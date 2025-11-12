@@ -1,0 +1,22 @@
+{
+    "version": 1,
+    "revision": 0,
+    "rules": [
+        {
+            "primary-output": "x64\\Debug\\gl_index_buffer.h.obj",
+            "outputs": [
+                "C:\\Users\\User\\Desktop\\WLWengine\\WLWengine\\WLWengine\\x64\\Debug\\vc145.pdb",
+                "x64\\Debug\\",
+                "C:\\Users\\User\\Desktop\\WLWengine\\WLWengine\\WLWengine\\x64\\Debug\\gl_index_buffer.h.ifc"
+            ],
+            "provides": [
+                {
+                    "logical-name": "root\\core\\gl_index_buffer.h",
+                    "source-path": "c:\\users\\user\\desktop\\wlwengine\\wlwengine\\wlwengine\\root\\core\\gl_index_buffer.h",
+                    "lookup-method": "absolute"
+                }
+            ],
+            "requires": []
+        }
+    ]
+}
