@@ -1,11 +1,13 @@
 #pragma once
 
 #include "color.h"
+#include "vector2.h"
 
 namespace wlw::core { 
 
- struct Vertex2D {
-  float position[2]; 
+ class Vertex2D {
+ public:
+  Vector2 position;
   Color color;
 };
 

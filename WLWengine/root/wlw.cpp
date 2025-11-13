@@ -9,21 +9,16 @@ namespace wlw {
     WLWEngineImpl() {}
 
     void Start(std::shared_ptr<wlw::core::Window> window) override {
-
-      //window->Initialize();
       windows_.insert({ last_window_id, window });
       last_window_id++;
 			rendering_driver_->Initialize(window);
-      AttachWindow(window);
     }
 
     int AttachWindow(std::shared_ptr<core::Window > window) override {
-      window->Initialize();
 			rendering_driver_->AttachWindow(window);
       windows_.insert({ last_window_id, window });
       return last_window_id++;
     }
-
 
     void Iterate() override {
       for (auto& [_, window] : windows_) {

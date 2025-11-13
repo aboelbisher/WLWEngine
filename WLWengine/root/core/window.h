@@ -4,7 +4,7 @@
 
 #include "color.h"
 #include "scene/node_2d.h"
-
+#include "core/vector2.h"
 
 #ifdef WLW_USE_GLFW
 #include <GLFW/glfw3.h>
@@ -20,12 +20,15 @@ public:
 	using Nodes2DMap = std::unordered_map<int, std::shared_ptr<scene::Node2D>>;
 
 	virtual ~Window() = default;
-	virtual void Initialize() = 0;
+#ifdef WLW_USE_GLFW
+	virtual void Initialize(GLFWwindow* master_window = nullptr) = 0;
+#endif
 	virtual void MakeContextCurrent() = 0;
 	virtual void ProcessEvents() = 0;
 	virtual void SetClearColor(const Color& color) = 0;
 	virtual void SetIsActive(bool is_active) = 0;
 	virtual int AddNode(const std::shared_ptr<scene::Node2D>& node_2d) = 0;
+	virtual Vector2 GetSize() const = 0;
 
 	virtual const Nodes2DMap& GetNodes2D() const = 0;
 

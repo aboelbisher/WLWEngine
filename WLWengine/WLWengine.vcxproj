@@ -36,6 +36,11 @@
     <ClInclude Include="External\include\KHR\khrplatform.h" />
     <ClInclude Include="root\core\index_buffer.h" />
     <ClInclude Include="root\core\logger.h" />
+    <ClInclude Include="root\core\size2.h" />
+    <ClInclude Include="root\core\vector2.h" />
+    <ClInclude Include="root\core\vector3.h" />
+    <ClInclude Include="root\core\vertex.h" />
+    <ClInclude Include="root\core\vertex_3d.h" />
     <ClInclude Include="root\core\vertex_buffer.h" />
     <ClInclude Include="root\core\vertex_2d.h" />
     <ClInclude Include="root\rendering_driver\rendering_driver.h" />

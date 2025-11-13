@@ -14,7 +14,7 @@ using namespace wlw;
 
 int main() {
 	auto engine = wlw::WLWEngine::Create();
-	std::shared_ptr< wlw::core::Window> window = wlw::core::Window::Create(800, 600, "WLW Engine Window");
+	std::shared_ptr< wlw::core::Window> window = wlw::core::Window::Create(800, 600, "MainWindow");
 
 	core::Color red(1.0f, 0.0f, 0.0f, 1.0f);
 	std::array<wlw::core::Vertex2D, 3> vertices = { {
@@ -29,20 +29,24 @@ int main() {
 	auto shape = std::make_shared<wlw::scene::Triangle2D>(vertices);
 	window->AddNode(shape);
 
-	std::array<wlw::core::Vertex2D, 3> vertices1 = { {
-
-	{ { 0.1f, 0.5f }, { 0.0f, 0.0f, 1.0f, 1.0f } },
-	// V4: Top Right of second triangle
-	{ { 0.9f,  0.5f}, {0.0f, 0.0f, 1.0f, 1.0f} },
-// V5: Bottom Center of second triangle
-	{ { 0.5f, -0.0f}, {0.0f, 0.0f, 1.0f, 1.0f} }
-} };
-	auto shape1 = std::make_shared<wlw::scene::Triangle2D>(vertices1);
-	window->AddNode(shape1);
 
 	//window->SetClearColor(wlw::core::Color(0.0f, 0.0f, 1.0f, 1.0f));
 	engine->Start(window);
 
+
+	std::shared_ptr< wlw::core::Window> window1 = wlw::core::Window::Create(1024, 1024, "SecondaryWIdow");
+
+	std::array<wlw::core::Vertex2D, 3> vertices1 = { {
+
+{ { 0.1f, 0.5f }, { 0.0f, 0.0f, 1.0f, 1.0f } },
+// V4: Top Right of second triangle
+{ { 0.9f,  0.5f}, {0.0f, 0.0f, 1.0f, 1.0f} },
+// V5: Bottom Center of second triangle
+	{ { 0.5f, -0.0f}, {0.0f, 0.0f, 1.0f, 1.0f} }
+} };
+	auto shape1 = std::make_shared<wlw::scene::Triangle2D>(vertices1);
+	window1->AddNode(shape1);
+	engine->AttachWindow(window1);
 
 	while(true) {
 

@@ -1,8 +1,10 @@
+#include <iostream>
+#include <GLFW/glfw3.h>
+
+#include "core/logger.h"
 #include "rendering_driver.h"
 #include "core/gl_index_buffer.h"
 #include "core/gl_vertex_buffer.h"
-#include <iostream>
-#include <GLFW/glfw3.h>
 
 //#ifdef WLW_USE_GLFW
 
@@ -59,6 +61,7 @@ public:
 
 	bool Initialize(std::shared_ptr<core::Window> window) override {
 
+    main_window_ = window;
     // 1. Set the error callback FIRST
     glfwSetErrorCallback(error_callback);
 
@@ -110,13 +113,17 @@ public:
     // Compile and link the basic shader (unchanged)
     m_ShaderID = CreateProgram(vertexShaderSource, fragmentShaderSource);
     if (m_ShaderID == 0) return false;
-    glUseProgram(m_ShaderID);
+
 
     glEnable(GL_DEPTH_TEST);
     return true;
 	}
 
   void AttachWindow(std::shared_ptr<core::Window> window) override {
+    if (FAIL_IF(main_window_ == nullptr, "null window, did u forgot to initialise the rendering driver ? ")) {
+      return;
+    }
+    window->Initialize(main_window_->GetGLFWwindow());
     glfwSetFramebufferSizeCallback(window->GetGLFWwindow(), framebuffer_size_callback);
   }
 
@@ -132,15 +139,14 @@ public:
   void DrawWindow(std::shared_ptr<core::Window> window) override {
 		window->MakeContextCurrent();
     window->ProcessEvents();
-    //glViewport(0, 0, 800, 800);
 
-    int width, height;
-    glfwGetFramebufferSize(window->GetGLFWwindow(), &width, &height);
+    auto size = window->GetSize();
 
     //// RHI Calls - The engine code is API-agnostic here
-    SetViewport(0, 0, width, height);
+    SetViewport(0, 0, size.x, size.y);
     Clear();
 
+    glUseProgram(m_ShaderID);
 
 		for (const auto& [_, node] : window->GetNodes2D()) {
 			auto vertex_buffer = CreateVertexBuffer(node->GetVertices());
@@ -158,7 +164,6 @@ public:
 
   void DrawIndexed(uint32_t indexCount) {
     // Use the active shader program
-    glUseProgram(m_ShaderID);
 
     // The bound IVertexBuffer (VAO) and IIndexBuffer (EBO) state is used here.
     // We use GL_UNSIGNED_INT because our index data is uint32_t.
@@ -169,10 +174,7 @@ public:
     glDeleteProgram(m_ShaderID);
   }
 
-
 private:
-  GLuint m_ShaderID = 0; // Program ID for the minimal shader
-
   GLuint CompileShader(GLenum type, const char* source) {
     GLuint id = glCreateShader(type);
     glShaderSource(id, 1, &source, nullptr);
@@ -208,9 +210,11 @@ private:
     glDeleteShader(fs);
 
     return program;
-  }
+ }
 
-
+private:
+  GLuint m_ShaderID = 0; // Program ID for the minimal shader
+  std::shared_ptr<core::Window> main_window_;
 };
 
 std::unique_ptr<RenderingDriver> RenderingDriver::Create() {

@@ -21,12 +21,12 @@ public:
 		// Destructor implementation (e.g., destroy the window)
 	}
 
-	void Initialize() override {
-		if (window_ != NULL) {
+ void Initialize(GLFWwindow* master_window) override {
+	if (window_ != NULL) {
 			std::cerr << "GLFW window is already initialized" << std::endl;
 			return;
 		}
-		window_ = glfwCreateWindow(width_, height_, title_.c_str(), NULL, NULL);
+		window_ = glfwCreateWindow(width_, height_, title_.c_str(), NULL, master_window);
 		if (window_ == NULL) {
 			std::cerr << "Failed to create GLFW window with title " << title_ << std::endl;
 			glfwTerminate();
@@ -80,6 +80,9 @@ public:
 		return nodes_;
 	}
 
+	Vector2 GetSize() const override {
+		return { static_cast<float>(width_), static_cast<float>(height_)};
+	}
 
 private:
 	void processInput() {
