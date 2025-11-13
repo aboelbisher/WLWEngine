@@ -34,7 +34,7 @@ void main()
 }
 )";
 
-  const char* fragmentShaderSource = R"(
+  const char* fragment2DShaderSource = R"(
 #version 330 core
 out vec4 FragColor;
 in vec3 vertexColor;
@@ -48,13 +48,77 @@ void main()
 #version 330 core
 layout (location = 0) in vec3 aPos;
 layout (location = 1) in vec3 aColor;
+layout (location = 1) in vec3 aNormal;
+
 out vec3 vertexColor;
+out vec3 vertexNormal;
+out vec3 vertexPos;
+
+uniform mat4 model;
+uniform mat4 view;
+uniform mat4 projection;
+
 void main()
 {
-    gl_Position = vec4(aPos.x, aPos.y, aPos.z, 1.0);
+    vec4 worldPos = model * vec4(aPos, 1.0);
+    vertexNormal = mat3(transpose(inverse(model))) * aNormal;
+    gl_Position = projection * view * model * vec4(aPos, 1.0);
+
+    vertexPos = worldPos.xyz;
     vertexColor = aColor;
 }
 )";
+
+
+  const char* fragment3DShaderSource = R"(
+#version 330 core
+
+in vec3 vertexColor;
+in vec3 vertexNormal;
+in vec3 vertexPos;
+
+uniform vec3 viewPos;
+uniform vec3 objectColor;
+uniform vec3 lightColor;
+uniform vec3 lightPos;
+
+
+
+out vec4 FragColor;
+
+void main()
+{
+    float ambientStrength = 0.1;
+    float shininess = 32.0;
+    vec3 ambient = ambientStrength * vertexColor;
+
+    vec3 norm = normalize(vertexNormal);
+    vec3 lightDir = normalize(lightPos - vertexPos); 
+
+    // Calculate the angle (cosine) and ensure it's not negative (light hitting from behind)
+    float diff = max(dot(norm, lightDir), 0.0);
+    vec3 diffuse = diff * vertexColor;
+
+    // --- 3. Specular Lighting ---
+    // Bright spot reflecting directly at the viewer.
+    
+    // Direction from fragment to the viewer/camera
+    vec3 viewDir = normalize(viewPos - vertexPos);
+    
+    // Reflection vector (R = 2 * (N . L) * N - L)
+    vec3 reflectDir = reflect(-lightDir, norm); 
+
+    // Calculate specular factor (cosine of angle between view and reflection vector, raised to shininess)
+    float spec = pow(max(dot(viewDir, reflectDir), 0.0), shininess);
+    vec3 specular = spec * lightColor;
+
+    // --- 4. Final Color Calculation ---
+    // Combine all lighting components and multiply by the object's base color.
+    vec3 result = (ambient + diffuse + specular) * objectColor;
+
+    FragColor = vec4(result, 1.0);}
+)";
+
 
 class GLRenderingDriver : public RenderingDriver {
 public:
@@ -125,11 +189,11 @@ public:
     std::cout << "-----------------------------------" << std::endl;
 
     // Compile and link the basic shader (unchanged)
-    m_ShaderID_2D = CreateProgram(vertex2DShaderSource, fragmentShaderSource);
+    m_ShaderID_2D = CreateProgram(vertex2DShaderSource, fragment2DShaderSource);
     if (m_ShaderID_2D == 0) return false;
 
 
-    m_ShaderID_3D = CreateProgram(vertex3DShaderSource, fragmentShaderSource);
+    m_ShaderID_3D = CreateProgram(vertex3DShaderSource, fragment3DShaderSource);
     if (m_ShaderID_3D == 0) return false;
 
 
@@ -180,8 +244,23 @@ public:
     }
 
     glUseProgram(m_ShaderID_3D);
-
+    
     for (const auto& [_, node] : window->GetNodes3D()) {
+
+			auto camera = window->GetUpdatedCamera();
+      glUniformMatrix4fv(glGetUniformLocation(m_ShaderID_3D, "model"), 1, GL_FALSE, glm::value_ptr(node->GetModelMatrix()));
+      glUniformMatrix4fv(glGetUniformLocation(m_ShaderID_3D, "view"), 1, GL_FALSE, glm::value_ptr(camera->GetViewMatrix()));
+      glUniformMatrix4fv(glGetUniformLocation(m_ShaderID_3D, "projection"), 1, GL_FALSE, glm::value_ptr(camera->GetProjectionMatrix()));
+			auto& camera_position = camera->GetPosition();
+
+      glm::vec3 lightPosition = glm::vec3(1.2f, 1.0f, 2.0f);
+      glm::vec3 lightColour = glm::vec3(1.0f, 1.0f, 1.0f); // White light
+      glm::vec3 objectColour = glm::vec3(1.0f, 0.5f, 0.31f); // Orange-red object
+      glUniform3f(glGetUniformLocation(m_ShaderID_3D, "objectColor"), objectColour.x, objectColour.y, objectColour.z);
+      glUniform3f(glGetUniformLocation(m_ShaderID_3D, "lightColor"), lightColour.x, lightColour.y, lightColour.z);
+      glUniform3f(glGetUniformLocation(m_ShaderID_3D, "lightPos"), lightPosition.x, lightPosition.y, lightPosition.z);
+      glUniform3f(glGetUniformLocation(m_ShaderID_3D, "viewPos"), camera_position.x, camera_position.y, camera_position.z);
+
       auto vertex_buffer = CreateVertexBuffer(node->GetMesh().GetVertices());
       auto index_buffer = CreateIndexBuffer(node->GetMesh().GetIndices());
 

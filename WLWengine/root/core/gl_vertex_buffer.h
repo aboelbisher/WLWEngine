@@ -23,7 +23,7 @@ public:
     glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(Vertex3D), vertices.data(), GL_STATIC_DRAW);
 
     // 4. Set Vertex Attributes (Layout matching the Vertex2D struct)
-    // Attribute 0: Position (2 floats)
+    // Attribute 0: Position (3 floats)
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex3D), (void*)0);
     glEnableVertexAttribArray(0);
 
@@ -31,13 +31,16 @@ public:
     glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex3D), (void*)(3 * sizeof(float)));
     glEnableVertexAttribArray(1);
 
+		// Attribute 2: Normal (3 floats)
+		glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex3D), (void*)(7 * sizeof(float)));
+    
     // NOTE on VAO: The VAO is created, and the VBO layout is set here. 
     // The EBO (Index Buffer) will be bound separately during the draw call, 
     // as the VAO does NOT store EBO state in this implementation pattern.
 
     // 5. Unbind
     Unbind();
-  }
+  } 
 
 
 	GLVertexBuffer(const std::vector<Vertex2D>& vertices) {

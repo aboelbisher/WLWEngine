@@ -2,9 +2,13 @@
 #include <GLFW/glfw3.h>
 #include <glad/glad.h>
 
+
 #include "core/logger.h"
 #include <iostream>
 #include <unordered_map>
+
+#include "scene/fps_camera.h"
+
 
 namespace wlw::core {
 
@@ -16,7 +20,7 @@ namespace wlw::core {
 
 class WindowImpl: public Window {
 public:
-	WindowImpl(int width, int height, const std::string& title): width_(width), height_(height), title_(title), color_(1.0, 0.0, 0.0, 1.0) {}
+	WindowImpl(const Vector2& size, const std::string& title): size_(size), title_(title), color_(1.0, 0.0, 0.0, 1.0) {}
 	~WindowImpl() override {
 		// Destructor implementation (e.g., destroy the window)
 	}
@@ -26,7 +30,7 @@ public:
 			std::cerr << "GLFW window is already initialized" << std::endl;
 			return;
 		}
-		window_ = glfwCreateWindow(width_, height_, title_.c_str(), NULL, master_window);
+		window_ = glfwCreateWindow(size_.x, size_.y, title_.c_str(), NULL, master_window);
 		if (window_ == NULL) {
 			std::cerr << "Failed to create GLFW window with title " << title_ << std::endl;
 			glfwTerminate();
@@ -88,20 +92,59 @@ public:
 		return nodes_3d_;
 	}
 
+	void SetCamera(std::shared_ptr<scene::Camera3D> camera) override {
+		camera_ = camera;
+	}
+
+	const std::shared_ptr<scene::Camera3D> GetUpdatedCamera() const override {
+		camera_->UpdateSize(size_);
+		return camera_;
+	}
 
 	Vector2 GetSize() const override {
-		return { static_cast<float>(width_), static_cast<float>(height_)};
+		return size_;
 	}
 
 private:
 	void processInput() {
-		if (glfwGetKey(window_, GLFW_KEY_ESCAPE) == GLFW_PRESS)
-			glfwSetWindowShouldClose(window_, true);
+	
+		float currentSpeedFactor = 1.0f;
+		// Example: Check for speed boost (Left Shift)
+		// if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) {
+		//     currentSpeedFactor = 3.0f;
+		// }
+
+		float deltaTime = 0.016f; // Assuming a fixed time step for simplicity (60 FPS)
+		// Forward
+		if ( glfwGetKey(window_, GLFW_KEY_W) == GLFW_PRESS) {
+			camera_->ProcessKeyboard(scene::CameraMovement::FORWARD, deltaTime * currentSpeedFactor);
+		}
+		// Backward
+		if ( glfwGetKey(window_, GLFW_KEY_S) == GLFW_PRESS ) {
+			camera_->ProcessKeyboard(scene::CameraMovement::BACKWARD, deltaTime * currentSpeedFactor);
+		}
+		// Left (Strafe)
+		if (glfwGetKey(window_, GLFW_KEY_A) == GLFW_PRESS ) {
+			camera_->ProcessKeyboard(scene::CameraMovement::LEFT, deltaTime * currentSpeedFactor);
+		}
+		// Right (Strafe)
+		if (glfwGetKey(window_, GLFW_KEY_D) == GLFW_PRESS ) {
+			camera_->ProcessKeyboard(scene::CameraMovement::RIGHT, deltaTime * currentSpeedFactor);
+		}
+		// Up (Elevation)
+		if ( glfwGetKey(window_, GLFW_KEY_SPACE) == GLFW_PRESS ) {
+			camera_->ProcessKeyboard(scene::CameraMovement::UP, deltaTime * currentSpeedFactor);
+		}
+		// Down (Elevation)
+		if (glfwGetKey(window_, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS) {
+			camera_->ProcessKeyboard(scene::CameraMovement::DOWN, deltaTime * currentSpeedFactor);
+		}
+
+
 	}
 
 	GLFWwindow* window_;
-	int width_; 
-	int height_;
+	core::Vector2 size_;
 	Color color_;
 	std::string title_;
 
@@ -112,9 +155,11 @@ private:
 
 	Nodes3DMap nodes_3d_;
 	int nodes_3d_next_id_ = 0;
+
+	std::shared_ptr<scene::Camera3D> camera_ = scene::FPSCamera::Create();
 };
 
-std::unique_ptr<Window> Window::Create(int width, int height, const std::string& title) {
-	return std::make_unique<WindowImpl>(width, height, title);
+std::unique_ptr<Window> Window::Create(const Vector2& size, const std::string& title) {
+	return std::make_unique<WindowImpl>(size, title);
 }	
 } // namespace wlw::core

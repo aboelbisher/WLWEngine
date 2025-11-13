@@ -12,6 +12,7 @@
 #include "core/vector2.h"
 #include "core/vertex_2d.h"
 #include "core/vertex_3d.h"
+#include "scene/camera_3d.h"
 
 namespace wlw::core {
 
@@ -35,6 +36,9 @@ public:
 	virtual const Nodes2DMap& GetNodes2D() const = 0;
 	virtual const Nodes3DMap& GetNodes3D() const = 0;
 
+	virtual void SetCamera(std::shared_ptr<scene::Camera3D> camera) = 0;
+	virtual const std::shared_ptr<scene::Camera3D> GetUpdatedCamera() const = 0;
+
 #ifdef WLW_USE_GLFW
 	virtual GLFWwindow* GetGLFWwindow() = 0 ;
 #endif
@@ -48,7 +52,7 @@ public:
 	//virtual int GetHeight() const = 0;
 
 
-	static std::unique_ptr<Window> Create(int width, int height, const std::string& title);
+	static std::unique_ptr<Window> Create(const Vector2& size, const std::string& title);
 };
 
 } // namespace wlw::core

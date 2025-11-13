@@ -24,11 +24,13 @@
     <ClCompile Include="root\core\gl_index_buffer.h" />
     <ClCompile Include="root\core\gl_vertex_buffer.h" />
     <ClCompile Include="root\rendering_driver\rendering_driver_gl.cpp" />
+    <ClCompile Include="root\scene\fps_camera.cpp" />
     <ClCompile Include="root\wlw.cpp" />
     <ClCompile Include="root\core\window.cpp" />
     <ClCompile Include="root\scene\triangle_2d.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="data_helper.h" />
     <ClInclude Include="External\include\glad\glad.h" />
     <ClInclude Include="External\include\GLFW\glfw3.h" />
     <ClInclude Include="External\include\GLFW\glfw3native.h" />
@@ -36,7 +38,6 @@
     <ClInclude Include="root\core\index_buffer.h" />
     <ClInclude Include="root\core\logger.h" />
     <ClInclude Include="root\core\mesh.h" />
-    <ClInclude Include="root\core\size2.h" />
     <ClInclude Include="root\core\vector2.h" />
     <ClInclude Include="root\core\vector3.h" />
     <ClInclude Include="root\core\vertex.h" />
@@ -44,6 +45,8 @@
     <ClInclude Include="root\core\vertex_buffer.h" />
     <ClInclude Include="root\core\vertex_2d.h" />
     <ClInclude Include="root\rendering_driver\rendering_driver.h" />
+    <ClInclude Include="root\scene\camera_3d.h" />
+    <ClInclude Include="root\scene\fps_camera.h" />
     <ClInclude Include="root\scene\node.h" />
     <ClInclude Include="root\core\color.h" />
     <ClInclude Include="root\wlw.h" />
