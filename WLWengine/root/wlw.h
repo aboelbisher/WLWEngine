@@ -1,6 +1,8 @@
 #pragma once
 #include <memory>
 
+#pragma once
+
 #include "core/window.h"
 
 namespace wlw {
@@ -9,12 +11,11 @@ namespace wlw {
 	public:
 		virtual ~WLWEngine() = default;
 
-		virtual void Start(std::unique_ptr<wlw::core::Window> window) = 0;
+		virtual void Start(std::shared_ptr<wlw::core::Window> window) = 0;
 		virtual void Iterate() = 0;
-
-		virtual void AttachWindow(std::unique_ptr<wlw::core::Window> window) = 0;
-
+		virtual int AttachWindow(std::shared_ptr<wlw::core::Window> window) = 0;
 
 		static std::unique_ptr<WLWEngine> Create();
+
 	};
 }

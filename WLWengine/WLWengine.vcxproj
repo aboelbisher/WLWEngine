@@ -25,7 +25,7 @@
     <ClCompile Include="root\core\gl_vertex_buffer.h" />
     <ClCompile Include="root\rendering_driver\rendering_driver_gl.cpp" />
     <ClCompile Include="root\scene\node_2d.cpp" />
-    <ClCompile Include="root\wlw_gl.cpp" />
+    <ClCompile Include="root\wlw.cpp" />
     <ClCompile Include="root\core\window.cpp" />
     <ClCompile Include="root\scene\triangle_2d.cpp" />
   </ItemGroup>
@@ -35,10 +35,10 @@
     <ClInclude Include="External\include\GLFW\glfw3native.h" />
     <ClInclude Include="External\include\KHR\khrplatform.h" />
     <ClInclude Include="root\core\index_buffer.h" />
+    <ClInclude Include="root\core\logger.h" />
     <ClInclude Include="root\core\vertex_buffer.h" />
     <ClInclude Include="root\core\vertex_2d.h" />
     <ClInclude Include="root\rendering_driver\rendering_driver.h" />
-    <ClInclude Include="root\scene\node.h" />
     <ClInclude Include="root\scene\node_2d.h" />
     <ClInclude Include="root\core\color.h" />
     <ClInclude Include="root\wlw.h" />
@@ -129,10 +129,10 @@
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions);WLW_USE_GLFW;</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions);WLW_USE_GLFW;GLFW_INCLUDE_NONE;</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>$(ProjectDir)External\include;</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)\External\include;$(ProjectDir)\root;</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>

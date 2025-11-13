@@ -3,10 +3,13 @@
 #include <string>
 
 #include "color.h"
+#include "scene/node_2d.h"
+
 
 #ifdef WLW_USE_GLFW
 #include <GLFW/glfw3.h>
 #endif
+#include <unordered_map>
 
 
 
@@ -14,12 +17,17 @@ namespace wlw::core {
 
 class Window {
 public:
+	using Nodes2DMap = std::unordered_map<int, std::shared_ptr<scene::Node2D>>;
+
 	virtual ~Window() = default;
 	virtual void Initialize() = 0;
 	virtual void MakeContextCurrent() = 0;
 	virtual void ProcessEvents() = 0;
 	virtual void SetClearColor(const Color& color) = 0;
+	virtual void SetIsActive(bool is_active) = 0;
+	virtual int AddNode(const std::shared_ptr<scene::Node2D>& node_2d) = 0;
 
+	virtual const Nodes2DMap& GetNodes2D() const = 0;
 
 #ifdef WLW_USE_GLFW
 	virtual GLFWwindow* GetGLFWwindow() = 0 ;

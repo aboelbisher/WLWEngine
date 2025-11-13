@@ -1,7 +1,10 @@
 #include "window.h"
 #include <GLFW/glfw3.h>
+#include <glad/glad.h>
 
+#include "core/logger.h"
 #include <iostream>
+#include <unordered_map>
 
 namespace wlw::core {
 
@@ -34,17 +37,13 @@ public:
 	void MakeContextCurrent() override {
 		ASSERT_GLFW_WINDOW_NOT_NULL(window_);
 		glfwMakeContextCurrent(window_);
-		glViewport(0, 0, width_, height_);
+		glfwSwapInterval(1);
 	}
 
 	void ProcessEvents() override {
 		ASSERT_GLFW_WINDOW_NOT_NULL(window_);
 		// Input processing
 		processInput();
-
-		glClearColor(color_.r, color_.g, color_.b, color_.a);
-
-		glClear(GL_COLOR_BUFFER_BIT);
 
 		// --- Actual Render Logic Goes Here ---
 
@@ -59,12 +58,27 @@ public:
 	void SetClearColor(const Color& color) override {
 		color_ = color;
 		glClearColor(color.r, color.g, color.b, color.a);
+		glClear(GL_COLOR_BUFFER_BIT);
+
 	}
 
 	GLFWwindow* GetGLFWwindow() override {
 		return window_;
 	}
 
+	void SetIsActive(bool is_active) override {
+		is_active_ = is_active;
+	}
+
+	int AddNode(const std::shared_ptr<scene::Node2D>& node_2d) {
+		int node_id = static_cast<int>(nodes_.size());
+		nodes_[node_id] = node_2d;
+		return node_id;
+	}
+
+	const Nodes2DMap& GetNodes2D() const override {
+		return nodes_;
+	}
 
 
 private:
@@ -78,6 +92,11 @@ private:
 	int height_;
 	Color color_;
 	std::string title_;
+
+	bool is_active_ = true;
+
+
+	std::unordered_map<int, std::shared_ptr<scene::Node2D>> nodes_;
 };
 
 std::unique_ptr<Window> Window::Create(int width, int height, const std::string& title) {

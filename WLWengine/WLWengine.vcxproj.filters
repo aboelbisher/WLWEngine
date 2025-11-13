@@ -21,9 +21,6 @@
     <ClCompile Include="External\include\glad\glad.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="root\wlw_gl.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="root\core\window.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -40,6 +37,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="root\rendering_driver\rendering_driver_gl.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="root\wlw.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -84,6 +84,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="root\rendering_driver\rendering_driver.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="root\core\logger.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

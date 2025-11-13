@@ -3,6 +3,15 @@
 
 namespace wlw::scene {
 
+  const std::vector<core::Vertex2D>& Triangle2D::GetVertices() const {
+    return vertices_;
+  }
+  
+  const std::vector<uint32_t>& Triangle2D::GetIndices() const {
+    return indices_;
+  }
+
+
   //Triangle2D::Triangle2D() {}
   //  // 1. Define the vertices (still the same)
   //// X, Y, Z for each vertex
