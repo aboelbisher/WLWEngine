@@ -10,8 +10,16 @@ class Node2D {
 public:
 	virtual ~Node2D() = default;
 
-	virtual const std::vector<core::Vertex2D>& GetVertices() const = 0;
-	virtual const std::vector<uint32_t>& GetIndices() const = 0;
+	const std::vector<core::Vertex2D>& GetVertices() const;
+	const std::vector<uint32_t>& GetIndices() const;
+
+	void SetVertices(const std::vector<core::Vertex2D>& vertices);
+	void SetIndices(const std::vector<uint32_t>& indices);
+
+protected:
+	std::vector<core::Vertex2D> vertices_;
+	std::vector<uint32_t> indices_;
+
 };
 }
 
