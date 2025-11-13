@@ -70,15 +70,24 @@ public:
 		is_active_ = is_active;
 	}
 
-	int AddNode(const std::shared_ptr<scene::Node2D>& node_2d) {
-		int node_id = static_cast<int>(nodes_.size());
-		nodes_[node_id] = node_2d;
-		return node_id;
+	int AddNode(const std::shared_ptr<scene::Node<Vertex2D>>& node_2d) override {
+		nodes_2d_[nodes_2d_next_id_] = node_2d;
+		return nodes_2d_next_id_++;
+	}
+
+	int AddNode(const std::shared_ptr<scene::Node<Vertex3D>>& node_3d) override {
+		nodes_3d_[nodes_3d_next_id_] = node_3d;
+		return nodes_3d_next_id_++;
 	}
 
 	const Nodes2DMap& GetNodes2D() const override {
-		return nodes_;
+		return nodes_2d_;
 	}
+
+	const Nodes3DMap& GetNodes3D() const override {
+		return nodes_3d_;
+	}
+
 
 	Vector2 GetSize() const override {
 		return { static_cast<float>(width_), static_cast<float>(height_)};
@@ -98,8 +107,11 @@ private:
 
 	bool is_active_ = true;
 
+	Nodes2DMap nodes_2d_;
+	int nodes_2d_next_id_ = 0;
 
-	std::unordered_map<int, std::shared_ptr<scene::Node2D>> nodes_;
+	Nodes3DMap nodes_3d_;
+	int nodes_3d_next_id_ = 0;
 };
 
 std::unique_ptr<Window> Window::Create(int width, int height, const std::string& title) {

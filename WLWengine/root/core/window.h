@@ -1,23 +1,24 @@
 #pragma once
 #include <memory>
 #include <string>
-
-#include "color.h"
-#include "scene/node_2d.h"
-#include "core/vector2.h"
+#include <unordered_map>
 
 #ifdef WLW_USE_GLFW
 #include <GLFW/glfw3.h>
 #endif
-#include <unordered_map>
 
-
+#include "color.h"
+#include "scene/node.h"
+#include "core/vector2.h"
+#include "core/vertex_2d.h"
+#include "core/vertex_3d.h"
 
 namespace wlw::core {
 
 class Window {
 public:
-	using Nodes2DMap = std::unordered_map<int, std::shared_ptr<scene::Node2D>>;
+	using Nodes2DMap = std::unordered_map<int, std::shared_ptr<scene::Node<Vertex2D>>>;
+	using Nodes3DMap = std::unordered_map<int, std::shared_ptr<scene::Node<Vertex3D>>>;
 
 	virtual ~Window() = default;
 #ifdef WLW_USE_GLFW
@@ -27,10 +28,12 @@ public:
 	virtual void ProcessEvents() = 0;
 	virtual void SetClearColor(const Color& color) = 0;
 	virtual void SetIsActive(bool is_active) = 0;
-	virtual int AddNode(const std::shared_ptr<scene::Node2D>& node_2d) = 0;
+	virtual int AddNode(const std::shared_ptr<scene::Node<Vertex2D>>& node_2d) = 0;
+	virtual int AddNode(const std::shared_ptr<scene::Node<Vertex3D>>& node_3d) = 0;
 	virtual Vector2 GetSize() const = 0;
 
 	virtual const Nodes2DMap& GetNodes2D() const = 0;
+	virtual const Nodes3DMap& GetNodes3D() const = 0;
 
 #ifdef WLW_USE_GLFW
 	virtual GLFWwindow* GetGLFWwindow() = 0 ;

@@ -22,7 +22,7 @@ namespace wlw::rendering {
 
   // --- Global Setup (Minimal Shaders for Modern GL) ---
 // Shaders are required for modern OpenGL (Core Profile 3.3+)
-  const char* vertexShaderSource = R"(
+  const char* vertex2DShaderSource = R"(
 #version 330 core
 layout (location = 0) in vec2 aPos;
 layout (location = 1) in vec3 aColor;
@@ -44,13 +44,27 @@ void main()
 }
 )";
 
-
+  const char* vertex3DShaderSource = R"(
+#version 330 core
+layout (location = 0) in vec3 aPos;
+layout (location = 1) in vec3 aColor;
+out vec3 vertexColor;
+void main()
+{
+    gl_Position = vec4(aPos.x, aPos.y, aPos.z, 1.0);
+    vertexColor = aColor;
+}
+)";
 
 class GLRenderingDriver : public RenderingDriver {
 public:
 
 	std::unique_ptr<core::WVertexBuffer> CreateVertexBuffer(const std::vector<core::Vertex2D>& vertices) override { 
 		return std::make_unique<core::GLVertexBuffer>(vertices);
+	}
+
+  std::unique_ptr<core::WVertexBuffer> CreateVertexBuffer(const std::vector<core::Vertex3D>& vertices) override {
+    return  std::make_unique<core::GLVertexBuffer>(vertices);
 	}
 
 	// NEW: Resource Creation for Index Buffers
@@ -111,8 +125,12 @@ public:
     std::cout << "-----------------------------------" << std::endl;
 
     // Compile and link the basic shader (unchanged)
-    m_ShaderID = CreateProgram(vertexShaderSource, fragmentShaderSource);
-    if (m_ShaderID == 0) return false;
+    m_ShaderID_2D = CreateProgram(vertex2DShaderSource, fragmentShaderSource);
+    if (m_ShaderID_2D == 0) return false;
+
+
+    m_ShaderID_3D = CreateProgram(vertex3DShaderSource, fragmentShaderSource);
+    if (m_ShaderID_3D == 0) return false;
 
 
     glEnable(GL_DEPTH_TEST);
@@ -146,20 +164,36 @@ public:
     SetViewport(0, 0, size.x, size.y);
     Clear();
 
-    glUseProgram(m_ShaderID);
+    glUseProgram(m_ShaderID_2D);
 
 		for (const auto& [_, node] : window->GetNodes2D()) {
-			auto vertex_buffer = CreateVertexBuffer(node->GetVertices());
-			auto index_buffer = CreateIndexBuffer(node->GetIndices());
+			auto vertex_buffer = CreateVertexBuffer(node->GetMesh().GetVertices());
+			auto index_buffer = CreateIndexBuffer(node->GetMesh().GetIndices());
 
 			vertex_buffer->Bind();
 			index_buffer->Bind(); 
 
-			DrawIndexed(static_cast<uint32_t>(node->GetIndices().size()));  
+			DrawIndexed(static_cast<uint32_t>(node->GetMesh().GetIndices().size()));
 
 			vertex_buffer->Unbind();
 			index_buffer->Unbind();
     }
+
+    glUseProgram(m_ShaderID_3D);
+
+    for (const auto& [_, node] : window->GetNodes3D()) {
+      auto vertex_buffer = CreateVertexBuffer(node->GetMesh().GetVertices());
+      auto index_buffer = CreateIndexBuffer(node->GetMesh().GetIndices());
+
+      vertex_buffer->Bind();
+      index_buffer->Bind();
+
+      DrawIndexed(static_cast<uint32_t>(node->GetMesh().GetIndices().size()));
+
+      vertex_buffer->Unbind();
+      index_buffer->Unbind();
+    }
+
   }
 
   void DrawIndexed(uint32_t indexCount) {
@@ -171,7 +205,7 @@ public:
   }
 
   ~GLRenderingDriver() override {
-    glDeleteProgram(m_ShaderID);
+    glDeleteProgram(m_ShaderID_2D);
   }
 
 private:
@@ -213,7 +247,8 @@ private:
  }
 
 private:
-  GLuint m_ShaderID = 0; // Program ID for the minimal shader
+  GLuint m_ShaderID_2D = 0; 
+  GLuint m_ShaderID_3D = 0; 
   std::shared_ptr<core::Window> main_window_;
 };
 
