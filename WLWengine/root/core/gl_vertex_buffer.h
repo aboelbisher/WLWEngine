@@ -33,7 +33,8 @@ public:
 
 		// Attribute 2: Normal (3 floats)
 		glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex3D), (void*)(7 * sizeof(float)));
-    
+    glEnableVertexAttribArray(2);
+
     // NOTE on VAO: The VAO is created, and the VBO layout is set here. 
     // The EBO (Index Buffer) will be bound separately during the draw call, 
     // as the VAO does NOT store EBO state in this implementation pattern.
@@ -54,6 +55,7 @@ public:
 
     // 3. Upload Data
     glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(Vertex2D), vertices.data(), GL_STATIC_DRAW);
+
 
     // 4. Set Vertex Attributes (Layout matching the Vertex2D struct)
     // Attribute 0: Position (2 floats)

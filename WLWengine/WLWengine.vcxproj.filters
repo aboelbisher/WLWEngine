@@ -39,7 +39,13 @@
     <ClCompile Include="root\wlw.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="root\scene\camera_3d.cpp">
+    <ClCompile Include="root\scene\fps_camera.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="root\utils\stb_image_impl.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="root\utils\image_loader.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -105,6 +111,18 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="root\scene\camera_3d.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="root\scene\fps_camera.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="root\utils\image_loader.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="root\utils\stb_image.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="root\utils\image.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

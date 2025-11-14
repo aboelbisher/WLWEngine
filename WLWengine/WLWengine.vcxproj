@@ -25,6 +25,8 @@
     <ClCompile Include="root\core\gl_vertex_buffer.h" />
     <ClCompile Include="root\rendering_driver\rendering_driver_gl.cpp" />
     <ClCompile Include="root\scene\fps_camera.cpp" />
+    <ClCompile Include="root\utils\image_loader.cpp" />
+    <ClCompile Include="root\utils\stb_image_impl.cpp" />
     <ClCompile Include="root\wlw.cpp" />
     <ClCompile Include="root\core\window.cpp" />
     <ClCompile Include="root\scene\triangle_2d.cpp" />
@@ -49,6 +51,9 @@
     <ClInclude Include="root\scene\fps_camera.h" />
     <ClInclude Include="root\scene\node.h" />
     <ClInclude Include="root\core\color.h" />
+    <ClInclude Include="root\utils\image.h" />
+    <ClInclude Include="root\utils\image_loader.h" />
+    <ClInclude Include="root\utils\stb_image.h" />
     <ClInclude Include="root\wlw.h" />
     <ClInclude Include="root\core\window.h" />
     <ClInclude Include="root\scene\triangle_2d.h" />

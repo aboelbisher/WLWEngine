@@ -47,8 +47,8 @@ void main()
   const char* vertex3DShaderSource = R"(
 #version 330 core
 layout (location = 0) in vec3 aPos;
-layout (location = 1) in vec3 aColor;
-layout (location = 1) in vec3 aNormal;
+layout (location = 1) in vec4 aColor;
+layout (location = 2) in vec3 aNormal;
 
 out vec3 vertexColor;
 out vec3 vertexNormal;
@@ -61,11 +61,11 @@ uniform mat4 projection;
 void main()
 {
     vec4 worldPos = model * vec4(aPos, 1.0);
-    vertexNormal = mat3(transpose(inverse(model))) * aNormal;
+    vertexNormal = normalize(mat3(transpose(inverse(model))) * aNormal);
     gl_Position = projection * view * model * vec4(aPos, 1.0);
 
     vertexPos = worldPos.xyz;
-    vertexColor = aColor;
+    vertexColor = aColor.xyz;
 }
 )";
 
@@ -82,14 +82,12 @@ uniform vec3 objectColor;
 uniform vec3 lightColor;
 uniform vec3 lightPos;
 
-
-
 out vec4 FragColor;
 
 void main()
 {
     float ambientStrength = 0.1;
-    float shininess = 32.0;
+    float shininess = 64.0;
     vec3 ambient = ambientStrength * vertexColor;
 
     vec3 norm = normalize(vertexNormal);
@@ -101,10 +99,10 @@ void main()
 
     // --- 3. Specular Lighting ---
     // Bright spot reflecting directly at the viewer.
-    
+
     // Direction from fragment to the viewer/camera
     vec3 viewDir = normalize(viewPos - vertexPos);
-    
+
     // Reflection vector (R = 2 * (N . L) * N - L)
     vec3 reflectDir = reflect(-lightDir, norm); 
 
@@ -116,7 +114,8 @@ void main()
     // Combine all lighting components and multiply by the object's base color.
     vec3 result = (ambient + diffuse + specular) * objectColor;
 
-    FragColor = vec4(result, 1.0);}
+    FragColor = vec4(result, 1.0);
+}
 )";
 
 
@@ -252,8 +251,6 @@ public:
       glUniformMatrix4fv(glGetUniformLocation(m_ShaderID_3D, "view"), 1, GL_FALSE, glm::value_ptr(camera->GetViewMatrix()));
       glUniformMatrix4fv(glGetUniformLocation(m_ShaderID_3D, "projection"), 1, GL_FALSE, glm::value_ptr(camera->GetProjectionMatrix()));
 			auto& camera_position = camera->GetPosition();
-
-      std::cout << "pos" << camera_position.x << ", " << camera_position.y << ", " << camera_position.z << std::endl;
 
 
       glm::vec3 lightPosition = glm::vec3(1.2f, 1.0f, 2.0f);

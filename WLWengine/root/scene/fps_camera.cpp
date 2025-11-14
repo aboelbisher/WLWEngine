@@ -8,10 +8,12 @@ namespace wlw::scene {
   class FPSCameraImpl : public FPSCamera {
   public:
     FPSCameraImpl()
-      : position_(0.0f, 0.0f, 3.0f), world_up_(0.0f, 0.0f, 1.0f),
+      : position_(0.56f, 12.16f, 2.2f), 
       yaw_(-90.0f), pitch_(0.0f), fov_(45.0f), near_plane_(0.1f), far_plane_(100.0f),
       movement_speed_(5.0f) { // 5 units per second 
+
       updateCameraVectors();
+
     }
 
     void SetPosition(const core::Vector3& position) override {
@@ -22,16 +24,16 @@ namespace wlw::scene {
       // In an FPS camera, the target is calculated from Position + Front.
       // For simplicity, we just ignore this setter here and rely on rotation for direction.
     }
-    void SetCameraUp(const core::Vector3& up) override {
-      world_up_ = {up.x, up.y, up.z};
-      updateCameraVectors();
-    }
+    //void SetCameraUp(const core::Vector3& up) override {
+    //  world_up_ = {up.x, up.y, up.z};
+    //  updateCameraVectors();
+    //}
     void UpdateSize(const core::Vector2& size) override {
       aspect_ratio_ = size.x / size.y;
       projection_matrix_ = glm::perspective(glm::radians(fov_), aspect_ratio_, near_plane_, far_plane_);
     }
 
-    const glm::vec3& GetPosition() const override { return position_; }
+    const core::Vector3& GetPosition() const override { return position_; }
     const glm::mat4& GetViewMatrix() override {
       updateCameraVectors(); // Ensure the view matrix is always up-to-date before access
       return view_matrix_;
@@ -45,7 +47,7 @@ namespace wlw::scene {
       float velocity = movement_speed_ * deltaTime;
 
       // Base vectors for movement
-      glm::vec3 movementVector;
+      core::Vector3 movementVector;
 
       switch (direction) {
       case CameraMovement::FORWARD:
@@ -61,11 +63,33 @@ namespace wlw::scene {
         movementVector = right_;
         break;
       case CameraMovement::UP:
-        movementVector = world_up_; // Move along the world Y-axis (Up)
+        movementVector = up_; 
         break;
       case CameraMovement::DOWN:
-        movementVector = -world_up_; // Move along the world Y-axis (Down)
+        movementVector = -up_; 
         break;
+
+
+      case CameraMovement::DOWN_ROTATE:
+        pitch_ += 30.0f * deltaTime; // Rotate up
+        updateCameraVectors();
+				return;
+
+      case CameraMovement::UP_ROTATE:
+        pitch_ = 30.0f * deltaTime; // Rotate down
+				updateCameraVectors();
+        return;
+
+      case CameraMovement::RIGHT_ROTATE:
+        yaw_ -= 30.0f * deltaTime; // Rotate left
+        updateCameraVectors();
+        return;
+
+      case CameraMovement::LEFT_ROTATE:
+
+				yaw_ += 30.0f * deltaTime; // Rotate right
+        updateCameraVectors();
+        return;
       }
 
       // Apply movement
@@ -73,36 +97,36 @@ namespace wlw::scene {
       // In a true FPS camera, this would also prevent vertical drift (lock Y for walking)
       // Position.y = fixed_y_height;
     }
+		static constexpr core::Vector3 world_up_ = { 0.0f, 0.0f, 1.0f }; // Z-up coordinate system
 
   private:
     void updateCameraVectors() {
       // Calculate the new Front vector
-      glm::vec3 front;
-       front.x = cos(glm::radians(yaw_)) * cos(glm::radians(pitch_));
-       front.y = sin(glm::radians(pitch_));
-       front.z = sin(glm::radians(yaw_)) * cos(glm::radians(pitch_));
+      core::Vector3 front;
+      // for- world up
+      front.x = cos(glm::radians(yaw_)) * cos(glm::radians(pitch_));
+      front.y = sin(glm::radians(yaw_)) * cos(glm::radians(pitch_));
+      front.z = sin(glm::radians(pitch_));
 
       // For this simple example, we assume Yaw/Pitch is fixed (looking towards -Z initially)
       // We will only use the Right and WorldUp vectors for simple strafing and elevation.
 
-
-			front_ = glm::normalize(front);
-      right_ = glm::normalize(glm::cross(front, world_up_)); // Normalize the vectors, because their length gets closer to 0 the more you look up or down
-      up_ = glm::normalize(glm::cross(right_, front));
+       front_ = front.Normalize();
+       right_ = front.Cross(world_up_).Normalize();
+			 up_ = right_.Cross(front_).Normalize();
 
       // Calculate view matrix
-      view_matrix_ = glm::lookAt(position_, position_ + front, up_);
+      view_matrix_ = glm::lookAt(glm::vec3(position_), glm::vec3(position_ + front),  glm::vec3(up_));
     }
 
 
 
   private:
     // Camera attributes
-    glm::vec3 position_;
-    glm::vec3 world_up_; // Global up vector (Y-axis)
-    glm::vec3 front_;   // The direction the camera is looking
-    glm::vec3 right_;   // The vector pointing to the right
-    glm::vec3 up_;      // The local up vector
+    core::Vector3 position_;
+    core::Vector3 front_;   // The direction the camera is looking
+    core::Vector3 right_;   // The vector pointing to the right
+    core::Vector3 up_;      // The local up vector
 
     // Eular angles (used for rotation, but we focus on position here)
     float yaw_;

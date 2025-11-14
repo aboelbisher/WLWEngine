@@ -117,26 +117,48 @@ private:
 		float deltaTime = 0.016f; // Assuming a fixed time step for simplicity (60 FPS)
 		// Forward
 		if ( glfwGetKey(window_, GLFW_KEY_W) == GLFW_PRESS) {
-			camera_->ProcessKeyboard(scene::CameraMovement::FORWARD, deltaTime * currentSpeedFactor);
+			if (glfwGetKey(window_, GLFW_KEY_LEFT_CONTROL)) {
+				camera_->ProcessKeyboard(scene::CameraMovement::UP_ROTATE, deltaTime * currentSpeedFactor);
+			}
+			else {
+				camera_->ProcessKeyboard(scene::CameraMovement::FORWARD, deltaTime * currentSpeedFactor);
+			}
 		}
 		// Backward
 		if ( glfwGetKey(window_, GLFW_KEY_S) == GLFW_PRESS ) {
-			camera_->ProcessKeyboard(scene::CameraMovement::BACKWARD, deltaTime * currentSpeedFactor);
+			if (glfwGetKey(window_, GLFW_KEY_LEFT_CONTROL)) {
+				camera_->ProcessKeyboard(scene::CameraMovement::DOWN_ROTATE, deltaTime * currentSpeedFactor);
+			}
+			else {
+				camera_->ProcessKeyboard(scene::CameraMovement::BACKWARD, deltaTime * currentSpeedFactor);
+			}
+
 		}
 		// Left (Strafe)
 		if (glfwGetKey(window_, GLFW_KEY_A) == GLFW_PRESS ) {
-			camera_->ProcessKeyboard(scene::CameraMovement::LEFT, deltaTime * currentSpeedFactor);
+			if (glfwGetKey(window_, GLFW_KEY_LEFT_CONTROL)) {
+				camera_->ProcessKeyboard(scene::CameraMovement::LEFT_ROTATE, deltaTime * currentSpeedFactor);
+			}
+			else {
+				camera_->ProcessKeyboard(scene::CameraMovement::LEFT, deltaTime * currentSpeedFactor);
+			}
 		}
 		// Right (Strafe)
 		if (glfwGetKey(window_, GLFW_KEY_D) == GLFW_PRESS ) {
-			camera_->ProcessKeyboard(scene::CameraMovement::RIGHT, deltaTime * currentSpeedFactor);
+			if (glfwGetKey(window_, GLFW_KEY_LEFT_CONTROL)) {
+				camera_->ProcessKeyboard(scene::CameraMovement::RIGHT_ROTATE, deltaTime * currentSpeedFactor);
+			}
+			else {
+				camera_->ProcessKeyboard(scene::CameraMovement::RIGHT, deltaTime * currentSpeedFactor);
+			}
+
 		}
 		// Up (Elevation)
-		if ( glfwGetKey(window_, GLFW_KEY_SPACE) == GLFW_PRESS ) {
+		if ( glfwGetKey(window_, GLFW_KEY_E) == GLFW_PRESS ) {
 			camera_->ProcessKeyboard(scene::CameraMovement::UP, deltaTime * currentSpeedFactor);
 		}
 		// Down (Elevation)
-		if (glfwGetKey(window_, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS) {
+		if (glfwGetKey(window_, GLFW_KEY_Q) == GLFW_PRESS) {
 			camera_->ProcessKeyboard(scene::CameraMovement::DOWN, deltaTime * currentSpeedFactor);
 		}
 	}

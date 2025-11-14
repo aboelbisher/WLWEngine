@@ -128,86 +128,88 @@ core::Mesh<core::Vertex3D> createCubeWithNormals(float size = 1.0f) {
   std::vector<core::Vertex3D> vertices;
 
   // Standard color for the whole cube
-  const core::Color white = { 0.0f, 0.0f, 1.0f, 1.0f };
-
+   core::Color red = { 1.0f, 0.0f, 0.0f, 1.0f };
+   core::Color green = { 0.0f, 1.0f, 0.0f, 1.0f };
+   core::Color blue = { 0.0f, 0.0f, 1.0f, 1.0f };
+	 blue = green = red;
   // --- 1. FRONT FACE (+Z) ---
   // Vertices defined in counter-clockwise order (standard for front-facing)
   const core::Vector3 N_Front = { 0.0f, 0.0f, 1.0f };
 
   // Triangle 1: Bottom-left, Bottom-right, Top-right
-  vertices.push_back({ { -HS, -HS,  HS }, white, N_Front }); // 0
-  vertices.push_back({ {  HS, -HS,  HS }, white, N_Front }); // 1
-  vertices.push_back({ {  HS,  HS,  HS }, white, N_Front }); // 2
+  vertices.push_back({ { -HS, -HS,  HS }, red, N_Front }); // 0
+  vertices.push_back({ {  HS, -HS,  HS }, red, N_Front }); // 1
+  vertices.push_back({ {  HS,  HS,  HS }, red, N_Front }); // 2
 
   // Triangle 2: Top-right, Top-left, Bottom-left
-  vertices.push_back({ {  HS,  HS,  HS }, white, N_Front }); // 3
-  vertices.push_back({ { -HS,  HS,  HS }, white, N_Front }); // 4
-  vertices.push_back({ { -HS, -HS,  HS }, white, N_Front }); // 5
+  vertices.push_back({ {  HS,  HS,  HS }, blue, N_Front }); // 3
+  vertices.push_back({ { -HS,  HS,  HS }, blue, N_Front }); // 4
+  vertices.push_back({ { -HS, -HS,  HS }, blue, N_Front }); // 5
 
   // --- 2. BACK FACE (-Z) ---
   const core::Vector3 N_Back = { 0.0f, 0.0f, -1.0f };
 
   // Triangle 1: Bottom-right, Bottom-left, Top-left (Winding is opposite to maintain front-facing)
-  vertices.push_back({ {  HS, -HS, -HS }, white, N_Back }); // 6
-  vertices.push_back({ { -HS, -HS, -HS }, white, N_Back }); // 7
-  vertices.push_back({ { -HS,  HS, -HS }, white, N_Back }); // 8
+  vertices.push_back({ {  HS, -HS, -HS }, green, N_Back }); // 6
+  vertices.push_back({ { -HS, -HS, -HS }, green, N_Back }); // 7
+  vertices.push_back({ { -HS,  HS, -HS }, green, N_Back }); // 8
 
   // Triangle 2: Top-left, Top-right, Bottom-right
-  vertices.push_back({ { -HS,  HS, -HS }, white, N_Back }); // 9
-  vertices.push_back({ {  HS,  HS, -HS }, white, N_Back }); // 10
-  vertices.push_back({ {  HS, -HS, -HS }, white, N_Back }); // 11
+  vertices.push_back({ { -HS,  HS, -HS }, red, N_Back }); // 9
+  vertices.push_back({ {  HS,  HS, -HS }, red, N_Back }); // 10
+  vertices.push_back({ {  HS, -HS, -HS }, red, N_Back }); // 11
 
   // --- 3. TOP FACE (+Y) ---
   const core::Vector3 N_Top = { 0.0f, 1.0f, 0.0f };
 
   // Triangle 1: Top-left-front, Top-right-front, Top-right-back
-  vertices.push_back({ { -HS,  HS,  HS }, white, N_Top }); // 12
-  vertices.push_back({ {  HS,  HS,  HS }, white, N_Top }); // 13
-  vertices.push_back({ {  HS,  HS, -HS }, white, N_Top }); // 14
+  vertices.push_back({ { -HS,  HS,  HS }, blue, N_Top }); // 12
+  vertices.push_back({ {  HS,  HS,  HS }, blue, N_Top }); // 13
+  vertices.push_back({ {  HS,  HS, -HS }, blue, N_Top }); // 14
 
   // Triangle 2: Top-right-back, Top-left-back, Top-left-front
-  vertices.push_back({ {  HS,  HS, -HS }, white, N_Top }); // 15
-  vertices.push_back({ { -HS,  HS, -HS }, white, N_Top }); // 16
-  vertices.push_back({ { -HS,  HS,  HS }, white, N_Top }); // 17
+  vertices.push_back({ {  HS,  HS, -HS }, red, N_Top }); // 15
+  vertices.push_back({ { -HS,  HS, -HS }, red, N_Top }); // 16
+  vertices.push_back({ { -HS,  HS,  HS }, red, N_Top }); // 17
 
   // --- 4. BOTTOM FACE (-Y) ---
   const core::Vector3 N_Bottom = { 0.0f, -1.0f, 0.0f };
 
   // Triangle 1: Bottom-left-front, Bottom-left-back, Bottom-right-back
-  vertices.push_back({ { -HS, -HS,  HS }, white, N_Bottom }); // 18
-  vertices.push_back({ { -HS, -HS, -HS }, white, N_Bottom }); // 19
-  vertices.push_back({ {  HS, -HS, -HS }, white, N_Bottom }); // 20
+  vertices.push_back({ { -HS, -HS,  HS }, green, N_Bottom }); // 18
+  vertices.push_back({ { -HS, -HS, -HS }, green, N_Bottom }); // 19
+  vertices.push_back({ {  HS, -HS, -HS }, green, N_Bottom }); // 20
 
   // Triangle 2: Bottom-right-back, Bottom-right-front, Bottom-left-front
-  vertices.push_back({ {  HS, -HS, -HS }, white, N_Bottom }); // 21
-  vertices.push_back({ {  HS, -HS,  HS }, white, N_Bottom }); // 22
-  vertices.push_back({ { -HS, -HS,  HS }, white, N_Bottom }); // 23
+  vertices.push_back({ {  HS, -HS, -HS }, red, N_Bottom }); // 21
+  vertices.push_back({ {  HS, -HS,  HS }, red, N_Bottom }); // 22
+  vertices.push_back({ { -HS, -HS,  HS }, red, N_Bottom }); // 23
 
   // --- 5. RIGHT FACE (+X) ---
   const core::Vector3 N_Right = { 1.0f, 0.0f, 0.0f };
 
   // Triangle 1: Bottom-right-front, Bottom-right-back, Top-right-back
-  vertices.push_back({ {  HS, -HS,  HS }, white, N_Right }); // 24
-  vertices.push_back({ {  HS, -HS, -HS }, white, N_Right }); // 25
-  vertices.push_back({ {  HS,  HS, -HS }, white, N_Right }); // 26
+  vertices.push_back({ {  HS, -HS,  HS }, blue, N_Right }); // 24
+  vertices.push_back({ {  HS, -HS, -HS }, blue, N_Right }); // 25
+  vertices.push_back({ {  HS,  HS, -HS }, blue, N_Right }); // 26
 
   // Triangle 2: Top-right-back, Top-right-front, Bottom-right-front
-  vertices.push_back({ {  HS,  HS, -HS }, white, N_Right }); // 27
-  vertices.push_back({ {  HS,  HS,  HS }, white, N_Right }); // 28
-  vertices.push_back({ {  HS, -HS,  HS }, white, N_Right }); // 29
+  vertices.push_back({ {  HS,  HS, -HS }, green, N_Right }); // 27
+  vertices.push_back({ {  HS,  HS,  HS }, green, N_Right }); // 28
+  vertices.push_back({ {  HS, -HS,  HS }, green, N_Right }); // 29
 
   // --- 6. LEFT FACE (-X) ---
   const core::Vector3 N_Left = { -1.0f, 0.0f, 0.0f };
 
   // Triangle 1: Bottom-left-back, Bottom-left-front, Top-left-front
-  vertices.push_back({ { -HS, -HS, -HS }, white, N_Left }); // 30
-  vertices.push_back({ { -HS, -HS,  HS }, white, N_Left }); // 31
-  vertices.push_back({ { -HS,  HS,  HS }, white, N_Left }); // 32
+  vertices.push_back({ { -HS, -HS, -HS }, red, N_Left }); // 30
+  vertices.push_back({ { -HS, -HS,  HS }, red, N_Left }); // 31
+  vertices.push_back({ { -HS,  HS,  HS }, red, N_Left }); // 32
 
   // Triangle 2: Top-left-front, Top-left-back, Bottom-left-back
-  vertices.push_back({ { -HS,  HS,  HS }, white, N_Left }); // 33
-  vertices.push_back({ { -HS,  HS, -HS }, white, N_Left }); // 34
-  vertices.push_back({ { -HS, -HS, -HS }, white, N_Left }); // 35
+  vertices.push_back({ { -HS,  HS,  HS }, blue, N_Left }); // 33
+  vertices.push_back({ { -HS,  HS, -HS }, blue, N_Left }); // 34
+  vertices.push_back({ { -HS, -HS, -HS }, blue, N_Left }); // 35
 
   // The indices are now simply sequential since every 3 vertices form a unique triangle
   std::vector<uint32_t> indices(vertices.size());
