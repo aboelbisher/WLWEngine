@@ -8,7 +8,7 @@ namespace wlw::scene {
   class FPSCameraImpl : public FPSCamera {
   public:
     FPSCameraImpl()
-      : position_(0.0f, 0.0f, 3.0f), world_up_(0.0f, 1.0f, 0.0f),
+      : position_(0.0f, 0.0f, 3.0f), world_up_(0.0f, 0.0f, 1.0f),
       yaw_(-90.0f), pitch_(0.0f), fov_(45.0f), near_plane_(0.1f), far_plane_(100.0f),
       movement_speed_(5.0f) { // 5 units per second 
       updateCameraVectors();

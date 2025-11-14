@@ -253,6 +253,9 @@ public:
       glUniformMatrix4fv(glGetUniformLocation(m_ShaderID_3D, "projection"), 1, GL_FALSE, glm::value_ptr(camera->GetProjectionMatrix()));
 			auto& camera_position = camera->GetPosition();
 
+      std::cout << "pos" << camera_position.x << ", " << camera_position.y << ", " << camera_position.z << std::endl;
+
+
       glm::vec3 lightPosition = glm::vec3(1.2f, 1.0f, 2.0f);
       glm::vec3 lightColour = glm::vec3(1.0f, 1.0f, 1.0f); // White light
       glm::vec3 objectColour = glm::vec3(1.0f, 0.5f, 0.31f); // Orange-red object

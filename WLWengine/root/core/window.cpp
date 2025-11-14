@@ -139,9 +139,27 @@ private:
 		if (glfwGetKey(window_, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS) {
 			camera_->ProcessKeyboard(scene::CameraMovement::DOWN, deltaTime * currentSpeedFactor);
 		}
-
-
 	}
+
+	//void ProcessMouseMovement(float xoffset, float yoffset, bool constrainPitch = true) override {
+	//	// Apply sensitivity to the raw mouse input
+	//	xoffset *= MouseSensitivity;
+	//	yoffset *= MouseSensitivity;
+
+	//	// Adjust Yaw and Pitch
+	//	Yaw += xoffset;
+	//	Pitch += yoffset;
+
+	//	// Constrain Pitch to avoid flipping the view (essential for FPS cameras)
+	//	if (constrainPitch) {
+	//		if (Pitch > 89.0f) Pitch = 89.0f;
+	//		if (Pitch < -89.0f) Pitch = -89.0f;
+	//	}
+
+	//	// Recalculate Front, Right, and Up vectors
+	//	updateCameraVectors();
+	//}
+
 
 	GLFWwindow* window_;
 	core::Vector2 size_;

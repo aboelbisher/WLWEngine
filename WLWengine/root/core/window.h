@@ -39,6 +39,7 @@ public:
 	virtual void SetCamera(std::shared_ptr<scene::Camera3D> camera) = 0;
 	virtual const std::shared_ptr<scene::Camera3D> GetUpdatedCamera() const = 0;
 
+
 #ifdef WLW_USE_GLFW
 	virtual GLFWwindow* GetGLFWwindow() = 0 ;
 #endif
