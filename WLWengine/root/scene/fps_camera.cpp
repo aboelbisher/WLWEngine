@@ -42,61 +42,101 @@ namespace wlw::scene {
 
     // --- Core Movement Logic ---
     void ProcessKeyboard(CameraMovement direction, float deltaTime) override {
-
-
       float velocity = movement_speed_ * deltaTime;
-
-      // Base vectors for movement
       core::Vector3 movementVector;
 
       switch (direction) {
       case CameraMovement::FORWARD:
-        movementVector = front_;
+      case CameraMovement::BACKWARD: {
+        // Project the Front vector onto the horizontal plane (XY)
+        core::Vector3 horizontalFront = front_;
+        horizontalFront.z = 0.0f; // <--- The key to staying grounded
+        horizontalFront = horizontalFront.Normalize();
+
+        if (direction == CameraMovement::FORWARD) {
+          movementVector = horizontalFront;
+        }
+        else {
+          movementVector = -horizontalFront;
+        }
         break;
-      case CameraMovement::BACKWARD:
-        movementVector = -front_;
-        break;
+      }
+
       case CameraMovement::LEFT:
         movementVector = -right_;
         break;
       case CameraMovement::RIGHT:
         movementVector = right_;
         break;
+
+        // UP/DOWN movement is now purely vertical 'flying' (along Z-axis)
       case CameraMovement::UP:
-        movementVector = up_; 
+        movementVector = world_up_;
         break;
       case CameraMovement::DOWN:
-        movementVector = -up_; 
+        movementVector = -world_up_;
         break;
 
-
-      case CameraMovement::DOWN_ROTATE:
-        pitch_ += 30.0f * deltaTime; // Rotate up
-        updateCameraVectors();
-				return;
-
+        // Rotations are processed and immediately return
       case CameraMovement::UP_ROTATE:
-        pitch_ = 30.0f * deltaTime; // Rotate down
-				updateCameraVectors();
+        pitch_ += 30.0f * deltaTime;
+        if (pitch_ > 89.0f) pitch_ = 89.0f;
+        updateCameraVectors();
         return;
 
-      case CameraMovement::RIGHT_ROTATE:
-        yaw_ -= 30.0f * deltaTime; // Rotate left
+      case CameraMovement::DOWN_ROTATE:
+        pitch_ -= 30.0f * deltaTime;
+        if (pitch_ < -89.0f) pitch_ = -89.0f;
         updateCameraVectors();
         return;
 
       case CameraMovement::LEFT_ROTATE:
+        yaw_ -= 30.0f * deltaTime;
+        updateCameraVectors();
+        return;
 
-				yaw_ += 30.0f * deltaTime; // Rotate right
+      case CameraMovement::RIGHT_ROTATE:
+        yaw_ += 30.0f * deltaTime; // Assuming 30.0f to match LEFT_ROTATE
         updateCameraVectors();
         return;
       }
 
       // Apply movement
       position_ += movementVector * velocity;
-      // In a true FPS camera, this would also prevent vertical drift (lock Y for walking)
-      // Position.y = fixed_y_height;
     }
+
+    void ProcessMouseMovement(float xoffset, float yoffset, bool constrainPitch) override {
+
+      // 1. Apply Sensitivity
+      // This scales the raw input to a comfortable rate of turning.
+      float sensitivity = 0.1f;
+      xoffset *= sensitivity;
+      yoffset *= sensitivity;
+
+      // 2. Update Yaw and Pitch
+      // Yaw: Adding X-offset turns the camera horizontally.
+      yaw_ += xoffset;
+
+      // Pitch: Subtracting Y-offset moves the camera up/down. 
+      // We subtract because screens typically have Y-coordinates increasing downwards.
+      pitch_ -= yoffset;
+
+      // 3. Constrain Pitch (Look Up/Down)
+      // Prevents the camera from flipping upside down.
+      if (constrainPitch) {
+        if (pitch_ > 89.0f) {
+          pitch_ = 89.0f;
+        }
+        if (pitch_ < -89.0f) {
+          pitch_ = -89.0f;
+        }
+      }
+
+      // 4. Update Vectors
+      // The core of the functionality: recalculate front/right/up based on the new angles.
+      updateCameraVectors();
+    }
+
 		static constexpr core::Vector3 world_up_ = { 0.0f, 0.0f, 1.0f }; // Z-up coordinate system
 
   private:

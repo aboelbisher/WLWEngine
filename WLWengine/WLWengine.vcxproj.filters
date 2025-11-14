@@ -27,13 +27,13 @@
     <ClCompile Include="root\scene\triangle_2d.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="root\core\gl_vertex_buffer.h">
+    <ClCompile Include="root\rendering\gl_vertex_buffer.h">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="root\core\gl_index_buffer.h">
+    <ClCompile Include="root\rendering\gl_index_buffer.h">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="root\rendering_driver\rendering_driver_gl.cpp">
+    <ClCompile Include="root\rendering\rendering_driver_gl.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="root\wlw.cpp">
@@ -80,13 +80,13 @@
     <ClInclude Include="root\core\vertex_2d.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="root\core\vertex_buffer.h">
+    <ClInclude Include="root\rendering\vertex_buffer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="root\core\index_buffer.h">
+    <ClInclude Include="root\rendering\index_buffer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="root\rendering_driver\rendering_driver.h">
+    <ClInclude Include="root\rendering\rendering_driver.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="root\core\logger.h">
@@ -102,9 +102,6 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="root\core\vector3.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="root\core\vertex.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="root\core\vertex_3d.h">
@@ -123,6 +120,12 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="root\utils\image.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="root\shaders\basic_shaders.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="root\rendering\input_engine.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

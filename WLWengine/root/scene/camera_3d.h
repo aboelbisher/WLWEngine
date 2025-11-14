@@ -36,6 +36,7 @@ namespace wlw::scene {
 		virtual const glm::mat4& GetProjectionMatrix() = 0;
 
 		virtual void ProcessKeyboard(CameraMovement direction, float deltaTime) = 0;
+		virtual void ProcessMouseMovement(float xoffset, float yoffset, bool constrainPitch = true) = 0;
 
 	};
 } // namespace wlw::scene

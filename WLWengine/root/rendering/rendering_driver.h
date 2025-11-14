@@ -2,8 +2,8 @@
 
 #include <memory>
 #include <vector>
-#include "core/index_buffer.h"
-#include "core/vertex_buffer.h"
+#include "rendering/index_buffer.h"
+#include "rendering/vertex_buffer.h"
 #include "core/vertex_2d.h"
 #include "core/vertex_3d.h"
 

@@ -1,3 +1,4 @@
+#ifdef WLW_USE_GLFW
 #include "window.h"
 #include <GLFW/glfw3.h>
 #include <glad/glad.h>
@@ -35,6 +36,8 @@ public:
 			std::cerr << "Failed to create GLFW window with title " << title_ << std::endl;
 			glfwTerminate();
 		}
+
+		glfwSetInputMode(window_, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 	}
 
 
@@ -109,14 +112,10 @@ private:
 	void processInput() {
 	
 		float currentSpeedFactor = 1.0f;
-		// Example: Check for speed boost (Left Shift)
-		// if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) {
-		//     currentSpeedFactor = 3.0f;
-		// }
 
 		float deltaTime = 0.016f; // Assuming a fixed time step for simplicity (60 FPS)
 		// Forward
-		if ( glfwGetKey(window_, GLFW_KEY_W) == GLFW_PRESS) {
+		if (glfwGetKey(window_, GLFW_KEY_W) == GLFW_PRESS) {
 			if (glfwGetKey(window_, GLFW_KEY_LEFT_CONTROL)) {
 				camera_->ProcessKeyboard(scene::CameraMovement::UP_ROTATE, deltaTime * currentSpeedFactor);
 			}
@@ -163,25 +162,28 @@ private:
 		}
 	}
 
-	//void ProcessMouseMovement(float xoffset, float yoffset, bool constrainPitch = true) override {
-	//	// Apply sensitivity to the raw mouse input
-	//	xoffset *= MouseSensitivity;
-	//	yoffset *= MouseSensitivity;
+	void mouse_callback(GLFWwindow* window, double xpos, double ypos) {
+		std::cout << "Mouse moved to: " << xpos << ", " << ypos << std::endl;
+		if (first_mouse_) {
+			last_position_.x = xpos;
+			last_position_.y = ypos;
+			first_mouse_ = false;
+		}
 
-	//	// Adjust Yaw and Pitch
-	//	Yaw += xoffset;
-	//	Pitch += yoffset;
+		// 1. Calculate the offset (how much the mouse moved)
+		float xoffset = xpos - last_position_.x;
+		float yoffset = last_position_.y - ypos; // Reversed Y-offset for screen coordinates!
 
-	//	// Constrain Pitch to avoid flipping the view (essential for FPS cameras)
-	//	if (constrainPitch) {
-	//		if (Pitch > 89.0f) Pitch = 89.0f;
-	//		if (Pitch < -89.0f) Pitch = -89.0f;
-	//	}
+		// 2. Store the new position for the next frame
+		last_position_.x = xpos;
+		last_position_.x = ypos;
 
-	//	// Recalculate Front, Right, and Up vectors
-	//	updateCameraVectors();
-	//}
+		// 3. Process with the camera object
+		camera_->ProcessMouseMovement(xoffset, yoffset);
+	}
 
+	bool first_mouse_ = true;
+	core::Vector2 last_position_;
 
 	GLFWwindow* window_;
 	core::Vector2 size_;
@@ -203,3 +205,5 @@ std::unique_ptr<Window> Window::Create(const Vector2& size, const std::string& t
 	return std::make_unique<WindowImpl>(size, title);
 }	
 } // namespace wlw::core
+
+#endif // WLW_USE_GLFW

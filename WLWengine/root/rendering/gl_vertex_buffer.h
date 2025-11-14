@@ -1,11 +1,13 @@
+#ifdef WLW_USE_GLFW
+
 #pragma once
 #include <vector>
 #include <glad/glad.h>
 
 
-#include "vertex_buffer.h"
-#include "vertex_2d.h"
-#include "vertex_3d.h"
+#include "rendering/vertex_buffer.h"
+#include "core/vertex_2d.h"
+#include "core/vertex_3d.h"
 
 namespace wlw::core {
 class GLVertexBuffer : public WVertexBuffer {
@@ -94,3 +96,5 @@ private:
 };
 
 } // wlw:core
+
+#endif // WLW_USE_GLFW

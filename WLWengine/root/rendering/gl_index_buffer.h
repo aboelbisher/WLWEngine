@@ -1,6 +1,9 @@
+#ifdef WLW_USE_GLFW
+
+
 #pragma once
 
-#include "index_buffer.h"
+#include "rendering/index_buffer.h"
 #include <glad/glad.h>
 
 #include <vector>
@@ -42,3 +45,5 @@ namespace wlw::core {
     //}
   };
 } // wlw:core
+
+#endif // WLW_USE_GLFW
