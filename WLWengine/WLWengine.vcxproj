@@ -21,6 +21,7 @@
   <ItemGroup>
     <ClCompile Include="External\include\glad\glad.c" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="root\os\input_engine_gl.cpp" />
     <ClCompile Include="root\rendering\gl_index_buffer.h" />
     <ClCompile Include="root\rendering\gl_vertex_buffer.h" />
     <ClCompile Include="root\rendering\rendering_driver_gl.cpp" />
@@ -28,7 +29,7 @@
     <ClCompile Include="root\utils\image_loader.cpp" />
     <ClCompile Include="root\utils\stb_image_impl.cpp" />
     <ClCompile Include="root\wlw.cpp" />
-    <ClCompile Include="root\core\window.cpp" />
+    <ClCompile Include="root\scene\window.cpp" />
     <ClCompile Include="root\scene\triangle_2d.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -37,6 +38,7 @@
     <ClInclude Include="External\include\GLFW\glfw3.h" />
     <ClInclude Include="External\include\GLFW\glfw3native.h" />
     <ClInclude Include="External\include\KHR\khrplatform.h" />
+    <ClInclude Include="root\os\input_engine.h" />
     <ClInclude Include="root\rendering\index_buffer.h" />
     <ClInclude Include="root\core\logger.h" />
     <ClInclude Include="root\core\mesh.h" />
@@ -56,7 +58,7 @@
     <ClInclude Include="root\utils\image_loader.h" />
     <ClInclude Include="root\utils\stb_image.h" />
     <ClInclude Include="root\wlw.h" />
-    <ClInclude Include="root\core\window.h" />
+    <ClInclude Include="root\scene\window.h" />
     <ClInclude Include="root\scene\triangle_2d.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">

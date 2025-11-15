@@ -106,20 +106,19 @@ namespace wlw::scene {
     }
 
     void ProcessMouseMovement(float xoffset, float yoffset, bool constrainPitch) override {
-
       // 1. Apply Sensitivity
       // This scales the raw input to a comfortable rate of turning.
-      float sensitivity = 0.1f;
+      float sensitivity = 0.01f;
       xoffset *= sensitivity;
       yoffset *= sensitivity;
 
       // 2. Update Yaw and Pitch
       // Yaw: Adding X-offset turns the camera horizontally.
-      yaw_ += xoffset;
+      yaw_ -= xoffset;
 
       // Pitch: Subtracting Y-offset moves the camera up/down. 
       // We subtract because screens typically have Y-coordinates increasing downwards.
-      pitch_ -= yoffset;
+      pitch_ += yoffset;
 
       // 3. Constrain Pitch (Look Up/Down)
       // Prevents the camera from flipping upside down.

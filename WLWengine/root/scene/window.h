@@ -7,7 +7,7 @@
 #include <GLFW/glfw3.h>
 #endif
 
-#include "color.h"
+#include "core/color.h"
 #include "scene/node.h"
 #include "core/vector2.h"
 #include "core/vertex_2d.h"
@@ -39,6 +39,7 @@ public:
 	virtual void SetCamera(std::shared_ptr<scene::Camera3D> camera) = 0;
 	virtual const std::shared_ptr<scene::Camera3D> GetUpdatedCamera() const = 0;
 
+	virtual void ProcessMouseMovement(double xpos, double ypos) = 0;
 
 #ifdef WLW_USE_GLFW
 	virtual GLFWwindow* GetGLFWwindow() = 0 ;

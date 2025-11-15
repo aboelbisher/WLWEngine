@@ -109,6 +109,8 @@ public:
 	}
 
 private:
+
+	//TODO: Move to somehwere else (like input manager)
 	void processInput() {
 	
 		float currentSpeedFactor = 1.0f;
@@ -162,7 +164,8 @@ private:
 		}
 	}
 
-	void mouse_callback(GLFWwindow* window, double xpos, double ypos) {
+
+	void ProcessMouseMovement(double xpos, double ypos) {
 		std::cout << "Mouse moved to: " << xpos << ", " << ypos << std::endl;
 		if (first_mouse_) {
 			last_position_.x = xpos;
@@ -172,14 +175,18 @@ private:
 
 		// 1. Calculate the offset (how much the mouse moved)
 		float xoffset = xpos - last_position_.x;
+		std::cout << "X Offset: " << xoffset << std::endl;
 		float yoffset = last_position_.y - ypos; // Reversed Y-offset for screen coordinates!
 
 		// 2. Store the new position for the next frame
 		last_position_.x = xpos;
-		last_position_.x = ypos;
+		last_position_.y = ypos;
 
 		// 3. Process with the camera object
 		camera_->ProcessMouseMovement(xoffset, yoffset);
+
+
+		return;
 	}
 
 	bool first_mouse_ = true;

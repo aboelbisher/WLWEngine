@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include "core/window.h"
+#include "scene/window.h"
 
 namespace wlw {
 

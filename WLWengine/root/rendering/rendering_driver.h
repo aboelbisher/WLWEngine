@@ -7,7 +7,7 @@
 #include "core/vertex_2d.h"
 #include "core/vertex_3d.h"
 
-#include "core/window.h"
+#include "scene/window.h"
 
 namespace wlw::rendering {
 class RenderingDriver {

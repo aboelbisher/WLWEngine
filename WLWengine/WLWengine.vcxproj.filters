@@ -21,7 +21,7 @@
     <ClCompile Include="External\include\glad\glad.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="root\core\window.cpp">
+    <ClCompile Include="root\scene\window.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="root\scene\triangle_2d.cpp">
@@ -48,6 +48,9 @@
     <ClCompile Include="root\utils\image_loader.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="root\os\input_engine_gl.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="External\include\glad\glad.h">
@@ -65,7 +68,7 @@
     <ClInclude Include="root\wlw.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="root\core\window.h">
+    <ClInclude Include="root\scene\window.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="root\core\color.h">
@@ -126,6 +129,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="root\rendering\input_engine.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="root\os\input_engine.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

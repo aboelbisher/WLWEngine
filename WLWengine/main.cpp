@@ -1,7 +1,7 @@
 #include <iostream>
 
 #include "root/wlw.h"
-#include "root/core/window.h"
+#include "scene/window.h"
 #include <chrono>
 #include <thread>
 #include <scene/triangle_2d.h>
@@ -20,7 +20,7 @@ using namespace wlw;
 
 int main() {
 	auto engine = wlw::WLWEngine::Create();
-	std::shared_ptr< wlw::core::Window> window = wlw::core::Window::Create({800, 600}, "MainWindow");
+	std::shared_ptr< wlw::core::Window> window = wlw::core::Window::Create({600, 600}, "MainWindow");
 	engine->Start(window);
 	auto cube = createCubeWithNormals();
 	auto cube_node = std::make_shared<wlw::scene::Node<wlw::core::Vertex3D>>();
