@@ -36,12 +36,12 @@ public:
 	}
 
 	// NEW: Resource Creation for Index Buffers
-	std::unique_ptr<core::WIndexBuffer> CreateIndexBuffer(const std::vector<uint32_t>& indices) override { 
+	std::unique_ptr<core::WIndexBuffer> CreateIndexBuffer(const std::vector<uint32_t>& indices) override {
 		return std::make_unique<core::GLIndexBuffer>(indices);
 	}
 
 
-	bool Initialize(std::shared_ptr<core::Window> window) override {
+	bool Initialize(std::shared_ptr<scene::Window> window) override {
 
     main_window_ = window;
     // 1. Set the error callback FIRST
@@ -103,7 +103,7 @@ public:
     return true;
 	}
 
-  void AttachWindow(std::shared_ptr<core::Window> window) override {
+  void AttachWindow(std::shared_ptr<scene::Window> window) override {
     if (FAIL_IF(main_window_ == nullptr, "null window, did u forgot to initialise the rendering driver ? ")) {
       return;
     }
@@ -120,7 +120,7 @@ public:
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
   }
 
-  void DrawWindow(std::shared_ptr<core::Window> window) override {
+  void DrawWindow(std::shared_ptr<scene::Window> window) override {
 		window->MakeContextCurrent();
     window->ProcessEvents();
 
@@ -153,17 +153,9 @@ public:
       glUniformMatrix4fv(glGetUniformLocation(m_ShaderID_3D, "model"), 1, GL_FALSE, glm::value_ptr(node->GetModelMatrix()));
       glUniformMatrix4fv(glGetUniformLocation(m_ShaderID_3D, "view"), 1, GL_FALSE, glm::value_ptr(camera->GetViewMatrix()));
       glUniformMatrix4fv(glGetUniformLocation(m_ShaderID_3D, "projection"), 1, GL_FALSE, glm::value_ptr(camera->GetProjectionMatrix()));
+
 			auto& camera_position = camera->GetPosition();
-
-
-      glm::vec3 lightPosition = glm::vec3(1.2f, 1.0f, 2.0f);
-      glm::vec3 lightColour = glm::vec3(1.0f, 1.0f, 1.0f); // White light
-      glm::vec3 objectColour = glm::vec3(1.0f, 0.5f, 0.31f); // Orange-red object
-      glUniform3f(glGetUniformLocation(m_ShaderID_3D, "objectColor"), objectColour.x, objectColour.y, objectColour.z);
-      glUniform3f(glGetUniformLocation(m_ShaderID_3D, "lightColor"), lightColour.x, lightColour.y, lightColour.z);
-      glUniform3f(glGetUniformLocation(m_ShaderID_3D, "lightPos"), lightPosition.x, lightPosition.y, lightPosition.z);
       glUniform3f(glGetUniformLocation(m_ShaderID_3D, "viewPos"), camera_position.x, camera_position.y, camera_position.z);
-
 
       auto material = node->GetMaterial();
       if (material) {
@@ -172,7 +164,18 @@ public:
         material->BindTexture();
         GLint textureLocation = glGetUniformLocation(m_ShaderID_3D, "model_texture");
         glUniform1i(textureLocation, 0); // Tell the shader to use GL_TEXTURE0
-        //material->UnbindTexture();
+
+        if (const auto& lighting = material->GetLighting()) {
+          glUniform1i(glGetUniformLocation(m_ShaderID_3D, "useLighting"), true);
+          glUniform3f(glGetUniformLocation(m_ShaderID_3D, "objectColor"), lighting->color.r, lighting->color.g, lighting->color.b);
+          glUniform3f(glGetUniformLocation(m_ShaderID_3D, "lightPos"), lighting->position.x, lighting->position.y, lighting->position.z);
+          glUniform1f(glGetUniformLocation(m_ShaderID_3D, "ambientStrength"), lighting->ambient_strength);
+          glUniform1f(glGetUniformLocation(m_ShaderID_3D, "shininess"), lighting->shininess);
+        }
+        else {
+          glUniform1i(glGetUniformLocation(m_ShaderID_3D, "useLighting"), false);
+        }
+
       } else {
         glUniform1i(glGetUniformLocation(m_ShaderID_3D, "use_texture"), false);
       }
@@ -244,7 +247,7 @@ private:
 private:
   GLuint m_ShaderID_2D = 0; 
   GLuint m_ShaderID_3D = 0; 
-  std::shared_ptr<core::Window> main_window_;
+  std::shared_ptr<scene::Window> main_window_;
 };
 
 std::unique_ptr<RenderingDriver> RenderingDriver::Create() {

@@ -55,7 +55,7 @@
     <ClInclude Include="root\scene\fps_camera.h" />
     <ClInclude Include="root\scene\node.h" />
     <ClInclude Include="root\core\color.h" />
-    <ClInclude Include="root\shaders\basic_shaders.h" />
+    <ClInclude Include="root\rendering\shaders\basic_shaders.h" />
     <ClInclude Include="root\utils\image.h" />
     <ClInclude Include="root\utils\image_loader.h" />
     <ClInclude Include="root\utils\stb_image.h" />

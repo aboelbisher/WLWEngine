@@ -68,12 +68,12 @@ in vec3 vertexPos;
 in vec2 vertUV;
 in vec3 vertexNormal1;
 
-
 uniform vec3 viewPos;
-uniform vec3 objectColor;
 uniform vec3 lightColor;
 uniform vec3 lightPos;
-
+uniform bool useLighting;
+uniform float ambientStrength;
+uniform float shininess;
 uniform bool use_texture;
 uniform sampler2D model_texture; 
 
@@ -83,8 +83,12 @@ void main()
 {
     vec3 final_vertex_color = use_texture ?  texture(model_texture, vertUV).xyz : vertexColor;
 
-    float ambientStrength = 0.1;
-    float shininess = 64.0;
+    if (!useLighting) {
+      FragColor = vec4(final_vertex_color, 1.0);
+      return;
+    }
+
+
     vec3 ambient = ambientStrength * final_vertex_color;
 
     vec3 norm = normalize(vertexNormal);
@@ -109,11 +113,8 @@ void main()
 
     // --- 4. Final Color Calculation ---
     // Combine all lighting components and multiply by the object's base color.
-    vec3 result = (ambient + diffuse + specular) * objectColor;
+    vec3 result = (ambient + diffuse + specular);
 
     FragColor = vec4(result, 1.0);
-
-
-    //FragColor = vec4(vertexNormal1, 1.0);
 }
 )";

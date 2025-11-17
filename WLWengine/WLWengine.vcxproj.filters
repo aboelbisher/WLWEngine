@@ -128,7 +128,7 @@
     <ClInclude Include="root\utils\image.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="root\shaders\basic_shaders.h">
+    <ClInclude Include="root\rendering\shaders\basic_shaders.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="root\rendering\input_engine.h">

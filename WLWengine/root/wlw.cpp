@@ -9,14 +9,14 @@ namespace wlw {
   public:
     WLWEngineImpl() {}
 
-    void Start(std::shared_ptr<wlw::core::Window> window) override {
+    void Start(std::shared_ptr<wlw::scene::Window> window) override {
       windows_.insert({ last_window_id, window });
       last_window_id++;
 			rendering_driver_->Initialize(window);
 			input_engine_->AttachWindow(window);
     }
 
-    int AttachWindow(std::shared_ptr<core::Window > window) override {
+    int AttachWindow(std::shared_ptr<scene::Window > window) override {
 			rendering_driver_->AttachWindow(window);
       input_engine_->AttachWindow(window);
       windows_.insert({ last_window_id, window });
@@ -31,7 +31,7 @@ namespace wlw {
 
 
   private:
-    std::unordered_map<int, std::shared_ptr<core::Window>> windows_;
+    std::unordered_map<int, std::shared_ptr<scene::Window>> windows_;
     int last_window_id = 0;
   
     std::unique_ptr<rendering::RenderingDriver> rendering_driver_ = rendering::RenderingDriver::Create();

@@ -12,7 +12,7 @@ namespace wlw::os {
 		public:
 		InputEngineImpl() {}
 
-		void AttachWindow(std::shared_ptr<core::Window> window) override {
+		void AttachWindow(std::shared_ptr<scene::Window> window) override {
 			glfwSetWindowUserPointer(window->GetGLFWwindow(), window.get());
 			glfwSetCursorPosCallback(window->GetGLFWwindow(), InputEngineImpl::MouseCallback);
 				//TODO and what happen when the window is removed XDXDXD ? 
@@ -20,14 +20,14 @@ namespace wlw::os {
 		}
 
 		static void MouseCallback(GLFWwindow* window, double xpos, double ypos) {
-			core::Window* window_ = static_cast<core::Window*>(glfwGetWindowUserPointer(window));
+			scene::Window* window_ = static_cast<scene::Window*>(glfwGetWindowUserPointer(window));
 			if (FAIL_IF(window_ == nullptr, "window instance is null in MouseCallback")) {
 				return;
 			}
 			window_->ProcessMouseMovement(static_cast<float>(xpos), static_cast<float>(ypos));
 		}
 	private:
-		std::vector<std::shared_ptr<core::Window>> attached_windows_;
+		std::vector<std::shared_ptr<scene::Window>> attached_windows_;
 
 	};
 

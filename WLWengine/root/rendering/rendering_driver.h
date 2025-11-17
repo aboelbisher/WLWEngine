@@ -19,9 +19,9 @@ public:
   virtual std::unique_ptr<core::WVertexBuffer> CreateVertexBuffer(const std::vector<core::Vertex3D>& vertices) = 0;
 
   virtual std::unique_ptr<core::WIndexBuffer> CreateIndexBuffer(const std::vector<uint32_t>& indices) = 0;
-	virtual bool Initialize(std::shared_ptr<core::Window> window) = 0;
-	virtual void AttachWindow(std::shared_ptr<core::Window> window) = 0;
-  virtual void DrawWindow(std::shared_ptr<core::Window> window) = 0;
+	virtual bool Initialize(std::shared_ptr<scene::Window> window) = 0;
+	virtual void AttachWindow(std::shared_ptr<scene::Window> window) = 0;
+  virtual void DrawWindow(std::shared_ptr<scene::Window> window) = 0;
 
   virtual void SetViewport(int x, int y, int width, int height) = 0;
   virtual void Clear() = 0;

@@ -3,6 +3,7 @@
 #include <vector>
 #include <concepts>
 #include <type_traits>
+#include <unordered_map>
 
 #include "core/vertex_2d.h"
 #include "core/vertex_3d.h"
@@ -15,6 +16,8 @@
 
 namespace wlw::scene {
 
+
+
 template <core::OnlyVerticesTypes T>
 class Node {
 public:
@@ -26,22 +29,61 @@ public:
 		mesh_ = mesh;
 	}
 
+	void Translate(const core::Vector3& vector) {
+		position_ += vector;
+		for (const auto& [_, child_] : children_) {
+			child_->Translate(vector);
+		}
+	}
+
 	void SetPosition(const core::Vector3& position) {
+		auto old_position = position_;
 		position_ = position;
 		UpdateModelMatrix();
+		auto translation_vector = old_position - position;
+		for (const auto& [_, child_] : children_) {
+			child_->Translate(translation_vector);
+		}
 	}
 
 	void SetScale(const core::Vector3& scale) {
 		scale_ = scale;
 		UpdateModelMatrix();
+		for (const auto& [_, child_] : children_) {
+			children_->SetScale(scale);
+		}
 	}
 
 	void SetRotation(const core::Vector3& rotation_angle_degrees) {
-		// Store rotation angles (in radians)
 		rotation_angles_degrees_ = rotation_angle_degrees;
 		UpdateModelMatrix();
+
+		for (const auto& [_, child_] : children_) {
+			children_->SetRotation(rotation_angle_degrees);
+		}
 	}
 
+	const glm::mat4& GetModelMatrix() const {
+		return model_matrix_;
+	}
+
+	void SetMaterial(std::unique_ptr<rendering::Material> material) {
+		material_ = std::move(material);
+
+		//TODO: should this be done here ?
+		material_->GenerateTexture();
+	}
+
+	const rendering::Material* GetMaterial() const {
+		return material_.get();
+	}
+
+	int AddNode(std::shared_ptr<Node> node) {
+		children_.insert({current_node_id_, node});
+		return current_node_id_++;
+	}
+
+private:
 
 	void UpdateModelMatrix() {
 		// Convert degrees to radians for GLM
@@ -63,21 +105,6 @@ public:
 		model_matrix_ = glm::translate(model_matrix_, glm::vec3(position_.x, position_.y, position_.z));
 	}
 
-	const glm::mat4& GetModelMatrix() const {
-		return model_matrix_;
-	}
-
-	void SetMaterial(std::unique_ptr<rendering::Material> material) {
-		material_ = std::move(material);
-
-		//TODO: should this be done here ?
-		material_->GenerateTexture();
-	}
-
-	const rendering::Material* GetMaterial() const {
-		return material_.get();
-	}
-
 private:
 	core::Mesh<T> mesh_;
 
@@ -87,11 +114,17 @@ private:
 
 	glm::mat4 model_matrix_ = glm::mat4(1.0f);
 
-
 	std::unique_ptr<rendering::Material> material_;
+
+	std::unordered_map<int, std::shared_ptr<scene::Node<T>>>  children_;
+	int current_node_id_ = 0;
 };
 
 using Node3D = Node<core::Vertex3D>;
 using Node2D = Node<core::Vertex2D>;
+
+using Nodes2DMap = std::unordered_map<int, std::shared_ptr<Node2D>>;
+using Nodes3DMap = std::unordered_map<int, std::shared_ptr<Node3D>>;
+
 
 } // namespace wlw::scene

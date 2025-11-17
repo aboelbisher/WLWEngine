@@ -11,7 +11,7 @@
 #include "scene/fps_camera.h"
 
 
-namespace wlw::core {
+namespace wlw::scene {
 
 #define ASSERT_GLFW_WINDOW_NOT_NULL(window) \
 		if (window == NULL) { \
@@ -21,7 +21,7 @@ namespace wlw::core {
 
 class WindowImpl: public Window {
 public:
-	WindowImpl(const Vector2& size, const std::string& title): size_(size), title_(title), color_(1.0, 0.0, 0.0, 1.0) {}
+	WindowImpl(const core::Vector2& size, const std::string& title): size_(size), title_(title), color_(1.0, 0.0, 0.0, 1.0) {}
 	~WindowImpl() override {
 		// Destructor implementation (e.g., destroy the window)
 	}
@@ -62,7 +62,7 @@ public:
 	}
 
 
-	void SetClearColor(const Color& color) override {
+	void SetClearColor(const core::Color& color) override {
 		color_ = color;
 		glClearColor(color.r, color.g, color.b, color.a);
 		glClear(GL_COLOR_BUFFER_BIT);
@@ -77,12 +77,12 @@ public:
 		is_active_ = is_active;
 	}
 
-	int AddNode(const std::shared_ptr<scene::Node<Vertex2D>>& node_2d) override {
+	int AddNode(const std::shared_ptr<Node2D>& node_2d) override {
 		nodes_2d_[nodes_2d_next_id_] = node_2d;
 		return nodes_2d_next_id_++;
 	}
 
-	int AddNode(const std::shared_ptr<scene::Node<Vertex3D>>& node_3d) override {
+	int AddNode(const std::shared_ptr<Node3D>& node_3d) override {
 		nodes_3d_[nodes_3d_next_id_] = node_3d;
 		return nodes_3d_next_id_++;
 	}
@@ -95,16 +95,16 @@ public:
 		return nodes_3d_;
 	}
 
-	void SetCamera(std::shared_ptr<scene::Camera3D> camera) override {
+	void SetCamera(std::shared_ptr<Camera3D> camera) override {
 		camera_ = camera;
 	}
 
-	const std::shared_ptr<scene::Camera3D> GetUpdatedCamera() const override {
+	const std::shared_ptr<Camera3D> GetUpdatedCamera() const override {
 		camera_->UpdateSize(size_);
 		return camera_;
 	}
 
-	Vector2 GetSize() const override {
+	core::Vector2 GetSize() const override {
 		return size_;
 	}
 
@@ -185,21 +185,21 @@ private:
 
 	GLFWwindow* window_;
 	core::Vector2 size_;
-	Color color_;
+	core::Color color_;
 	std::string title_;
 
 	bool is_active_ = true;
 
-	Nodes2DMap nodes_2d_;
+	wlw::scene::Nodes2DMap nodes_2d_{};
 	int nodes_2d_next_id_ = 0;
 
-	Nodes3DMap nodes_3d_;
+	wlw::scene::Nodes3DMap nodes_3d_ = {};
 	int nodes_3d_next_id_ = 0;
 
 	std::shared_ptr<scene::Camera3D> camera_ = scene::FPSCamera::Create();
 };
 
-std::unique_ptr<Window> Window::Create(const Vector2& size, const std::string& title) {
+std::unique_ptr<Window> Window::Create(const core::Vector2& size, const std::string& title) {
 	return std::make_unique<WindowImpl>(size, title);
 }	
 } // namespace wlw::core
