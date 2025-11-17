@@ -37,6 +37,10 @@ public:
 		glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex3D), (void*)(7 * sizeof(float)));
     glEnableVertexAttribArray(2);
 
+    // Attribute 3: UV (2 floats)
+    glVertexAttribPointer(3, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex3D), (void*)(10 * sizeof(float)));
+    glEnableVertexAttribArray(3);
+
     // NOTE on VAO: The VAO is created, and the VBO layout is set here. 
     // The EBO (Index Buffer) will be bound separately during the draw call, 
     // as the VAO does NOT store EBO state in this implementation pattern.

@@ -24,6 +24,7 @@
     <ClCompile Include="root\os\input_engine_gl.cpp" />
     <ClCompile Include="root\rendering\gl_index_buffer.h" />
     <ClCompile Include="root\rendering\gl_vertex_buffer.h" />
+    <ClCompile Include="root\rendering\material_gl.cpp" />
     <ClCompile Include="root\rendering\rendering_driver_gl.cpp" />
     <ClCompile Include="root\scene\fps_camera.cpp" />
     <ClCompile Include="root\utils\image_loader.cpp" />
@@ -38,6 +39,7 @@
     <ClInclude Include="External\include\GLFW\glfw3.h" />
     <ClInclude Include="External\include\GLFW\glfw3native.h" />
     <ClInclude Include="External\include\KHR\khrplatform.h" />
+    <ClInclude Include="root\rendering\material.h" />
     <ClInclude Include="root\os\input_engine.h" />
     <ClInclude Include="root\rendering\index_buffer.h" />
     <ClInclude Include="root\core\logger.h" />

@@ -7,6 +7,6 @@
 namespace wlw::utils {
 		class ImageLoader {
 		public:
-				static std::shared_ptr<Image> LoadImage(const std::string& file_path);
+				static std::unique_ptr<Image> LoadImage(const std::string& file_path);
 		};
 } // namespace wlw::utils

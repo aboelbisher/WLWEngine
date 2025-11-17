@@ -164,29 +164,20 @@ private:
 		}
 	}
 
-
 	void ProcessMouseMovement(double xpos, double ypos) {
-		std::cout << "Mouse moved to: " << xpos << ", " << ypos << std::endl;
 		if (first_mouse_) {
 			last_position_.x = xpos;
 			last_position_.y = ypos;
 			first_mouse_ = false;
 		}
 
-		// 1. Calculate the offset (how much the mouse moved)
 		float xoffset = xpos - last_position_.x;
-		std::cout << "X Offset: " << xoffset << std::endl;
-		float yoffset = last_position_.y - ypos; // Reversed Y-offset for screen coordinates!
+		float yoffset = last_position_.y - ypos;
 
-		// 2. Store the new position for the next frame
 		last_position_.x = xpos;
 		last_position_.y = ypos;
 
-		// 3. Process with the camera object
 		camera_->ProcessMouseMovement(xoffset, yoffset);
-
-
-		return;
 	}
 
 	bool first_mouse_ = true;

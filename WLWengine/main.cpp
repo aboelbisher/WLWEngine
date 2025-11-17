@@ -9,29 +9,45 @@
 #include <array>
 #include <core/color.h>
 #include <core/mesh.h>
+#include <rendering/material.h>
+
+#include <utils/image_loader.h>
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
 #include "data_helper.h"
-
+#include <filesystem>
 using namespace wlw;
 
-
+namespace fs = std::filesystem;
 int main() {
+
+
 	auto engine = wlw::WLWEngine::Create();
-	std::shared_ptr< wlw::core::Window> window = wlw::core::Window::Create({600, 600}, "MainWindow");
+	std::shared_ptr< wlw::core::Window> window = wlw::core::Window::Create({1024, 1024 }, "MainWindow");
 	engine->Start(window);
 	auto cube = createCubeWithNormals();
 	auto cube_node = std::make_shared<wlw::scene::Node<wlw::core::Vertex3D>>();
 	cube_node->SetMesh(cube);
 	window->AddNode(cube_node);
 
+	auto material = rendering::Material::Create();
+	auto image = utils::ImageLoader::LoadImage("cube.jpg");
+	material->SetTexture(std::move(image));
+	cube_node->SetMaterial(std::move(material));
+
 	auto pyramid = createPyramidFrustumWithNormals();
 	auto pyramid_node = std::make_shared<wlw::scene::Node<wlw::core::Vertex3D>>();
 	pyramid_node->SetMesh(pyramid);
 	pyramid_node->SetPosition({ 3.0f, 0.0f, 0.0f });
 	window->AddNode(pyramid_node);
+
+	auto pyramid_material = rendering::Material::Create();
+	auto pyramid_texture = utils::ImageLoader::LoadImage("pyramid.jpg");
+	pyramid_material->SetTexture(std::move(pyramid_texture));
+	pyramid_node->SetMaterial(std::move(pyramid_material));
+
 
 	while(true) {
 		engine->Iterate();

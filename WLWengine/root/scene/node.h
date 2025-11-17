@@ -7,6 +7,8 @@
 #include "core/vertex_2d.h"
 #include "core/vertex_3d.h"
 #include "core/mesh.h"
+#include "core/logger.h"
+#include "rendering/material.h"
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp> // For passing to OpenGL
@@ -65,6 +67,16 @@ public:
 		return model_matrix_;
 	}
 
+	void SetMaterial(std::unique_ptr<rendering::Material> material) {
+		material_ = std::move(material);
+
+		//TODO: should this be done here ?
+		material_->GenerateTexture();
+	}
+
+	const rendering::Material* GetMaterial() const {
+		return material_.get();
+	}
 
 private:
 	core::Mesh<T> mesh_;
@@ -74,6 +86,9 @@ private:
 	core::Vector3 rotation_angles_degrees_ = { 0,0,0 };
 
 	glm::mat4 model_matrix_ = glm::mat4(1.0f);
+
+
+	std::unique_ptr<rendering::Material> material_;
 };
 
 using Node3D = Node<core::Vertex3D>;

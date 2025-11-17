@@ -27,15 +27,19 @@ void main()
 }
 )";
 
+
 const char* vertex3DShaderSource = R"(
 #version 330 core
 layout (location = 0) in vec3 aPos;
 layout (location = 1) in vec4 aColor;
 layout (location = 2) in vec3 aNormal;
+layout (location = 3) in vec2 UV;
 
 out vec3 vertexColor;
 out vec3 vertexNormal;
+out vec3 vertexNormal1;
 out vec3 vertexPos;
+out vec2 vertUV;
 
 uniform mat4 model;
 uniform mat4 view;
@@ -49,6 +53,8 @@ void main()
 
     vertexPos = worldPos.xyz;
     vertexColor = aColor.xyz;
+    vertUV = UV;
+    vertexNormal1 = aNormal;
 }
 )";
 
@@ -59,26 +65,34 @@ const char* fragment3DShaderSource = R"(
 in vec3 vertexColor;
 in vec3 vertexNormal;
 in vec3 vertexPos;
+in vec2 vertUV;
+in vec3 vertexNormal1;
+
 
 uniform vec3 viewPos;
 uniform vec3 objectColor;
 uniform vec3 lightColor;
 uniform vec3 lightPos;
 
+uniform bool use_texture;
+uniform sampler2D model_texture; 
+
 out vec4 FragColor;
 
 void main()
 {
+    vec3 final_vertex_color = use_texture ?  texture(model_texture, vertUV).xyz : vertexColor;
+
     float ambientStrength = 0.1;
     float shininess = 64.0;
-    vec3 ambient = ambientStrength * vertexColor;
+    vec3 ambient = ambientStrength * final_vertex_color;
 
     vec3 norm = normalize(vertexNormal);
     vec3 lightDir = normalize(lightPos - vertexPos); 
 
     // Calculate the angle (cosine) and ensure it's not negative (light hitting from behind)
     float diff = max(dot(norm, lightDir), 0.0);
-    vec3 diffuse = diff * vertexColor;
+    vec3 diffuse = diff * final_vertex_color;
 
     // --- 3. Specular Lighting ---
     // Bright spot reflecting directly at the viewer.
@@ -98,5 +112,8 @@ void main()
     vec3 result = (ambient + diffuse + specular) * objectColor;
 
     FragColor = vec4(result, 1.0);
+
+
+    //FragColor = vec4(vertexNormal1, 1.0);
 }
 )";

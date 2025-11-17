@@ -24,8 +24,6 @@ namespace wlw::rendering {
   }
 
 
-
-
 class GLRenderingDriver : public RenderingDriver {
 public:
 
@@ -98,10 +96,8 @@ public:
     m_ShaderID_2D = CreateProgram(vertex2DShaderSource, fragment2DShaderSource);
     if (m_ShaderID_2D == 0) return false;
 
-
     m_ShaderID_3D = CreateProgram(vertex3DShaderSource, fragment3DShaderSource);
     if (m_ShaderID_3D == 0) return false;
-
 
     glEnable(GL_DEPTH_TEST);
     return true;
@@ -168,6 +164,19 @@ public:
       glUniform3f(glGetUniformLocation(m_ShaderID_3D, "lightPos"), lightPosition.x, lightPosition.y, lightPosition.z);
       glUniform3f(glGetUniformLocation(m_ShaderID_3D, "viewPos"), camera_position.x, camera_position.y, camera_position.z);
 
+
+      auto material = node->GetMaterial();
+      if (material) {
+        glUniform1i(glGetUniformLocation(m_ShaderID_3D, "use_texture"), true);
+        glActiveTexture(GL_TEXTURE0);
+        material->BindTexture();
+        GLint textureLocation = glGetUniformLocation(m_ShaderID_3D, "model_texture");
+        glUniform1i(textureLocation, 0); // Tell the shader to use GL_TEXTURE0
+        //material->UnbindTexture();
+      } else {
+        glUniform1i(glGetUniformLocation(m_ShaderID_3D, "use_texture"), false);
+      }
+ 
       auto vertex_buffer = CreateVertexBuffer(node->GetMesh().GetVertices());
       auto index_buffer = CreateIndexBuffer(node->GetMesh().GetIndices());
 
