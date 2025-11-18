@@ -24,7 +24,7 @@ namespace fs = std::filesystem;
 int main() {
 
 	auto engine = wlw::WLWEngine::Create();
-	std::shared_ptr< wlw::scene::Window> window = wlw::scene::Window::Create({ 1024, 1024 }, "MainWindow");
+	std::shared_ptr< wlw::scene::Window> window = wlw::scene::Window::Create({ 2048, 2048 }, "MainWindow");
 	engine->Start(window);
 	auto cube = createCubeWithNormals();
 	auto cube_node = std::make_shared<scene::Node3D>();
