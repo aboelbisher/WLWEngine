@@ -12,6 +12,7 @@
 #include <rendering/material.h>
 
 #include <utils/image_loader.h>
+#include <utils/gltf_loader.h>
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -67,6 +68,16 @@ int main() {
 	sphere_node->SetMesh(sphere);
 	sphere_node->SetPosition(lighting.position);  
 	window->AddNode(sphere_node);
+
+
+
+	auto random_model_mesh = utils::GLTFLoader::Load("random_model.obj");
+	auto copy_mesh = *random_model_mesh;
+	auto random_model_node = std::make_shared<scene::Node3D>();
+	random_model_node->SetMesh(copy_mesh);
+	random_model_node->SetPosition({ 0.0f, 5.0f, 0.0f });
+	window->AddNode(random_model_node);
+
 
 	auto window_ = window->GetGLFWwindow();
 	while(true) {
