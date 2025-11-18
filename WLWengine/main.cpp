@@ -70,28 +70,29 @@ int main() {
 
 	auto window_ = window->GetGLFWwindow();
 	while(true) {
+		core::Vector3 pos_change = {};
 		if (glfwGetKey(window_, GLFW_KEY_UP) == GLFW_PRESS) {
-			lighting.position += {0.00, 0.01, 0.0};
+			pos_change = {0.00, 0.01, 0.0};
 		}
 		// Backward
 		if (glfwGetKey(window_, GLFW_KEY_DOWN) == GLFW_PRESS) {
-			lighting.position -= {0.00, 0.01, 0.0};
+			pos_change =  {0.00, -0.01, 0.0};
 		}
 		// Left (Strafe)
 		if (glfwGetKey(window_, GLFW_KEY_LEFT) == GLFW_PRESS) {
-			lighting.position -= {0.01, 0.0, 0.0};
+			pos_change = {-0.01, 0.0, 0.0};
 		}
 		// Right (Strafe)
 		if (glfwGetKey(window_, GLFW_KEY_RIGHT) == GLFW_PRESS) {
-			lighting.position += {0.01, 0.0, 0.0};
+			pos_change = {+0.01, 0.0, 0.0};
 		}
 
-		std::cout << "position " << lighting.position.x << std::endl;
+		lighting.position += pos_change;
 		material->SetLighting(lighting);
 
-		cube_node->SetPosition(lighting.position);
+		sphere_node->SetPosition(lighting.position);
 
-		//cube_node->SetPosition(cube_node->GetPosition() + lighting.position);
+		//cube_node->SetPosition(cube_node->GetPosition() + pos_change);
 
 		engine->Iterate();
 	}
