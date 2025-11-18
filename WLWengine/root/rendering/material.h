@@ -5,7 +5,7 @@
 
 #include "utils/image.h"
 #include "core/color.h"
-#include "core/Vector3.h"
+#include "core/vector3.h"
 
 namespace wlw::rendering {
 

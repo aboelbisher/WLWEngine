@@ -65,7 +65,7 @@ int main() {
 	auto sphere = createSphereWithNormals();
 	auto sphere_node = std::make_shared<wlw::scene::Node3D>();
 	sphere_node->SetMesh(sphere);
-	sphere_node->SetPosition(lighting.position);
+	sphere_node->SetPosition(lighting.position);  
 	window->AddNode(sphere_node);
 
 	auto window_ = window->GetGLFWwindow();

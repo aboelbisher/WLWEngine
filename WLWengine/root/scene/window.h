@@ -5,6 +5,7 @@
 #include <functional>
 
 #ifdef WLW_USE_GLFW
+#include <glad/glad.h>
 #include <GLFW/glfw3.h>
 #endif
 

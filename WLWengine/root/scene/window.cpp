@@ -1,7 +1,7 @@
 #ifdef WLW_USE_GLFW
 #include "window.h"
+
 #include <GLFW/glfw3.h>
-#include <glad/glad.h>
 
 
 #include "core/logger.h"
@@ -132,7 +132,7 @@ private:
 		}
 	}
 
-	void ProcessMouseMovement(double xpos, double ypos) {
+	void ProcessMouseMovement(double xpos, double ypos) override {
 		if (first_mouse_) {
 			last_position_.x = xpos;
 			last_position_.y = ypos;

@@ -1,5 +1,6 @@
 #ifdef WLW_USE_GLFW
 
+#include <glad/glad.h>
 #include <iostream>
 #include <GLFW/glfw3.h>
 

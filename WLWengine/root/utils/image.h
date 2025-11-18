@@ -1,5 +1,5 @@
 #pragma once
-#include <corecrt_malloc.h>
+#include <memory>
 #include "core/vector2.h"
 
 namespace wlw::utils {
