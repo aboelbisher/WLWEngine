@@ -88,7 +88,6 @@ void main()
       return;
     }
 
-
     vec3 ambient = ambientStrength * final_vertex_color;
 
     vec3 norm = normalize(vertexNormal);

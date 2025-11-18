@@ -21,7 +21,9 @@ namespace wlw::scene {
 
 class WindowImpl: public Window {
 public:
-	WindowImpl(const core::Vector2& size, const std::string& title): size_(size), title_(title), color_(1.0, 0.0, 0.0, 1.0) {}
+	WindowImpl(const core::Vector2& size, const std::string& title) : title_(title), color_(1.0, 0.0, 0.0, 1.0) {
+		size_ = size;
+	}
 	~WindowImpl() override {
 		// Destructor implementation (e.g., destroy the window)
 	}
@@ -73,40 +75,6 @@ public:
 		return window_;
 	}
 
-	void SetIsActive(bool is_active) override {
-		is_active_ = is_active;
-	}
-
-	int AddNode(const std::shared_ptr<Node2D>& node_2d) override {
-		nodes_2d_[nodes_2d_next_id_] = node_2d;
-		return nodes_2d_next_id_++;
-	}
-
-	int AddNode(const std::shared_ptr<Node3D>& node_3d) override {
-		nodes_3d_[nodes_3d_next_id_] = node_3d;
-		return nodes_3d_next_id_++;
-	}
-
-	const Nodes2DMap& GetNodes2D() const override {
-		return nodes_2d_;
-	}
-
-	const Nodes3DMap& GetNodes3D() const override {
-		return nodes_3d_;
-	}
-
-	void SetCamera(std::shared_ptr<Camera3D> camera) override {
-		camera_ = camera;
-	}
-
-	const std::shared_ptr<Camera3D> GetUpdatedCamera() const override {
-		camera_->UpdateSize(size_);
-		return camera_;
-	}
-
-	core::Vector2 GetSize() const override {
-		return size_;
-	}
 
 private:
 
@@ -184,19 +152,9 @@ private:
 	core::Vector2 last_position_;
 
 	GLFWwindow* window_;
-	core::Vector2 size_;
 	core::Color color_;
 	std::string title_;
 
-	bool is_active_ = true;
-
-	wlw::scene::Nodes2DMap nodes_2d_{};
-	int nodes_2d_next_id_ = 0;
-
-	wlw::scene::Nodes3DMap nodes_3d_ = {};
-	int nodes_3d_next_id_ = 0;
-
-	std::shared_ptr<scene::Camera3D> camera_ = scene::FPSCamera::Create();
 };
 
 std::unique_ptr<Window> Window::Create(const core::Vector2& size, const std::string& title) {

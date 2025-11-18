@@ -34,16 +34,21 @@ public:
 		for (const auto& [_, child_] : children_) {
 			child_->Translate(vector);
 		}
+		UpdateModelMatrix();
 	}
 
 	void SetPosition(const core::Vector3& position) {
 		auto old_position = position_;
 		position_ = position;
 		UpdateModelMatrix();
-		auto translation_vector = old_position - position;
+		auto translation_vector = position - old_position;
 		for (const auto& [_, child_] : children_) {
 			child_->Translate(translation_vector);
 		}
+	}
+
+	core::Vector3 GetPosition() const {
+		return position_;
 	}
 
 	void SetScale(const core::Vector3& scale) {
@@ -67,8 +72,8 @@ public:
 		return model_matrix_;
 	}
 
-	void SetMaterial(std::unique_ptr<rendering::Material> material) {
-		material_ = std::move(material);
+	void SetMaterial(std::shared_ptr<rendering::Material> material) {
+		material_ = material;
 
 		//TODO: should this be done here ?
 		material_->GenerateTexture();
@@ -81,6 +86,10 @@ public:
 	int AddNode(std::shared_ptr<Node> node) {
 		children_.insert({current_node_id_, node});
 		return current_node_id_++;
+	}
+
+	const std::unordered_map<int, std::shared_ptr<scene::Node<T>>>& GetChildren() const  {
+		return children_;
 	}
 
 private:
@@ -114,7 +123,7 @@ private:
 
 	glm::mat4 model_matrix_ = glm::mat4(1.0f);
 
-	std::unique_ptr<rendering::Material> material_;
+	std::shared_ptr<rendering::Material> material_;
 
 	std::unordered_map<int, std::shared_ptr<scene::Node<T>>>  children_;
 	int current_node_id_ = 0;

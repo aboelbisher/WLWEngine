@@ -6,6 +6,10 @@
 
 using namespace wlw;
 
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
 core::Mesh<core::Vertex3D> createPyramidFrustumWithNormals(float baseSize = 2.0f, float topSize = 1.0f, float height = 1.5f) {
   // Define half-sizes
   const float HB = baseSize / 2.0f;
@@ -216,3 +220,96 @@ core::Mesh<core::Vertex3D> createCubeWithNormals(float size = 1.0f) {
   return mesh_;
 }
 
+
+core::Mesh<core::Vertex3D> createSphereWithNormals(
+  float radius = 1.0f,
+  int stacks = 32,
+  int sectors = 64
+) {
+  std::vector<core::Vertex3D> vertices;
+  std::vector<uint32_t> indices;
+
+  // --- 1. Generate Vertices ---
+
+  // Constants for stack/sector sizing
+  const float stack_step = M_PI / stacks;
+  const float sector_step = 2 * M_PI / sectors;
+
+  // Random color for the sphere (simplifying the color assignment)
+  const core::Color sphere_color = { 0.8f, 0.8f, 0.8f, 1.0f };
+
+  for (int i = 0; i <= stacks; ++i) {
+    // Current angle for the stack (latitude) - ranges from -PI/2 to PI/2
+    float stack_angle = M_PI / 2 - i * stack_step;
+
+    // Radius of the circle at this latitude (r * cos(phi))
+    float xy_radius = radius * std::cos(stack_angle);
+
+    // Z-coordinate (r * sin(phi))
+    float z = radius * std::sin(stack_angle);
+
+    for (int j = 0; j <= sectors; ++j) {
+      // Current angle for the sector (longitude) - ranges from 0 to 2*PI
+      float sector_angle = j * sector_step;
+
+      // Calculate X and Y coordinates
+      float x = xy_radius * std::cos(sector_angle);
+      float y = xy_radius * std::sin(sector_angle);
+
+      // 1. Position
+      core::Vector3 position = { x, y, z };
+
+      // 2. Normal (Vector pointing from center to vertex, normalized)
+      core::Vector3 normal = position.Normalize();
+
+      // 3. UV Coordinates (0.0 to 1.0)
+      core::Vector2 uv = {
+          (float)j / sectors, // U: Horizontal texture coordinate
+          (float)i / stacks   // V: Vertical texture coordinate
+      };
+
+      // Create and store the vertex
+      vertices.push_back({
+          position,
+          sphere_color, // Simple grey color
+          normal,
+          uv
+        });
+    }
+  }
+
+  // --- 2. Generate Indices ---
+
+  // A quad is formed by two triangles (triangle strip)
+  for (int i = 0; i < stacks; ++i) {
+    int k1 = i * (sectors + 1);     // Index of the first vertex in the current stack
+    int k2 = (i + 1) * (sectors + 1); // Index of the first vertex in the next stack
+
+    for (int j = 0; j < sectors; ++j, ++k1, ++k2) {
+      // The pole caps are special cases, but the UV method handles them gracefully.
+      // Check if not at the poles (first and last stacks)
+
+      // Triangle 1: (k1, k2, k1+1)
+      // This connects vertices on the current stack (k1) to the next stack (k2).
+      if (i != 0) {
+        indices.push_back(k1);
+        indices.push_back(k2);
+        indices.push_back(k1 + 1);
+      }
+
+      // Triangle 2: (k1+1, k2, k2+1)
+      // This completes the quad connecting to the next sector column.
+      if (i != (stacks - 1)) {
+        indices.push_back(k1 + 1);
+        indices.push_back(k2);
+        indices.push_back(k2 + 1);
+      }
+    }
+  }
+
+  // --- 3. Package and Return ---
+  core::Mesh<core::Vertex3D> mesh;
+  mesh.SetVertices(vertices);
+  mesh.SetIndices(indices);
+  return mesh;
+}

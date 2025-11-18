@@ -147,15 +147,11 @@ public:
 
     glUseProgram(m_ShaderID_3D);
     
-    for (const auto& [_, node] : window->GetNodes3D()) {
-
-			auto camera = window->GetUpdatedCamera();
+    window->IterateOver3DNodes([this, window](const std::shared_ptr<scene::Node3D> node) {
+      auto camera = window->GetUpdatedCamera();
       glUniformMatrix4fv(glGetUniformLocation(m_ShaderID_3D, "model"), 1, GL_FALSE, glm::value_ptr(node->GetModelMatrix()));
       glUniformMatrix4fv(glGetUniformLocation(m_ShaderID_3D, "view"), 1, GL_FALSE, glm::value_ptr(camera->GetViewMatrix()));
       glUniformMatrix4fv(glGetUniformLocation(m_ShaderID_3D, "projection"), 1, GL_FALSE, glm::value_ptr(camera->GetProjectionMatrix()));
-
-			auto& camera_position = camera->GetPosition();
-      glUniform3f(glGetUniformLocation(m_ShaderID_3D, "viewPos"), camera_position.x, camera_position.y, camera_position.z);
 
       auto material = node->GetMaterial();
       if (material) {
@@ -166,20 +162,20 @@ public:
         glUniform1i(textureLocation, 0); // Tell the shader to use GL_TEXTURE0
 
         if (const auto& lighting = material->GetLighting()) {
+          auto& camera_position = camera->GetPosition();
+          glUniform3f(glGetUniformLocation(m_ShaderID_3D, "viewPos"), camera_position.x, camera_position.y, camera_position.z);
           glUniform1i(glGetUniformLocation(m_ShaderID_3D, "useLighting"), true);
           glUniform3f(glGetUniformLocation(m_ShaderID_3D, "objectColor"), lighting->color.r, lighting->color.g, lighting->color.b);
           glUniform3f(glGetUniformLocation(m_ShaderID_3D, "lightPos"), lighting->position.x, lighting->position.y, lighting->position.z);
           glUniform1f(glGetUniformLocation(m_ShaderID_3D, "ambientStrength"), lighting->ambient_strength);
           glUniform1f(glGetUniformLocation(m_ShaderID_3D, "shininess"), lighting->shininess);
-        }
-        else {
+        } else {
           glUniform1i(glGetUniformLocation(m_ShaderID_3D, "useLighting"), false);
         }
-
       } else {
         glUniform1i(glGetUniformLocation(m_ShaderID_3D, "use_texture"), false);
       }
- 
+
       auto vertex_buffer = CreateVertexBuffer(node->GetMesh().GetVertices());
       auto index_buffer = CreateIndexBuffer(node->GetMesh().GetIndices());
 
@@ -190,7 +186,8 @@ public:
 
       vertex_buffer->Unbind();
       index_buffer->Unbind();
-    }
+      
+      });
 
   }
 
