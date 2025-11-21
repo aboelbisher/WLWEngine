@@ -83,6 +83,8 @@ void main()
 {
     vec3 final_vertex_color = use_texture ?  texture(model_texture, vertUV).xyz : vertexColor;
 
+    //vec3 final_vertex_color = use_texture ?  vec3(0.0, 1.0, 0.0) : vertexColor;
+
     if (!useLighting) {
       FragColor = vec4(final_vertex_color, 1.0);
       return;

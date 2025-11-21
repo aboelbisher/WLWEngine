@@ -7,7 +7,7 @@
 
 #include "core/vertex_2d.h"
 #include "core/vertex_3d.h"
-#include "core/mesh.h"
+#include "core/model.h"
 #include "core/logger.h"
 #include "rendering/material.h"
 
@@ -16,17 +16,16 @@
 
 namespace wlw::scene {
 
-
-
 template <core::OnlyVerticesTypes T>
 class Node {
 public:
-	const core::Mesh<T>& GetMesh() const {
-		return mesh_;
+
+	std::shared_ptr <core::Model<T>> GetModel() const {
+		return model_;
 	}
 
-	void SetMesh(const core::Mesh<T>& mesh) {
-		mesh_ = mesh;
+	void SetModel(std::shared_ptr <core::Model<T>> model) {
+		model_ = model;
 	}
 
 	void Translate(const core::Vector3& vector) {
@@ -79,8 +78,8 @@ public:
 		material_->GenerateTexture();
 	}
 
-	const rendering::Material* GetMaterial() const {
-		return material_.get();
+	const std::shared_ptr<rendering::Material> GetMaterial() const {
+		return material_;
 	}
 
 	int AddNode(std::shared_ptr<Node> node) {
@@ -115,7 +114,7 @@ private:
 	}
 
 private:
-	core::Mesh<T> mesh_;
+	std::shared_ptr <core::Model<T>> model_;
 
 	core::Vector3 position_ = { 0,0,0 };
 	core::Vector3 scale_ = {1,1,1};

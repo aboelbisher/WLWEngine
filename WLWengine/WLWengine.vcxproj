@@ -27,8 +27,9 @@
     <ClCompile Include="root\rendering\material_gl.cpp" />
     <ClCompile Include="root\rendering\rendering_driver_gl.cpp" />
     <ClCompile Include="root\scene\fps_camera.cpp" />
+    <ClCompile Include="root\utils\gltf_loader.cpp" />
     <ClCompile Include="root\utils\image_loader.cpp" />
-    <ClCompile Include="root\utils\stb_image_impl.cpp" />
+    <ClCompile Include="root\utils\libs_impl.cpp" />
     <ClCompile Include="root\wlw.cpp" />
     <ClCompile Include="root\scene\window.cpp" />
     <ClCompile Include="root\scene\triangle_2d.cpp" />
@@ -39,6 +40,7 @@
     <ClInclude Include="External\include\GLFW\glfw3.h" />
     <ClInclude Include="External\include\GLFW\glfw3native.h" />
     <ClInclude Include="External\include\KHR\khrplatform.h" />
+    <ClInclude Include="root\core\model.h" />
     <ClInclude Include="root\rendering\material.h" />
     <ClInclude Include="root\os\input_engine.h" />
     <ClInclude Include="root\rendering\index_buffer.h" />
@@ -56,12 +58,19 @@
     <ClInclude Include="root\scene\node.h" />
     <ClInclude Include="root\core\color.h" />
     <ClInclude Include="root\rendering\shaders\basic_shaders.h" />
-    <ClInclude Include="root\utils\image.h" />
+    <ClInclude Include="root\utils\gltf_loader.h" />
+    <ClInclude Include="root\utils\texture.h" />
     <ClInclude Include="root\utils\image_loader.h" />
+    <ClInclude Include="root\utils\json.hpp" />
     <ClInclude Include="root\utils\stb_image.h" />
+    <ClInclude Include="root\utils\stb_image_write.h" />
+    <ClInclude Include="root\utils\tiny_gltf.h" />
     <ClInclude Include="root\wlw.h" />
     <ClInclude Include="root\scene\window.h" />
     <ClInclude Include="root\scene\triangle_2d.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="random_model\scene.bin" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>18.0</VCProjectVersion>
@@ -119,7 +128,7 @@
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
@@ -134,7 +143,7 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
@@ -147,7 +156,7 @@
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions);WLW_USE_GLFW;GLFW_INCLUDE_NONE;</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions);WLW_USE_GLFW;GLFW_INCLUDE_NONE;;_CRT_SECURE_NO_WARNINGS</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <AdditionalIncludeDirectories>$(ProjectDir)\External\include;$(ProjectDir)\root;</AdditionalIncludeDirectories>
@@ -165,7 +174,7 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>

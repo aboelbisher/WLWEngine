@@ -6,7 +6,7 @@
 
 namespace wlw::utils {
 
-  std::unique_ptr<Image> ImageLoader::LoadImage(const std::string& file_path) {
+  std::unique_ptr<Texture> ImageLoader::LoadImage(const std::string& file_path) {
     int width, height, channels_count;
 
     unsigned char* data = stbi_load(file_path.c_str(), &width, &height, &channels_count, 0);
@@ -14,6 +14,6 @@ namespace wlw::utils {
       return nullptr;
     }
 
-    return std::make_unique<Image>( core::Vector2{ static_cast<float>(width), static_cast<float>(height) }, channels_count, data);
+    return std::make_unique<Texture>( core::Vector2{ static_cast<float>(width), static_cast<float>(height) }, channels_count, data);
   }
 } // namespace wlw::utils

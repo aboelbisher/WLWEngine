@@ -30,10 +30,6 @@ namespace wlw::rendering {
       glDeleteTextures(1, textureIDs);
     }
 
-    void SetTexture(std::unique_ptr<utils::Image> image) override {
-      texture_ = std::move(image);
-    }
-
     void GenerateTexture() override {
       if (FAIL_IF(!texture_, "empty texture!")) {
         return;
@@ -86,9 +82,6 @@ namespace wlw::rendering {
     }
 
   private:
-    MaterialType type_;
-    std::unique_ptr<utils::Image> texture_;
-
     GLuint texture_id_;
 
   };

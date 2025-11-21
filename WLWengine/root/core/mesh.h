@@ -3,6 +3,7 @@
 #include <type_traits>
 #include "core/vertex_2d.h"
 #include "core/vertex_3d.h"
+#include "rendering/material.h"
 
 namespace wlw::core {
 
@@ -31,8 +32,18 @@ public:
 		indices_ = indices;
 	}
 
+	void SetMaterial(const std::shared_ptr<rendering::Material>& material) {
+		material_ = material;
+	}
+
+	std::shared_ptr<rendering::Material> GetMaterial() const {
+		return material_;
+	}
+
 protected:
 	std::vector<T> vertices_;
 	std::vector<uint32_t> indices_;
+
+	std::shared_ptr<rendering::Material> material_ = nullptr;
 };
 } // namespace wlw::core

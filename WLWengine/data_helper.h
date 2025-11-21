@@ -10,7 +10,7 @@ using namespace wlw;
 #define M_PI 3.14159265358979323846
 #endif
 
-core::Mesh<core::Vertex3D> createPyramidFrustumWithNormals(float baseSize = 2.0f, float topSize = 1.0f, float height = 1.5f) {
+std::shared_ptr<core::Mesh<core::Vertex3D>> createPyramidFrustumWithNormals(float baseSize = 2.0f, float topSize = 1.0f, float height = 1.5f) {
   // Define half-sizes
   const float HB = baseSize / 2.0f;
   const float HT = topSize / 2.0f;
@@ -123,13 +123,13 @@ core::Mesh<core::Vertex3D> createPyramidFrustumWithNormals(float baseSize = 2.0f
     indices[i] = static_cast<uint32_t>(i);
   }
 
-  core::Mesh<core::Vertex3D> mesh_;
-  mesh_.SetVertices(vertices);
-  mesh_.SetIndices(indices);
+  auto mesh_ = std::make_shared<core::Mesh<core::Vertex3D>>();
+  mesh_->SetVertices(vertices);
+  mesh_->SetIndices(indices);
   return mesh_;
 }
 
-core::Mesh<core::Vertex3D> createCubeWithNormals(float size = 1.0f) {
+std::shared_ptr<core::Mesh<core::Vertex3D>> createCubeWithNormals(float size = 1.0f) {
   const float HS = size / 2.0f;
   std::vector<core::Vertex3D> vertices;
 
@@ -214,14 +214,14 @@ core::Mesh<core::Vertex3D> createCubeWithNormals(float size = 1.0f) {
     indices[i] = static_cast<uint32_t>(i);
   }
 
-  core::Mesh<core::Vertex3D> mesh_;
-  mesh_.SetVertices(vertices);
-  mesh_.SetIndices(indices);
+  auto mesh_ = std::make_shared<core::Mesh<core::Vertex3D>>();
+  mesh_->SetVertices(vertices);
+  mesh_->SetIndices(indices);
   return mesh_;
 }
 
 
-core::Mesh<core::Vertex3D> createSphereWithNormals(
+std::shared_ptr<core::Mesh<core::Vertex3D>> createSphereWithNormals(
   float radius = 1.0f,
   int stacks = 32,
   int sectors = 64
@@ -308,8 +308,8 @@ core::Mesh<core::Vertex3D> createSphereWithNormals(
   }
 
   // --- 3. Package and Return ---
-  core::Mesh<core::Vertex3D> mesh;
-  mesh.SetVertices(vertices);
-  mesh.SetIndices(indices);
-  return mesh;
+  auto mesh_ = std::make_shared<core::Mesh<core::Vertex3D>>();
+  mesh_->SetVertices(vertices);
+  mesh_->SetIndices(indices);
+  return mesh_;
 }
