@@ -18,6 +18,11 @@ namespace wlw::core {
     // and accessible even if no material currently uses them.
     std::vector<std::shared_ptr<utils::Texture>> textures;
     std::vector<std::shared_ptr<rendering::Material>> materials;
+
+    std::string name;
 	};
+
+
+  using Mesh3DShared = std::shared_ptr<core::Mesh<core::Vertex3D>>;
 
 } // wlw::core

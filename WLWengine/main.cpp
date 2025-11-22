@@ -30,7 +30,7 @@ int main() {
 
 
 	
-	auto cube_mesh = createCubeWithNormals();
+	/*auto cube_mesh = createCubeWithNormals();
 	auto cube_node = std::make_shared<scene::Node3D>();
 	auto cube_model = std::make_shared<core::Model<core::Vertex3D>>();
 	cube_model->meshes.push_back(cube_mesh);
@@ -45,7 +45,7 @@ int main() {
 	pyramid1_node->SetPosition({ 0.0f, 0.0f, 1.1f });
 	cube_node->AddNode(pyramid1_node);
 
-	//window->AddNode(cube_node);
+	window->AddNode(cube_node);
 
 
 	std::shared_ptr<rendering::Material> material = rendering::Material::Create();
@@ -79,15 +79,14 @@ int main() {
 	sphere_model->meshes.push_back(sphere_mesh);
 	sphere_node->SetModel(sphere_model);
 	sphere_node->SetPosition(lighting.position);  
-	//window->AddNode(sphere_node);
+	window->AddNode(sphere_node);*/
 
 
-	//auto random_model_mesh = utils::GLTFLoader::Load("random_model/scene.gltf");
-	//auto copy_mesh = *random_model_mesh;
-	//auto random_model_node = std::make_shared<scene::Node3D>();
-	//random_model_node->SetMesh(copy_mesh);
-	//random_model_node->SetPosition({ 0.0f, 5.0f, 0.0f });
-	//window->AddNode(random_model_node);
+	auto random_model = utils::GLTFLoader::LoadModel("random_model/scene.gltf");
+	auto random_model_node = std::make_shared<scene::Node3D>();
+	random_model_node->SetModel(random_model);
+	random_model_node->SetPosition({ 0.0f, 5.0f, 0.0f });
+	window->AddNode(random_model_node);
 
 
 	auto window_ = window->GetGLFWwindow();
@@ -109,10 +108,10 @@ int main() {
 			pos_change = {+0.01, 0.0, 0.0};
 		}
 
-		lighting.position += pos_change;
-		material->SetLighting(lighting);
+		//lighting.position += pos_change;
+		//material->SetLighting(lighting);
 
-		sphere_node->SetPosition(lighting.position);
+		//sphere_node->SetPosition(lighting.position);
 
 		//cube_node->SetPosition(cube_node->GetPosition() + pos_change);
 

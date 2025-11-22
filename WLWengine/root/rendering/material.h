@@ -2,6 +2,7 @@
 
 #include <memory>
 #include <optional>
+#include <string>
 
 #include "utils/texture.h"
 #include "core/color.h"
@@ -26,7 +27,6 @@ namespace wlw::rendering {
 		virtual void GenerateTexture() = 0;
 		virtual void UnbindTexture() const = 0;
 
-
 		void SetTexture(std::shared_ptr<utils::Texture> texture) {
 			texture_ = texture;
 		}
@@ -48,6 +48,7 @@ namespace wlw::rendering {
 		core::Color color;
 		float metallic = 0.0f;
 		float roughness = 1.0f;
+		std::string name;
 
 	protected:
 		std::optional<Lighting> lighting_;
