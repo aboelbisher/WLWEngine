@@ -5,12 +5,13 @@
 
 #include "core/mesh.h"
 #include "core/vertex_3d.h"
+#include "core/model.h"
 
 namespace wlw::utils {
 
 class GLTFLoader {
 public:
-    static std::unique_ptr<core::Mesh<core::Vertex3D>> Load(const std::string& filepath);
+  static  std::shared_ptr<core::Model<core::Vertex3D>> LoadModel(const std::string& filename);
 };
 
 } // namespace wlw::utils

@@ -34,15 +34,23 @@ public:
 
 	void SetMaterial(const std::shared_ptr<rendering::Material>& material) {
 		material_ = material;
+
+		if (material_->HasTexture()) {
+			material_->GenerateTexture();
+		}
+
 	}
 
 	std::shared_ptr<rendering::Material> GetMaterial() const {
 		return material_;
 	}
 
+	std::string name = "";
+
 protected:
 	std::vector<T> vertices_;
 	std::vector<uint32_t> indices_;
+
 
 	std::shared_ptr<rendering::Material> material_ = nullptr;
 };

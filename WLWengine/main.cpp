@@ -28,7 +28,7 @@ int main() {
 	std::shared_ptr< wlw::scene::Window> window = wlw::scene::Window::Create({ 2048, 2048 }, "MainWindow");
 	engine->Start(window);
 
-
+	
 	
 	auto cube_mesh = createCubeWithNormals();
 	auto cube_node = std::make_shared<scene::Node3D>();
@@ -45,7 +45,7 @@ int main() {
 	pyramid1_node->SetPosition({ 0.0f, 0.0f, 1.1f });
 	cube_node->AddNode(pyramid1_node);
 
-	//window->AddNode(cube_node);
+	window->AddNode(cube_node);
 
 
 	std::shared_ptr<rendering::Material> material = rendering::Material::Create();
@@ -59,6 +59,7 @@ int main() {
 	material->color = core::Color(1.0, 1.0, 1.0, 1.0);
 	cube_node->SetMaterial(material);
 
+		
 
 	auto pyramid_mesh = createPyramidFrustumWithNormals();
 	auto pyramid_node = std::make_shared<wlw::scene::Node3D>();
@@ -79,15 +80,24 @@ int main() {
 	sphere_model->meshes.push_back(sphere_mesh);
 	sphere_node->SetModel(sphere_model);
 	sphere_node->SetPosition(lighting.position);  
-	//window->AddNode(sphere_node);
+	window->AddNode(sphere_node);
 
 
-	//auto random_model_mesh = utils::GLTFLoader::Load("random_model/scene.gltf");
-	//auto copy_mesh = *random_model_mesh;
-	//auto random_model_node = std::make_shared<scene::Node3D>();
-	//random_model_node->SetMesh(copy_mesh);
-	//random_model_node->SetPosition({ 0.0f, 5.0f, 0.0f });
-	//window->AddNode(random_model_node);
+	auto random_model = utils::GLTFLoader::LoadModel("random_model/scene.gltf");
+	auto random_model_node = std::make_shared<scene::Node3D>();
+	random_model_node->SetModel(random_model);
+	random_model_node->SetPosition({ 0.0f, 5.0f, 0.0f });
+
+	std::shared_ptr<rendering::Material> model_material = rendering::Material::Create();
+	auto lighting1 = rendering::Lighting{
+	.position = {1.2f, 1.0f, 2.0f},
+	.ambient_strength = 0.5, .shininess = 128.0f
+	};
+	model_material->SetLighting(lighting1);
+	model_material->color = core::Color(1.0, 1.0, 1.0, 1.0);
+	random_model_node->SetMaterial(model_material);
+
+	window->AddNode(random_model_node);
 
 
 	auto window_ = window->GetGLFWwindow();
@@ -112,7 +122,9 @@ int main() {
 		lighting.position += pos_change;
 		material->SetLighting(lighting);
 
-		sphere_node->SetPosition(lighting.position);
+		//sphere_node->SetPosition(lighting.position);
+
+		random_model_node->SetPosition(random_model_node->GetPosition() + pos_change);
 
 		//cube_node->SetPosition(cube_node->GetPosition() + pos_change);
 

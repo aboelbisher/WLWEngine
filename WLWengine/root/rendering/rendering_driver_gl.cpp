@@ -167,9 +167,8 @@ public:
 
       for (const auto& mesh : model->meshes) {
 
-        //BindMaterial(node->GetMaterial(), camera->GetPosition());
-
        BindMaterial(mesh->GetMaterial(), camera->GetPosition());
+       //BindMaterial(node->GetMaterial(), camera->GetPosition());
 
         auto vertex_buffer = CreateVertexBuffer(mesh->GetVertices());
         auto index_buffer = CreateIndexBuffer(mesh->GetIndices());

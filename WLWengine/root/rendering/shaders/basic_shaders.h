@@ -56,6 +56,7 @@ void main()
     vertUV = UV;
     vertexNormal1 = aNormal;
 }
+
 )";
 
 
