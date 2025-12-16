@@ -8,7 +8,7 @@ namespace wlw::core {
 
 	struct Vertex3D {
 		Vector3 position;
-		Color color;
+		Color color = {1.0f, 1.0f, 1.0f, 1.0f};
 		Vector3 normal;
 		Vector2 texCoords; 
  };

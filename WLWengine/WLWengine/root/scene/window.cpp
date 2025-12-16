@@ -81,7 +81,7 @@ private:
 	//TODO: Move to somehwere else (like input manager)
 	void processInput() {
 	
-		float currentSpeedFactor = 1.0f;
+		float currentSpeedFactor = 0.5f;
 
 		float deltaTime = 0.016f; // Assuming a fixed time step for simplicity (60 FPS)
 		// Forward

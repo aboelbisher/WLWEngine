@@ -165,13 +165,11 @@ public:
       glUniformMatrix4fv(glGetUniformLocation(m_ShaderID_3D, "projection"), 1, GL_FALSE, glm::value_ptr(camera->GetProjectionMatrix()));
 
       for (const auto& mesh : model->meshes) {
-        //auto material = mesh->GetMaterial();
-        //if (material = nullptr || !material->HasTexture()) {
-        //  continue;
-        //}
+        auto material = mesh->GetMaterial();
 
-       BindMaterial(mesh->GetMaterial(), camera->GetPosition());
        BindMaterial(node->GetMaterial(), camera->GetPosition());
+       BindMaterial(mesh->GetMaterial(), camera->GetPosition());
+
 
         auto vertex_buffer = CreateVertexBuffer(mesh->GetVertices());
         auto index_buffer = CreateIndexBuffer(mesh->GetIndices());
@@ -202,17 +200,23 @@ public:
         glUniform1i(glGetUniformLocation(m_ShaderID_3D, "use_texture"), false);
       }
 
+
+
       if (const auto& lighting = material->GetLighting()) {
-        auto material_light_color = material->color;
         glUniform3f(glGetUniformLocation(m_ShaderID_3D, "viewPos"), camera_position.x, camera_position.y, camera_position.z);
         glUniform1i(glGetUniformLocation(m_ShaderID_3D, "useLighting"), true);
-        glUniform3f(glGetUniformLocation(m_ShaderID_3D, "objectColor"), material_light_color.r, material_light_color.g, material_light_color.b);
         glUniform3f(glGetUniformLocation(m_ShaderID_3D, "lightPos"), lighting->position.x, lighting->position.y, lighting->position.z);
+        glUniform3f(glGetUniformLocation(m_ShaderID_3D, "lightColor"), lighting->color.r, lighting->color.g, lighting->color.b);
         glUniform1f(glGetUniformLocation(m_ShaderID_3D, "ambientStrength"), lighting->ambient_strength);
         glUniform1f(glGetUniformLocation(m_ShaderID_3D, "shininess"), lighting->shininess);
+        glUniform3f(glGetUniformLocation(m_ShaderID_3D, "lightPos"), lighting->color.r, lighting->color.g, lighting->color.b);
+
       } else {
         glUniform1i(glGetUniformLocation(m_ShaderID_3D, "useLighting"), false);
       }
+
+
+
     } else {
       glUniform1i(glGetUniformLocation(m_ShaderID_3D, "use_texture"), false);
       glUniform1i(glGetUniformLocation(m_ShaderID_3D, "useLighting"), false);

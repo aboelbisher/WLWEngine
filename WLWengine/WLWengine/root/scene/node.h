@@ -54,7 +54,7 @@ public:
 		scale_ = scale;
 		UpdateModelMatrix();
 		for (const auto& [_, child_] : children_) {
-			children_->SetScale(scale);
+			child_->SetScale(scale);
 		}
 	}
 
@@ -63,7 +63,7 @@ public:
 		UpdateModelMatrix();
 
 		for (const auto& [_, child_] : children_) {
-			children_->SetRotation(rotation_angle_degrees);
+			child_->SetRotation(rotation_angle_degrees);
 		}
 	}
 
@@ -75,7 +75,11 @@ public:
 		material_ = material;
 
 		//TODO: should this be done here ?
-		material_->GenerateTexture();
+		
+		if (material_->HasTexture()) {
+			material_->BindTexture();
+			material_->GenerateTexture();
+		}
 	}
 
 	const std::shared_ptr<rendering::Material> GetMaterial() const {

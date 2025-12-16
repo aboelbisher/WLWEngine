@@ -1,7 +1,0 @@
-<Solution>
-  <Configurations>
-    <Platform Name="x64" />
-    <Platform Name="x86" />
-  </Configurations>
-  <Project Path="WLWengine/WLWengine.vcxproj" Id="215ce2ab-6620-41c3-9c34-ae583417d1d2" />
-</Solution>

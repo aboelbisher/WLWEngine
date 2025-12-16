@@ -54,9 +54,9 @@ int main() {
 	.ambient_strength = 0.5, .shininess = 128.0f
 	};
 	material->SetLighting(lighting);
-	material->color = core::Color(1.0, 1.0, 1.0, 1.0);
+	//material->color = core::Color(1.0, 1.0, 1.0, 1.0);
 	cube_node->SetMaterial(material);
-	window->AddNode(cube_node);
+	//window->AddNode(cube_node);
 
 		
 
@@ -80,13 +80,14 @@ int main() {
 	sphere_node->SetModel(sphere_model);
 	sphere_node->SetPosition(lighting.position);  
 	sphere_node->SetMaterial(pyramid_material);
-	window->AddNode(sphere_node);
+	//window->AddNode(sphere_node);
 
 	
 	auto random_model = utils::GLTFLoader::LoadModel("random_model/scene.gltf");
 	auto random_model_node = std::make_shared<scene::Node3D>();
 	random_model_node->SetModel(random_model);
-	random_model_node->SetPosition({ 0.0f, 5.0f, 0.0f });
+	random_model_node->SetPosition({ 5.97f, 11.16f, 0.0f });
+	random_model_node->SetRotation({ 60.0, 0.0, 0.0 });
 
 	std::shared_ptr<rendering::Material> model_material = rendering::Material::Create();
 	auto lighting1 = rendering::Lighting{
@@ -94,8 +95,9 @@ int main() {
 	.ambient_strength = 0.5, .shininess = 128.0f
 	};
 	model_material->SetLighting(lighting1);
-	model_material->color = core::Color(1.0, 1.0, 1.0, 1.0);
+	//model_material->color = core::Color(1.0, 1.0, 1.0, 1.0);
 	random_model_node->SetMaterial(model_material);
+
 	window->AddNode(random_model_node);
 
 	auto window_ = window->GetGLFWwindow();
@@ -122,7 +124,9 @@ int main() {
 
 		//sphere_node->SetPosition(lighting.position);
 
-		//random_model_node->SetPosition(random_model_node->GetPosition() + pos_change);
+		random_model_node->SetPosition(random_model_node->GetPosition() + pos_change);
+
+		//std::cout << "Cube Position: " << random_model_node->GetPosition().x << ", " << random_model_node->GetPosition().y << ", " << random_model_node->GetPosition().z << std::endl;
 
 		//cube_node->SetPosition(cube_node->GetPosition() + pos_change);
 

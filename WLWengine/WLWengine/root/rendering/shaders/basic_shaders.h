@@ -70,8 +70,8 @@ in vec2 vertUV;
 in vec3 vertexNormal1;
 
 uniform vec3 viewPos;
-uniform vec3 lightColor;
 uniform vec3 lightPos;
+uniform vec3 lightColor;
 uniform bool useLighting;
 uniform float ambientStrength;
 uniform float shininess;
@@ -82,41 +82,29 @@ out vec4 FragColor;
 
 void main()
 {
-    vec3 final_vertex_color = use_texture ?  texture(model_texture, vertUV).xyz : vertexColor;
 
-    //vec3 final_vertex_color = use_texture ?  vec3(0.0, 1.0, 0.0) : vertexColor;
+    vec3 objectColor = use_texture ?  texture(model_texture, vertUV).xyz : vertexColor;
 
     if (!useLighting) {
-      FragColor = vec4(final_vertex_color, 1.0);
+      FragColor = vec4(objectColor, 1.0);
       return;
     }
 
-    vec3 ambient = ambientStrength * final_vertex_color;
-
     vec3 norm = normalize(vertexNormal);
     vec3 lightDir = normalize(lightPos - vertexPos); 
-
-    // Calculate the angle (cosine) and ensure it's not negative (light hitting from behind)
-    float diff = max(dot(norm, lightDir), 0.0);
-    vec3 diffuse = diff * final_vertex_color;
-
-    // --- 3. Specular Lighting ---
-    // Bright spot reflecting directly at the viewer.
-
-    // Direction from fragment to the viewer/camera
     vec3 viewDir = normalize(viewPos - vertexPos);
 
-    // Reflection vector (R = 2 * (N . L) * N - L)
-    vec3 reflectDir = reflect(-lightDir, norm); 
+    vec3 halfwayDir = normalize(lightDir + viewDir);
 
-    // Calculate specular factor (cosine of angle between view and reflection vector, raised to shininess)
-    float spec = pow(max(dot(viewDir, reflectDir), 0.0), shininess);
-    vec3 specular = spec * lightColor;
+    vec3 ambient = ambientStrength * lightColor;
 
-    // --- 4. Final Color Calculation ---
-    // Combine all lighting components and multiply by the object's base color.
-    vec3 result = (ambient + diffuse + specular);
+    float diff = max(dot(norm, lightDir), 0.0);
+    vec3 diffuse = diff * lightColor;
 
+    float spec = pow(max(dot(norm, halfwayDir), 0.0), shininess);
+    vec3 specular = (diff > 0.0) ? spec * lightColor  : vec3(0.0);
+
+    vec3 result = (ambient + diffuse) * objectColor + specular;
     FragColor = vec4(result, 1.0);
 }
 )";

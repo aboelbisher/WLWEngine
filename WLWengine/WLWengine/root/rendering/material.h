@@ -13,6 +13,7 @@ namespace wlw::rendering {
 	struct Lighting {
 		core::Vector3 position;
 
+		core::Color color = { 1.0f, 1.0f, 1.0f, 1.0f };
 		float ambient_strength;
 		float shininess;
 	};
@@ -45,7 +46,6 @@ namespace wlw::rendering {
 
 		static std::unique_ptr<Material> Create();
 
-		core::Color color;
 		float metallic = 0.0f;
 		float roughness = 1.0f;
 		std::string name;

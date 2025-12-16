@@ -5,3 +5,6 @@ x64/
 WLWengine/x64/
 .vs
 WLWengine/WLWengine.vcxproj
+WLWengine/x64/
+WLWengine/WLWengine.slnx
+WLWengine/vcpkg/

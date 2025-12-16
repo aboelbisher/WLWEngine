@@ -23,10 +23,12 @@ namespace wlw::utils {
   std::vector<std::shared_ptr<utils::Texture>> LoadTextures(const tinygltf::Model & inputModel) {
     std::vector<std::shared_ptr<utils::Texture>> textures;
     for (const auto& gltfTex : inputModel.textures) {
+
+      //std::shared_ptr<utils::Texture> texture = utils::ImageLoader::LoadImage("cube.jpg");
+
       tinygltf::Image gltfImage = inputModel.images[gltfTex.source];
       core::Vector2 size = { .x = static_cast<float>(gltfImage.width), .y = static_cast<float>(gltfImage.height) };
       auto texture = std::make_shared<utils::Texture>(size, gltfImage.component, gltfImage.image);
-
 
       textures.push_back(texture);
     }
@@ -40,28 +42,41 @@ namespace wlw::utils {
       std::shared_ptr<rendering::Material> new_material = rendering::Material::Create();
       new_material->name = gltfMat.name;
 
-      // PBR Data
-      // Resolve Index -> Pointer immediately
+      
+      // Lighting setup...
+      rendering::Lighting light_data{
+          .ambient_strength = 1.0f, // High ambient to ensure visibility for debugging
+          .shininess = (1.0f - new_material->roughness) * 128.0f
+      };
+
+      // 1. Load PBR Base Color Factor (RGBA)
+      // glTF defines this as a vector of 4 floats (default is 1,1,1,1)
+      if (gltfMat.pbrMetallicRoughness.baseColorFactor.size() == 4) {
+        light_data.color = {
+            (float)gltfMat.pbrMetallicRoughness.baseColorFactor[0],
+            (float)gltfMat.pbrMetallicRoughness.baseColorFactor[1],
+            (float)gltfMat.pbrMetallicRoughness.baseColorFactor[2],
+            (float)gltfMat.pbrMetallicRoughness.baseColorFactor[3]
+        };
+      }
+      else {
+        light_data.color = { 1.0f, 1.0f, 1.0f, 1.0f };
+      }
+
+      new_material->SetLighting(light_data);
+
+
+      // 2. Load Texture
       int texture_index = gltfMat.pbrMetallicRoughness.baseColorTexture.index;
       if (texture_index > -1 && texture_index < textures.size()) {
         auto texture = textures[texture_index];
         new_material->SetTexture(texture);
       }
-
+   
       new_material->roughness = (float)gltfMat.pbrMetallicRoughness.roughnessFactor;
       new_material->metallic = (float)gltfMat.pbrMetallicRoughness.metallicFactor;
 
-      // Optional: Convert PBR -> Phong
-      rendering::Lighting light_data{
-        .ambient_strength = 1.0,
-        .shininess = (1.0f - new_material->roughness) * 128.0f
-      };
 
-      //lightData.color = { 1.0f, 1.0f, 1.0f, 1.0f };
-      //lightData.shininess = (1.0f - new_material->roughness) * 128.0f;
-      //new_material->lighting_ = lightData;
-      new_material->color = { 1.0f, 1.0f, 1.0f, 1.0f };
-      new_material->SetLighting(light_data);
       materials.push_back(new_material);
     }
     return materials;
