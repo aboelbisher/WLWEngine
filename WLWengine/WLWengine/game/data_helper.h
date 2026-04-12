@@ -10,7 +10,7 @@ using namespace wlw;
 #define M_PI 3.14159265358979323846
 #endif
 
-std::shared_ptr<core::Mesh<core::Vertex3D>> createPyramidFrustumWithNormals(float baseSize = 2.0f, float topSize = 1.0f, float height = 1.5f) {
+inline std::shared_ptr<core::Mesh<core::Vertex3D>> createPyramidFrustumWithNormals(float baseSize = 2.0f, float topSize = 1.0f, float height = 1.5f) {
   // Define half-sizes
   const float HB = baseSize / 2.0f;
   const float HT = topSize / 2.0f;
@@ -129,84 +129,69 @@ std::shared_ptr<core::Mesh<core::Vertex3D>> createPyramidFrustumWithNormals(floa
   return mesh_;
 }
 
-std::shared_ptr<core::Mesh<core::Vertex3D>> createCubeWithNormals(float size = 1.0f) {
+inline std::shared_ptr<core::Mesh<core::Vertex3D>> createCubeWithNormals(float size = 1.0f, const core::Color& color = {1.0f, 1.0f, 1.0f, 1.0f}) {
   const float HS = size / 2.0f;
   std::vector<core::Vertex3D> vertices;
 
-  // UV Shorthand (used for clarity)
-  const core::Vector2 UV_BL = { 0.0f, 0.0f }; // Bottom-Left
-  const core::Vector2 UV_BR = { 1.0f, 0.0f }; // Bottom-Right
-  const core::Vector2 UV_TR = { 1.0f, 1.0f }; // Top-Right
-  const core::Vector2 UV_TL = { 0.0f, 1.0f }; // Top-Left
-
-  // Standard color for the whole cube
-  core::Color C = { 1.0f, 0.0f, 0.0f, 1.0f }; // Using a single color for simplicity
+  // UV Shorthand
+  const core::Vector2 UV_BL = {0.0f, 0.0f};
+  const core::Vector2 UV_BR = {1.0f, 0.0f};
+  const core::Vector2 UV_TR = {1.0f, 1.0f};
+  const core::Vector2 UV_TL = {0.0f, 1.0f};
 
   // --- 1. FRONT FACE (+Z) ---
-  const core::Vector3 N_Front = { 0.0f, 0.0f, 1.0f };
-  // Triangle 1: Bottom-left, Bottom-right, Top-right
-  vertices.push_back({ { -HS, -HS, HS }, C, N_Front, UV_BL }); // 0
-  vertices.push_back({ { HS, -HS, HS }, C, N_Front, UV_BR }); // 1
-  vertices.push_back({ { HS, HS, HS }, C, N_Front, UV_TR }); // 2
-
-  // Triangle 2: Top-right, Top-left, Bottom-left
-  vertices.push_back({ { HS, HS, HS }, C, N_Front, UV_TR }); // 3
-  vertices.push_back({ { -HS, HS, HS }, C, N_Front, UV_TL }); // 4
-  vertices.push_back({ { -HS, -HS, HS }, C, N_Front, UV_BL }); // 5
+  const core::Vector3 N_Front = {0.0f, 0.0f, 1.0f};
+  vertices.push_back({{-HS, -HS, HS}, color, N_Front, UV_BL});
+  vertices.push_back({{HS, -HS, HS}, color, N_Front, UV_BR});
+  vertices.push_back({{HS, HS, HS}, color, N_Front, UV_TR});
+  vertices.push_back({{HS, HS, HS}, color, N_Front, UV_TR});
+  vertices.push_back({{-HS, HS, HS}, color, N_Front, UV_TL});
+  vertices.push_back({{-HS, -HS, HS}, color, N_Front, UV_BL});
 
   // --- 2. BACK FACE (-Z) ---
-  const core::Vector3 N_Back = { 0.0f, 0.0f, -1.0f };
-  // Triangle 1: Bottom-right, Bottom-left, Top-left
-  vertices.push_back({ { HS, -HS, -HS }, C, N_Back, UV_BR }); // 6
-  vertices.push_back({ { -HS, -HS, -HS }, C, N_Back, UV_BL }); // 7
-  vertices.push_back({ { -HS, HS, -HS }, C, N_Back, UV_TL }); // 8
-
-  // Triangle 2: Top-left, Top-right, Bottom-right
-  vertices.push_back({ { -HS, HS, -HS }, C, N_Back, UV_TL }); // 9
-  vertices.push_back({ { HS, HS, -HS }, C, N_Back, UV_TR }); // 10
-  vertices.push_back({ { HS, -HS, -HS }, C, N_Back, UV_BR }); // 11
-
-  // [ ... continue for TOP, BOTTOM, RIGHT, LEFT faces using the UV_... variables ... ]
+  const core::Vector3 N_Back = {0.0f, 0.0f, -1.0f};
+  vertices.push_back({{HS, -HS, -HS}, color, N_Back, UV_BR});
+  vertices.push_back({{-HS, -HS, -HS}, color, N_Back, UV_BL});
+  vertices.push_back({{-HS, HS, -HS}, color, N_Back, UV_TL});
+  vertices.push_back({{-HS, HS, -HS}, color, N_Back, UV_TL});
+  vertices.push_back({{HS, HS, -HS}, color, N_Back, UV_TR});
+  vertices.push_back({{HS, -HS, -HS}, color, N_Back, UV_BR});
 
   // --- 3. TOP FACE (+Y) ---
-  const core::Vector3 N_Top = { 0.0f, 1.0f, 0.0f };
-  vertices.push_back({ { -HS, HS, HS }, C, N_Top, UV_BL }); // 12
-  vertices.push_back({ { HS, HS, HS }, C, N_Top, UV_BR }); // 13
-  vertices.push_back({ { HS, HS, -HS }, C, N_Top, UV_TR }); // 14
-
-  vertices.push_back({ { HS, HS, -HS }, C, N_Top, UV_TR }); // 15
-  vertices.push_back({ { -HS, HS, -HS }, C, N_Top, UV_TL }); // 16
-  vertices.push_back({ { -HS, HS, HS }, C, N_Top, UV_BL }); // 17
+  const core::Vector3 N_Top = {0.0f, 1.0f, 0.0f};
+  vertices.push_back({{-HS, HS, HS}, color, N_Top, UV_BL});
+  vertices.push_back({{HS, HS, HS}, color, N_Top, UV_BR});
+  vertices.push_back({{HS, HS, -HS}, color, N_Top, UV_TR});
+  vertices.push_back({{HS, HS, -HS}, color, N_Top, UV_TR});
+  vertices.push_back({{-HS, HS, -HS}, color, N_Top, UV_TL});
+  vertices.push_back({{-HS, HS, HS}, color, N_Top, UV_BL});
 
   // --- 4. BOTTOM FACE (-Y) ---
-  const core::Vector3 N_Bottom = { 0.0f, -1.0f, 0.0f };
-  vertices.push_back({ { -HS, -HS, HS }, C, N_Bottom, UV_TL }); // 18 (Mapping inverted to look correct)
-  vertices.push_back({ { -HS, -HS, -HS }, C, N_Bottom, UV_BL }); // 19
-  vertices.push_back({ { HS, -HS, -HS }, C, N_Bottom, UV_BR }); // 20
-
-  vertices.push_back({ { HS, -HS, -HS }, C, N_Bottom, UV_BR }); // 21
-  vertices.push_back({ { HS, -HS, HS }, C, N_Bottom, UV_TR }); // 22
-  vertices.push_back({ { -HS, -HS, HS }, C, N_Bottom, UV_TL }); // 23
+  const core::Vector3 N_Bottom = {0.0f, -1.0f, 0.0f};
+  vertices.push_back({{-HS, -HS, HS}, color, N_Bottom, UV_TL});
+  vertices.push_back({{-HS, -HS, -HS}, color, N_Bottom, UV_BL});
+  vertices.push_back({{HS, -HS, -HS}, color, N_Bottom, UV_BR});
+  vertices.push_back({{HS, -HS, -HS}, color, N_Bottom, UV_BR});
+  vertices.push_back({{HS, -HS, HS}, color, N_Bottom, UV_TR});
+  vertices.push_back({{-HS, -HS, HS}, color, N_Bottom, UV_TL});
 
   // --- 5. RIGHT FACE (+X) ---
-  const core::Vector3 N_Right = { 1.0f, 0.0f, 0.0f };
-  vertices.push_back({ { HS, -HS, HS }, C, N_Right, UV_BL }); // 24
-  vertices.push_back({ { HS, -HS, -HS }, C, N_Right, UV_BR }); // 25
-  vertices.push_back({ { HS, HS, -HS }, C, N_Right, UV_TR }); // 26
-
-  vertices.push_back({ { HS, HS, -HS }, C, N_Right, UV_TR }); // 27
-  vertices.push_back({ { HS, HS, HS }, C, N_Right, UV_TL }); // 28
-  vertices.push_back({ { HS, -HS, HS }, C, N_Right, UV_BL }); // 29
+  const core::Vector3 N_Right = {1.0f, 0.0f, 0.0f};
+  vertices.push_back({{HS, -HS, HS}, color, N_Right, UV_BL});
+  vertices.push_back({{HS, -HS, -HS}, color, N_Right, UV_BR});
+  vertices.push_back({{HS, HS, -HS}, color, N_Right, UV_TR});
+  vertices.push_back({{HS, HS, -HS}, color, N_Right, UV_TR});
+  vertices.push_back({{HS, HS, HS}, color, N_Right, UV_TL});
+  vertices.push_back({{HS, -HS, HS}, color, N_Right, UV_BL});
 
   // --- 6. LEFT FACE (-X) ---
-  const core::Vector3 N_Left = { -1.0f, 0.0f, 0.0f };
-  vertices.push_back({ { -HS, -HS, -HS }, C, N_Left, UV_BR }); // 30
-  vertices.push_back({ { -HS, -HS, HS }, C, N_Left, UV_BL }); // 31
-  vertices.push_back({ { -HS, HS, HS }, C, N_Left, UV_TL }); // 32
-
-  vertices.push_back({ { -HS, HS, HS }, C, N_Left, UV_TL }); // 33
-  vertices.push_back({ { -HS, HS, -HS }, C, N_Left, UV_TR }); // 34
-  vertices.push_back({ { -HS, -HS, -HS }, C, N_Left, UV_BR }); // 35
+  const core::Vector3 N_Left = {-1.0f, 0.0f, 0.0f};
+  vertices.push_back({{-HS, -HS, -HS}, color, N_Left, UV_BR});
+  vertices.push_back({{-HS, -HS, HS}, color, N_Left, UV_BL});
+  vertices.push_back({{-HS, HS, HS}, color, N_Left, UV_TL});
+  vertices.push_back({{-HS, HS, HS}, color, N_Left, UV_TL});
+  vertices.push_back({{-HS, HS, -HS}, color, N_Left, UV_TR});
+  vertices.push_back({{-HS, -HS, -HS}, color, N_Left, UV_BR});
 
   // ... (indices and mesh_ setup remains the same) ...
   std::vector<uint32_t> indices(vertices.size());
@@ -221,7 +206,7 @@ std::shared_ptr<core::Mesh<core::Vertex3D>> createCubeWithNormals(float size = 1
 }
 
 
-std::shared_ptr<core::Mesh<core::Vertex3D>> createSphereWithNormals(
+inline std::shared_ptr<core::Mesh<core::Vertex3D>> createSphereWithNormals(
   float radius = 1.0f,
   int stacks = 32,
   int sectors = 64
@@ -312,4 +297,89 @@ std::shared_ptr<core::Mesh<core::Vertex3D>> createSphereWithNormals(
   mesh_->SetVertices(vertices);
   mesh_->SetIndices(indices);
   return mesh_;
-}
+  }
+
+  inline std::shared_ptr<core::Mesh<core::Vertex3D>> createCylinderWithNormals(float radius = 0.5f, float height = 1.0f, int segments = 32) {
+  std::vector<core::Vertex3D> vertices;
+  std::vector<uint32_t> indices;
+  const float HH = height / 2.0f;
+  const core::Color color = {0.7f, 0.7f, 0.7f, 1.0f};
+
+  // Top and Bottom center points
+  core::Vertex3D topCenter = {{0, HH, 0}, color, {0, 1, 0}, {0.5f, 0.5f}};
+  core::Vertex3D bottomCenter = {{0, -HH, 0}, color, {0, -1, 0}, {0.5f, 0.5f}};
+
+  for (int i = 0; i <= segments; ++i) {
+    float angle = i * 2.0f * (float)M_PI / segments;
+    float x = radius * std::cos(angle);
+    float z = radius * std::sin(angle);
+    float u = (float)i / segments;
+
+    // Side vertices
+    core::Vector3 normal = core::Vector3(x, 0, z).Normalize();
+    vertices.push_back({{x, HH, z}, color, normal, {u, 1.0f}}); // Top side
+    vertices.push_back({{x, -HH, z}, color, normal, {u, 0.0f}}); // Bottom side
+
+    // Cap vertices
+    vertices.push_back({{x, HH, z}, color, {0, 1, 0}, {u, 1.0f}}); // Top cap
+    vertices.push_back({{x, -HH, z}, color, {0, -1, 0}, {u, 0.0f}}); // Bottom cap
+  }
+
+  int stride = 4;
+  for (int i = 0; i < segments; ++i) {
+    int curr = i * stride;
+    int next = (i + 1) * stride;
+
+    // Side faces
+    indices.push_back(curr); indices.push_back(next); indices.push_back(curr + 1);
+    indices.push_back(curr + 1); indices.push_back(next); indices.push_back(next + 1);
+
+    // Top cap
+    int tcIdx = (int)vertices.size();
+    vertices.push_back(topCenter);
+    indices.push_back(tcIdx); indices.push_back(curr + 2); indices.push_back(next + 2);
+
+    // Bottom cap
+    int bcIdx = (int)vertices.size();
+    vertices.push_back(bottomCenter);
+    indices.push_back(bcIdx); indices.push_back(next + 3); indices.push_back(curr + 3);
+  }
+
+  auto mesh_ = std::make_shared<core::Mesh<core::Vertex3D>>();
+  mesh_->SetVertices(vertices);
+  mesh_->SetIndices(indices);
+  return mesh_;
+  }
+
+  inline std::shared_ptr<core::Mesh<core::Vertex3D>> createGemWithNormals(float width = 0.5f, float height = 1.0f) {
+  std::vector<core::Vertex3D> vertices;
+  const float HW = width / 2.0f;
+  const float HH = height / 2.0f;
+  const core::Color color = {1.0f, 1.0f, 1.0f, 1.0f};
+
+  core::Vector3 top = {0, HH, 0};
+  core::Vector3 bottom = {0, -HH, 0};
+  core::Vector3 mid[4] = {{HW, 0, HW}, {-HW, 0, HW}, {-HW, 0, -HW}, {HW, 0, -HW}};
+
+  auto addTriangle = [&](const core::Vector3& p1, const core::Vector3& p2, const core::Vector3& p3) {
+    core::Vector3 v1 = p2 - p1;
+    core::Vector3 v2 = p3 - p1;
+    core::Vector3 normal = v1.Cross(v2).Normalize();
+    vertices.push_back({p1, color, normal, {0.5f, 1.0f}});
+    vertices.push_back({p2, color, normal, {0.0f, 0.0f}});
+    vertices.push_back({p3, color, normal, {1.0f, 0.0f}});
+  };
+
+  for (int i = 0; i < 4; ++i) {
+    addTriangle(top, mid[(i + 1) % 4], mid[i]);
+    addTriangle(bottom, mid[i], mid[(i + 1) % 4]);
+  }
+
+  std::vector<uint32_t> indices(vertices.size());
+  for (size_t i = 0; i < vertices.size(); ++i) indices[i] = (uint32_t)i;
+
+  auto mesh_ = std::make_shared<core::Mesh<core::Vertex3D>>();
+  mesh_->SetVertices(vertices);
+  mesh_->SetIndices(indices);
+  return mesh_;
+  }

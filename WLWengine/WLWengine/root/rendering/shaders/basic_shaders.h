@@ -70,11 +70,20 @@ in vec2 vertUV;
 in vec3 vertexNormal1;
 
 uniform vec3 viewPos;
+uniform int lightType; // 0 = Directional, 1 = Point, 2 = Spot
 uniform vec3 lightPos;
+uniform vec3 lightDir;
 uniform vec3 lightColor;
 uniform bool useLighting;
 uniform float ambientStrength;
 uniform float shininess;
+
+uniform float lightConstant;
+uniform float lightLinear;
+uniform float lightQuadratic;
+uniform float lightCutOff;
+uniform float lightOuterCutOff;
+
 uniform bool use_texture;
 uniform sampler2D model_texture; 
 
@@ -82,8 +91,7 @@ out vec4 FragColor;
 
 void main()
 {
-
-    vec3 objectColor = use_texture ?  texture(model_texture, vertUV).xyz : vertexColor;
+    vec3 objectColor = use_texture ? texture(model_texture, vertUV).xyz : vertexColor;
 
     if (!useLighting) {
       FragColor = vec4(objectColor, 1.0);
@@ -91,20 +99,41 @@ void main()
     }
 
     vec3 norm = normalize(vertexNormal);
-    vec3 lightDir = normalize(lightPos - vertexPos); 
     vec3 viewDir = normalize(viewPos - vertexPos);
+    
+    vec3 lightDirCalc;
+    float attenuation = 1.0;
+    float intensity = 1.0;
 
-    vec3 halfwayDir = normalize(lightDir + viewDir);
+    if (lightType == 0) { // Directional
+        lightDirCalc = normalize(-lightDir);
+    } else { // Point or Spot
+        lightDirCalc = normalize(lightPos - vertexPos);
+        float distance = length(lightPos - vertexPos);
+        attenuation = 1.0 / (lightConstant + lightLinear * distance + lightQuadratic * (distance * distance));
+        
+        if (lightType == 2) { // Spot
+            float theta = dot(lightDirCalc, normalize(-lightDir));
+            float epsilon = lightCutOff - lightOuterCutOff;
+            intensity = clamp((theta - lightOuterCutOff) / epsilon, 0.0, 1.0);
+        }
+    }
+
+    vec3 halfwayDir = normalize(lightDirCalc + viewDir);
 
     vec3 ambient = ambientStrength * lightColor;
 
-    float diff = max(dot(norm, lightDir), 0.0);
+    float diff = max(dot(norm, lightDirCalc), 0.0);
     vec3 diffuse = diff * lightColor;
 
     float spec = pow(max(dot(norm, halfwayDir), 0.0), shininess);
-    vec3 specular = (diff > 0.0) ? spec * lightColor  : vec3(0.0);
+    vec3 specular = (diff > 0.0) ? spec * lightColor : vec3(0.0);
 
-    vec3 result = (ambient + diffuse) * objectColor + specular;
+    ambient *= attenuation;
+    diffuse *= attenuation * intensity;
+    specular *= attenuation * intensity;
+
+    vec3 result = (ambient + diffuse + specular) * objectColor;
     FragColor = vec4(result, 1.0);
 }
 )";

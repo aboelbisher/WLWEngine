@@ -2,10 +2,15 @@
 
 #include <memory>
 #include <vector>
+#include <array>
 #include "rendering/index_buffer.h"
 #include "rendering/vertex_buffer.h"
 #include "core/vertex_2d.h"
 #include "core/vertex_3d.h"
+#include "utils/image_loader.h"
+#include "rendering/texture.h"
+
+#include "rendering/render_device.h"
 
 #include "scene/window.h"
 
@@ -14,11 +19,6 @@ class RenderingDriver {
 public:
   virtual ~RenderingDriver() = default;
 
-  // Resource Creation
-  virtual std::unique_ptr<core::WVertexBuffer> CreateVertexBuffer(const std::vector<core::Vertex2D>& vertices) = 0;
-  virtual std::unique_ptr<core::WVertexBuffer> CreateVertexBuffer(const std::vector<core::Vertex3D>& vertices) = 0;
-
-  virtual std::unique_ptr<core::WIndexBuffer> CreateIndexBuffer(const std::vector<uint32_t>& indices) = 0;
 	virtual bool Initialize(std::shared_ptr<scene::Window> window) = 0;
 	virtual void AttachWindow(std::shared_ptr<scene::Window> window) = 0;
   virtual void DrawWindow(std::shared_ptr<scene::Window> window) = 0;
@@ -26,7 +26,8 @@ public:
   virtual void SetViewport(int x, int y, int width, int height) = 0;
   virtual void Clear() = 0;
 
+  virtual RenderDevice* GetDevice() = 0;
 
-	static std::unique_ptr<RenderingDriver> Create();
+	static std::unique_ptr<RenderingDriver> Create(RenderDevice* device);
 };
-} // wlw::core
+} // wlw::rendering

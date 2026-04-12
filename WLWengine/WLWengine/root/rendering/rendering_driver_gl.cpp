@@ -5,18 +5,17 @@
 #include <GLFW/glfw3.h>
 
 #include "shaders/basic_shaders.h"
+#include "shaders/skybox_shaders.h"
 
 #include "core/logger.h"
 #include "rendering_driver.h"
+#include "rendering/render_device.h"
 #include "rendering/gl_index_buffer.h"
 #include "rendering/gl_vertex_buffer.h"
-
-//#ifdef WLW_USE_GLFW
 
 namespace wlw::rendering {
 
   void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
-    // Update the OpenGL viewport to match the new window dimensions
     glViewport(0, 0, width, height);
   }
 
@@ -27,25 +26,37 @@ namespace wlw::rendering {
 
 class GLRenderingDriver : public RenderingDriver {
 public:
+    struct UniformLocations {
+        GLint model;
+        GLint view;
+        GLint projection;
+        GLint viewPos;
+        GLint lightType;
+        GLint lightPos;
+        GLint lightDir;
+        GLint lightColor;
+        GLint useLighting;
+        GLint ambientStrength;
+        GLint shininess;
+        GLint lightConstant;
+        GLint lightLinear;
+        GLint lightQuadratic;
+        GLint lightCutOff;
+        GLint lightOuterCutOff;
+        GLint use_texture;
+        GLint model_texture;
+        
+        GLint skyboxView;
+        GLint skyboxProj;
+    } m_Uniforms;
 
-	std::unique_ptr<core::WVertexBuffer> CreateVertexBuffer(const std::vector<core::Vertex2D>& vertices) override { 
-		return std::make_unique<core::GLVertexBuffer>(vertices);
-	}
+    GLRenderingDriver(RenderDevice* device) : device_(device) {}
 
-  std::unique_ptr<core::WVertexBuffer> CreateVertexBuffer(const std::vector<core::Vertex3D>& vertices) override {
-    return  std::make_unique<core::GLVertexBuffer>(vertices);
-	}
-
-	// NEW: Resource Creation for Index Buffers
-	std::unique_ptr<core::WIndexBuffer> CreateIndexBuffer(const std::vector<uint32_t>& indices) override {
-		return std::make_unique<core::GLIndexBuffer>(indices);
-	}
-
+    RenderDevice* GetDevice() override { return device_; }
 
 	bool Initialize(std::shared_ptr<scene::Window> window) override {
 
     main_window_ = window;
-    // 1. Set the error callback FIRST
     glfwSetErrorCallback(error_callback);
 
     if (!glfwInit()) {
@@ -53,37 +64,21 @@ public:
       return false;
     }
 
-
-    // Configure OpenGL version hints (Version 3.3 Core Profile)
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
 #ifdef __APPLE__
-    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE); // Required for Mac OS X
+    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
 #endif
     window->Initialize();
 		window->MakeContextCurrent();
 		window->ProcessEvents();
 
-    // Load all OpenGL function pointers required for rendering.
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
     {
       std::cerr << "Failed to initialize GLAD" << std::endl;
-
-      const char* description;
-      int error_code = glfwGetError(&description);
-
-      if (error_code != GLFW_NO_ERROR) {
-        fprintf(stderr, "Last GLFW Error: %d - %s\n", error_code, description);
-      }
       glfwTerminate();
-    }
-
-
-    // Load OpenGL function pointers using GLAD (unchanged)
-    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
-      std::cerr << "Failed to initialize GLAD" << std::endl;
       return false;
     }
 
@@ -93,12 +88,62 @@ public:
     std::cout << "Version: " << glGetString(GL_VERSION) << std::endl;
     std::cout << "-----------------------------------" << std::endl;
 
-    // Compile and link the basic shader (unchanged)
     m_ShaderID_2D = CreateProgram(vertex2DShaderSource, fragment2DShaderSource);
     if (m_ShaderID_2D == 0) return false;
 
     m_ShaderID_3D = CreateProgram(vertex3DShaderSource, fragment3DShaderSource);
     if (m_ShaderID_3D == 0) return false;
+
+    m_ShaderID_Skybox = CreateProgram(skyboxVertexShaderSource, skyboxFragmentShaderSource);
+    if (m_ShaderID_Skybox == 0) return false;
+
+    glUseProgram(m_ShaderID_Skybox);
+    glUniform1i(glGetUniformLocation(m_ShaderID_Skybox, "skybox"), 0);
+    glUseProgram(0);
+
+    m_Uniforms.model = glGetUniformLocation(m_ShaderID_3D, "model");
+    m_Uniforms.view = glGetUniformLocation(m_ShaderID_3D, "view");
+    m_Uniforms.projection = glGetUniformLocation(m_ShaderID_3D, "projection");
+    m_Uniforms.viewPos = glGetUniformLocation(m_ShaderID_3D, "viewPos");
+    m_Uniforms.lightType = glGetUniformLocation(m_ShaderID_3D, "lightType");
+    m_Uniforms.lightPos = glGetUniformLocation(m_ShaderID_3D, "lightPos");
+    m_Uniforms.lightDir = glGetUniformLocation(m_ShaderID_3D, "lightDir");
+    m_Uniforms.lightColor = glGetUniformLocation(m_ShaderID_3D, "lightColor");
+    m_Uniforms.useLighting = glGetUniformLocation(m_ShaderID_3D, "useLighting");
+    m_Uniforms.ambientStrength = glGetUniformLocation(m_ShaderID_3D, "ambientStrength");
+    m_Uniforms.shininess = glGetUniformLocation(m_ShaderID_3D, "shininess");
+    m_Uniforms.lightConstant = glGetUniformLocation(m_ShaderID_3D, "lightConstant");
+    m_Uniforms.lightLinear = glGetUniformLocation(m_ShaderID_3D, "lightLinear");
+    m_Uniforms.lightQuadratic = glGetUniformLocation(m_ShaderID_3D, "lightQuadratic");
+    m_Uniforms.lightCutOff = glGetUniformLocation(m_ShaderID_3D, "lightCutOff");
+    m_Uniforms.lightOuterCutOff = glGetUniformLocation(m_ShaderID_3D, "lightOuterCutOff");
+    m_Uniforms.use_texture = glGetUniformLocation(m_ShaderID_3D, "use_texture");
+    m_Uniforms.model_texture = glGetUniformLocation(m_ShaderID_3D, "model_texture");
+
+    m_Uniforms.skyboxView = glGetUniformLocation(m_ShaderID_Skybox, "view");
+    m_Uniforms.skyboxProj = glGetUniformLocation(m_ShaderID_Skybox, "projection");
+
+    float skyboxVertices[] = {
+        -1.0f,  1.0f, -1.0f, -1.0f, -1.0f, -1.0f,  1.0f, -1.0f, -1.0f,
+         1.0f, -1.0f, -1.0f,  1.0f,  1.0f, -1.0f, -1.0f,  1.0f, -1.0f,
+        -1.0f, -1.0f,  1.0f, -1.0f, -1.0f, -1.0f, -1.0f,  1.0f, -1.0f,
+        -1.0f,  1.0f, -1.0f, -1.0f,  1.0f,  1.0f, -1.0f, -1.0f,  1.0f,
+         1.0f, -1.0f, -1.0f,  1.0f, -1.0f,  1.0f,  1.0f,  1.0f,  1.0f,
+         1.0f,  1.0f,  1.0f,  1.0f,  1.0f, -1.0f,  1.0f, -1.0f, -1.0f,
+        -1.0f, -1.0f,  1.0f, -1.0f,  1.0f,  1.0f,  1.0f,  1.0f,  1.0f,
+         1.0f,  1.0f,  1.0f,  1.0f, -1.0f,  1.0f, -1.0f, -1.0f,  1.0f,
+        -1.0f,  1.0f, -1.0f,  1.0f,  1.0f, -1.0f,  1.0f,  1.0f,  1.0f,
+         1.0f,  1.0f,  1.0f, -1.0f,  1.0f,  1.0f, -1.0f,  1.0f, -1.0f,
+        -1.0f, -1.0f, -1.0f, -1.0f, -1.0f,  1.0f,  1.0f, -1.0f, -1.0f,
+         1.0f, -1.0f, -1.0f, -1.0f, -1.0f,  1.0f,  1.0f, -1.0f,  1.0f
+    };
+    glGenVertexArrays(1, &m_SkyboxVAO);
+    glGenBuffers(1, &m_SkyboxVBO);
+    glBindVertexArray(m_SkyboxVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, m_SkyboxVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(skyboxVertices), &skyboxVertices, GL_STATIC_DRAW);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
 
     glEnable(GL_DEPTH_TEST);
     return true;
@@ -117,62 +162,93 @@ public:
   }
 
   void Clear() override {
-    glClearColor(0.1f, 0.1f, 0.15f, 1.0f); // Dark blue-gray background
+    glClearColor(0.1f, 0.1f, 0.15f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
   }
 
   void DrawWindow(std::shared_ptr<scene::Window> window) override {
-		window->MakeContextCurrent();
+    window->MakeContextCurrent();
     window->ProcessEvents();
 
     auto size = window->GetSize();
 
-    //// RHI Calls - The engine code is API-agnostic here
-    SetViewport(0, 0, size.x, size.y);
+    SetViewport(0, 0, (int)size.x, (int)size.y);
     Clear();
 
+    auto camera = window->GetUpdatedCamera();
+    glm::mat4 view = camera->GetViewMatrix();
+    glm::mat4 proj = camera->GetProjectionMatrix();
 
-    //2D rendering
-    /*
-
-    glUseProgram(m_ShaderID_2D);
-
-  	for (const auto& [_, node] : window->GetNodes2D()) {
-			auto vertex_buffer = CreateVertexBuffer(node->GetMesh().GetVertices());
-			auto index_buffer = CreateIndexBuffer(node->GetMesh().GetIndices());
-
-			vertex_buffer->Bind();
-			index_buffer->Bind(); 
-
-			DrawIndexed(static_cast<uint32_t>(node->GetMesh().GetIndices().size()));
-
-			vertex_buffer->Unbind();
-			index_buffer->Unbind();
-    }*/
+    // --- RENDER SKYBOX FIRST ---
+    auto skybox = window->GetSkybox();
+    if (skybox) {
+        glDisable(GL_DEPTH_TEST);
+        glDepthMask(GL_FALSE);
+        glDisable(GL_CULL_FACE);
+        
+        glUseProgram(m_ShaderID_Skybox);
+        
+        glm::mat4 staticView = glm::mat4(glm::mat3(view));
+        glUniformMatrix4fv(glGetUniformLocation(m_ShaderID_Skybox, "view"), 1, GL_FALSE, glm::value_ptr(staticView));
+        glUniformMatrix4fv(glGetUniformLocation(m_ShaderID_Skybox, "projection"), 1, GL_FALSE, glm::value_ptr(proj));
+        
+        glBindVertexArray(m_SkyboxVAO);
+        skybox->Bind(0);
+        glDrawArrays(GL_TRIANGLES, 0, 36);
+        glBindVertexArray(0);
+        
+        glDepthMask(GL_TRUE);
+        glEnable(GL_DEPTH_TEST);
+    }
 
     glUseProgram(m_ShaderID_3D);
-    
-    window->IterateOver3DNodes([this, window](const std::shared_ptr<scene::Node3D> node) {
+    glUniformMatrix4fv(m_Uniforms.view, 1, GL_FALSE, glm::value_ptr(view));
+    glUniformMatrix4fv(m_Uniforms.projection, 1, GL_FALSE, glm::value_ptr(proj));
+    core::Vector3 camPos = camera->GetPosition();
+    glUniform3f(m_Uniforms.viewPos, camPos.x, camPos.y, camPos.z);
+
+    scene::Frustum frustum = scene::Frustum::FromMatrix(proj * view);
+
+    window->IterateOver3DNodes([this, window, &frustum](const std::shared_ptr<scene::Node3D> node) {
+
+      if (!frustum.TestAABB(node->GetAABB())) {
+          return;
+      }
 
       auto model = node->GetModel();
+
       if (model == nullptr || model->meshes.empty()) {
         return;
       }
 
-      auto camera = window->GetUpdatedCamera();
-      glUniformMatrix4fv(glGetUniformLocation(m_ShaderID_3D, "model"), 1, GL_FALSE, glm::value_ptr(node->GetModelMatrix()));
-      glUniformMatrix4fv(glGetUniformLocation(m_ShaderID_3D, "view"), 1, GL_FALSE, glm::value_ptr(camera->GetViewMatrix()));
-      glUniformMatrix4fv(glGetUniformLocation(m_ShaderID_3D, "projection"), 1, GL_FALSE, glm::value_ptr(camera->GetProjectionMatrix()));
+      glUniformMatrix4fv(m_Uniforms.model, 1, GL_FALSE, glm::value_ptr(node->GetModelMatrix()));
 
       for (const auto& mesh : model->meshes) {
-        auto material = mesh->GetMaterial();
+        auto node_mat = node->GetMaterial();
+        auto mesh_mat = mesh->GetMaterial();
+        
+        bool has_lighting = (node_mat && node_mat->GetLighting().has_value()) || 
+                            (mesh_mat && mesh_mat->GetLighting().has_value());
 
-       BindMaterial(node->GetMaterial(), camera->GetPosition());
-       BindMaterial(mesh->GetMaterial(), camera->GetPosition());
+        glUniform1i(m_Uniforms.use_texture, false);
+        glUniform1i(m_Uniforms.useLighting, has_lighting);
 
+        if (node_mat) {
+          BindMaterial(node_mat);
+        }
+        if (mesh_mat) {
+          BindMaterial(mesh_mat);
+        }
 
-        auto vertex_buffer = CreateVertexBuffer(mesh->GetVertices());
-        auto index_buffer = CreateIndexBuffer(mesh->GetIndices());
+        if (!mesh->GetVertexBuffer()) {
+            mesh->SetVertexBuffer(device_->CreateVertexBuffer(mesh->GetVertices()));
+        }
+        if (!mesh->GetIndexBuffer()) {
+            mesh->SetIndexBuffer(device_->CreateIndexBuffer(mesh->GetIndices()));
+        }
+
+        const auto* vertex_buffer = mesh->GetVertexBuffer();
+        const auto* index_buffer = mesh->GetIndexBuffer();
 
         vertex_buffer->Bind();
         index_buffer->Bind();
@@ -182,59 +258,45 @@ public:
         vertex_buffer->Unbind();
         index_buffer->Unbind();
       }
-
-
-      });
-
+    });
   }
 
-  void BindMaterial(std::shared_ptr<rendering::Material> material, const core::Vector3& camera_position) {
-    if (material) {
-      if (material->HasTexture()) {
-        glUniform1i(glGetUniformLocation(m_ShaderID_3D, "use_texture"), true);
-        glActiveTexture(GL_TEXTURE0);
-        material->BindTexture();
-        GLint textureLocation = glGetUniformLocation(m_ShaderID_3D, "model_texture");
-        glUniform1i(textureLocation, 0); // Tell the shader to use GL_TEXTURE0
-      } else {
-        glUniform1i(glGetUniformLocation(m_ShaderID_3D, "use_texture"), false);
-      }
+  void BindMaterial(std::shared_ptr<rendering::Material> material) {
+    if (!material) return;
 
-
-
-      if (const auto& lighting = material->GetLighting()) {
-        glUniform3f(glGetUniformLocation(m_ShaderID_3D, "viewPos"), camera_position.x, camera_position.y, camera_position.z);
-        glUniform1i(glGetUniformLocation(m_ShaderID_3D, "useLighting"), true);
-        glUniform3f(glGetUniformLocation(m_ShaderID_3D, "lightPos"), lighting->position.x, lighting->position.y, lighting->position.z);
-        glUniform3f(glGetUniformLocation(m_ShaderID_3D, "lightColor"), lighting->color.r, lighting->color.g, lighting->color.b);
-        glUniform1f(glGetUniformLocation(m_ShaderID_3D, "ambientStrength"), lighting->ambient_strength);
-        glUniform1f(glGetUniformLocation(m_ShaderID_3D, "shininess"), lighting->shininess);
-        glUniform3f(glGetUniformLocation(m_ShaderID_3D, "lightPos"), lighting->color.r, lighting->color.g, lighting->color.b);
-
-      } else {
-        glUniform1i(glGetUniformLocation(m_ShaderID_3D, "useLighting"), false);
-      }
-
-
-
-    } else {
-      glUniform1i(glGetUniformLocation(m_ShaderID_3D, "use_texture"), false);
-      glUniform1i(glGetUniformLocation(m_ShaderID_3D, "useLighting"), false);
-
+    if (material->HasTexture()) {
+      glUniform1i(m_Uniforms.use_texture, true);
+      glActiveTexture(GL_TEXTURE0);
+      material->BindTexture();
+      glUniform1i(m_Uniforms.model_texture, 0); 
     }
 
+    if (const auto& lighting = material->GetLighting()) {
+      glUniform1i(m_Uniforms.useLighting, true);
+      glUniform1i(m_Uniforms.lightType, static_cast<int>(lighting->type));
+      glUniform3f(m_Uniforms.lightPos, lighting->position.x, lighting->position.y, lighting->position.z);
+      glUniform3f(m_Uniforms.lightDir, lighting->direction.x, lighting->direction.y, lighting->direction.z);
+      glUniform3f(m_Uniforms.lightColor, lighting->color.r, lighting->color.g, lighting->color.b);
+      glUniform1f(m_Uniforms.ambientStrength, lighting->ambient_strength);
+      glUniform1f(m_Uniforms.shininess, lighting->shininess);
+      glUniform1f(m_Uniforms.lightConstant, lighting->constant);
+      glUniform1f(m_Uniforms.lightLinear, lighting->linear);
+      glUniform1f(m_Uniforms.lightQuadratic, lighting->quadratic);
+      glUniform1f(m_Uniforms.lightCutOff, lighting->cutOff);
+      glUniform1f(m_Uniforms.lightOuterCutOff, lighting->outerCutOff);
+    }
   }
 
   void DrawIndexed(uint32_t indexCount) {
-    // Use the active shader program
-
-    // The bound IVertexBuffer (VAO) and IIndexBuffer (EBO) state is used here.
-    // We use GL_UNSIGNED_INT because our index data is uint32_t.
     glDrawElements(GL_TRIANGLES, indexCount, GL_UNSIGNED_INT, nullptr);
   }
 
   ~GLRenderingDriver() override {
     glDeleteProgram(m_ShaderID_2D);
+    glDeleteProgram(m_ShaderID_3D);
+    glDeleteProgram(m_ShaderID_Skybox);
+    glDeleteVertexArrays(1, &m_SkyboxVAO);
+    glDeleteBuffers(1, &m_SkyboxVBO);
   }
 
 private:
@@ -258,7 +320,6 @@ private:
     return id;
   }
 
-  // Helper to link program 
   GLuint CreateProgram(const char* vsSource, const char* fsSource) {
     GLuint program = glCreateProgram();
     GLuint vs = CompileShader(GL_VERTEX_SHADER, vsSource);
@@ -278,14 +339,18 @@ private:
 private:
   GLuint m_ShaderID_2D = 0; 
   GLuint m_ShaderID_3D = 0; 
+  GLuint m_ShaderID_Skybox = 0;
+  GLuint m_SkyboxVAO = 0;
+  GLuint m_SkyboxVBO = 0;
   std::shared_ptr<scene::Window> main_window_;
+  RenderDevice* device_;
 };
 
-std::unique_ptr<RenderingDriver> RenderingDriver::Create() {
-	return std::make_unique<GLRenderingDriver>();
+std::unique_ptr<RenderingDriver> RenderingDriver::Create(RenderDevice* device) {
+	return std::make_unique<GLRenderingDriver>(device);
 }
 
-} // wlw::core
+} // namespace wlw::rendering
 
 
 #endif // WLW_USE_GLFW

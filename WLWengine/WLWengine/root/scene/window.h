@@ -16,10 +16,9 @@
 #include "core/vertex_3d.h"
 #include "scene/camera_3d.h"
 #include "scene/fps_camera.h"
+#include "rendering/texture.h"
 
 namespace wlw::scene {
-
-
 
 class Window {
 public:
@@ -38,6 +37,14 @@ public:
 		is_active_ = is_active;
 	}
 
+	void SetSkybox(std::shared_ptr<rendering::WCubemap> skybox) {
+		skybox_ = skybox;
+	}
+
+	std::shared_ptr<rendering::WCubemap> GetSkybox() const {
+		return skybox_;
+	}
+
 	int AddNode(const std::shared_ptr<Node2D>& node_2d) {
 		nodes_2d_[nodes_2d_next_id_] = node_2d;
 		return nodes_2d_next_id_++;
@@ -46,6 +53,15 @@ public:
 	int AddNode(const std::shared_ptr<Node3D>& node_3d)  {
 		nodes_3d_[nodes_3d_next_id_] = node_3d;
 		return nodes_3d_next_id_++;
+	}
+
+	void RemoveNode3D(int id) {
+		nodes_3d_.erase(id);
+	}
+
+	void ClearScene3D() {
+		nodes_3d_.clear();
+		nodes_3d_next_id_ = 0;
 	}
 
 	const Nodes2DMap& GetNodes2D() const  {
@@ -108,6 +124,7 @@ protected:
 	int nodes_3d_next_id_ = 0;
 
 	std::shared_ptr<scene::Camera3D> camera_ = scene::FPSCamera::Create();
+	std::shared_ptr<rendering::WCubemap> skybox_ = nullptr;
 
 public:
 

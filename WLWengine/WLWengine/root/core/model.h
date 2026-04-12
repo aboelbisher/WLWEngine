@@ -4,7 +4,7 @@
 #include <vector>
 
 #include "core/mesh.h"
-#include "utils/texture.h"
+#include "rendering/texture.h"
 #include "rendering/material.h"
 
 namespace wlw::core {
@@ -16,7 +16,7 @@ namespace wlw::core {
 
     // We still keep a "Master List" to ensure textures are loaded 
     // and accessible even if no material currently uses them.
-    std::vector<std::shared_ptr<utils::Texture>> textures;
+    std::vector<std::shared_ptr<rendering::WTexture>> textures;
     std::vector<std::shared_ptr<rendering::Material>> materials;
 
     std::string name;

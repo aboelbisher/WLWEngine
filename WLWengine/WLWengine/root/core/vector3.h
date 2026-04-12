@@ -3,7 +3,7 @@
 #include <cmath>
 #include "glm/glm.hpp"
 #include "glm/gtc/matrix_transform.hpp"
-
+		
 namespace wlw::core {
 	struct Vector3 {
 		float x;

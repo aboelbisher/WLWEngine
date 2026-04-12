@@ -9,6 +9,7 @@
 #include "core/vertex_3d.h"
 #include "core/model.h"
 #include "core/logger.h"
+#include "core/collision.h"
 #include "rendering/material.h"
 
 #include <glm/gtc/matrix_transform.hpp>
@@ -19,6 +20,39 @@ namespace wlw::scene {
 template <core::OnlyVerticesTypes T>
 class Node {
 public:
+
+    scene::AABB GetAABB() const {
+        if (!model_ || model_->meshes.empty()) {
+            return scene::AABB::FromPositionAndSize(position_, 0.1f);
+        }
+
+        glm::vec3 minBound(std::numeric_limits<float>::max());
+        glm::vec3 maxBound(std::numeric_limits<float>::lowest());
+
+        for (const auto& mesh : model_->meshes) {
+            const auto& local = mesh->GetLocalAABB();
+
+            // The 8 corners of the local AABB
+            std::array<glm::vec3, 8> corners = {
+                glm::vec3{local.min.x, local.min.y, local.min.z},
+                glm::vec3{local.min.x, local.min.y, local.max.z},
+                glm::vec3{local.min.x, local.max.y, local.min.z},
+                glm::vec3{local.min.x, local.max.y, local.max.z},
+                glm::vec3{local.max.x, local.min.y, local.min.z},
+                glm::vec3{local.max.x, local.min.y, local.max.z},
+                glm::vec3{local.max.x, local.max.y, local.min.z},
+                glm::vec3{local.max.x, local.max.y, local.max.z}
+            };
+
+            for (const auto& corner : corners) {
+                glm::vec4 worldPos = model_matrix_ * glm::vec4(corner, 1.0f);
+                minBound = glm::min(minBound, glm::vec3(worldPos));
+                maxBound = glm::max(maxBound, glm::vec3(worldPos));
+            }
+        }
+        return { {minBound.x, minBound.y, minBound.z}, {maxBound.x, maxBound.y, maxBound.z} };
+    }
+
 
 	std::shared_ptr <core::Model<T>> GetModel() const {
 		return model_;
@@ -34,6 +68,14 @@ public:
 			child_->Translate(vector);
 		}
 		UpdateModelMatrix();
+	}
+
+	const core::Vector3& GetScale() const {
+		return scale_;
+	}
+
+	const core::Vector3& GetRotation() const {
+		return rotation_angles_degrees_;
 	}
 
 	void SetPosition(const core::Vector3& position) {
@@ -78,7 +120,6 @@ public:
 		
 		if (material_->HasTexture()) {
 			material_->BindTexture();
-			material_->GenerateTexture();
 		}
 	}
 
@@ -106,15 +147,17 @@ private:
 		));
 		// Start with Identity Matrix
 		model_matrix_ = glm::mat4(1.0f);
-		// Apply SCALE
-		model_matrix_ = glm::scale(model_matrix_, glm::vec3(scale_.x, scale_.y, scale_.z));
-		// Apply ROTATION (Y-axis example, add others as needed)
+		
+		// 1. Apply TRANSLATION (Translate to world position)
+		model_matrix_ = glm::translate(model_matrix_, glm::vec3(position_.x, position_.y, position_.z));
+
+		// 2. Apply ROTATION (Rotate around local origin)
 		model_matrix_ = glm::rotate(model_matrix_, rotation_angle_radians_.x, glm::vec3(1.0f, 0.0f, 0.0f));
 		model_matrix_ = glm::rotate(model_matrix_, rotation_angle_radians_.y, glm::vec3(0.0f, 1.0f, 0.0f));
 		model_matrix_ = glm::rotate(model_matrix_, rotation_angle_radians_.z, glm::vec3(0.0f, 0.0f, 1.0f));
-		// Add other axes as needed (e.g., rotationAnglesRadians.x for pitch, rotationAnglesRadians.z for roll)
-		// Apply TRANSLATION
-		model_matrix_ = glm::translate(model_matrix_, glm::vec3(position_.x, position_.y, position_.z));
+
+		// 3. Apply SCALE (Scale around local origin)
+		model_matrix_ = glm::scale(model_matrix_, glm::vec3(scale_.x, scale_.y, scale_.z));
 	}
 
 private:
