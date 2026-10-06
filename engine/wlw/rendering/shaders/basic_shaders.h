@@ -1,11 +1,11 @@
 #pragma once
 
-#pragma once
-
 
 // --- Global Setup (Minimal Shaders for Modern GL) ---
 // Shaders are required for modern OpenGL (Core Profile 3.3+)
-const char* vertex2DShaderSource = R"(
+namespace wlw::rendering {
+
+inline constexpr const char* vertex2DShaderSource = R"(
 #version 330 core
 layout (location = 0) in vec2 aPos;
 layout (location = 1) in vec3 aColor;
@@ -17,7 +17,7 @@ void main()
 }
 )";
 
-const char* fragment2DShaderSource = R"(
+inline constexpr const char* fragment2DShaderSource = R"(
 #version 330 core
 out vec4 FragColor;
 in vec3 vertexColor;
@@ -28,7 +28,7 @@ void main()
 )";
 
 
-const char* vertex3DShaderSource = R"(
+inline constexpr const char* vertex3DShaderSource = R"(
 #version 330 core
 layout (location = 0) in vec3 aPos;
 layout (location = 1) in vec4 aColor;
@@ -60,7 +60,7 @@ void main()
 )";
 
 
-const char* fragment3DShaderSource = R"(
+inline constexpr const char* fragment3DShaderSource = R"(
 #version 330 core
 
 in vec3 vertexColor;
@@ -137,3 +137,5 @@ void main()
     FragColor = vec4(result, 1.0);
 }
 )";
+
+} // namespace wlw::rendering

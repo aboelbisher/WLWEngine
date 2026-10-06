@@ -9,6 +9,7 @@
 #include <unordered_map>
 
 #include "wlw/scene/fps_camera.h"
+#include "wlw/os/glfw_platform.h"
 
 
 namespace wlw::scene {
@@ -21,11 +22,15 @@ namespace wlw::scene {
 
 class WindowImpl: public Window {
 public:
-	WindowImpl(const core::Vector2& size, const std::string& title) : title_(title), color_(1.0, 0.0, 0.0, 1.0) {
+	WindowImpl(const core::Vector2& size, const std::string& title) : color_(1.0, 0.0, 0.0, 1.0), title_(title) {
 		size_ = size;
 	}
 	~WindowImpl() override {
-		// Destructor implementation (e.g., destroy the window)
+		// If GLFW was already terminated, glfwTerminate() has destroyed this window for us.
+		if (window_ != nullptr && os::g_glfw_initialized) {
+			glfwDestroyWindow(window_);
+		}
+		window_ = nullptr;
 	}
 
  void Initialize(GLFWwindow* master_window) override {
@@ -36,7 +41,7 @@ public:
 		window_ = glfwCreateWindow(size_.x, size_.y, title_.c_str(), NULL, master_window);
 		if (window_ == NULL) {
 			std::cerr << "Failed to create GLFW window with title " << title_ << std::endl;
-			glfwTerminate();
+			return;
 		}
 
 		glfwSetInputMode(window_, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
@@ -49,18 +54,18 @@ public:
 		glfwSwapInterval(1);
 	}
 
+	// Polls OS events (keyboard, mouse, resize, close) and applies the window's own input handling.
+	// Called once per frame, after the frame was drawn and presented.
 	void ProcessEvents() override {
 		ASSERT_GLFW_WINDOW_NOT_NULL(window_);
-		// Input processing
-		processInput();
-
-		// --- Actual Render Logic Goes Here ---
-
-		// Swap the front and back buffers to display the rendered image
-		glfwSwapBuffers(window_);
-
-		// Check and call events (like input, window resize, etc.)
 		glfwPollEvents();
+		processInput();
+	}
+
+	// Presents the frame that was just drawn.
+	void SwapBuffers() override {
+		ASSERT_GLFW_WINDOW_NOT_NULL(window_);
+		glfwSwapBuffers(window_);
 	}
 
 
@@ -151,7 +156,7 @@ private:
 	bool first_mouse_ = true;
 	core::Vector2 last_position_;
 
-	GLFWwindow* window_;
+	GLFWwindow* window_ = nullptr;
 	core::Color color_;
 	std::string title_;
 

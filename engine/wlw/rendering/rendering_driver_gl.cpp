@@ -8,6 +8,7 @@
 #include "shaders/skybox_shaders.h"
 
 #include "wlw/core/logger.h"
+#include "wlw/os/glfw_platform.h"
 #include "rendering_driver.h"
 #include "wlw/rendering/render_device.h"
 #include "wlw/rendering/gl_index_buffer.h"
@@ -63,6 +64,7 @@ public:
       std::cerr << "Failed to initialize GLFW" << std::endl;
       return false;
     }
+    os::g_glfw_initialized = true;
 
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
@@ -78,8 +80,7 @@ public:
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
     {
       std::cerr << "Failed to initialize GLAD" << std::endl;
-      glfwTerminate();
-      return false;
+      return false;  // GLFW is terminated by the destructor
     }
 
     std::cout << "--- OpenGL Renderer Initialized ---" << std::endl;
@@ -168,7 +169,6 @@ public:
 
   void DrawWindow(std::shared_ptr<scene::Window> window) override {
     window->MakeContextCurrent();
-    window->ProcessEvents();
 
     auto size = window->GetSize();
 
@@ -189,8 +189,8 @@ public:
         glUseProgram(m_ShaderID_Skybox);
         
         glm::mat4 staticView = glm::mat4(glm::mat3(view));
-        glUniformMatrix4fv(glGetUniformLocation(m_ShaderID_Skybox, "view"), 1, GL_FALSE, glm::value_ptr(staticView));
-        glUniformMatrix4fv(glGetUniformLocation(m_ShaderID_Skybox, "projection"), 1, GL_FALSE, glm::value_ptr(proj));
+        glUniformMatrix4fv(m_Uniforms.skyboxView, 1, GL_FALSE, glm::value_ptr(staticView));
+        glUniformMatrix4fv(m_Uniforms.skyboxProj, 1, GL_FALSE, glm::value_ptr(proj));
         
         glBindVertexArray(m_SkyboxVAO);
         skybox->Bind(0);
@@ -209,7 +209,7 @@ public:
 
     scene::Frustum frustum = scene::Frustum::FromMatrix(proj * view);
 
-    window->IterateOver3DNodes([this, window, &frustum](const std::shared_ptr<scene::Node3D> node) {
+    window->IterateOver3DNodes([this, &frustum](const std::shared_ptr<scene::Node3D>& node) {
 
       if (!frustum.TestAABB(node->GetAABB())) {
           return;
@@ -259,6 +259,10 @@ public:
         index_buffer->Unbind();
       }
     });
+
+    // Present the frame we just drew (previously the swap happened before drawing,
+    // so every frame was shown one frame late).
+    window->SwapBuffers();
   }
 
   void BindMaterial(std::shared_ptr<rendering::Material> material) {
@@ -292,11 +296,22 @@ public:
   }
 
   ~GLRenderingDriver() override {
-    glDeleteProgram(m_ShaderID_2D);
-    glDeleteProgram(m_ShaderID_3D);
-    glDeleteProgram(m_ShaderID_Skybox);
-    glDeleteVertexArrays(1, &m_SkyboxVAO);
-    glDeleteBuffers(1, &m_SkyboxVBO);
+    if (!os::g_glfw_initialized) {
+      return;
+    }
+    // Free our GL objects while the main window's context still exists...
+    if (main_window_ && main_window_->GetGLFWwindow()) {
+      main_window_->MakeContextCurrent();
+      glDeleteProgram(m_ShaderID_2D);
+      glDeleteProgram(m_ShaderID_3D);
+      glDeleteProgram(m_ShaderID_Skybox);
+      glDeleteVertexArrays(1, &m_SkyboxVAO);
+      glDeleteBuffers(1, &m_SkyboxVBO);
+    }
+    main_window_.reset();
+    // ...then shut GLFW down (this also destroys any windows still open).
+    glfwTerminate();
+    os::g_glfw_initialized = false;
   }
 
 private:

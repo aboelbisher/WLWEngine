@@ -18,20 +18,18 @@ namespace wlw::core {
 			return { x - other.x, y - other.y, z - other.z };
 		}
 
-		Vector3 operator+=(const Vector3& other) const {
-			return  { x + other.x, y + other.y, z + other.z };
-		}
-
-		void operator-=(const Vector3& other) {
-			x -= other.x;
-			y -= other.y;
-			z -= other.z;
-		}
-
-		void operator+=(const Vector3& other) {
+		Vector3& operator+=(const Vector3& other) {
 			x += other.x;
 			y += other.y;
 			z += other.z;
+			return *this;
+		}
+
+		Vector3& operator-=(const Vector3& other) {
+			x -= other.x;
+			y -= other.y;
+			z -= other.z;
+			return *this;
 		}
 
 		Vector3 operator-() const {
@@ -42,7 +40,7 @@ namespace wlw::core {
 			return glm::vec3(x, y, z);
 		}
 
-		Vector3 Cross(const Vector3& a) {
+		Vector3 Cross(const Vector3& a) const {
 			return {
 				y * a.z - z * a.y,
 				z * a.x - x * a.z,
@@ -58,12 +56,12 @@ namespace wlw::core {
 			return { x / scalar, y / scalar, z / scalar };
 		}
 
-		Vector3 Normalize() {
+		Vector3 Normalize() const {
 			float length = std::sqrt(x * x + y * y + z * z);
 			return { x / length, y / length, z / length };
 		}
 
-		Vector3 Rotate(float angle_degrees, const Vector3& rotate_vector) {
+		Vector3 Rotate(float angle_degrees, const Vector3& rotate_vector) const {
 			// 2. Create an identity matrix
 			glm::vec3 glm_v = { x, y,z };
 			glm::mat4 rotation_matrix = glm::mat4(1.0f);

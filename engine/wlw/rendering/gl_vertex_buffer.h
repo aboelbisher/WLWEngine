@@ -3,6 +3,7 @@
 #pragma once
 #include <vector>
 #include <glad/glad.h>
+#include "wlw/os/glfw_platform.h"
 
 
 #include "wlw/rendering/vertex_buffer.h"
@@ -80,8 +81,10 @@ public:
   }
 
   ~GLVertexBuffer() override {
-    glDeleteBuffers(1, &m_VBO_);
-    glDeleteVertexArrays(1, &m_VAO_);
+    if (os::HasCurrentGLContext()) {
+      glDeleteBuffers(1, &m_VBO_);
+      glDeleteVertexArrays(1, &m_VAO_);
+    }
   }
 
   void Bind() const override {

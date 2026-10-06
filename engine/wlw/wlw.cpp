@@ -4,6 +4,8 @@
 #include "wlw/rendering/render_device.h"
 #include "wlw/os/input_engine.h"
 
+#include <unordered_map>
+
 namespace wlw {
 
   class WLWEngineImpl : public WLWEngine {
@@ -12,6 +14,21 @@ namespace wlw {
         render_device_ = rendering::RenderDevice::Create();
         rendering_driver_ = rendering::RenderingDriver::Create(render_device_.get());
         input_engine_ = os::InputEngine::Create();
+    }
+
+    // Shutdown order matters: GPU resources must be freed while a GL context exists,
+    // and glfwTerminate() (in the rendering driver) must come last.
+    ~WLWEngineImpl() override {
+      for (auto& [_, window] : windows_) {
+        if (window->GetGLFWwindow()) {
+          window->MakeContextCurrent();
+          window->ClearScene();        // frees meshes/textures nobody else holds
+        }
+      }
+      input_engine_.reset();
+      rendering_driver_.reset();       // frees shaders, then terminates GLFW
+      windows_.clear();
+      render_device_.reset();
     }
 
     void Start(std::shared_ptr<wlw::scene::Window> window) override {
@@ -28,9 +45,13 @@ namespace wlw {
       return last_window_id++;
     }
 
+    // One frame: draw + present every window, then poll input for the next frame.
     void Iterate() override {
       for (auto& [_, window] : windows_) {
-				rendering_driver_->DrawWindow(window);
+        rendering_driver_->DrawWindow(window);
+      }
+      for (auto& [_, window] : windows_) {
+        window->ProcessEvents();
       }
     }
 

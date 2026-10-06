@@ -5,6 +5,7 @@
 
 #include "wlw/rendering/index_buffer.h"
 #include <glad/glad.h>
+#include "wlw/os/glfw_platform.h"
 
 #include <vector>
 #include <cstdint>
@@ -17,7 +18,7 @@ namespace wlw::core {
 
   public:
     GLIndexBuffer(const std::vector<uint32_t>& indices)
-      : m_Count(indices.size()) {
+      : m_Count(static_cast<uint32_t>(indices.size())) {
 
       glGenBuffers(1, &m_EBO);
       // Bind the EBO to GL_ELEMENT_ARRAY_BUFFER to upload data
@@ -28,7 +29,7 @@ namespace wlw::core {
     }
 
     ~GLIndexBuffer() override {
-      glDeleteBuffers(1, &m_EBO);
+      if (os::HasCurrentGLContext()) glDeleteBuffers(1, &m_EBO);
     }
 
     void Bind() const override {

@@ -1,6 +1,8 @@
 #pragma once
 
-const char* skyboxVertexShaderSource = R"(
+namespace wlw::rendering {
+
+inline constexpr const char* skyboxVertexShaderSource = R"(
 #version 330 core
 layout (location = 0) in vec3 aPos;
 
@@ -19,7 +21,7 @@ void main()
 }
 )";
 
-const char* skyboxFragmentShaderSource = R"(
+inline constexpr const char* skyboxFragmentShaderSource = R"(
 #version 330 core 
 out vec4 FragColor;
 
@@ -32,3 +34,5 @@ void main()
     FragColor = texture(skybox, TexCoords);
 }
 )";
+
+} // namespace wlw::rendering

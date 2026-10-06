@@ -20,6 +20,7 @@ add_library(wlw STATIC
   wlw/core/vertex_2d.h
   wlw/core/vertex_3d.h
 
+  wlw/os/glfw_platform.h
   wlw/os/input_engine.h
   wlw/os/input_engine_gl.cpp
 

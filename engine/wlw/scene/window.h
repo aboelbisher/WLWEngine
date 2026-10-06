@@ -3,6 +3,7 @@
 #include <string>
 #include <unordered_map>
 #include <functional>
+#include <vector>
 
 #ifdef WLW_USE_GLFW
 #include <glad/glad.h>
@@ -28,7 +29,8 @@ public:
 	virtual void Initialize(GLFWwindow* master_window = nullptr) = 0;
 #endif
 	virtual void MakeContextCurrent() = 0;
-	virtual void ProcessEvents() = 0;
+	virtual void ProcessEvents() = 0;   // poll input/OS events
+	virtual void SwapBuffers() = 0;     // present the drawn frame
 	virtual void SetClearColor(const core::Color& color) = 0;
 
 	virtual void ProcessMouseMovement(double xpos, double ypos) = 0;
@@ -64,6 +66,14 @@ public:
 		nodes_3d_next_id_ = 0;
 	}
 
+	// Drops every node and the skybox (frees their GPU resources if nothing else holds them).
+	void ClearScene() {
+		nodes_2d_.clear();
+		nodes_2d_next_id_ = 0;
+		ClearScene3D();
+		skybox_ = nullptr;
+	}
+
 	const Nodes2DMap& GetNodes2D() const  {
 		return nodes_2d_;
 	}
@@ -85,24 +95,24 @@ public:
 		return size_;
 	}
 
-	//TODO: use callback cookies here
-	void IterateOver3DNodes(const std::function<void(const std::shared_ptr<Node3D>)> callback) {
+	// Visits every 3D node: top-level nodes first, then their children, level by level.
+	void IterateOver3DNodes(const std::function<void(const std::shared_ptr<Node3D>&)>& callback) const {
+		std::vector<std::shared_ptr<Node3D>> current;
+		current.reserve(nodes_3d_.size());
+		for (const auto& [_, node] : nodes_3d_) {
+			current.push_back(node);
+		}
 
-		//use vector rather than nodes; 
-		//u might be using the same ids when copying children here !!!!
-		auto current_nodes = nodes_3d_;
-
-		while (!current_nodes.empty()) {
-			Nodes3DMap children = {};
-			for (const auto& [_,node] : current_nodes) {
+		std::vector<std::shared_ptr<Node3D>> next;
+		while (!current.empty()) {
+			next.clear();
+			for (const auto& node : current) {
 				callback(node);
-
-				auto node_children = node->GetChildren();
-				for (const auto& [_, child] : node_children) {
-					children.insert({ node_children.size() + 1 ,child });
+				for (const auto& [_, child] : node->GetChildren()) {
+					next.push_back(child);
 				}
 			}
-			current_nodes = children;
+			current.swap(next);
 		}
 	}
 

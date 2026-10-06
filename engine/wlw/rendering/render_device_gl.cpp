@@ -5,6 +5,7 @@
 #include "render_device.h"
 #include "wlw/rendering/gl_index_buffer.h"
 #include "wlw/rendering/gl_vertex_buffer.h"
+#include "wlw/os/glfw_platform.h"
 
 namespace wlw::rendering {
 
@@ -28,7 +29,7 @@ public:
   }
 
   ~GLTexture2D() {
-    glDeleteTextures(1, &gpu_id_);
+    if (os::HasCurrentGLContext()) glDeleteTextures(1, &gpu_id_);
   }
 
   void Bind(unsigned int slot) const override {
@@ -61,7 +62,7 @@ public:
   }
 
   ~GLCubemap() {
-    glDeleteTextures(1, &gpu_id_);
+    if (os::HasCurrentGLContext()) glDeleteTextures(1, &gpu_id_);
   }
 
   void Bind(unsigned int slot) const override {
