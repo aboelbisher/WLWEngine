@@ -17,7 +17,8 @@ engine/wlw/
   platform/   THE ONLY PER-OS CODE: platform.h interface + glfw/glfw_platform.cpp (desktop)
               + android/android_platform.cpp (NativeActivity + EGL). iOS goes here later.
   rendering/  RenderingDriver/RenderDevice interfaces + one GL backend for GL 3.3 core AND GLES 3.0
-  scene/      Node (scene graph, local transforms, visibility), Window (surface + scene + input), cameras
+  scene/      Node (scene graph, local transforms, visibility), Window (surface + scene + input),
+              cameras (FollowCamera = perspective, OrthographicCamera = parallel/top-down)
   utils/      image/glTF loaders, texture cache, primitives.h (procedural cube/sphere/gem meshes)
 third_party/  glad (desktop only), stb, tinygltf + nlohmann json (vendored)
 cmake/WLWHelpers.cmake  wlw_add_game(), wlw_add_assets(), wlw_set_warnings()

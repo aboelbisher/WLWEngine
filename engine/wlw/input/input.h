@@ -10,7 +10,7 @@ namespace wlw::input {
 
 // Platform-neutral keys. Platforms map their key codes onto these (GLFW keys on desktop,
 // AKEYCODE_* on Android - the emulator's arrow keys arrive as D-pad keys).
-enum class Key : uint8_t { Unknown = 0, Up, Down, Left, Right, Space, Enter, Escape, W, A, S, D, I, Count };
+enum class Key : uint8_t { Unknown = 0, Up, Down, Left, Right, Space, Enter, Escape, W, A, S, D, I, P, Count };
 
 enum class Swipe : uint8_t { Up, Down, Left, Right };
 

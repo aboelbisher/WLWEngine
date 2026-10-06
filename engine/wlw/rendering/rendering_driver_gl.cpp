@@ -24,6 +24,8 @@ public:
         GLint view;
         GLint projection;
         GLint viewPos;
+        GLint viewOrthographic;
+        GLint viewForward;
         GLint lightType;
         GLint lightPos;
         GLint lightDir;
@@ -89,6 +91,8 @@ public:
     m_Uniforms.view = glGetUniformLocation(m_ShaderID_3D, "view");
     m_Uniforms.projection = glGetUniformLocation(m_ShaderID_3D, "projection");
     m_Uniforms.viewPos = glGetUniformLocation(m_ShaderID_3D, "viewPos");
+    m_Uniforms.viewOrthographic = glGetUniformLocation(m_ShaderID_3D, "viewOrthographic");
+    m_Uniforms.viewForward = glGetUniformLocation(m_ShaderID_3D, "viewForward");
     m_Uniforms.lightType = glGetUniformLocation(m_ShaderID_3D, "lightType");
     m_Uniforms.lightPos = glGetUniformLocation(m_ShaderID_3D, "lightPos");
     m_Uniforms.lightDir = glGetUniformLocation(m_ShaderID_3D, "lightDir");
@@ -188,6 +192,10 @@ public:
     glUniformMatrix4fv(m_Uniforms.projection, 1, GL_FALSE, glm::value_ptr(proj));
     core::Vector3 camPos = camera->GetPosition();
     glUniform3f(m_Uniforms.viewPos, camPos.x, camPos.y, camPos.z);
+    // The projection matrix tells the two kinds apart: w is 1 for orthographic (no divide by depth),
+    // -z for perspective. Row 2 of the view matrix is the camera's backward axis in world space.
+    glUniform1i(m_Uniforms.viewOrthographic, proj[3][3] == 1.0f);
+    glUniform3f(m_Uniforms.viewForward, -view[0][2], -view[1][2], -view[2][2]);
 
     scene::Frustum frustum = scene::Frustum::FromMatrix(proj * view);
 

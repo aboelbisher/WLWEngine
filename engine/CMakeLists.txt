@@ -72,6 +72,7 @@ add_library(wlw STATIC
   wlw/scene/fps_camera.cpp
   wlw/scene/fps_camera.h
   wlw/scene/node.h
+  wlw/scene/orthographic_camera.h
   wlw/scene/triangle_2d.cpp
   wlw/scene/triangle_2d.h
   wlw/scene/window.h

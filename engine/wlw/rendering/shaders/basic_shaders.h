@@ -66,6 +66,8 @@ in vec2 vertUV;
 in vec3 vertexNormal1;
 
 uniform vec3 viewPos;
+uniform bool viewOrthographic; // orthographic: all view rays are parallel to viewForward
+uniform vec3 viewForward;
 uniform int lightType; // 0 = Directional, 1 = Point, 2 = Spot
 uniform vec3 lightPos;
 uniform vec3 lightDir;
@@ -95,7 +97,9 @@ void main()
     }
 
     vec3 norm = normalize(vertexNormal);
-    vec3 viewDir = normalize(viewPos - vertexPos);
+    // Direction from the surface towards the eye. With perspective it depends on where the
+    // fragment is; with an orthographic projection it's the same everywhere.
+    vec3 viewDir = viewOrthographic ? -viewForward : normalize(viewPos - vertexPos);
     
     vec3 lightDirCalc;
     float attenuation = 1.0;
