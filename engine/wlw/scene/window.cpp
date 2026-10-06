@@ -62,6 +62,19 @@ public:
 		processInput();
 	}
 
+	bool ShouldClose() const override {
+		return window_ == nullptr || glfwWindowShouldClose(window_);
+	}
+
+	void RequestClose() override {
+		if (window_) glfwSetWindowShouldClose(window_, GLFW_TRUE);
+	}
+
+	void SetTitle(const std::string& title) override {
+		title_ = title;
+		if (window_) glfwSetWindowTitle(window_, title.c_str());
+	}
+
 	// Presents the frame that was just drawn.
 	void SwapBuffers() override {
 		ASSERT_GLFW_WINDOW_NOT_NULL(window_);

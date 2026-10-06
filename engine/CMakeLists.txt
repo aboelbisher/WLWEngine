@@ -10,8 +10,12 @@ add_library(wlw STATIC
   wlw/wlw.h
   wlw/wlw.cpp
 
+  wlw/app/application.cpp
+  wlw/app/application.h
+
   wlw/core/collision.h
   wlw/core/color.h
+  wlw/core/fixed_timestep.h
   wlw/core/logger.h
   wlw/core/mesh.h
   wlw/core/model.h

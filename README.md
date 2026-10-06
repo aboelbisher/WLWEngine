@@ -9,6 +9,7 @@ It's a plain CMake library with no IDE-specific project files, so Visual Studio,
 |---|---|
 | `engine/wlw/` | Engine source. Include as `#include "wlw/scene/window.h"` |
 | `third_party/` | Vendored glad (GL loader), stb, tinygltf |
+| `docs/concepts/` | Explanations of the engine's concepts, one per feature (start with `01-game-loop.md`) |
 | `cmake/WLWHelpers.cmake` | `wlw_add_assets()`, `wlw_set_warnings()` for game targets |
 | `vcpkg/` + `vcpkg.json` | Dependency manager (git submodule, pinned) + manifest (glm, glfw3) |
 
@@ -48,6 +49,20 @@ add_subdirectory(external/WLWengine)
 add_executable(my_game main.cpp)
 target_link_libraries(my_game PRIVATE wlw::wlw)
 wlw_add_assets(my_game assets)
+```
+
+A game derives from `wlw::Application` and overrides its hooks:
+
+```cpp
+class MyGame : public wlw::Application {
+ protected:
+  void OnStart() override {}                 // build the scene
+  void OnFixedUpdate(float dt) override {}   // game logic, constant dt
+  void OnUpdate(float dt) override {}        // per-frame: input, camera
+  void OnRender(float alpha) override {}     // interpolate state into nodes
+};
+
+int main() { return MyGame().Run(); }
 ```
 
 ## Git workflow

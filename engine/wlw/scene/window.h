@@ -31,6 +31,9 @@ public:
 	virtual void MakeContextCurrent() = 0;
 	virtual void ProcessEvents() = 0;   // poll input/OS events
 	virtual void SwapBuffers() = 0;     // present the drawn frame
+	virtual bool ShouldClose() const = 0;          // user closed the window (or RequestClose was called)
+	virtual void RequestClose() = 0;
+	virtual void SetTitle(const std::string& title) = 0;
 	virtual void SetClearColor(const core::Color& color) = 0;
 
 	virtual void ProcessMouseMovement(double xpos, double ypos) = 0;
