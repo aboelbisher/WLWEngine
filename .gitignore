@@ -1,10 +1,29 @@
-WLWengine.vcxproj
-WLWengine.vcxproj.filters
-WLWengine.vcxproj.user
-x64/
-WLWengine/x64/
-.vs
-WLWengine/WLWengine.vcxproj
-WLWengine/x64/
-WLWengine/WLWengine.slnx
-WLWengine/vcpkg/
+# ---- Build output ----
+build/
+[Xx]64/
+[Ww]in32/
+[Dd]ebug/
+[Rr]elease/
+*.obj
+*.pdb
+*.idb
+*.ilk
+*.ifc
+*.tlog
+*.exe
+
+# ---- Visual Studio (per-user) ----
+.vs/
+*.vcxproj.user
+*.suo
+*.user
+
+# ---- vcpkg ----
+# vcpkg itself is a submodule (WLWengine/vcpkg); manifest installs land here:
+vcpkg_installed/
+
+# ---- Editors / OS ----
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store

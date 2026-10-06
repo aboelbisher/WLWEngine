@@ -1,0 +1,175 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="External\include\glad\glad.c" />
+    <ClCompile Include="game\game.cpp" />
+    <ClCompile Include="game\level.cpp" />
+    <ClCompile Include="main.cpp" />
+    <ClCompile Include="platformer\platformer_game.cpp" />
+    <ClCompile Include="platformer\platformer_level.cpp" />
+    <ClCompile Include="root\os\input_engine_gl.cpp" />
+    <ClCompile Include="root\rendering\material_gl.cpp" />
+    <ClCompile Include="root\rendering\rendering_driver_gl.cpp" />
+    <ClCompile Include="root\rendering\render_device_gl.cpp" />
+    <ClCompile Include="root\scene\fps_camera.cpp" />
+    <ClCompile Include="root\utils\gltf_loader.cpp" />
+    <ClCompile Include="root\utils\image_loader.cpp" />
+    <ClCompile Include="root\utils\libs_impl.cpp" />
+    <ClCompile Include="root\rendering\texture.cpp" />
+    <ClCompile Include="root\wlw.cpp" />
+    <ClCompile Include="root\scene\window.cpp" />
+    <ClCompile Include="root\scene\triangle_2d.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="External\include\GLFW\glfw3.h" />
+    <ClInclude Include="External\include\GLFW\glfw3native.h" />
+    <ClInclude Include="External\include\KHR\khrplatform.h" />
+    <ClInclude Include="External\include\glad\glad.h" />
+    <ClInclude Include="game\data_helper.h" />
+    <ClInclude Include="game\game.h" />
+    <ClInclude Include="game\level.h" />
+    <ClInclude Include="game\player_controller.h" />
+    <ClInclude Include="platformer\platformer_game.h" />
+    <ClInclude Include="platformer\platformer_level.h" />
+    <ClInclude Include="platformer\platformer_player_controller.h" />
+    <ClInclude Include="root\core\collision.h" />
+    <ClInclude Include="root\core\color.h" />
+    <ClInclude Include="root\core\logger.h" />
+    <ClInclude Include="root\core\mesh.h" />
+    <ClInclude Include="root\core\model.h" />
+    <ClInclude Include="root\core\vector2.h" />
+    <ClInclude Include="root\core\vector3.h" />
+    <ClInclude Include="root\core\vertex_2d.h" />
+    <ClInclude Include="root\core\vertex_3d.h" />
+    <ClInclude Include="root\os\input_engine.h" />
+    <ClInclude Include="root\rendering\gl_index_buffer.h" />
+    <ClInclude Include="root\rendering\gl_vertex_buffer.h" />
+    <ClInclude Include="root\rendering\index_buffer.h" />
+    <ClInclude Include="root\rendering\input_engine.h" />
+    <ClInclude Include="root\rendering\material.h" />
+    <ClInclude Include="root\rendering\render_device.h" />
+    <ClInclude Include="root\rendering\rendering_driver.h" />
+    <ClInclude Include="root\rendering\shaders\basic_shaders.h" />
+    <ClInclude Include="root\rendering\shaders\skybox_shaders.h" />
+    <ClInclude Include="root\rendering\texture.h" />
+    <ClInclude Include="root\rendering\vertex_buffer.h" />
+    <ClInclude Include="root\scene\camera_3d.h" />
+    <ClInclude Include="root\scene\follow_camera.h" />
+    <ClInclude Include="root\scene\fps_camera.h" />
+    <ClInclude Include="root\scene\node.h" />
+    <ClInclude Include="root\scene\triangle_2d.h" />
+    <ClInclude Include="root\scene\window.h" />
+    <ClInclude Include="root\utils\gltf_loader.h" />
+    <ClInclude Include="root\utils\image_loader.h" />
+    <ClInclude Include="root\utils\json.hpp" />
+    <ClInclude Include="root\utils\stb_image.h" />
+    <ClInclude Include="root\utils\stb_image_write.h" />
+    <ClInclude Include="root\utils\texture_manager.h" />
+    <ClInclude Include="root\utils\tiny_gltf.h" />
+    <ClInclude Include="root\wlw.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="random_model\scene.bin" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="cube.jpg" />
+    <Image Include="pyramid.jpg" />
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>18.0</VCProjectVersion>
+    <Keyword>Win32Proj</Keyword>
+    <ProjectGuid>{215ce2ab-6620-41c3-9c34-ae583417d1d2}</ProjectGuid>
+    <RootNamespace>WLWengine</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <!-- vcpkg: use the repo's own vcpkg submodule in manifest mode (vcpkg.json),
+       not whatever "vcpkg integrate install" happens to point at on this machine. -->
+  <PropertyGroup Label="Vcpkg">
+    <VcpkgRoot>$(MSBuildThisFileDirectory)..\vcpkg\</VcpkgRoot>
+    <VCPkgLocalAppDataDisabled>true</VCPkgLocalAppDataDisabled>
+    <VcpkgEnableManifest>true</VcpkgEnableManifest>
+    <VcpkgManifestRoot>$(MSBuildThisFileDirectory)..\</VcpkgManifestRoot>
+    <VcpkgApplocalDeps>false</VcpkgApplocalDeps>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v145</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v145</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <Import Project="$(VcpkgRoot)scripts\buildsystems\msbuild\vcpkg.props" Condition="Exists('$(VcpkgRoot)scripts\buildsystems\msbuild\vcpkg.props')" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="Shared">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <!-- Build output lives outside the source tree: <solution>\build\x64\Debug\ -->
+  <PropertyGroup>
+    <OutDir>$(MSBuildThisFileDirectory)..\build\$(Platform)\$(Configuration)\</OutDir>
+    <IntDir>$(MSBuildThisFileDirectory)..\build\$(Platform)\$(Configuration)\obj\</IntDir>
+  </PropertyGroup>
+  <!-- Settings shared by every configuration -->
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+      <PreprocessorDefinitions>WLW_USE_GLFW;GLFW_INCLUDE_NONE;_CRT_SECURE_NO_WARNINGS;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(ProjectDir)game;$(ProjectDir)External\include;$(ProjectDir)root;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalLibraryDirectories>$(ProjectDir)External\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>glfw3.lib;opengl32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)'=='Debug'">
+    <ClCompile>
+      <PreprocessorDefinitions>_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)'=='Release'">
+    <ClCompile>
+      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+    </ClCompile>
+    <Link>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+    </Link>
+  </ItemDefinitionGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <Import Project="$(VcpkgRoot)scripts\buildsystems\msbuild\vcpkg.targets" Condition="Exists('$(VcpkgRoot)scripts\buildsystems\msbuild\vcpkg.targets')" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+  <Target Name="WlwCheckVcpkg" BeforeTargets="PrepareForBuild" Condition="!Exists('$(VcpkgRoot)scripts\buildsystems\msbuild\vcpkg.targets')">
+    <Error Text="vcpkg submodule missing. Run: git submodule update --init  then  WLWengine\vcpkg\bootstrap-vcpkg.bat" />
+  </Target>
+</Project>
