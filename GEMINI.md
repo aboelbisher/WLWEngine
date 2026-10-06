@@ -1,6 +1,7 @@
 # WLWengine - C++ Graphics Engine
 
-A modular C++ graphics engine with a focus on 3D rendering, using OpenGL as the primary backend.
+A modular C++20 graphics engine (OpenGL 3.3 / OpenGL ES 3.0) for games on Windows, macOS, Linux and Android.
+See `CLAUDE.md` for the full, up-to-date rules (platform layer, GLES compatibility, logging).
 
 ## Architecture Overview
 
@@ -12,15 +13,17 @@ consume the engine as a git submodule (`add_subdirectory` + `target_link_librari
 - **`core/`**: vectors, color, vertex types, `mesh.h`, `model.h`, `collision.h` (AABB), `logger.h`.
 - **`rendering/`**: `rendering_driver.h` / `render_device.h` interfaces with OpenGL implementations
   (`*_gl.cpp`), materials, textures, GPU buffers, embedded shaders in `shaders/`.
-- **`scene/`**: `node.h` (scene graph, Node2D/Node3D), `window.h` (GLFW window), cameras.
-- **`os/`**: input handling.
+- **`app/`**: `Application` (game loop with fixed timestep), `entry_point.h` (`WLW_MAIN`).
+- **`input/`**: keys, pointer/touch, swipes, taps.
+- **`platform/`**: the only per-OS code (`glfw/` desktop, `android/`).
+- **`scene/`**: `node.h` (scene graph, Node2D/Node3D), `window.h` (platform-neutral window interface), cameras.
 - **`utils/`**: image + GLTF loaders, texture cache, `primitives.h` (procedural cube/sphere/gem/... meshes).
 - **`wlw.h`**: engine entry point (`WLWEngine::Create()`).
 
 ## Project Structure
 - `engine/` - the library. `third_party/` - glad, stb, tinygltf (vendored).
 - No sample games live here; [WLWSnake](https://github.com/aboelbisher/WLWSnake) is the reference game that consumes the engine.
-- `cmake/WLWHelpers.cmake` - `wlw_add_assets(target dir)` copies assets next to the executable.
+- `cmake/WLWHelpers.cmake` - `wlw_add_game()` (exe on desktop, .so on Android), `wlw_add_assets()`.
 - `vcpkg/` (submodule) + `vcpkg.json` - glm, glfw3.
 
 ## Coding Standards & Conventions
@@ -29,7 +32,7 @@ consume the engine as a git submodule (`add_subdirectory` + `target_link_librari
 - **Abstractions**: Use abstract base classes (interfaces) for platform-dependent features (e.g., `RenderingDriver`, `Window`).
 - **Namespaces**:
   - `wlw`: Root namespace.
-  - `wlw::core`, `wlw::scene`, `wlw::rendering`, `wlw::os`, `wlw::utils`: Sub-namespaces for organization.
+  - `wlw::core`, `wlw::scene`, `wlw::rendering`, `wlw::input`, `wlw::platform`, `wlw::utils`: Sub-namespaces for organization.
 - **Naming**:
   - Classes: `PascalCase`.
   - Methods: `PascalCase` (e.g., `AddNode`, `SetPosition`).
@@ -46,5 +49,6 @@ The engine supports:
 - Loading and rendering 3D models (including GLTF).
 - Scene graph hierarchy with parent-child relationships.
 - Basic lighting (ambient, shininess) and texturing.
-- FPS-style camera.
-- Multiple window support.
+- FPS-style and follow cameras.
+- Input: keyboard, mouse, touch (swipes, taps).
+- Android (NativeActivity + EGL + GLES 3.0) and desktop (GLFW + GL 3.3).

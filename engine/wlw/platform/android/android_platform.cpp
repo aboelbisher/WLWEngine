@@ -59,6 +59,7 @@ input::Key MapKey(int32_t keycode) {
     case AKEYCODE_A: return input::Key::A;
     case AKEYCODE_S: return input::Key::S;
     case AKEYCODE_D: return input::Key::D;
+    case AKEYCODE_I: return input::Key::I;
     default: return input::Key::Unknown;
   }
 }

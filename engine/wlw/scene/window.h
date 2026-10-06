@@ -80,6 +80,8 @@ public:
 		nodes_3d_.erase(id);
 	}
 
+	size_t NodeCount3D() const { return nodes_3d_.size(); }
+
 	void ClearScene3D() {
 		nodes_3d_.clear();
 		nodes_3d_next_id_ = 0;

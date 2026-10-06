@@ -193,6 +193,10 @@ public:
 
     window->IterateOver3DNodes([this, &frustum](const std::shared_ptr<scene::Node3D>& node) {
 
+      if (!node->IsVisibleInHierarchy()) {
+          return;
+      }
+
       if (!frustum.TestAABB(node->GetAABB())) {
           return;
       }

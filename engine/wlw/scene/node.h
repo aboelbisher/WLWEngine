@@ -68,6 +68,19 @@ public:
 
 	const glm::mat4& GetLocalMatrix() const { return local_matrix_; }
 
+	// ---- Visibility ----
+	// Hidden nodes (and everything under them) are skipped by the renderer but stay in the scene.
+	// Hiding is how you reuse objects cheaply: keep a pool of nodes and show/hide them instead of
+	// creating and destroying them every time.
+	void SetVisible(bool visible) { visible_ = visible; }
+	bool IsVisible() const { return visible_; }
+	bool IsVisibleInHierarchy() const {
+		for (const Node* n = this; n != nullptr; n = n->parent_) {
+			if (!n->visible_) return false;
+		}
+		return true;
+	}
+
 	// ---- World transform (includes all parents) ----
 	glm::mat4 GetModelMatrix() const {
 		return parent_ ? parent_->GetModelMatrix() * local_matrix_ : local_matrix_;
@@ -153,6 +166,7 @@ private:
 	core::Vector3 scale_ = {1, 1, 1};
 	core::Vector3 rotation_angles_degrees_ = {0, 0, 0};
 	glm::mat4 local_matrix_ = glm::mat4(1.0f);
+	bool visible_ = true;
 
 	Node* parent_ = nullptr;  // non-owning; cleared when the parent is destroyed or removes us
 	int id_in_parent_ = -1;
