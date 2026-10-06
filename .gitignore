@@ -1,29 +1,17 @@
 # ---- Build output ----
 build/
-[Xx]64/
-[Ww]in32/
-[Dd]ebug/
-[Rr]elease/
-*.obj
-*.pdb
-*.idb
-*.ilk
-*.ifc
-*.tlog
-*.exe
+out/
+CMakeUserPresets.json
 
-# ---- Visual Studio (per-user) ----
-.vs/
-*.vcxproj.user
-*.suo
-*.user
-
-# ---- vcpkg ----
-# vcpkg itself is a submodule (WLWengine/vcpkg); manifest installs land here:
+# ---- vcpkg (vcpkg itself is the vcpkg/ submodule) ----
 vcpkg_installed/
 
-# ---- Editors / OS ----
+# ---- IDEs / OS ----
+.vs/
 .vscode/
 .idea/
-Thumbs.db
+*.user
+*.suo
+xcuserdata/
 .DS_Store
+Thumbs.db
