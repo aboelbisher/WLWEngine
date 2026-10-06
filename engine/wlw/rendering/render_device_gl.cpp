@@ -1,11 +1,10 @@
-#ifdef WLW_USE_GLFW
+#ifdef WLW_RENDERER_GL
 
-#include <glad/glad.h>
-#include <GLFW/glfw3.h>
+#include "wlw/rendering/gl.h"
 #include "render_device.h"
 #include "wlw/rendering/gl_index_buffer.h"
 #include "wlw/rendering/gl_vertex_buffer.h"
-#include "wlw/os/glfw_platform.h"
+#include "wlw/platform/platform.h"
 
 namespace wlw::rendering {
 
@@ -20,16 +19,19 @@ public:
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
+    // Sized internal formats (GL_RGB8...) are required by GLES 3.0 and fine on desktop GL.
     GLenum format = GL_RGB;
-    if (data.channels == 4) format = GL_RGBA;
-    else if (data.channels == 1) format = GL_RED;
+    GLint internal_format = GL_RGB8;
+    if (data.channels == 4) { format = GL_RGBA; internal_format = GL_RGBA8; }
+    else if (data.channels == 1) { format = GL_RED; internal_format = GL_R8; }
 
-    glTexImage2D(GL_TEXTURE_2D, 0, format, (int)data.size.x, (int)data.size.y, 0, format, GL_UNSIGNED_BYTE, data.pixels.data());
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);  // rows of RGB images aren't always 4-byte aligned
+    glTexImage2D(GL_TEXTURE_2D, 0, internal_format, (int)data.size.x, (int)data.size.y, 0, format, GL_UNSIGNED_BYTE, data.pixels.data());
     glGenerateMipmap(GL_TEXTURE_2D);
   }
 
   ~GLTexture2D() {
-    if (os::HasCurrentGLContext()) glDeleteTextures(1, &gpu_id_);
+    if (platform::HasCurrentGLContext()) glDeleteTextures(1, &gpu_id_);
   }
 
   void Bind(unsigned int slot) const override {
@@ -50,8 +52,10 @@ public:
 
     for (unsigned int i = 0; i < 6; i++) {
       GLenum format = GL_RGB;
-      if (faces[i].channels == 4) format = GL_RGBA;
-      glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, format, (int)faces[i].size.x, (int)faces[i].size.y, 0, format, GL_UNSIGNED_BYTE, faces[i].pixels.data());
+      GLint internal_format = GL_RGB8;
+      if (faces[i].channels == 4) { format = GL_RGBA; internal_format = GL_RGBA8; }
+      glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+      glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, internal_format, (int)faces[i].size.x, (int)faces[i].size.y, 0, format, GL_UNSIGNED_BYTE, faces[i].pixels.data());
     }
 
     glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -62,7 +66,7 @@ public:
   }
 
   ~GLCubemap() {
-    if (os::HasCurrentGLContext()) glDeleteTextures(1, &gpu_id_);
+    if (platform::HasCurrentGLContext()) glDeleteTextures(1, &gpu_id_);
   }
 
   void Bind(unsigned int slot) const override {
@@ -104,4 +108,4 @@ std::unique_ptr<RenderDevice> RenderDevice::Create() {
 
 } // namespace wlw::rendering
 
-#endif // WLW_USE_GLFW
+#endif // WLW_RENDERER_GL

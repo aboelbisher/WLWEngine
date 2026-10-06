@@ -1,6 +1,7 @@
 #include <iostream>
 #include "wlw/core/logger.h"
 #include "image_loader.h"
+#include "wlw/platform/platform.h"
 #include "stb_image.h"
 #include "wlw/core/vector2.h"
 #include "wlw/rendering/texture.h"
@@ -10,8 +11,14 @@ namespace wlw::utils {
   std::unique_ptr<RawImage> ImageLoader::LoadImage(const std::string &file_path) {
     int width, height, channels_count;
 
-    unsigned char* data = stbi_load(file_path.c_str(), &width, &height, &channels_count, 0);
-    if (FAIL_IF(data == nullptr, "Failed to load image: " + file_path)) {
+    // Read through the platform layer so this also works for assets packed inside an APK.
+    const auto file = platform::ReadFile(file_path);
+    if (FAIL_IF(!file, "Failed to read image file: " << file_path)) {
+      return nullptr;
+    }
+    unsigned char* data = stbi_load_from_memory(file->data(), static_cast<int>(file->size()), &width, &height,
+                                                &channels_count, 0);
+    if (FAIL_IF(data == nullptr, "Failed to decode image: " << file_path)) {
       return nullptr;
     }
 

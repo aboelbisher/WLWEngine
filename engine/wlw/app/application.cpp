@@ -1,5 +1,7 @@
 #include "wlw/app/application.h"
 
+#include "wlw/core/log.h"
+
 #include <algorithm>
 #include <chrono>
 #include <cstdio>
@@ -17,7 +19,10 @@ Application::~Application() = default;
 int Application::Run() {
   // Engine start happens here, not in the constructor: virtual hooks can't be called from a
   // base-class constructor, and the derived game's members must exist before OnStart().
-  engine_->Start(window_);
+  if (!engine_->Start(window_)) {
+    WLW_LOG_ERROR("Engine failed to start");
+    return 1;
+  }
   OnStart();
 
   // steady_clock: monotonic (never jumps when the system clock changes), available on every platform.
@@ -26,6 +31,11 @@ int Application::Run() {
   const Clock::time_point start = previous;
 
   while (!quit_requested_ && !window_->ShouldClose()) {
+    if (window_->ConsumeResumed()) {
+      // Back from the background (mobile): don't count the time we were away as one huge frame.
+      previous = Clock::now();
+      timestep_.Reset();
+    }
     const Clock::time_point now = Clock::now();
     const double frame_seconds = std::chrono::duration<double>(now - previous).count();
     previous = now;

@@ -5,6 +5,7 @@
 
 #include "wlw/core/fixed_timestep.h"
 #include "wlw/core/vector2.h"
+#include "wlw/input/input.h"
 #include "wlw/scene/window.h"
 #include "wlw/wlw.h"
 
@@ -15,7 +16,7 @@ struct AppConfig {
   core::Vector2 window_size = {1280, 720};
   float fixed_timestep = 1.0f / 60.0f;  // simulation rate: 60 steps per second
   float max_frame_time = 0.25f;         // longer frames are clamped (see FixedTimestep)
-  bool show_stats_in_title = true;      // "title | 60 fps | 16.7 ms"
+  bool show_stats_in_title = true;      // "title | 60 fps | 16.7 ms" (desktop)
 };
 
 // Base class for a game. It owns the engine, the window and the main loop; a game overrides
@@ -26,8 +27,6 @@ struct AppConfig {
 //   OnUpdate(frame_time)       <- per-frame work: input, camera, UI
 //   OnRender(alpha)            <- push the latest state to the scene, interpolated by alpha
 //   draw + present, then poll input for the next frame
-//
-// See docs/concepts/01-game-loop.md.
 class Application {
  public:
   explicit Application(AppConfig config = {});
@@ -53,6 +52,7 @@ class Application {
   virtual void OnShutdown() {}
 
   WLWEngine& Engine() { return *engine_; }
+  input::Input& Input() { return window_->GetInput(); }  // keys, pointer/touch, swipes, taps
   scene::Window& Window() { return *window_; }
   const std::shared_ptr<scene::Window>& WindowPtr() const { return window_; }
   const AppConfig& Config() const { return config_; }
@@ -65,7 +65,7 @@ class Application {
   void UpdateStats(double frame_seconds);
 
   AppConfig config_;
-  // Destroyed in reverse order: the window handle first, the engine (GL + GLFW shutdown) last.
+  // Destroyed in reverse order: the window handle first, the engine (GL + platform shutdown) last.
   std::unique_ptr<WLWEngine> engine_;
   std::shared_ptr<scene::Window> window_;
   core::FixedTimestep timestep_;

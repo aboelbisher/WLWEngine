@@ -1,6 +1,6 @@
 # WLWengine
 
-A small C++20 / OpenGL graphics engine for simple games. Desktop (Windows, macOS, Linux) now; Android and iOS later.
+A small C++20 / OpenGL graphics engine for simple games: Windows, macOS, Linux and Android (iOS next).
 It's a plain CMake library with no IDE-specific project files, so Visual Studio, Xcode, CLion, VS Code and (later) Android Studio all work from the same `CMakeLists.txt`.
 
 ## Layout
@@ -8,8 +8,8 @@ It's a plain CMake library with no IDE-specific project files, so Visual Studio,
 | Path | What |
 |---|---|
 | `engine/wlw/` | Engine source. Include as `#include "wlw/scene/window.h"` |
+| `engine/wlw/platform/` | The only per-OS code: `glfw/` (desktop), `android/` (NativeActivity + EGL). Everything else is shared |
 | `third_party/` | Vendored glad (GL loader), stb, tinygltf |
-| `docs/concepts/` | Explanations of the engine's concepts, one per feature (start with `01-game-loop.md`) |
 | `cmake/WLWHelpers.cmake` | `wlw_add_assets()`, `wlw_set_warnings()` for game targets |
 | `vcpkg/` + `vcpkg.json` | Dependency manager (git submodule, pinned) + manifest (glm, glfw3) |
 
@@ -40,15 +40,23 @@ cmake --preset windows-debug        # or: debug / release on macOS & Linux
 cmake --build --preset windows-debug
 ```
 
+## Platforms
+
+| | Window / context | Graphics | Input |
+|---|---|---|---|
+| Windows, macOS, Linux | GLFW | OpenGL 3.3 core (glad) | keyboard, mouse |
+| Android | NativeActivity + EGL | OpenGL ES 3.0 | touch (swipes, taps), keys |
+
+The renderer is one codebase for both GL flavours (`engine/wlw/rendering/gl.h`); shaders are written
+without a `#version` line and get the right one prepended at compile time.
+
 ## Using the engine in a game
 
 Games live in their own repos and add the engine as a submodule. [WLWSnake](https://github.com/aboelbisher/WLWSnake) is the reference game:
 
 ```cmake
 add_subdirectory(external/WLWengine)
-add_executable(my_game main.cpp)
-target_link_libraries(my_game PRIVATE wlw::wlw)
-wlw_add_assets(my_game assets)
+wlw_add_game(my_game SOURCES main.cpp ASSETS assets)   # .exe on desktop, .so on Android
 ```
 
 A game derives from `wlw::Application` and overrides its hooks:
@@ -62,7 +70,7 @@ class MyGame : public wlw::Application {
   void OnRender(float alpha) override {}     // interpolate state into nodes
 };
 
-int main() { return MyGame().Run(); }
+WLW_MAIN(MyGame)   // #include "wlw/app/entry_point.h": main() on desktop, android_main() on Android
 ```
 
 ## Git workflow

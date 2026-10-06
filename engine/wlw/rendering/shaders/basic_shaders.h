@@ -1,12 +1,11 @@
 #pragma once
 
 
-// --- Global Setup (Minimal Shaders for Modern GL) ---
-// Shaders are required for modern OpenGL (Core Profile 3.3+)
+// Shader sources without a #version line: the renderer prepends kGLSLHeader (rendering/gl.h),
+// so the same source compiles as GLSL 3.30 (desktop) or GLSL ES 3.00 (mobile).
 namespace wlw::rendering {
 
 inline constexpr const char* vertex2DShaderSource = R"(
-#version 330 core
 layout (location = 0) in vec2 aPos;
 layout (location = 1) in vec3 aColor;
 out vec3 vertexColor;
@@ -18,7 +17,6 @@ void main()
 )";
 
 inline constexpr const char* fragment2DShaderSource = R"(
-#version 330 core
 out vec4 FragColor;
 in vec3 vertexColor;
 void main()
@@ -29,7 +27,6 @@ void main()
 
 
 inline constexpr const char* vertex3DShaderSource = R"(
-#version 330 core
 layout (location = 0) in vec3 aPos;
 layout (location = 1) in vec4 aColor;
 layout (location = 2) in vec3 aNormal;
@@ -61,7 +58,6 @@ void main()
 
 
 inline constexpr const char* fragment3DShaderSource = R"(
-#version 330 core
 
 in vec3 vertexColor;
 in vec3 vertexNormal;

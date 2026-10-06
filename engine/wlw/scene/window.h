@@ -5,11 +5,6 @@
 #include <functional>
 #include <vector>
 
-#ifdef WLW_USE_GLFW
-#include <glad/glad.h>
-#include <GLFW/glfw3.h>
-#endif
-
 #include "wlw/core/color.h"
 #include "wlw/scene/node.h"
 #include "wlw/core/vector2.h"
@@ -18,25 +13,46 @@
 #include "wlw/scene/camera_3d.h"
 #include "wlw/scene/fps_camera.h"
 #include "wlw/rendering/texture.h"
+#include "wlw/input/input.h"
 
 namespace wlw::scene {
 
+// A drawable surface + its scene (nodes, camera, skybox) + its input.
+// The platform layer implements the OS-specific part (platform/<os>/<os>_platform.cpp);
+// nothing in this header depends on GLFW, EGL or any OS API.
 class Window {
 public:
 
 	virtual ~Window() = default;
-#ifdef WLW_USE_GLFW
-	virtual void Initialize(GLFWwindow* master_window = nullptr) = 0;
-#endif
-	virtual void MakeContextCurrent() = 0;
-	virtual void ProcessEvents() = 0;   // poll input/OS events
-	virtual void SwapBuffers() = 0;     // present the drawn frame
-	virtual bool ShouldClose() const = 0;          // user closed the window (or RequestClose was called)
-	virtual void RequestClose() = 0;
-	virtual void SetTitle(const std::string& title) = 0;
-	virtual void SetClearColor(const core::Color& color) = 0;
 
-	virtual void ProcessMouseMovement(double xpos, double ypos) = 0;
+	// ---- Platform-specific (implemented per OS) ----
+	// Creates the OS window/surface and a GL context. `share_with`: share GPU resources with
+	// another window's context (desktop multi-window; unsupported on mobile).
+	virtual bool Initialize(Window* share_with = nullptr) = 0;
+	virtual void MakeContextCurrent() = 0;
+	virtual void ProcessEvents() = 0;   // poll OS events and feed GetInput()
+	virtual void SwapBuffers() = 0;     // present the drawn frame
+	virtual bool ShouldClose() const = 0;          // user closed the window/app (or RequestClose was called)
+	virtual void RequestClose() = 0;
+	virtual void SetTitle(const std::string& title) = 0;  // no-op where there is no title bar
+	// Returns true once after the app comes back from the background (mobile), so the game
+	// loop can restart its clock instead of seeing one huge frame.
+	virtual bool ConsumeResumed() { return false; }
+
+	input::Input& GetInput() { return input_; }
+	const input::Input& GetInput() const { return input_; }
+
+	// Feeds mouse-look to the current camera (FPS camera); called by platforms that capture the cursor.
+	void ProcessMouseMovement(double xpos, double ypos) {
+		if (first_mouse_) {
+			last_mouse_ = {static_cast<float>(xpos), static_cast<float>(ypos)};
+			first_mouse_ = false;
+		}
+		const float xoffset = static_cast<float>(xpos) - last_mouse_.x;
+		const float yoffset = last_mouse_.y - static_cast<float>(ypos);
+		last_mouse_ = {static_cast<float>(xpos), static_cast<float>(ypos)};
+		if (camera_) camera_->ProcessMouseMovement(xoffset, yoffset);
+	}
 
 	void SetIsActive(bool is_active) {
 		is_active_ = is_active;
@@ -90,7 +106,9 @@ public:
 	}
 
 	const std::shared_ptr<Camera3D> GetUpdatedCamera() const {
-		camera_->UpdateSize(size_);
+		if (size_.x > 0 && size_.y > 0) {  // minimized windows report 0x0
+			camera_->UpdateSize(size_);
+		}
 		return camera_;
 	}
 
@@ -120,13 +138,13 @@ public:
 	}
 
 
-#ifdef WLW_USE_GLFW
-	virtual GLFWwindow* GetGLFWwindow() = 0 ;
-#endif
 
 
 protected:
-	core::Vector2 size_;
+	core::Vector2 size_;  // drawable size in pixels (updated by the platform on resize)
+	input::Input input_;
+	bool first_mouse_ = true;
+	core::Vector2 last_mouse_{0, 0};
 
 	bool is_active_ = true;
 

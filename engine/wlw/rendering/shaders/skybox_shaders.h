@@ -3,7 +3,6 @@
 namespace wlw::rendering {
 
 inline constexpr const char* skyboxVertexShaderSource = R"(
-#version 330 core
 layout (location = 0) in vec3 aPos;
 
 out vec3 TexCoords;
@@ -22,7 +21,6 @@ void main()
 )";
 
 inline constexpr const char* skyboxFragmentShaderSource = R"(
-#version 330 core 
 out vec4 FragColor;
 
 in vec3 TexCoords;

@@ -28,3 +28,25 @@ function(wlw_set_warnings target)
     target_compile_options(${target} PRIVATE -Wall -Wextra -Wno-unused-parameter)
   endif()
 endfunction()
+
+# wlw_add_game(<target> SOURCES <files...> [ASSETS <dir>])
+# Creates a game target the right way for the current platform:
+#   desktop: an executable (assets copied next to it)
+#   Android: a shared library lib<target>.so that NativeActivity loads (assets are packed into
+#            the APK by Gradle instead; see the game's android/ project)
+function(wlw_add_game target)
+  cmake_parse_arguments(GAME "" "ASSETS" "SOURCES" ${ARGN})
+  if(ANDROID)
+    add_library(${target} SHARED ${GAME_SOURCES})
+    # The glue's ANativeActivity_onCreate lives in a static library and nothing references it;
+    # force it in, otherwise the linker drops it and Android can't start the app.
+    target_link_options(${target} PRIVATE "SHELL:-u ANativeActivity_onCreate")
+  else()
+    add_executable(${target} ${GAME_SOURCES})
+    if(GAME_ASSETS)
+      wlw_add_assets(${target} "${GAME_ASSETS}")
+    endif()
+  endif()
+  target_link_libraries(${target} PRIVATE wlw::wlw)
+  wlw_set_warnings(${target})
+endfunction()

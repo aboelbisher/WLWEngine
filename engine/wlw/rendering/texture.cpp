@@ -1,4 +1,5 @@
-#include <glad/glad.h>
+#ifdef WLW_RENDERER_GL
+#include "wlw/rendering/gl.h"
 #include "texture.h"
 
 namespace wlw::rendering {
@@ -22,3 +23,5 @@ void WCubemap::Unbind() const {
 }
 
 } // namespace wlw::rendering
+
+#endif  // WLW_RENDERER_GL

@@ -1,28 +1,20 @@
-#ifdef WLW_USE_GLFW
+#ifdef WLW_RENDERER_GL
 
-#include <glad/glad.h>
-#include <iostream>
-#include <GLFW/glfw3.h>
+#include <vector>
+
+#include "wlw/rendering/gl.h"
 
 #include "shaders/basic_shaders.h"
 #include "shaders/skybox_shaders.h"
 
 #include "wlw/core/logger.h"
-#include "wlw/os/glfw_platform.h"
+#include "wlw/platform/platform.h"
 #include "rendering_driver.h"
 #include "wlw/rendering/render_device.h"
 #include "wlw/rendering/gl_index_buffer.h"
 #include "wlw/rendering/gl_vertex_buffer.h"
 
 namespace wlw::rendering {
-
-  void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
-    glViewport(0, 0, width, height);
-  }
-
-  void error_callback(int error, const char* description) {
-		std::cerr << "GLFW Error " << error << ": " << description << std::endl;
-  }
 
 
 class GLRenderingDriver : public RenderingDriver {
@@ -58,36 +50,27 @@ public:
 	bool Initialize(std::shared_ptr<scene::Window> window) override {
 
     main_window_ = window;
-    glfwSetErrorCallback(error_callback);
 
-    if (!glfwInit()) {
-      std::cerr << "Failed to initialize GLFW" << std::endl;
+    // The platform layer creates the OS window and its GL context (GLFW on desktop, EGL on
+    // Android); the renderer only needs a current context and loaded GL functions.
+    if (!platform::Init()) {
+      WLW_LOG_ERROR("Platform initialization failed");
       return false;
     }
-    os::g_glfw_initialized = true;
-
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-
-#ifdef __APPLE__
-    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
-#endif
-    window->Initialize();
-		window->MakeContextCurrent();
-		window->ProcessEvents();
-
-    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
-    {
-      std::cerr << "Failed to initialize GLAD" << std::endl;
-      return false;  // GLFW is terminated by the destructor
+    if (!window->Initialize()) {
+      WLW_LOG_ERROR("Window / GL context creation failed");
+      return false;
+    }
+    window->MakeContextCurrent();
+    if (!platform::LoadGLFunctions()) {
+      WLW_LOG_ERROR("Failed to load OpenGL functions");
+      return false;
     }
 
-    std::cout << "--- OpenGL Renderer Initialized ---" << std::endl;
-    std::cout << "Vendor: " << glGetString(GL_VENDOR) << std::endl;
-    std::cout << "Renderer: " << glGetString(GL_RENDERER) << std::endl;
-    std::cout << "Version: " << glGetString(GL_VERSION) << std::endl;
-    std::cout << "-----------------------------------" << std::endl;
+    WLW_LOG_INFO("--- OpenGL renderer initialized ---\n  Vendor:   %s\n  Renderer: %s\n  Version:  %s",
+                 reinterpret_cast<const char*>(glGetString(GL_VENDOR)),
+                 reinterpret_cast<const char*>(glGetString(GL_RENDERER)),
+                 reinterpret_cast<const char*>(glGetString(GL_VERSION)));
 
     m_ShaderID_2D = CreateProgram(vertex2DShaderSource, fragment2DShaderSource);
     if (m_ShaderID_2D == 0) return false;
@@ -154,8 +137,7 @@ public:
     if (FAIL_IF(main_window_ == nullptr, "null window, did u forgot to initialise the rendering driver ? ")) {
       return;
     }
-    window->Initialize(main_window_->GetGLFWwindow());
-    glfwSetFramebufferSizeCallback(window->GetGLFWwindow(), framebuffer_size_callback);
+    window->Initialize(main_window_.get());  // shares GPU resources with the main window
   }
 
   void SetViewport(int x, int y, int width, int height) override {
@@ -296,11 +278,11 @@ public:
   }
 
   ~GLRenderingDriver() override {
-    if (!os::g_glfw_initialized) {
+    if (!platform::IsAlive()) {
       return;
     }
     // Free our GL objects while the main window's context still exists...
-    if (main_window_ && main_window_->GetGLFWwindow()) {
+    if (main_window_) {
       main_window_->MakeContextCurrent();
       glDeleteProgram(m_ShaderID_2D);
       glDeleteProgram(m_ShaderID_3D);
@@ -309,26 +291,26 @@ public:
       glDeleteBuffers(1, &m_SkyboxVBO);
     }
     main_window_.reset();
-    // ...then shut GLFW down (this also destroys any windows still open).
-    glfwTerminate();
-    os::g_glfw_initialized = false;
+    // ...then shut the platform down (destroys any windows / contexts still open).
+    platform::Shutdown();
   }
 
 private:
   GLuint CompileShader(GLenum type, const char* source) {
     GLuint id = glCreateShader(type);
-    glShaderSource(id, 1, &source, nullptr);
+    // Prepend the GLSL version for this GL flavour (see rendering/gl.h).
+    const char* sources[] = {kGLSLHeader, source};
+    glShaderSource(id, 2, sources, nullptr);
     glCompileShader(id);
 
     int result;
     glGetShaderiv(id, GL_COMPILE_STATUS, &result);
     if (result == GL_FALSE) {
-      int length;
+      int length = 0;
       glGetShaderiv(id, GL_INFO_LOG_LENGTH, &length);
-      std::vector<char> message(length);
+      std::vector<char> message(length > 1 ? length : 1, '\0');
       glGetShaderInfoLog(id, length, &length, message.data());
-      std::cerr << "Failed to compile shader (" << (type == GL_VERTEX_SHADER ? "Vertex" : "Fragment") << "):" << std::endl;
-      std::cerr << message.data() << std::endl;
+      WLW_LOG_ERROR("Failed to compile %s shader:\n%s", type == GL_VERTEX_SHADER ? "vertex" : "fragment", message.data());
       glDeleteShader(id);
       return 0;
     }
@@ -336,18 +318,32 @@ private:
   }
 
   GLuint CreateProgram(const char* vsSource, const char* fsSource) {
-    GLuint program = glCreateProgram();
     GLuint vs = CompileShader(GL_VERTEX_SHADER, vsSource);
     GLuint fs = CompileShader(GL_FRAGMENT_SHADER, fsSource);
+    if (vs == 0 || fs == 0) {
+      if (vs) glDeleteShader(vs);
+      if (fs) glDeleteShader(fs);
+      return 0;
+    }
 
+    GLuint program = glCreateProgram();
     glAttachShader(program, vs);
     glAttachShader(program, fs);
     glLinkProgram(program);
-    glValidateProgram(program);
-
-    glDeleteShader(vs);
+    glDeleteShader(vs);  // the linked program keeps what it needs
     glDeleteShader(fs);
 
+    GLint linked = GL_FALSE;
+    glGetProgramiv(program, GL_LINK_STATUS, &linked);
+    if (linked != GL_TRUE) {
+      GLint length = 0;
+      glGetProgramiv(program, GL_INFO_LOG_LENGTH, &length);
+      std::vector<char> message(length > 1 ? length : 1, '\0');
+      glGetProgramInfoLog(program, (GLsizei)message.size(), nullptr, message.data());
+      WLW_LOG_ERROR("Failed to link shader program:\n%s", message.data());
+      glDeleteProgram(program);
+      return 0;
+    }
     return program;
  }
 
@@ -368,4 +364,4 @@ std::unique_ptr<RenderingDriver> RenderingDriver::Create(RenderDevice* device) {
 } // namespace wlw::rendering
 
 
-#endif // WLW_USE_GLFW
+#endif // WLW_RENDERER_GL

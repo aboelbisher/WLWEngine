@@ -13,7 +13,7 @@ namespace wlw {
 	public:
 		virtual ~WLWEngine() = default;
 
-		virtual void Start(std::shared_ptr<wlw::scene::Window> window) = 0;
+		virtual bool Start(std::shared_ptr<wlw::scene::Window> window) = 0;  // creates the GL context; false on failure
 		virtual void Iterate() = 0;
 		virtual int AttachWindow(std::shared_ptr<wlw::scene::Window> window) = 0;
 

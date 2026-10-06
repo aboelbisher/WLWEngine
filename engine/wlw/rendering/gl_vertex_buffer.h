@@ -1,9 +1,9 @@
-#ifdef WLW_USE_GLFW
+#ifdef WLW_RENDERER_GL
 
 #pragma once
 #include <vector>
-#include <glad/glad.h>
-#include "wlw/os/glfw_platform.h"
+#include "wlw/rendering/gl.h"
+#include "wlw/platform/platform.h"
 
 
 #include "wlw/rendering/vertex_buffer.h"
@@ -81,7 +81,7 @@ public:
   }
 
   ~GLVertexBuffer() override {
-    if (os::HasCurrentGLContext()) {
+    if (platform::HasCurrentGLContext()) {
       glDeleteBuffers(1, &m_VBO_);
       glDeleteVertexArrays(1, &m_VAO_);
     }
@@ -103,4 +103,4 @@ private:
 
 } // wlw:core
 
-#endif // WLW_USE_GLFW
+#endif // WLW_RENDERER_GL

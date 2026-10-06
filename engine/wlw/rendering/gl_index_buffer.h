@@ -1,11 +1,11 @@
-#ifdef WLW_USE_GLFW
+#ifdef WLW_RENDERER_GL
 
 
 #pragma once
 
 #include "wlw/rendering/index_buffer.h"
-#include <glad/glad.h>
-#include "wlw/os/glfw_platform.h"
+#include "wlw/rendering/gl.h"
+#include "wlw/platform/platform.h"
 
 #include <vector>
 #include <cstdint>
@@ -29,7 +29,7 @@ namespace wlw::core {
     }
 
     ~GLIndexBuffer() override {
-      if (os::HasCurrentGLContext()) glDeleteBuffers(1, &m_EBO);
+      if (platform::HasCurrentGLContext()) glDeleteBuffers(1, &m_EBO);
     }
 
     void Bind() const override {
@@ -47,4 +47,4 @@ namespace wlw::core {
   };
 } // wlw:core
 
-#endif // WLW_USE_GLFW
+#endif // WLW_RENDERER_GL
