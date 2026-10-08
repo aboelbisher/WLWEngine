@@ -13,6 +13,8 @@ Remote: `git@github.com:aboelbisher/WLWEngine.git`, branch `main`.
 ```
 engine/wlw/
   anim/       ease.h (Penner easing curves), tween.h (Tween<T>: value-type tweens the game owns and samples)
+  debug/      DebugUI: Dear ImGui (third_party/imgui) fed from Input, drawn via Window::SetOverlay; games add
+              panels in Application::OnDebugUI() (#if WLW_DEBUG_UI). F1 / "Debug" button. Off in release builds
   app/        Application (game loop: OnStart/OnFixedUpdate/OnUpdate/OnRender), entry_point.h (WLW_MAIN)
   core/       math types, FixedTimestep, log.h (WLW_LOG_*), logger.h (FAIL_IF), mesh/model, collision.h (AABB, Ray, Plane, IntersectPlane)
   input/      Input: keys (pressed vs held), pointer (mouse/first finger), swipes, taps
@@ -25,8 +27,8 @@ engine/wlw/
   utils/      image/glTF loaders, texture cache, primitives.h (procedural cube, bevelled cube, sphere, gem meshes)
 samples/      small games, built only when the engine is the top-level project (desktop):
               snake/ (Snake + its rules tests)
-tests/        engine unit tests (no window/GPU: anim, picking, primitives), also top-level only; ctest
-third_party/  glad (desktop only), stb, tinygltf + nlohmann json (vendored)
+tests/        engine unit tests (no window/GPU: anim, input, picking, primitives), also top-level only; ctest
+third_party/  glad (desktop only), stb, tinygltf + nlohmann json, Dear ImGui 1.92.9b (vendored)
 cmake/WLWHelpers.cmake  wlw_add_game(), wlw_add_assets(), wlw_set_warnings()
 vcpkg/ + vcpkg.json     desktop deps (glm, glfw3). Android fetches glm via FetchContent instead.
 ```

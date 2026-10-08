@@ -23,6 +23,9 @@ class SnakeApp : public wlw::Application {
   void OnFixedUpdate(float dt) override;
   void OnUpdate(float dt) override;
   void OnRender(float alpha) override;
+#if WLW_DEBUG_UI
+  void OnDebugUI() override;
+#endif
 
  private:
   using Model = std::shared_ptr<wlw::core::Model<wlw::core::Vertex3D>>;

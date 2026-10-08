@@ -61,6 +61,7 @@ input::Key MapKey(int32_t keycode) {
     case AKEYCODE_D: return input::Key::D;
     case AKEYCODE_I: return input::Key::I;
     case AKEYCODE_P: return input::Key::P;
+    case AKEYCODE_F1: return input::Key::F1;
     default: return input::Key::Unknown;
   }
 }
@@ -80,6 +81,7 @@ class AndroidWindow : public scene::Window {
 
   bool Initialize(scene::Window* share_with) override {
     if (share_with) WLW_LOG_WARN("Multiple windows aren't supported on Android");
+    input_.SetTouchScreen(true);  // the pointer is a finger: no hover, coarse aim
     // The native window arrives asynchronously (APP_CMD_INIT_WINDOW): wait for it.
     while (g_app->window == nullptr && !g_app->destroyRequested) PollEvents(-1);
     if (g_app->destroyRequested) return false;

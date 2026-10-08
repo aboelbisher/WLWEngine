@@ -11,6 +11,10 @@
 
 namespace wlw {
 
+namespace debug {
+class DebugUI;
+}
+
 struct AppConfig {
   std::string title = "WLWengine";
   core::Vector2 window_size = {1280, 720};
@@ -26,6 +30,7 @@ struct AppConfig {
 //   OnFixedUpdate(step)  x N   <- game logic / physics, always with the same dt
 //   OnUpdate(frame_time)       <- per-frame work: input, camera, UI
 //   OnRender(alpha)            <- push the latest state to the scene, interpolated by alpha
+//   OnDebugUI()                <- debug panels (WLW_DEBUG_UI builds, while the debug UI is open)
 //   draw + present, then poll input for the next frame
 class Application {
  public:
@@ -50,6 +55,10 @@ class Application {
   virtual void OnRender(float alpha) {}
   // Called once after the loop ends, while the engine is still alive.
   virtual void OnShutdown() {}
+  // Build debug panels here with the Dear ImGui API (ImGui::Begin, SliderFloat, Button...).
+  // Called once per frame after OnRender while the debug UI is open (F1 or its "Debug" button).
+  // Only called in builds with WLW_DEBUG_UI=1: wrap overrides in `#if WLW_DEBUG_UI`.
+  virtual void OnDebugUI() {}
 
   WLWEngine& Engine() { return *engine_; }
   input::Input& Input() { return window_->GetInput(); }  // keys, pointer/touch, swipes, taps
@@ -68,6 +77,11 @@ class Application {
   // Destroyed in reverse order: the window handle first, the engine (GL + platform shutdown) last.
   std::unique_ptr<WLWEngine> engine_;
   std::shared_ptr<scene::Window> window_;
+#if WLW_DEBUG_UI
+  void DrawEngineDebugWindow();  // always shown while the debug UI is open: stats, ImGui demo
+  std::unique_ptr<debug::DebugUI> debug_ui_;  // destroyed before the window and the engine
+  bool show_imgui_demo_ = false;
+#endif
   core::FixedTimestep timestep_;
 
   bool quit_requested_ = false;

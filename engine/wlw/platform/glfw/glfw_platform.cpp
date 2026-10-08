@@ -82,6 +82,7 @@ input::Key MapKey(int key) {
     case GLFW_KEY_D: return input::Key::D;
     case GLFW_KEY_I: return input::Key::I;
     case GLFW_KEY_P: return input::Key::P;
+    case GLFW_KEY_F1: return input::Key::F1;
     default: return input::Key::Unknown;
   }
 }

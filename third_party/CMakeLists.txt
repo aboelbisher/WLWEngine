@@ -12,3 +12,15 @@ target_include_directories(wlw_stb SYSTEM INTERFACE stb)
 add_library(wlw_tinygltf INTERFACE)
 target_include_directories(wlw_tinygltf SYSTEM INTERFACE tinygltf)
 target_link_libraries(wlw_tinygltf INTERFACE wlw_stb)
+
+# ---- Dear ImGui v1.92.9b (MIT; vendored core + OpenGL3 renderer backend): the debug UI ----
+# Linked by the engine only when WLW_DEBUG_UI is on. The backend is compiled by the engine
+# (wlw/debug/imgui_gl_backend.cpp) so it uses the engine's GL headers.
+add_library(wlw_imgui STATIC
+  imgui/imgui.cpp
+  imgui/imgui_demo.cpp
+  imgui/imgui_draw.cpp
+  imgui/imgui_tables.cpp
+  imgui/imgui_widgets.cpp)
+target_include_directories(wlw_imgui SYSTEM PUBLIC imgui imgui/backends)
+set_target_properties(wlw_imgui PROPERTIES FOLDER "third_party" POSITION_INDEPENDENT_CODE ON)

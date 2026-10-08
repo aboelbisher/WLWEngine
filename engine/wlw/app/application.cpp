@@ -1,6 +1,10 @@
 #include "wlw/app/application.h"
 
 #include "wlw/core/log.h"
+#if WLW_DEBUG_UI
+#include "imgui.h"
+#include "wlw/debug/debug_ui.h"
+#endif
 
 #include <algorithm>
 #include <chrono>
@@ -23,6 +27,9 @@ int Application::Run() {
     WLW_LOG_ERROR("Engine failed to start");
     return 1;
   }
+#if WLW_DEBUG_UI
+  debug_ui_ = std::make_unique<debug::DebugUI>(*window_);  // needs the GL context Start() made
+#endif
   OnStart();
 
   // steady_clock: monotonic (never jumps when the system clock changes), available on every platform.
@@ -40,16 +47,29 @@ int Application::Run() {
     const double frame_seconds = std::chrono::duration<double>(now - previous).count();
     previous = now;
     time_since_start_ = std::chrono::duration<double>(now - start).count();
+    // Clamp like the stepper does, so a breakpoint doesn't hand OnUpdate a 30-second dt.
+    const float frame_dt = static_cast<float>(std::min(frame_seconds, static_cast<double>(config_.max_frame_time)));
+
+#if WLW_DEBUG_UI
+    // First, so the debug UI can claim the pointer before the game reads input this frame.
+    debug_ui_->BeginFrame(frame_dt);
+#endif
 
     const int steps = timestep_.Advance(frame_seconds);
     for (int i = 0; i < steps; ++i) {
       OnFixedUpdate(timestep_.Step());
     }
 
-    // Clamp like the stepper does, so a breakpoint doesn't hand OnUpdate a 30-second dt.
-    const float frame_dt = static_cast<float>(std::min(frame_seconds, static_cast<double>(config_.max_frame_time)));
     OnUpdate(frame_dt);
     OnRender(timestep_.Alpha());
+
+#if WLW_DEBUG_UI
+    if (debug_ui_->IsOpen()) {
+      DrawEngineDebugWindow();
+      OnDebugUI();
+    }
+    debug_ui_->EndFrame();  // drawn on top of the scene by Iterate()
+#endif
 
     engine_->Iterate();  // draw + present every window, then poll input
     UpdateStats(frame_seconds);
@@ -78,3 +98,23 @@ void Application::UpdateStats(double frame_seconds) {
 }
 
 }  // namespace wlw
+
+#if WLW_DEBUG_UI
+namespace wlw {
+
+void Application::DrawEngineDebugWindow() {
+  ImGui::SetNextWindowCollapsed(true, ImGuiCond_FirstUseEver);
+  ImGui::SetNextWindowPos(ImVec2(8.0f, 8.0f), ImGuiCond_FirstUseEver);
+  ImGui::Begin("Engine");
+  ImGui::Text("%.0f fps, %.2f ms", fps_, frame_ms_);
+  const core::Vector2 framebuffer = window_->GetSize();
+  const core::Vector2 surface = window_->GetInput().SurfaceSize();
+  ImGui::Text("Framebuffer %.0f x %.0f px", framebuffer.x, framebuffer.y);
+  ImGui::Text("Pointer area %.0f x %.0f%s", surface.x, surface.y, window_->GetInput().IsTouchScreen() ? " (touch)" : "");
+  ImGui::Checkbox("ImGui demo window", &show_imgui_demo_);
+  ImGui::End();
+  if (show_imgui_demo_) ImGui::ShowDemoWindow(&show_imgui_demo_);  // every widget, with code
+}
+
+}  // namespace wlw
+#endif

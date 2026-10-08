@@ -124,6 +124,26 @@ elseif(WLW_PLATFORM STREQUAL "android")
   target_link_libraries(wlw PUBLIC wlw_native_app_glue EGL GLESv3 android log)
 endif()
 
+# ---- Debug UI (Dear ImGui) ----
+# On by default; off by default in release-type builds, so it never ships by accident.
+if(CMAKE_BUILD_TYPE MATCHES "^(Release|RelWithDebInfo|MinSizeRel)$")
+  set(_wlw_debug_ui_default OFF)
+else()
+  set(_wlw_debug_ui_default ON)
+endif()
+option(WLW_DEBUG_UI "Build the in-game debug UI (Dear ImGui)" ${_wlw_debug_ui_default})
+if(WLW_DEBUG_UI)
+  target_sources(wlw PRIVATE
+    wlw/debug/debug_ui.cpp
+    wlw/debug/debug_ui.h
+    wlw/debug/imgui_gl_backend.cpp)
+  target_compile_definitions(wlw PUBLIC WLW_DEBUG_UI=1)
+  target_link_libraries(wlw PUBLIC wlw_imgui)  # games use the ImGui API in OnDebugUI()
+else()
+  target_compile_definitions(wlw PUBLIC WLW_DEBUG_UI=0)
+endif()
+message(STATUS "WLWengine debug UI: ${WLW_DEBUG_UI}")
+
 wlw_set_warnings(wlw)
 
 # Keep the folder structure in IDEs (VS / Xcode / Android Studio)

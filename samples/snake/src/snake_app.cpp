@@ -262,3 +262,29 @@ void SnakeApp::UpdateTitle() {
 }
 
 }  // namespace snake
+
+#if WLW_DEBUG_UI
+#include "imgui.h"
+
+namespace snake {
+
+// Debug panel (F1 / "Debug" button): a small example of the engine's debug UI.
+void SnakeApp::OnDebugUI() {
+  ImGui::Begin("Snake");
+  ImGui::Text("%.0f fps (%.2f ms)", Fps(), FrameMs());
+  ImGui::Text("Score %d, length %zu", game_.Score(), game_.Body().size());
+  ImGui::Text("Move interval %.3f s", game_.MoveInterval());
+  ImGui::Checkbox("Interpolate", &interpolate_);
+  if (ImGui::Checkbox("Orthographic", &orthographic_)) {
+    if (orthographic_) {
+      Window().SetCamera(ortho_camera_);
+    } else {
+      Window().SetCamera(perspective_camera_);
+    }
+  }
+  if (ImGui::Button("Restart")) Restart();
+  ImGui::End();
+}
+
+}  // namespace snake
+#endif

@@ -139,6 +139,12 @@ public:
 		}
 	}
 
+	// Drawn on top of the scene, just before the frame is presented (e.g. the debug UI).
+	void SetOverlay(std::function<void()> draw) { overlay_ = std::move(draw); }
+	void DrawOverlay() const {
+		if (overlay_) overlay_();
+	}
+
 
 
 
@@ -158,6 +164,7 @@ protected:
 
 	std::shared_ptr<scene::Camera3D> camera_ = scene::FPSCamera::Create();
 	std::shared_ptr<rendering::WCubemap> skybox_ = nullptr;
+	std::function<void()> overlay_;
 
 public:
 
