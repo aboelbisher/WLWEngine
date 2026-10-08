@@ -13,13 +13,14 @@ Remote: `git@github.com:aboelbisher/WLWEngine.git`, branch `main`.
 ```
 engine/wlw/
   app/        Application (game loop: OnStart/OnFixedUpdate/OnUpdate/OnRender), entry_point.h (WLW_MAIN)
-  core/       math types, FixedTimestep, log.h (WLW_LOG_*), logger.h (FAIL_IF), mesh/model, AABB
+  core/       math types, FixedTimestep, log.h (WLW_LOG_*), logger.h (FAIL_IF), mesh/model, collision.h (AABB, Ray, Plane, IntersectPlane)
   input/      Input: keys (pressed vs held), pointer (mouse/first finger), swipes, taps
   platform/   THE ONLY PER-OS CODE: platform.h interface + glfw/glfw_platform.cpp (desktop)
               + android/android_platform.cpp (NativeActivity + EGL). iOS goes here later.
   rendering/  RenderingDriver/RenderDevice interfaces + one GL backend for GL 3.3 core AND GLES 3.0
   scene/      Node (scene graph, local transforms, visibility), Window (surface + scene + input),
-              cameras (FollowCamera = perspective, OrthographicCamera = parallel/top-down)
+              cameras (FollowCamera = perspective, OrthographicCamera = parallel/top-down;
+              Camera3D::ScreenPointToRay for picking, fed with Input::SurfaceSize())
   utils/      image/glTF loaders, texture cache, primitives.h (procedural cube/sphere/gem meshes)
 samples/      small games, built only when the engine is the top-level project (desktop):
               snake/ (Snake + its rules tests)

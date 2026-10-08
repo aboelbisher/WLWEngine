@@ -56,6 +56,7 @@ void Input::OnPointerUp(float x, float y) {
 }
 
 void Input::SetSurfaceSize(float width, float height) {
+  surface_size_ = {width, height};
   surface_min_side_ = std::max(1.0f, std::min(width, height));
 }
 

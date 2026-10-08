@@ -33,6 +33,10 @@ class Input {
   bool WasPointerPressed() const { return pointer_pressed_; }
   bool WasPointerReleased() const { return pointer_released_; }
   core::Vector2 PointerPosition() const { return pointer_position_; }  // pixels, origin top-left
+  // The size of the area PointerPosition() is measured in, in the same units. Pass this (not
+  // Window::GetSize()) to Camera3D::ScreenPointToRay: on HiDPI desktops the cursor uses window
+  // units while the framebuffer is bigger.
+  core::Vector2 SurfaceSize() const { return surface_size_; }
 
   // Swipes completed this frame, in order. A swipe fires as soon as the finger/mouse has moved
   // far enough (no need to lift), and keeps firing for further turns in the same drag.
@@ -67,6 +71,7 @@ class Input {
   std::vector<Swipe> swipes_;
   bool tapped_ = false;
 
+  core::Vector2 surface_size_{720.0f, 1280.0f};
   float surface_min_side_ = 720.0f;
 };
 
