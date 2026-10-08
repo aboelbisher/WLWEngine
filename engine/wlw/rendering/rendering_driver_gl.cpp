@@ -285,7 +285,7 @@ public:
     glUniform1i(m_Uniforms.instanced, 0);
     window->SetRenderStats(stats);
 
-    window->DrawOverlay();  // debug UI etc., on top of the scene
+    window->DrawOverlays();  // game UI, debug UI: on top of the scene
 
     // Present the frame we just drew (previously the swap happened before drawing,
     // so every frame was shown one frame late).

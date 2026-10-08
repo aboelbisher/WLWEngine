@@ -1,6 +1,9 @@
 #include "wlw/app/application.h"
 
 #include "wlw/core/log.h"
+#include "wlw/platform/platform.h"
+#include "wlw/ui/canvas.h"
+#include "wlw/ui/ui_renderer.h"
 #if WLW_DEBUG_UI
 #include "imgui.h"
 #include "wlw/debug/debug_ui.h"
@@ -18,7 +21,9 @@ Application::Application(AppConfig config)
       window_(scene::Window::Create(config_.window_size, config_.title)),
       timestep_(config_.fixed_timestep, config_.max_frame_time) {}
 
-Application::~Application() = default;
+Application::~Application() {
+  if (ui_overlay_id_ >= 0) window_->RemoveOverlay(ui_overlay_id_);
+}
 
 int Application::Run() {
   // Engine start happens here, not in the constructor: virtual hooks can't be called from a
@@ -27,6 +32,13 @@ int Application::Run() {
     WLW_LOG_ERROR("Engine failed to start");
     return 1;
   }
+  // The game UI layer, drawn over the 3D scene (and under the debug UI, created next).
+  canvas_ = std::make_unique<ui::Canvas>();
+  ui_renderer_ = ui::UIRenderer::Create();
+  ui_overlay_id_ = window_->AddOverlay([this] {
+    const core::Vector2 framebuffer = window_->GetSize();
+    ui_renderer_->Draw(*canvas_, {framebuffer.x, framebuffer.y});
+  });
 #if WLW_DEBUG_UI
   debug_ui_ = std::make_unique<debug::DebugUI>(*window_);  // needs the GL context Start() made
 #endif
@@ -62,6 +74,10 @@ int Application::Run() {
 
     OnUpdate(frame_dt);
     OnRender(timestep_.Alpha());
+    const core::Vector2 framebuffer = window_->GetSize();
+    canvas_->BeginFrame({framebuffer.x, framebuffer.y}, platform::GetSafeAreaInsets(),
+                        {config_.ui_reference_size.x, config_.ui_reference_size.y});
+    OnRenderUI(*canvas_);
 
 #if WLW_DEBUG_UI
     if (debug_ui_->IsOpen()) {

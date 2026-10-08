@@ -10,11 +10,14 @@
 //     *surface* when the window comes back.
 #ifdef WLW_PLATFORM_ANDROID
 
+#include <algorithm>
 #include <memory>
 
 #include <EGL/egl.h>
 #include <GLES3/gl3.h>
+#include <jni.h>
 #include <android/asset_manager.h>
+#include <android/configuration.h>
 #include <android/log.h>
 #include <android/native_window.h>
 #include <android_native_app_glue.h>
@@ -33,6 +36,8 @@ namespace {
 android_app* g_app = nullptr;
 bool g_alive = false;
 EGLDisplay g_display = EGL_NO_DISPLAY;
+SafeAreaInsets g_insets;      // cached; refreshed when the window changes
+bool g_insets_valid = false;
 
 // Processes pending OS events. timeout_ms = -1 blocks until at least one event arrives.
 void PollEvents(int timeout_ms) {
@@ -245,6 +250,7 @@ class AndroidWindow : public scene::Window {
     eglQuerySurface(g_display, surface_, EGL_WIDTH, &width);
     eglQuerySurface(g_display, surface_, EGL_HEIGHT, &height);
     size_ = {(float)width, (float)height};
+    g_insets_valid = false;  // size or orientation changed: ask for the insets again
     input_.SetSurfaceSize((float)width, (float)height);
   }
 
@@ -300,6 +306,90 @@ std::optional<std::vector<uint8_t>> ReadFile(const std::string& path) {
   AAsset_close(asset);
   if (read < 0 || static_cast<size_t>(read) != data.size()) return std::nullopt;
   return data;
+}
+
+namespace {
+
+// Asks Java for the window insets: NativeActivity has no C API for them, so this goes through
+// JNI (Java Native Interface): find the Java classes and methods by name and call them.
+// Returns false if they aren't available yet (the view isn't attached to the window).
+bool QueryInsets(SafeAreaInsets& out) {
+  if (!g_app) return false;
+  JavaVM* vm = g_app->activity->vm;
+  JNIEnv* env = nullptr;
+  bool attached_here = false;
+  if (vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) == JNI_EDETACHED) {
+    if (vm->AttachCurrentThread(&env, nullptr) != JNI_OK) return false;  // our thread -> JVM
+    attached_here = true;
+  }
+  env->PushLocalFrame(32);  // every Java reference created below is freed by PopLocalFrame
+
+  bool ok = false;
+  const int sdk = AConfiguration_getSdkVersion(g_app->config);
+  // activity.getWindow().getDecorView().getRootWindowInsets()
+  jobject activity = g_app->activity->clazz;
+  jmethodID get_window = env->GetMethodID(env->GetObjectClass(activity), "getWindow", "()Landroid/view/Window;");
+  jobject window = env->CallObjectMethod(activity, get_window);
+  jmethodID get_decor = env->GetMethodID(env->GetObjectClass(window), "getDecorView", "()Landroid/view/View;");
+  jobject decor = env->CallObjectMethod(window, get_decor);
+  jmethodID get_root_insets =
+      env->GetMethodID(env->GetObjectClass(decor), "getRootWindowInsets", "()Landroid/view/WindowInsets;");
+  jobject insets = env->CallObjectMethod(decor, get_root_insets);
+  if (insets && !env->ExceptionCheck()) {
+    jclass insets_class = env->GetObjectClass(insets);
+    if (sdk >= 30) {
+      // Android 11+: insets.getInsets(Type.systemBars() | Type.displayCutout())
+      jclass type = env->FindClass("android/view/WindowInsets$Type");
+      const jint mask = env->CallStaticIntMethod(type, env->GetStaticMethodID(type, "systemBars", "()I")) |
+                        env->CallStaticIntMethod(type, env->GetStaticMethodID(type, "displayCutout", "()I"));
+      jobject rect = env->CallObjectMethod(
+          insets, env->GetMethodID(insets_class, "getInsets", "(I)Landroid/graphics/Insets;"), mask);
+      jclass rect_class = env->GetObjectClass(rect);
+      out.left = static_cast<float>(env->GetIntField(rect, env->GetFieldID(rect_class, "left", "I")));
+      out.top = static_cast<float>(env->GetIntField(rect, env->GetFieldID(rect_class, "top", "I")));
+      out.right = static_cast<float>(env->GetIntField(rect, env->GetFieldID(rect_class, "right", "I")));
+      out.bottom = static_cast<float>(env->GetIntField(rect, env->GetFieldID(rect_class, "bottom", "I")));
+    } else {
+      // Older: the system bars, plus the camera cutout on Android 9-10.
+      auto call = [&](jobject object, jclass cls, const char* name) {
+        return static_cast<float>(env->CallIntMethod(object, env->GetMethodID(cls, name, "()I")));
+      };
+      out.left = call(insets, insets_class, "getSystemWindowInsetLeft");
+      out.top = call(insets, insets_class, "getSystemWindowInsetTop");
+      out.right = call(insets, insets_class, "getSystemWindowInsetRight");
+      out.bottom = call(insets, insets_class, "getSystemWindowInsetBottom");
+      if (sdk >= 28) {
+        jobject cutout = env->CallObjectMethod(
+            insets, env->GetMethodID(insets_class, "getDisplayCutout", "()Landroid/view/DisplayCutout;"));
+        if (cutout) {
+          jclass cutout_class = env->GetObjectClass(cutout);
+          out.left = std::max(out.left, call(cutout, cutout_class, "getSafeInsetLeft"));
+          out.top = std::max(out.top, call(cutout, cutout_class, "getSafeInsetTop"));
+          out.right = std::max(out.right, call(cutout, cutout_class, "getSafeInsetRight"));
+          out.bottom = std::max(out.bottom, call(cutout, cutout_class, "getSafeInsetBottom"));
+        }
+      }
+    }
+    ok = !env->ExceptionCheck();
+  }
+  if (env->ExceptionCheck()) env->ExceptionClear();  // a Java exception must not stay pending
+
+  env->PopLocalFrame(nullptr);
+  if (attached_here) vm->DetachCurrentThread();
+  return ok;
+}
+
+}  // namespace
+
+SafeAreaInsets GetSafeAreaInsets() {
+  if (!g_insets_valid) {
+    SafeAreaInsets insets;
+    if (QueryInsets(insets)) {
+      g_insets = insets;
+      g_insets_valid = true;
+    }
+  }
+  return g_insets;
 }
 
 void WriteLog(LogLevel level, const char* message) {

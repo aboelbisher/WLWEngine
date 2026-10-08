@@ -98,7 +98,29 @@ static void TestIntersectPlane() {
   CHECK(raised_hit && Near(raised_hit->y, 2));
 }
 
+static void TestWorldToScreenIsTheInverse() {
+  auto ortho = scene::OrthographicCamera::Create();
+  ortho->SetPosition({0, 12, 5});
+  ortho->SetTarget({0, 0, 0});
+  ortho->SetVisibleArea(9, 13);
+  ortho->UpdateSize(kScreen);
+  PerspectiveTestCamera persp;
+  for (scene::Camera3D* camera : {static_cast<scene::Camera3D*>(ortho.get()), static_cast<scene::Camera3D*>(&persp)}) {
+    for (const glm::vec3& world : kGroundPoints) {
+      // WorldToScreen matches the GPU's own projection...
+      const glm::vec3 screen = camera->WorldToScreen(world, kScreen);
+      const core::Vector2 expected = WorldToScreen(*camera, world);
+      CHECK(Near(screen.x, expected.x, 1e-2f) && Near(screen.y, expected.y, 1e-2f));
+      CHECK(screen.z > -1.0f && screen.z < 1.0f);  // between near and far: visible
+      // ...and picking that pixel lands back on the point.
+      const auto hit = scene::IntersectPlane(camera->ScreenPointToRay({screen.x, screen.y}, kScreen), {{0, 1, 0}, 0});
+      CHECK(hit && glm::length(*hit - world) < 1e-3f);
+    }
+  }
+}
+
 int main() {
+  TestWorldToScreenIsTheInverse();
   TestOrthographicTilted();
   TestPerspective();
   TestScreenCenterAndFlip();

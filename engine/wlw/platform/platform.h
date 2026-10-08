@@ -31,9 +31,20 @@ bool HasCurrentGLContext();
 // where libGLESv3 is linked directly).
 bool LoadGLFunctions();
 
-// Reads a whole asset file. Desktop: path relative to the working directory (the executable's
-// folder). Android: path inside the APK's assets/.
+// Reads a whole asset file. Desktop: a relative path is looked up in the working directory, then
+// next to the executable (where the build copies the assets). Android: path inside the APK's
+// assets/.
 std::optional<std::vector<uint8_t>> ReadFile(const std::string& path);
+
+// The parts of the screen covered by system UI or hardware: status bar, camera cutout/notch,
+// gesture or navigation bar. Keep important UI inside. In framebuffer pixels; all 0 on desktop.
+struct SafeAreaInsets {
+  float left = 0.0f;
+  float top = 0.0f;
+  float right = 0.0f;
+  float bottom = 0.0f;
+};
+SafeAreaInsets GetSafeAreaInsets();
 
 void WriteLog(LogLevel level, const char* message);
 

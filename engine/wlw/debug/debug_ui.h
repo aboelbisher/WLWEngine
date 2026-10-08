@@ -38,6 +38,7 @@ class DebugUI {
   scene::Window& window_;
   bool open_ = false;
   bool imgui_pointer_down_ = false;  // the button state ImGui has been told about
+  int overlay_id_ = -1;
 };
 
 }  // namespace wlw::debug

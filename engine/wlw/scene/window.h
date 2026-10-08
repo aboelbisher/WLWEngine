@@ -148,10 +148,17 @@ public:
 	const RenderStats& GetRenderStats() const { return render_stats_; }
 	void SetRenderStats(const RenderStats& stats) { render_stats_ = stats; }
 
-	// Drawn on top of the scene, just before the frame is presented (e.g. the debug UI).
-	void SetOverlay(std::function<void()> draw) { overlay_ = std::move(draw); }
-	void DrawOverlay() const {
-		if (overlay_) overlay_();
+	// Layers drawn on top of the 3D scene, just before the frame is presented, in the order they
+	// were added (the game UI first, the debug UI over it). Returns an id for RemoveOverlay.
+	int AddOverlay(std::function<void()> draw) {
+		overlays_.push_back({next_overlay_id_, std::move(draw)});
+		return next_overlay_id_++;
+	}
+	void RemoveOverlay(int id) {
+		std::erase_if(overlays_, [id](const auto& overlay) { return overlay.first == id; });
+	}
+	void DrawOverlays() const {
+		for (const auto& [_, draw] : overlays_) draw();
 	}
 
 
@@ -173,7 +180,8 @@ protected:
 
 	std::shared_ptr<scene::Camera3D> camera_ = scene::FPSCamera::Create();
 	std::shared_ptr<rendering::WCubemap> skybox_ = nullptr;
-	std::function<void()> overlay_;
+	std::vector<std::pair<int, std::function<void()>>> overlays_;
+	int next_overlay_id_ = 0;
 	RenderStats render_stats_;
 
 public:

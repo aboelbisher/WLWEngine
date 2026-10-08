@@ -11,6 +11,10 @@
 
 namespace wlw {
 
+namespace ui {
+class Canvas;
+class UIRenderer;
+}  // namespace ui
 namespace debug {
 class DebugUI;
 }
@@ -21,6 +25,8 @@ struct AppConfig {
   float fixed_timestep = 1.0f / 60.0f;  // simulation rate: 60 steps per second
   float max_frame_time = 0.25f;         // longer frames are clamped (see FixedTimestep)
   bool show_stats_in_title = true;      // "title | 60 fps | 16.7 ms" (desktop)
+  // The UI's virtual resolution: the Canvas is scaled so this area fits on any screen.
+  core::Vector2 ui_reference_size = {640, 360};
 };
 
 // Base class for a game. It owns the engine, the window and the main loop; a game overrides
@@ -53,6 +59,9 @@ class Application {
   virtual void OnUpdate(float dt) {}
   // Called once per frame before drawing. alpha in [0, 1) = progress towards the next fixed step.
   virtual void OnRender(float alpha) {}
+  // Called once per frame after OnRender: draw the 2D UI (HUD, menus) on the canvas. It's drawn
+  // over the 3D scene, in Canvas units (see ui::Canvas).
+  virtual void OnRenderUI(ui::Canvas& canvas) {}
   // Called once after the loop ends, while the engine is still alive.
   virtual void OnShutdown() {}
   // Build debug panels here with the Dear ImGui API (ImGui::Begin, SliderFloat, Button...).
@@ -77,6 +86,9 @@ class Application {
   // Destroyed in reverse order: the window handle first, the engine (GL + platform shutdown) last.
   std::unique_ptr<WLWEngine> engine_;
   std::shared_ptr<scene::Window> window_;
+  std::unique_ptr<ui::Canvas> canvas_;
+  std::unique_ptr<ui::UIRenderer> ui_renderer_;  // GL objects: destroyed before the window/engine
+  int ui_overlay_id_ = -1;
 #if WLW_DEBUG_UI
   void DrawEngineDebugWindow();  // always shown while the debug UI is open: stats, ImGui demo
   std::unique_ptr<debug::DebugUI> debug_ui_;  // destroyed before the window and the engine

@@ -1,4 +1,4 @@
-# Unit tests for engine code that runs without a window or GPU (math, input, animation, particles, meshes).
+# Unit tests for engine code that runs without a window or GPU (math, input, animation, particles, meshes, UI layout).
 # Built only when the engine is the top-level project. Run: ctest --test-dir build/<preset>
 function(wlw_add_engine_test name)
   add_executable(${name} ${name}.cpp check.h)
@@ -11,3 +11,5 @@ wlw_add_engine_test(fx_tests)
 wlw_add_engine_test(input_tests)
 wlw_add_engine_test(picking_tests)
 wlw_add_engine_test(primitives_tests)
+wlw_add_engine_test(ui_tests)
+target_compile_definitions(ui_tests PRIVATE WLW_TEST_FONT="${CMAKE_CURRENT_SOURCE_DIR}/data/LilitaOne-Regular.ttf")

@@ -3,11 +3,20 @@
 #ifdef WLW_PLATFORM_GLFW
 
 #include <cstdio>
+#include <filesystem>
 #include <fstream>
 #include <iterator>
 
 #include "wlw/rendering/gl.h"  // glad must come before GLFW
 #include <GLFW/glfw3.h>
+
+#if defined(_WIN32)
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <windows.h>  // GetModuleFileNameW (after glad/GLFW, which set up the GL macros)
+#elif defined(__APPLE__)
+#include <mach-o/dyld.h>
+#endif
 
 #include "wlw/platform/platform.h"
 #include "wlw/scene/window.h"
@@ -18,6 +27,25 @@ bool g_alive = false;
 
 void GlfwErrorCallback(int error, const char* description) {
   WLW_LOG_ERROR("GLFW error %d: %s", error, description);
+}
+
+// The folder of the running executable: where the build copies the game's assets.
+std::filesystem::path ExecutableDirectory() {
+#if defined(_WIN32)
+  wchar_t buffer[MAX_PATH];
+  const DWORD length = GetModuleFileNameW(nullptr, buffer, MAX_PATH);
+  if (length == 0 || length == MAX_PATH) return {};
+  return std::filesystem::path(buffer).parent_path();
+#elif defined(__APPLE__)
+  char buffer[4096];
+  uint32_t size = sizeof(buffer);
+  if (_NSGetExecutablePath(buffer, &size) != 0) return {};
+  return std::filesystem::path(buffer).parent_path();
+#else
+  std::error_code error;
+  const std::filesystem::path exe = std::filesystem::read_symlink("/proc/self/exe", error);
+  return error ? std::filesystem::path() : exe.parent_path();
+#endif
 }
 }  // namespace
 
@@ -51,9 +79,14 @@ bool LoadGLFunctions() { return gladLoadGLLoader(reinterpret_cast<GLADloadproc>(
 
 std::optional<std::vector<uint8_t>> ReadFile(const std::string& path) {
   std::ifstream file(path, std::ios::binary);
+  if (!file && std::filesystem::path(path).is_relative()) {
+    file.open(ExecutableDirectory() / path, std::ios::binary);  // e.g. launched from elsewhere
+  }
   if (!file) return std::nullopt;
   return std::vector<uint8_t>(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
 }
+
+SafeAreaInsets GetSafeAreaInsets() { return {}; }  // desktop windows have no cutouts or system bars
 
 void WriteLog(LogLevel level, const char* message) {
   static const char* kPrefix[] = {"", "[warning] ", "[error] "};

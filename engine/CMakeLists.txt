@@ -85,6 +85,13 @@ add_library(wlw STATIC
   wlw/scene/triangle_2d.h
   wlw/scene/window.h
 
+  wlw/ui/canvas.cpp
+  wlw/ui/canvas.h
+  wlw/ui/font.cpp
+  wlw/ui/font.h
+  wlw/ui/ui_renderer.h
+  wlw/ui/ui_renderer_gl.cpp
+
   wlw/utils/gltf_loader.cpp
   wlw/utils/gltf_loader.h
   wlw/utils/image_loader.cpp

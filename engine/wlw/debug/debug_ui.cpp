@@ -44,13 +44,13 @@ DebugUI::DebugUI(scene::Window& window) : window_(window) {
   io.Fonts->AddFontDefaultVector();
 
   ImGui_ImplOpenGL3_Init(kImGuiGLSLVersion);
-  window_.SetOverlay([] {
+  overlay_id_ = window_.AddOverlay([] {
     if (ImDrawData* draw_data = ImGui::GetDrawData()) ImGui_ImplOpenGL3_RenderDrawData(draw_data);
   });
 }
 
 DebugUI::~DebugUI() {
-  window_.SetOverlay(nullptr);
+  window_.RemoveOverlay(overlay_id_);
   window_.GetInput().SetPointerBlocked(false);
   if (platform::HasCurrentGLContext()) ImGui_ImplOpenGL3_Shutdown();  // frees GL objects
   ImGui::DestroyContext();

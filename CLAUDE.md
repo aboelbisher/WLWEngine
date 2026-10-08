@@ -25,10 +25,12 @@ engine/wlw/
   scene/      Node (scene graph, local transforms, visibility, instancing: SetInstances = one draw call for N copies), Window (surface + scene + input),
               cameras (FollowCamera = perspective, OrthographicCamera = parallel/top-down;
               Camera3D::ScreenPointToRay for picking, fed with Input::SurfaceSize())
+  ui/         2D UI layer: Font (TTF -> SDF atlas, stb_truetype), Canvas (virtual units, safe area, text,
+              rounded rects, batched quads), UIRenderer (GL). Games draw in Application::OnRenderUI()
   utils/      image/glTF loaders, texture cache, primitives.h (procedural cube, bevelled cube, sphere, gem meshes)
 samples/      small games, built only when the engine is the top-level project (desktop):
               snake/ (Snake + its rules tests)
-tests/        engine unit tests (no window/GPU: anim, fx, input, picking, primitives), also top-level only; ctest
+tests/        engine unit tests (no window/GPU: anim, fx, input, picking, primitives, ui); test data in tests/data/, also top-level only; ctest
 third_party/  glad (desktop only), stb, tinygltf + nlohmann json, Dear ImGui 1.92.9b (vendored)
 cmake/WLWHelpers.cmake  wlw_add_game(), wlw_add_assets(), wlw_set_warnings()
 vcpkg/ + vcpkg.json     desktop deps (glm, glfw3). Android fetches glm via FetchContent instead.
@@ -62,6 +64,8 @@ cmake --build --preset windows-debug
 .\build\windows-debug\samples\snake\wlw_snake.exe
 ctest --test-dir build\windows-debug --output-on-failure
 ```
+**Don't add features to the samples** (owner's rule): engine features are shown and verified
+through Bluzzle and the engine tests. Snake only has to keep compiling.
 Samples build only when the engine is the top-level project (`WLW_BUILD_SAMPLES`), so a game
 that uses the engine as a submodule doesn't compile them. Snake is a quick check that engine
 changes didn't break anything; keep it building when the engine API changes.

@@ -112,5 +112,14 @@ namespace wlw::scene {
 			return {glm::vec3(near_point), glm::normalize(glm::vec3(far_point - near_point))};
 		}
 
+		// The other direction: where a world point is drawn on screen (what the GPU does to every
+		// vertex). x, y in the units of `screen_size`, origin top-left; z = depth in NDC (-1 near,
+		// +1 far; outside that range the point is clipped). For UI that follows 3D objects.
+		glm::vec3 WorldToScreen(const glm::vec3& world, const core::Vector2& screen_size) {
+			const glm::vec4 clip = GetProjectionMatrix() * GetViewMatrix() * glm::vec4(world, 1.0f);
+			const glm::vec3 ndc = glm::vec3(clip) / clip.w;  // the perspective divide
+			return {(ndc.x + 1.0f) * 0.5f * screen_size.x, (1.0f - ndc.y) * 0.5f * screen_size.y, ndc.z};
+		}
+
 	};
 } // namespace wlw::scene
