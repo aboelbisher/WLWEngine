@@ -88,6 +88,8 @@ std::optional<std::vector<uint8_t>> ReadFile(const std::string& path) {
 
 SafeAreaInsets GetSafeAreaInsets() { return {}; }  // desktop windows have no cutouts or system bars
 
+bool MoveToBackground() { return false; }  // no such thing on desktop: the app quits instead
+
 void WriteLog(LogLevel level, const char* message) {
   static const char* kPrefix[] = {"", "[warning] ", "[error] "};
   FILE* out = level == LogLevel::Error ? stderr : stdout;

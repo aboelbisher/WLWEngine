@@ -77,4 +77,46 @@ void Canvas::Text(const Font& font, std::string_view text, glm::vec2 position, f
   AddText(font, text, pen, size, style.color, 0.5f);
 }
 
+bool Canvas::Button(const Font& font, std::string_view label, const Rect& rect, const ButtonStyle& style) {
+  // Immediate mode keeps no widget objects, so a button is recognised from frame to frame by an
+  // id made from what identifies it: its label and where it is (FNV-1a hash).
+  uint64_t id = 1469598103934665603ull;
+  auto mix = [&id](uint64_t value) { id = (id ^ value) * 1099511628211ull; };
+  for (char c : label) mix(static_cast<unsigned char>(c));
+  mix(static_cast<uint64_t>(static_cast<int64_t>(rect.Center().x * 4.0f)));
+  mix(static_cast<uint64_t>(static_cast<int64_t>(rect.Center().y * 4.0f)));
+  if (id == 0) id = 1;
+
+  const glm::vec2 p = pointer_.position;
+  const bool inside = p.x >= rect.min.x && p.x <= rect.max.x && p.y >= rect.min.y && p.y <= rect.max.y;
+  bool clicked = false;
+  if (interactive_) {
+    if (pointer_.pressed && inside) active_button_ = id;  // went down on this button
+    if (active_button_ == id && pointer_.released) {     // ...and up: a click only if still on it
+      clicked = inside;
+      active_button_ = 0;
+    } else if (active_button_ == id && !pointer_.down) {
+      active_button_ = 0;  // the press ended elsewhere without us seeing the release
+    }
+  }
+  const bool held = interactive_ && active_button_ == id && pointer_.down && inside;
+
+  // A darker slab under the face; held, the face sinks onto it and shrinks a little.
+  const glm::vec2 depth(0.0f, 4.0f);
+  if (style.shadow.a > 0.0f) FillRect({rect.min + depth, rect.max + depth}, style.shadow, style.corner_radius);
+  Rect face = rect;
+  if (held) {
+    const glm::vec2 shrink = rect.Size() * 0.03f;
+    face = {rect.min + shrink + depth * 0.6f, rect.max - shrink + depth * 0.6f};
+  }
+  core::Color fill = style.fill;
+  if (held) fill = {fill.r * 0.85f, fill.g * 0.85f, fill.b * 0.85f, fill.a};
+  FillRect(face, fill, style.corner_radius);
+  const float text_size = style.text_size > 0.0f ? style.text_size : rect.Size().y * 0.45f;
+  TextStyle text;
+  text.color = style.text;
+  Text(font, label, face.Center(), text_size, Align::Center, text);
+  return clicked;
+}
+
 }  // namespace wlw::ui

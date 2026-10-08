@@ -55,6 +55,10 @@ int Application::Run() {
       previous = Clock::now();
       timestep_.Reset();
     }
+    if (window_->ConsumePaused()) {
+      OnAppPaused();
+      screens_.AppPaused();  // e.g. the game screen opens its pause panel
+    }
     const Clock::time_point now = Clock::now();
     const double frame_seconds = std::chrono::duration<double>(now - previous).count();
     previous = now;
@@ -67,32 +71,69 @@ int Application::Run() {
     debug_ui_->BeginFrame(frame_dt);
 #endif
 
+    // Back: the top screen first (close a panel...), then the game; with nothing left to close,
+    // leave like any Android app does (desktop: Escape quits).
+    const input::Input& input = window_->GetInput();
+    if (input.WasKeyPressed(input::Key::Back) || input.WasKeyPressed(input::Key::Escape)) {
+      if (!screens_.Back() && !OnBack() && !platform::MoveToBackground()) Quit();
+    }
+
     const int steps = timestep_.Advance(frame_seconds);
     for (int i = 0; i < steps; ++i) {
       OnFixedUpdate(timestep_.Step());
+      screens_.FixedUpdate(timestep_.Step());
     }
 
     OnUpdate(frame_dt);
+    screens_.Update(frame_dt);
     OnRender(timestep_.Alpha());
-    const core::Vector2 framebuffer = window_->GetSize();
-    canvas_->BeginFrame({framebuffer.x, framebuffer.y}, platform::GetSafeAreaInsets(),
-                        {config_.ui_reference_size.x, config_.ui_reference_size.y});
-    OnRenderUI(*canvas_);
+    screens_.Render(timestep_.Alpha());
+
+    BuildUI();
 
 #if WLW_DEBUG_UI
     if (debug_ui_->IsOpen()) {
       DrawEngineDebugWindow();
       OnDebugUI();
+      screens_.DebugUI();
     }
     debug_ui_->EndFrame();  // drawn on top of the scene by Iterate()
 #endif
 
     engine_->Iterate();  // draw + present every window, then poll input
+    screens_.EndFrame(frame_dt);  // screen changes requested this frame happen now, between frames
     UpdateStats(frame_seconds);
   }
 
+  screens_.Clear();  // OnExit for every screen while the game object is still fully alive
   OnShutdown();
   return 0;
+}
+
+void Application::BuildUI() {
+  const core::Vector2 framebuffer = window_->GetSize();
+  canvas_->BeginFrame({framebuffer.x, framebuffer.y}, platform::GetSafeAreaInsets(),
+                      {config_.ui_reference_size.x, config_.ui_reference_size.y});
+
+  // The pointer for UI widgets, in Canvas units: pointer units -> framebuffer pixels -> units.
+  // Uses the normal (blockable) queries, so the debug UI still takes precedence.
+  const input::Input& input = window_->GetInput();
+  const core::Vector2 surface = input.SurfaceSize();
+  ui::PointerState pointer;
+  if (surface.x > 0.0f && surface.y > 0.0f) {
+    const core::Vector2 p = input.PointerPosition();
+    pointer.position = canvas_->FromPixels({p.x * framebuffer.x / surface.x, p.y * framebuffer.y / surface.y});
+  }
+  pointer.down = input.IsPointerDown();
+  pointer.pressed = input.WasPointerPressed();
+  pointer.released = input.WasPointerReleased();
+  canvas_->SetPointer(pointer);
+
+  OnRenderUI(*canvas_);
+  screens_.RenderUI(*canvas_);
+  if (const float fade = screens_.FadeAmount(); fade > 0.0f) {  // screen transitions
+    canvas_->FillRect({{0.0f, 0.0f}, canvas_->Size()}, {0.0f, 0.0f, 0.0f, fade});
+  }
 }
 
 void Application::UpdateStats(double frame_seconds) {

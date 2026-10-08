@@ -35,6 +35,8 @@ add_library(wlw STATIC
   wlw/app/application.cpp
   wlw/app/application.h
   wlw/app/entry_point.h
+  wlw/app/screen.cpp
+  wlw/app/screen.h
 
   wlw/core/collision.h
   wlw/core/color.h

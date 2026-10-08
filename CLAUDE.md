@@ -16,7 +16,8 @@ engine/wlw/
   fx/         ParticleSystem: CPU simulation (fixed capacity, swap-remove, bursts) -> instances
   debug/      DebugUI: Dear ImGui (third_party/imgui) fed from Input, drawn via Window::SetOverlay; games add
               panels in Application::OnDebugUI() (#if WLW_DEBUG_UI). F1 / "Debug" button. Off in release builds
-  app/        Application (game loop: OnStart/OnFixedUpdate/OnUpdate/OnRender), entry_point.h (WLW_MAIN)
+  app/        Application (game loop: OnStart/OnFixedUpdate/OnUpdate/OnRender), entry_point.h (WLW_MAIN),
+              Screen + ScreenStack (game states: deferred push/pop/replace, overlays, fades, Back routing)
   core/       math types, FixedTimestep, log.h (WLW_LOG_*), logger.h (FAIL_IF), mesh/model, collision.h (AABB, Ray, Plane, IntersectPlane)
   input/      Input: keys (pressed vs held), pointer (mouse/first finger), swipes, taps
   platform/   THE ONLY PER-OS CODE: platform.h interface + glfw/glfw_platform.cpp (desktop)
@@ -26,7 +27,7 @@ engine/wlw/
               cameras (FollowCamera = perspective, OrthographicCamera = parallel/top-down;
               Camera3D::ScreenPointToRay for picking, fed with Input::SurfaceSize())
   ui/         2D UI layer: Font (TTF -> SDF atlas, stb_truetype), Canvas (virtual units, safe area, text,
-              rounded rects, batched quads), UIRenderer (GL). Games draw in Application::OnRenderUI()
+              rounded rects, batched quads), UIRenderer (GL). Canvas::Button = immediate-mode button. Games draw in Application::OnRenderUI()
   utils/      image/glTF loaders, texture cache, primitives.h (procedural cube, bevelled cube, sphere, gem meshes)
 samples/      small games, built only when the engine is the top-level project (desktop):
               snake/ (Snake + its rules tests)

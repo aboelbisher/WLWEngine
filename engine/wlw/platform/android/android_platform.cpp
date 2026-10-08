@@ -67,6 +67,7 @@ input::Key MapKey(int32_t keycode) {
     case AKEYCODE_I: return input::Key::I;
     case AKEYCODE_P: return input::Key::P;
     case AKEYCODE_F1: return input::Key::F1;
+    case AKEYCODE_BACK: return input::Key::Back;  // handled by the game (Application), not Android
     default: return input::Key::Unknown;
   }
 }
@@ -122,6 +123,12 @@ class AndroidWindow : public scene::Window {
   void RequestClose() override { close_requested_ = true; }
   void SetTitle(const std::string&) override {}  // no title bar on Android
 
+  bool ConsumePaused() override {
+    const bool paused = paused_event_;
+    paused_event_ = false;
+    return paused;
+  }
+
   bool ConsumeResumed() override {
     const bool resumed = was_suspended_;
     was_suspended_ = false;
@@ -139,6 +146,7 @@ class AndroidWindow : public scene::Window {
         break;
       case APP_CMD_PAUSE:
         resumed_ = false;
+        paused_event_ = true;  // the game should pause itself (phone call, app switch...)
         break;
       case APP_CMD_RESUME:
         resumed_ = true;
@@ -169,7 +177,6 @@ class AndroidWindow : public scene::Window {
     }
     if (type == AINPUT_EVENT_TYPE_KEY) {
       const int32_t keycode = AKeyEvent_getKeyCode(event);
-      if (keycode == AKEYCODE_BACK) return 0;  // not handled: Android's default closes the app
       const input::Key key = MapKey(keycode);
       if (key == input::Key::Unknown) return 0;
       const int32_t action = AKeyEvent_getAction(event);
@@ -258,6 +265,7 @@ class AndroidWindow : public scene::Window {
   EGLContext context_ = EGL_NO_CONTEXT;
   EGLSurface surface_ = EGL_NO_SURFACE;
   bool resumed_ = true;  // the activity is starting; APP_CMD_PAUSE flips this
+  bool paused_event_ = false;  // APP_CMD_PAUSE seen, not yet reported to the game
   bool was_suspended_ = false;
   bool close_requested_ = false;
 };
@@ -390,6 +398,27 @@ SafeAreaInsets GetSafeAreaInsets() {
     }
   }
   return g_insets;
+}
+
+bool MoveToBackground() {
+  // activity.moveTaskToBack(true): the same as pressing Home; the app keeps running in the
+  // background and comes back exactly where it was.
+  if (!g_app) return false;
+  JavaVM* vm = g_app->activity->vm;
+  JNIEnv* env = nullptr;
+  bool attached_here = false;
+  if (vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) == JNI_EDETACHED) {
+    if (vm->AttachCurrentThread(&env, nullptr) != JNI_OK) return false;
+    attached_here = true;
+  }
+  jobject activity = g_app->activity->clazz;
+  jclass activity_class = env->GetObjectClass(activity);
+  jmethodID move = env->GetMethodID(activity_class, "moveTaskToBack", "(Z)Z");
+  const bool moved = move && env->CallBooleanMethod(activity, move, JNI_TRUE);
+  if (env->ExceptionCheck()) env->ExceptionClear();
+  env->DeleteLocalRef(activity_class);
+  if (attached_here) vm->DetachCurrentThread();
+  return moved;
 }
 
 void WriteLog(LogLevel level, const char* message) {

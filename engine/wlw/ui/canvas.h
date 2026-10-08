@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <string_view>
 #include <vector>
 
@@ -18,6 +19,23 @@ struct Rect {
   glm::vec2 max{0.0f};
   glm::vec2 Center() const { return (min + max) * 0.5f; }
   glm::vec2 Size() const { return max - min; }
+};
+
+// How a ui::Canvas::Button looks.
+struct ButtonStyle {
+  core::Color fill{0.98f, 0.76f, 0.25f, 1.0f};
+  core::Color text{0.10f, 0.08f, 0.16f, 1.0f};
+  float text_size = 0.0f;  // 0 = 45% of the button height
+  float corner_radius = 14.0f;
+  core::Color shadow{0.0f, 0.0f, 0.0f, 0.35f};  // a darker slab under the button; alpha 0 = none
+};
+
+// The pointer as UI widgets see it this frame, in Canvas units (Application fills it in).
+struct PointerState {
+  glm::vec2 position{0.0f};
+  bool down = false;      // held
+  bool pressed = false;   // went down this frame
+  bool released = false;  // went up this frame
 };
 
 // How text looks. Outline and shadow come from the same SDF atlas (see Font).
@@ -67,6 +85,19 @@ class Canvas {
   void Text(const Font& font, std::string_view text, glm::vec2 position, float size, Align align = Align::Left,
             const TextStyle& style = {});
 
+  // ---- Widgets ----
+  // An immediate-mode button: call it every frame you want it shown; it returns true on the
+  // frame it was clicked (pressed on it and released on it - sliding off cancels). It shrinks
+  // a little while held. Only responds while the canvas is interactive (see SetInteractive).
+  bool Button(const Font& font, std::string_view label, const Rect& rect, const ButtonStyle& style = {});
+
+  void SetPointer(const PointerState& pointer) { pointer_ = pointer; }
+  const PointerState& Pointer() const { return pointer_; }
+  // ScreenStack turns this off while drawing screens that aren't on top: their buttons are
+  // visible but can't be clicked.
+  void SetInteractive(bool interactive) { interactive_ = interactive; }
+  bool Interactive() const { return interactive_; }
+
   const std::vector<UIVertex>& Vertices() const { return vertices_; }  // 4 per quad
   const std::vector<UIBatch>& Batches() const { return batches_; }
   size_t QuadCount() const { return vertices_.size() / 4; }
@@ -83,6 +114,9 @@ class Canvas {
   std::vector<UIVertex> vertices_;
   std::vector<UIBatch> batches_;
   std::vector<GlyphQuad> glyph_scratch_;  // reused: no allocation per Text() call
+  PointerState pointer_;
+  bool interactive_ = true;
+  uint64_t active_button_ = 0;  // the button the pointer went down on (0 = none); kept across frames
 };
 
 }  // namespace wlw::ui

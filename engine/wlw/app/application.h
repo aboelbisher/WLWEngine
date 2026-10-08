@@ -7,6 +7,7 @@
 #include "wlw/core/vector2.h"
 #include "wlw/input/input.h"
 #include "wlw/scene/window.h"
+#include "wlw/app/screen.h"
 #include "wlw/wlw.h"
 
 namespace wlw {
@@ -30,14 +31,17 @@ struct AppConfig {
 };
 
 // Base class for a game. It owns the engine, the window and the main loop; a game overrides
-// the On*() hooks. One frame of Run() looks like this:
+// the On*() hooks and/or pushes Screens (game states). One frame of Run() looks like this
+// (each hook is followed by the same call on the screens: top only for updates, all visible
+// screens for drawing):
 //
-//   measure frame time
+//   measure frame time; Back -> screens, OnBack(), else leave
 //   OnFixedUpdate(step)  x N   <- game logic / physics, always with the same dt
-//   OnUpdate(frame_time)       <- per-frame work: input, camera, UI
+//   OnUpdate(frame_time)       <- per-frame work: input, camera
 //   OnRender(alpha)            <- push the latest state to the scene, interpolated by alpha
+//   OnRenderUI(canvas)         <- 2D UI over the scene
 //   OnDebugUI()                <- debug panels (WLW_DEBUG_UI builds, while the debug UI is open)
-//   draw + present, then poll input for the next frame
+//   draw + present, then poll input for the next frame; apply screen changes
 class Application {
  public:
   explicit Application(AppConfig config = {});
@@ -64,6 +68,11 @@ class Application {
   virtual void OnRenderUI(ui::Canvas& canvas) {}
   // Called once after the loop ends, while the engine is still alive.
   virtual void OnShutdown() {}
+  // Back (Android) / Escape (desktop) that no screen handled. Return true if handled; otherwise
+  // the app goes to the background on Android and quits on desktop.
+  virtual bool OnBack() { return false; }
+  // The app went to the background (mobile). Screens get Screen::OnAppPaused too.
+  virtual void OnAppPaused() {}
   // Build debug panels here with the Dear ImGui API (ImGui::Begin, SliderFloat, Button...).
   // Called once per frame after OnRender while the debug UI is open (F1 or its "Debug" button).
   // Only called in builds with WLW_DEBUG_UI=1: wrap overrides in `#if WLW_DEBUG_UI`.
@@ -72,6 +81,9 @@ class Application {
   WLWEngine& Engine() { return *engine_; }
   input::Input& Input() { return window_->GetInput(); }  // keys, pointer/touch, swipes, taps
   scene::Window& Window() { return *window_; }
+  // Game states (menu, play, pause...): push Screens here; the engine updates the top one and
+  // draws the visible ones, after the Application's own On* hooks. Optional.
+  app::ScreenStack& Screens() { return screens_; }
   const std::shared_ptr<scene::Window>& WindowPtr() const { return window_; }
   const AppConfig& Config() const { return config_; }
 
@@ -81,6 +93,7 @@ class Application {
 
  private:
   void UpdateStats(double frame_seconds);
+  void BuildUI();  // the 2D UI for this frame: canvas setup, OnRenderUI, screens, fades
 
   AppConfig config_;
   // Destroyed in reverse order: the window handle first, the engine (GL + platform shutdown) last.
@@ -89,6 +102,7 @@ class Application {
   std::unique_ptr<ui::Canvas> canvas_;
   std::unique_ptr<ui::UIRenderer> ui_renderer_;  // GL objects: destroyed before the window/engine
   int ui_overlay_id_ = -1;
+  app::ScreenStack screens_;  // emptied at the end of Run(), while the game's members still exist
 #if WLW_DEBUG_UI
   void DrawEngineDebugWindow();  // always shown while the debug UI is open: stats, ImGui demo
   std::unique_ptr<debug::DebugUI> debug_ui_;  // destroyed before the window and the engine

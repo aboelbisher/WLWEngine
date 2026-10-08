@@ -38,6 +38,9 @@ public:
 	// Returns true once after the app comes back from the background (mobile), so the game
 	// loop can restart its clock instead of seeing one huge frame.
 	virtual bool ConsumeResumed() { return false; }
+	// Returns true once after the app was sent to the background (mobile: call, app switch,
+	// screen off), so the game can pause itself.
+	virtual bool ConsumePaused() { return false; }
 
 	input::Input& GetInput() { return input_; }
 	const input::Input& GetInput() const { return input_; }

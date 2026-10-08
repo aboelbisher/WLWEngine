@@ -46,6 +46,11 @@ struct SafeAreaInsets {
 };
 SafeAreaInsets GetSafeAreaInsets();
 
+// What Back does when the game has nothing left to close: Android sends the app to the
+// background (like the home screen does; the game keeps its state). Returns false where that
+// doesn't exist (desktop), and the caller quits instead.
+bool MoveToBackground();
+
 void WriteLog(LogLevel level, const char* message);
 
 }  // namespace wlw::platform
