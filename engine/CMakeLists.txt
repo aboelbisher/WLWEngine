@@ -29,6 +29,9 @@ add_library(wlw STATIC
   wlw/wlw.h
   wlw/wlw.cpp
 
+  wlw/anim/ease.h
+  wlw/anim/tween.h
+
   wlw/app/application.cpp
   wlw/app/application.h
   wlw/app/entry_point.h

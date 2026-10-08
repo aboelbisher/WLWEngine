@@ -1,5 +1,7 @@
 #pragma once
 
+#include <algorithm>
+#include <cmath>
 #include <vector>
 #include "wlw/core/mesh.h"
 #include "wlw/core/vertex_3d.h"
@@ -206,6 +208,90 @@ inline std::shared_ptr<core::Mesh<core::Vertex3D>> createCubeWithNormals(float s
   return mesh_;
 }
 
+
+// A cube with chamfered (bevelled) edges: 6 faces shrunk inwards by `bevel`, 12 slanted strips
+// along the edges and 8 small triangles at the corners. Every facet has its own flat normal, so
+// the edges catch the light differently from the faces - that's what makes it read as a solid,
+// "physical" block instead of a flat-shaded box. `bevel` is clamped to [0, size / 2).
+inline std::shared_ptr<core::Mesh<core::Vertex3D>> createBeveledCubeWithNormals(
+    float size = 1.0f, float bevel = 0.1f, const core::Color& color = {1.0f, 1.0f, 1.0f, 1.0f}) {
+  const float h = size / 2.0f;                              // half size: the outer surface
+  const float in = h - std::clamp(bevel, 0.0f, h * 0.99f);  // where the flat faces end
+  std::vector<core::Vertex3D> vertices;
+
+  // Adds a flat convex polygon facing `normal`. Points may come in any order: they're sorted
+  // counter-clockwise around the normal (seen from outside), which is the front-face winding.
+  auto add_polygon = [&](std::vector<glm::vec3> points, const glm::vec3& normal) {
+    glm::vec3 center(0.0f);
+    for (const glm::vec3& p : points) center += p;
+    center /= static_cast<float>(points.size());
+    const glm::vec3 u = glm::normalize(points[0] - center);
+    const glm::vec3 v = glm::cross(normal, u);
+    std::sort(points.begin(), points.end(), [&](const glm::vec3& a, const glm::vec3& b) {
+      return std::atan2(glm::dot(a - center, v), glm::dot(a - center, u)) <
+             std::atan2(glm::dot(b - center, v), glm::dot(b - center, u));
+    });
+    const core::Vector3 n{normal.x, normal.y, normal.z};
+    for (size_t i = 1; i + 1 < points.size(); ++i) {  // triangle fan
+      for (const glm::vec3& p : {points[0], points[i], points[i + 1]}) {
+        vertices.push_back({{p.x, p.y, p.z}, color, n, {0.0f, 0.0f}});
+      }
+    }
+  };
+  // The point with value v0 on axis a0, v1 on a1 and v2 on a2.
+  auto point = [](int a0, float v0, int a1, float v1, int a2, float v2) {
+    glm::vec3 p(0.0f);
+    p[a0] = v0;
+    p[a1] = v1;
+    p[a2] = v2;
+    return p;
+  };
+  const float signs[] = {-1.0f, 1.0f};
+
+  // 6 faces: on axis `a` at +-h, spanning +-in on the other two axes.
+  for (int a = 0; a < 3; ++a) {
+    const int b = (a + 1) % 3, c = (a + 2) % 3;
+    for (float s : signs) {
+      glm::vec3 normal(0.0f);
+      normal[a] = s;
+      add_polygon({point(a, s * h, b, -in, c, -in), point(a, s * h, b, in, c, -in),
+                   point(a, s * h, b, in, c, in), point(a, s * h, b, -in, c, in)},
+                  normal);
+    }
+  }
+  // 12 edge strips: between the face on axis `a` (sign sa) and the face on axis `b` (sign sb),
+  // running along the third axis `c`.
+  for (int a = 0; a < 3; ++a) {
+    const int b = (a + 1) % 3, c = (a + 2) % 3;
+    for (float sa : signs) {
+      for (float sb : signs) {
+        glm::vec3 normal(0.0f);
+        normal[a] = sa;
+        normal[b] = sb;
+        add_polygon({point(a, sa * h, b, sb * in, c, -in), point(a, sa * h, b, sb * in, c, in),
+                     point(a, sa * in, b, sb * h, c, -in), point(a, sa * in, b, sb * h, c, in)},
+                    glm::normalize(normal));
+      }
+    }
+  }
+  // 8 corner triangles.
+  for (float sx : signs) {
+    for (float sy : signs) {
+      for (float sz : signs) {
+        add_polygon({{sx * h, sy * in, sz * in}, {sx * in, sy * h, sz * in}, {sx * in, sy * in, sz * h}},
+                    glm::normalize(glm::vec3(sx, sy, sz)));
+      }
+    }
+  }
+
+  std::vector<uint32_t> indices(vertices.size());
+  for (size_t i = 0; i < vertices.size(); ++i) indices[i] = static_cast<uint32_t>(i);
+
+  auto mesh = std::make_shared<core::Mesh<core::Vertex3D>>();
+  mesh->SetVertices(vertices);
+  mesh->SetIndices(indices);
+  return mesh;
+}
 
 inline std::shared_ptr<core::Mesh<core::Vertex3D>> createSphereWithNormals(
   float radius = 1.0f,
