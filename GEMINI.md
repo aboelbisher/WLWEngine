@@ -22,7 +22,8 @@ consume the engine as a git submodule (`add_subdirectory` + `target_link_librari
 
 ## Project Structure
 - `engine/` - the library. `third_party/` - glad, stb, tinygltf (vendored).
-- No sample games live here; [WLWSnake](https://github.com/aboelbisher/WLWSnake) is the reference game that consumes the engine.
+- `samples/` - small sample games (Snake), built only when the engine is the top-level project.
+  [Bluzzle](https://github.com/aboelbisher/Bluzzle) is the current game that consumes the engine.
 - `cmake/WLWHelpers.cmake` - `wlw_add_game()` (exe on desktop, .so on Android), `wlw_add_assets()`.
 - `vcpkg/` (submodule) + `vcpkg.json` - glm, glfw3.
 

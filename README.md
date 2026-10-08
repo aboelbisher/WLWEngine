@@ -9,6 +9,7 @@ It's a plain CMake library with no IDE-specific project files, so Visual Studio,
 |---|---|
 | `engine/wlw/` | Engine source. Include as `#include "wlw/scene/window.h"` |
 | `engine/wlw/platform/` | The only per-OS code: `glfw/` (desktop), `android/` (NativeActivity + EGL). Everything else is shared |
+| `samples/` | Small sample games (Snake) built when the engine is the top-level project |
 | `third_party/` | Vendored glad (GL loader), stb, tinygltf |
 | `cmake/WLWHelpers.cmake` | `wlw_add_assets()`, `wlw_set_warnings()` for game targets |
 | `vcpkg/` + `vcpkg.json` | Dependency manager (git submodule, pinned) + manifest (glm, glfw3) |
@@ -26,7 +27,7 @@ vcpkg is bootstrapped automatically on the first configure. Dependencies install
 
 ## Building
 
-**Visual Studio 2026**: *File → Open → Folder…* on the repo root. Pick the `Windows Debug` preset in the toolbar and build. The engine is a library only; to run something, open a game that uses it, like [WLWSnake](https://github.com/aboelbisher/WLWSnake).
+**Visual Studio 2026**: *File → Open → Folder…* on the repo root. Pick the `Windows Debug` preset in the toolbar and build. This also builds the sample games in `samples/`; run `build/windows-debug/samples/snake/wlw_snake.exe`. Samples are skipped when the engine is used as a submodule.
 
 **Xcode**
 ```sh
@@ -52,7 +53,7 @@ without a `#version` line and get the right one prepended at compile time.
 
 ## Using the engine in a game
 
-Games live in their own repos and add the engine as a submodule. [WLWSnake](https://github.com/aboelbisher/WLWSnake) is the reference game:
+Games live in their own repos and add the engine as a submodule. [Bluzzle](https://github.com/aboelbisher/Bluzzle) is the current one:
 
 ```cmake
 add_subdirectory(external/WLWengine)

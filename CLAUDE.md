@@ -2,9 +2,10 @@
 
 C++20 / OpenGL game engine, built as a CMake static library (`wlw::wlw`). Targets Windows,
 macOS, Linux and Android today; iOS is planned. Games live in **separate repos** and include
-this repo as a git submodule. The reference game is WLWSnake
-(github.com/aboelbisher/WLWSnake). Its `CLAUDE.md` holds the overall project context, the
+this repo as a git submodule. The current game is Bluzzle
+(github.com/aboelbisher/Bluzzle). Its `CLAUDE.md` holds the overall project context, the
 roadmap and the owner's working preferences: read it too when working from there.
+`samples/snake/` is the first game (Snake), kept here as a sample and engine smoke test.
 
 Remote: `git@github.com:aboelbisher/WLWEngine.git`, branch `main`.
 
@@ -20,6 +21,8 @@ engine/wlw/
   scene/      Node (scene graph, local transforms, visibility), Window (surface + scene + input),
               cameras (FollowCamera = perspective, OrthographicCamera = parallel/top-down)
   utils/      image/glTF loaders, texture cache, primitives.h (procedural cube/sphere/gem meshes)
+samples/      small games, built only when the engine is the top-level project (desktop):
+              snake/ (Snake + its rules tests)
 third_party/  glad (desktop only), stb, tinygltf + nlohmann json (vendored)
 cmake/WLWHelpers.cmake  wlw_add_game(), wlw_add_assets(), wlw_set_warnings()
 vcpkg/ + vcpkg.json     desktop deps (glm, glfw3). Android fetches glm via FetchContent instead.
@@ -50,8 +53,12 @@ Windows (from a "Developer PowerShell for VS"):
 ```
 cmake --preset windows-debug
 cmake --build --preset windows-debug
+.\build\windows-debug\samples\snake\wlw_snake.exe
+ctest --test-dir build\windows-debug --output-on-failure
 ```
-The engine has no executable of its own. Build and run WLWSnake to test changes.
+Samples build only when the engine is the top-level project (`WLW_BUILD_SAMPLES`), so a game
+that uses the engine as a submodule doesn't compile them. Snake is a quick check that engine
+changes didn't break anything; keep it building when the engine API changes.
 
 ## Known gaps / tech debt
 - The glTF loader still reads files with `fopen`, so glTF models don't load from APK assets yet.
