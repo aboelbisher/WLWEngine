@@ -60,6 +60,12 @@ void SnakeApp::OnStart() {
   food_node_->SetMaterial(material_);
   Window().AddNode(food_node_);
 
+  particle_node_ = std::make_shared<scene::Node3D>();
+  particle_node_->SetModel(MakeModel(utils::createCubeWithNormals(1.0f)));  // white: tinted per particle
+  particle_node_->SetMaterial(material_);
+  particle_node_->SetInstances({});
+  Window().AddNode(particle_node_);
+
   SetupCameras();
 
   Restart();
@@ -105,6 +111,20 @@ void SnakeApp::BuildBoard() {
   }
 }
 
+void SnakeApp::EatBurst() {
+  // The head is where the food was (the game has already spawned new food).
+  const Cell head = game_.Body().front();
+  wlw::fx::BurstSettings burst;
+  burst.count_min = 14;
+  burst.count_max = 20;
+  burst.spread_degrees = 70.0f;
+  burst.speed_min = 3.0f;
+  burst.speed_max = 6.0f;
+  burst.size_start = 0.22f;
+  burst.color = {0.95f, 0.85f, 0.3f, 1.0f};
+  particles_.Burst(burst, {static_cast<float>(head.x), 0.6f, static_cast<float>(head.z)});
+}
+
 void SnakeApp::Restart() {
   game_.Reset(RandomSeed());
   move_timer_ = 0.0f;
@@ -123,6 +143,7 @@ void SnakeApp::OnFixedUpdate(float dt) {
     switch (game_.Step()) {
       case SnakeGame::StepResult::Ate:
         WLW_LOG_INFO("Yum! Score %d", game_.Score());
+        EatBurst();
         UpdateTitle();
         break;
       case SnakeGame::StepResult::Died:
@@ -143,6 +164,7 @@ void SnakeApp::OnUpdate(float dt) {
   ReadInput();
   FitPerspectiveCameraToScreen();  // the orthographic camera fits itself (SetVisibleArea)
   food_spin_ += 120.0f * dt;  // degrees per second: purely visual, so per-frame dt is fine
+  particles_.Update(dt);
 }
 
 void SnakeApp::ReadInput() {
@@ -213,6 +235,9 @@ void SnakeApp::OnRender(float alpha) {
   const float bob = 0.1f * std::sin(glm::radians(food_spin_ * 2.0f));
   food_node_->SetPosition({(float)food.x, 0.55f + bob, (float)food.z});
   food_node_->SetRotation({0.0f, food_spin_, 0.0f});
+
+  particles_.BuildInstances(particle_instances_);
+  particle_node_->SetInstances(particle_instances_);
 }
 
 void SnakeApp::SyncSnakeNodes(float t) {

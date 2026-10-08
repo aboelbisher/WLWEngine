@@ -1,15 +1,18 @@
 #pragma once
 
 #include <array>
+#include <cstdint>
 #include <limits>
 #include <memory>
 #include <unordered_map>
+#include <vector>
 
 #include "wlw/core/collision.h"
 #include "wlw/core/logger.h"
 #include "wlw/core/model.h"
 #include "wlw/core/vertex_2d.h"
 #include "wlw/core/vertex_3d.h"
+#include "wlw/rendering/instance_buffer.h"
 #include "wlw/rendering/material.h"
 
 #include <glm/gtc/matrix_transform.hpp>
@@ -68,6 +71,28 @@ public:
 
 	const glm::mat4& GetLocalMatrix() const { return local_matrix_; }
 
+	// ---- Instancing ----
+	// Draws the node's model once per instance, all in ONE draw call (GPU instancing), each copy
+	// with its own transform (relative to the node) and colour tint. For many copies of the same
+	// mesh - particles, crowds, tiles. Calling it switches the node to instanced drawing (an empty
+	// list draws nothing); ClearInstances() switches back to drawing the model once.
+	void SetInstances(std::vector<rendering::InstanceData> instances) {
+		instances_ = std::move(instances);
+		instanced_ = true;
+		++instances_version_;
+	}
+	void ClearInstances() {
+		instances_.clear();
+		instanced_ = false;
+		++instances_version_;
+	}
+	bool IsInstanced() const { return instanced_; }
+	const std::vector<rendering::InstanceData>& GetInstances() const { return instances_; }
+	// For the renderer: bumped by every change, so it re-uploads only when something changed.
+	uint64_t GetInstancesVersion() const { return instances_version_; }
+	rendering::WInstanceBuffer* GetInstanceBuffer() const { return instance_buffer_.get(); }
+	void SetInstanceBuffer(std::unique_ptr<rendering::WInstanceBuffer> buffer) { instance_buffer_ = std::move(buffer); }
+
 	// ---- Visibility ----
 	// Hidden nodes (and everything under them) are skipped by the renderer but stay in the scene.
 	// Hiding is how you reuse objects cheaply: keep a pool of nodes and show/hide them instead of
@@ -91,29 +116,37 @@ public:
 		return {world[3].x, world[3].y, world[3].z};
 	}
 
-	// World-space bounding box of this node's model (children not included).
+	// World-space bounding box of this node's model (children not included). For an instanced node,
+	// the box around all its instances.
 	scene::AABB GetAABB() const {
 		const glm::mat4 world = GetModelMatrix();
-		if (!model_ || model_->meshes.empty()) {
+		if (!model_ || model_->meshes.empty() || (instanced_ && instances_.empty())) {
 			return scene::AABB::FromPositionAndSize({world[3].x, world[3].y, world[3].z}, 0.1f);
 		}
 
 		glm::vec3 min_bound(std::numeric_limits<float>::max());
 		glm::vec3 max_bound(std::numeric_limits<float>::lowest());
 
-		for (const auto& mesh : model_->meshes) {
-			const auto& local = mesh->GetLocalAABB();
-			const std::array<glm::vec3, 8> corners = {
-				glm::vec3{local.min.x, local.min.y, local.min.z}, glm::vec3{local.min.x, local.min.y, local.max.z},
-				glm::vec3{local.min.x, local.max.y, local.min.z}, glm::vec3{local.min.x, local.max.y, local.max.z},
-				glm::vec3{local.max.x, local.min.y, local.min.z}, glm::vec3{local.max.x, local.min.y, local.max.z},
-				glm::vec3{local.max.x, local.max.y, local.min.z}, glm::vec3{local.max.x, local.max.y, local.max.z}};
+		auto add_corners = [&](const glm::mat4& to_world) {
+			for (const auto& mesh : model_->meshes) {
+				const auto& local = mesh->GetLocalAABB();
+				const std::array<glm::vec3, 8> corners = {
+					glm::vec3{local.min.x, local.min.y, local.min.z}, glm::vec3{local.min.x, local.min.y, local.max.z},
+					glm::vec3{local.min.x, local.max.y, local.min.z}, glm::vec3{local.min.x, local.max.y, local.max.z},
+					glm::vec3{local.max.x, local.min.y, local.min.z}, glm::vec3{local.max.x, local.min.y, local.max.z},
+					glm::vec3{local.max.x, local.max.y, local.min.z}, glm::vec3{local.max.x, local.max.y, local.max.z}};
 
-			for (const auto& corner : corners) {
-				const glm::vec3 p = glm::vec3(world * glm::vec4(corner, 1.0f));
-				min_bound = glm::min(min_bound, p);
-				max_bound = glm::max(max_bound, p);
+				for (const auto& corner : corners) {
+					const glm::vec3 p = glm::vec3(to_world * glm::vec4(corner, 1.0f));
+					min_bound = glm::min(min_bound, p);
+					max_bound = glm::max(max_bound, p);
+				}
 			}
+		};
+		if (instanced_) {
+			for (const auto& instance : instances_) add_corners(world * instance.transform);
+		} else {
+			add_corners(world);
 		}
 		return {{min_bound.x, min_bound.y, min_bound.z}, {max_bound.x, max_bound.y, max_bound.z}};
 	}
@@ -161,6 +194,11 @@ private:
 
 	std::shared_ptr<core::Model<T>> model_;
 	std::shared_ptr<rendering::Material> material_;
+
+	bool instanced_ = false;
+	std::vector<rendering::InstanceData> instances_;
+	uint64_t instances_version_ = 0;
+	std::unique_ptr<rendering::WInstanceBuffer> instance_buffer_;
 
 	core::Vector3 position_ = {0, 0, 0};
 	core::Vector3 scale_ = {1, 1, 1};

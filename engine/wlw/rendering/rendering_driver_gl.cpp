@@ -12,6 +12,7 @@
 #include "rendering_driver.h"
 #include "wlw/rendering/render_device.h"
 #include "wlw/rendering/gl_index_buffer.h"
+#include "wlw/rendering/gl_instance_buffer.h"
 #include "wlw/rendering/gl_vertex_buffer.h"
 
 namespace wlw::rendering {
@@ -40,6 +41,7 @@ public:
         GLint lightOuterCutOff;
         GLint use_texture;
         GLint model_texture;
+        GLint instanced;
         
         GLint skyboxView;
         GLint skyboxProj;
@@ -107,6 +109,7 @@ public:
     m_Uniforms.lightOuterCutOff = glGetUniformLocation(m_ShaderID_3D, "lightOuterCutOff");
     m_Uniforms.use_texture = glGetUniformLocation(m_ShaderID_3D, "use_texture");
     m_Uniforms.model_texture = glGetUniformLocation(m_ShaderID_3D, "model_texture");
+    m_Uniforms.instanced = glGetUniformLocation(m_ShaderID_3D, "instanced");
 
     m_Uniforms.skyboxView = glGetUniformLocation(m_ShaderID_Skybox, "view");
     m_Uniforms.skyboxProj = glGetUniformLocation(m_ShaderID_Skybox, "projection");
@@ -199,13 +202,19 @@ public:
 
     scene::Frustum frustum = scene::Frustum::FromMatrix(proj * view);
 
-    window->IterateOver3DNodes([this, &frustum](const std::shared_ptr<scene::Node3D>& node) {
+    scene::Window::RenderStats stats;
+    window->IterateOver3DNodes([this, &frustum, &stats](const std::shared_ptr<scene::Node3D>& node) {
 
       if (!node->IsVisibleInHierarchy()) {
           return;
       }
+      const bool instanced = node->IsInstanced();
+      if (instanced && node->GetInstances().empty()) {
+          return;  // instanced with zero copies: nothing to draw
+      }
 
       if (!frustum.TestAABB(node->GetAABB())) {
+          ++stats.culled_nodes;
           return;
       }
 
@@ -216,6 +225,16 @@ public:
       }
 
       glUniformMatrix4fv(m_Uniforms.model, 1, GL_FALSE, glm::value_ptr(node->GetModelMatrix()));
+
+      // Instanced: one draw call per mesh for all copies. The per-instance data goes to the GPU
+      // only when it changed (GLInstanceBuffer::Upload compares versions).
+      GLInstanceBuffer* instance_buffer = nullptr;
+      if (instanced) {
+        if (!node->GetInstanceBuffer()) node->SetInstanceBuffer(std::make_unique<GLInstanceBuffer>());
+        instance_buffer = static_cast<GLInstanceBuffer*>(node->GetInstanceBuffer());
+        instance_buffer->Upload(node->GetInstances(), node->GetInstancesVersion());
+      }
+      glUniform1i(m_Uniforms.instanced, instanced);
 
       for (const auto& mesh : model->meshes) {
         auto node_mat = node->GetMaterial();
@@ -247,12 +266,24 @@ public:
         vertex_buffer->Bind();
         index_buffer->Bind();
 
-        DrawIndexed(static_cast<uint32_t>(mesh->GetIndices().size()));
+        const auto index_count = static_cast<GLsizei>(mesh->GetIndices().size());
+        if (instanced) {
+          const auto count = static_cast<GLsizei>(node->GetInstances().size());
+          instance_buffer->Attach();
+          glDrawElementsInstanced(GL_TRIANGLES, index_count, GL_UNSIGNED_INT, nullptr, count);
+          GLInstanceBuffer::Detach();
+          stats.instances += count;
+        } else {
+          DrawIndexed(static_cast<uint32_t>(index_count));
+        }
+        ++stats.draw_calls;
 
         vertex_buffer->Unbind();
         index_buffer->Unbind();
       }
     });
+    glUniform1i(m_Uniforms.instanced, 0);
+    window->SetRenderStats(stats);
 
     window->DrawOverlay();  // debug UI etc., on top of the scene
 

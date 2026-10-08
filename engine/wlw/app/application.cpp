@@ -107,6 +107,8 @@ void Application::DrawEngineDebugWindow() {
   ImGui::SetNextWindowPos(ImVec2(8.0f, 8.0f), ImGuiCond_FirstUseEver);
   ImGui::Begin("Engine");
   ImGui::Text("%.0f fps, %.2f ms", fps_, frame_ms_);
+  const scene::Window::RenderStats& stats = window_->GetRenderStats();
+  ImGui::Text("%d draw calls, %d instances, %d culled", stats.draw_calls, stats.instances, stats.culled_nodes);
   const core::Vector2 framebuffer = window_->GetSize();
   const core::Vector2 surface = window_->GetInput().SurfaceSize();
   ImGui::Text("Framebuffer %.0f x %.0f px", framebuffer.x, framebuffer.y);

@@ -13,6 +13,7 @@ Remote: `git@github.com:aboelbisher/WLWEngine.git`, branch `main`.
 ```
 engine/wlw/
   anim/       ease.h (Penner easing curves), tween.h (Tween<T>: value-type tweens the game owns and samples)
+  fx/         ParticleSystem: CPU simulation (fixed capacity, swap-remove, bursts) -> instances
   debug/      DebugUI: Dear ImGui (third_party/imgui) fed from Input, drawn via Window::SetOverlay; games add
               panels in Application::OnDebugUI() (#if WLW_DEBUG_UI). F1 / "Debug" button. Off in release builds
   app/        Application (game loop: OnStart/OnFixedUpdate/OnUpdate/OnRender), entry_point.h (WLW_MAIN)
@@ -21,13 +22,13 @@ engine/wlw/
   platform/   THE ONLY PER-OS CODE: platform.h interface + glfw/glfw_platform.cpp (desktop)
               + android/android_platform.cpp (NativeActivity + EGL). iOS goes here later.
   rendering/  RenderingDriver/RenderDevice interfaces + one GL backend for GL 3.3 core AND GLES 3.0
-  scene/      Node (scene graph, local transforms, visibility), Window (surface + scene + input),
+  scene/      Node (scene graph, local transforms, visibility, instancing: SetInstances = one draw call for N copies), Window (surface + scene + input),
               cameras (FollowCamera = perspective, OrthographicCamera = parallel/top-down;
               Camera3D::ScreenPointToRay for picking, fed with Input::SurfaceSize())
   utils/      image/glTF loaders, texture cache, primitives.h (procedural cube, bevelled cube, sphere, gem meshes)
 samples/      small games, built only when the engine is the top-level project (desktop):
               snake/ (Snake + its rules tests)
-tests/        engine unit tests (no window/GPU: anim, input, picking, primitives), also top-level only; ctest
+tests/        engine unit tests (no window/GPU: anim, fx, input, picking, primitives), also top-level only; ctest
 third_party/  glad (desktop only), stb, tinygltf + nlohmann json, Dear ImGui 1.92.9b (vendored)
 cmake/WLWHelpers.cmake  wlw_add_game(), wlw_add_assets(), wlw_set_warnings()
 vcpkg/ + vcpkg.json     desktop deps (glm, glfw3). Android fetches glm via FetchContent instead.

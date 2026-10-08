@@ -49,6 +49,9 @@ add_library(wlw STATIC
   wlw/core/vertex_2d.h
   wlw/core/vertex_3d.h
 
+  wlw/fx/particle_system.cpp
+  wlw/fx/particle_system.h
+
   wlw/input/input.cpp
   wlw/input/input.h
 
@@ -56,8 +59,10 @@ add_library(wlw STATIC
 
   wlw/rendering/gl.h
   wlw/rendering/gl_index_buffer.h
+  wlw/rendering/gl_instance_buffer.h
   wlw/rendering/gl_vertex_buffer.h
   wlw/rendering/index_buffer.h
+  wlw/rendering/instance_buffer.h
   wlw/rendering/material.h
   wlw/rendering/material_gl.cpp
   wlw/rendering/render_device.h

@@ -139,6 +139,15 @@ public:
 		}
 	}
 
+	// What the renderer did for the last frame of this window (shown in the debug UI).
+	struct RenderStats {
+		int draw_calls = 0;      // one per mesh drawn; an instanced node is one call for all its copies
+		int instances = 0;       // copies drawn by instanced calls
+		int culled_nodes = 0;    // skipped by frustum culling
+	};
+	const RenderStats& GetRenderStats() const { return render_stats_; }
+	void SetRenderStats(const RenderStats& stats) { render_stats_ = stats; }
+
 	// Drawn on top of the scene, just before the frame is presented (e.g. the debug UI).
 	void SetOverlay(std::function<void()> draw) { overlay_ = std::move(draw); }
 	void DrawOverlay() const {
@@ -165,6 +174,7 @@ protected:
 	std::shared_ptr<scene::Camera3D> camera_ = scene::FPSCamera::Create();
 	std::shared_ptr<rendering::WCubemap> skybox_ = nullptr;
 	std::function<void()> overlay_;
+	RenderStats render_stats_;
 
 public:
 

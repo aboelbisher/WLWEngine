@@ -31,6 +31,10 @@ layout (location = 0) in vec3 aPos;
 layout (location = 1) in vec4 aColor;
 layout (location = 2) in vec3 aNormal;
 layout (location = 3) in vec2 UV;
+// Instanced drawing only: per-INSTANCE attributes (glVertexAttribDivisor 1), i.e. they advance
+// once per copy of the mesh instead of once per vertex. A mat4 takes 4 locations (4..7).
+layout (location = 4) in mat4 aInstanceTransform;
+layout (location = 8) in vec4 aInstanceTint;
 
 out vec3 vertexColor;
 out vec3 vertexNormal;
@@ -41,15 +45,17 @@ out vec2 vertUV;
 uniform mat4 model;
 uniform mat4 view;
 uniform mat4 projection;
+uniform bool instanced;
 
 void main()
 {
-    vec4 worldPos = model * vec4(aPos, 1.0);
-    vertexNormal = normalize(mat3(transpose(inverse(model))) * aNormal);
-    gl_Position = projection * view * model * vec4(aPos, 1.0);
+    mat4 world = instanced ? model * aInstanceTransform : model;
+    vec4 worldPos = world * vec4(aPos, 1.0);
+    vertexNormal = normalize(mat3(transpose(inverse(world))) * aNormal);
+    gl_Position = projection * view * worldPos;
 
     vertexPos = worldPos.xyz;
-    vertexColor = aColor.xyz;
+    vertexColor = instanced ? aColor.xyz * aInstanceTint.xyz : aColor.xyz;
     vertUV = UV;
     vertexNormal1 = aNormal;
 }

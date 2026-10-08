@@ -9,6 +9,7 @@
 #include "wlw/scene/follow_camera.h"
 #include "wlw/scene/node.h"
 #include "wlw/scene/orthographic_camera.h"
+#include "wlw/fx/particle_system.h"
 
 namespace snake {
 
@@ -34,6 +35,7 @@ class SnakeApp : public wlw::Application {
   void BuildBoard();
   void ReadInput();
   void Restart();
+  void EatBurst();
   void SetupCameras();
   void FitPerspectiveCameraToScreen();
   void SyncSnakeNodes(float t);   // game state -> pooled segment nodes
@@ -55,6 +57,10 @@ class SnakeApp : public wlw::Application {
   // and are hidden (not destroyed) when it gets shorter again (on restart).
   std::vector<NodePtr> segment_nodes_;
   NodePtr food_node_;
+  // Sparkles when the snake eats: one instanced node draws every particle in one call.
+  wlw::fx::ParticleSystem particles_{256};
+  NodePtr particle_node_;
+  std::vector<wlw::rendering::InstanceData> particle_instances_;
   std::shared_ptr<wlw::scene::OrthographicCamera> ortho_camera_;
   std::shared_ptr<wlw::scene::FollowCamera> perspective_camera_;
 };
