@@ -9,10 +9,12 @@ import com.google.android.gms.ads.AdRequest
 import com.google.android.gms.ads.FullScreenContentCallback
 import com.google.android.gms.ads.LoadAdError
 import com.google.android.gms.ads.MobileAds
+import com.google.android.gms.ads.RequestConfiguration
 import com.google.android.gms.ads.interstitial.InterstitialAd
 import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback
 import com.google.android.gms.ads.rewarded.RewardedAd
 import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback
+import com.google.android.ump.ConsentDebugSettings
 import com.google.android.ump.ConsentInformation
 import com.google.android.ump.ConsentRequestParameters
 import com.google.android.ump.UserMessagingPlatform
@@ -24,7 +26,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 // The "ads" service of the native bridge: Google AdMob + Google's consent form (UMP), for
 // wlw::kit::Ads (kit/wlw/kit/ads.h). Everything here runs on the UI thread.
 //
-// Calls from C++:  init {rewarded, interstitial}, show_rewarded, show_interstitial, privacy_options
+// Calls from C++:  init {rewarded, interstitial, test_devices, debug_consent_eea}, show_rewarded,
+//                  show_interstitial, privacy_options, reset_consent
 // Events to C++:   state {rewarded_ready, interstitial_ready, privacy_required},
 //                  rewarded_done {rewarded}, interstitial_done, error {method, message}
 //
@@ -53,6 +56,7 @@ class AdMobService(private val activity: Activity) : WlwService {
             "show_rewarded" -> showRewarded()
             "show_interstitial" -> showInterstitial()
             "privacy_options" -> UserMessagingPlatform.showPrivacyOptionsForm(activity) { sendState() }
+            "reset_consent" -> consent?.reset()  // debug: the form shows again at the next start
             else -> reportError(method, "unknown method")
         }
     }
@@ -67,11 +71,27 @@ class AdMobService(private val activity: Activity) : WlwService {
     private fun init(args: JSONObject) {
         rewardedUnit = args.optString("rewarded")
         interstitialUnit = args.optString("interstitial")
+        val testDevices = mutableListOf<String>()
+        args.optJSONArray("test_devices")?.let { list ->
+            for (i in 0 until list.length()) testDevices.add(list.getString(i))
+        }
+        // The developer's own devices get test ads even from real ad units.
+        MobileAds.setRequestConfiguration(RequestConfiguration.Builder().setTestDeviceIds(testDevices).build())
+
+        val params = ConsentRequestParameters.Builder()
+        if (testDevices.isNotEmpty() || args.optBoolean("debug_consent_eea")) {
+            val debug = ConsentDebugSettings.Builder(activity)
+            for (id in testDevices) debug.addTestDeviceHashedId(id)
+            if (args.optBoolean("debug_consent_eea")) {
+                debug.setDebugGeography(ConsentDebugSettings.DebugGeography.DEBUG_GEOGRAPHY_EEA)
+            }
+            params.setConsentDebugSettings(debug.build())
+        }
         val info = UserMessagingPlatform.getConsentInformation(activity)
         consent = info
         info.requestConsentInfoUpdate(
             activity,
-            ConsentRequestParameters.Builder().build(),
+            params.build(),
             {
                 UserMessagingPlatform.loadAndShowConsentFormIfRequired(activity) { formError ->
                     if (formError != null) Log.w(TAG, "Consent form: ${formError.message}")

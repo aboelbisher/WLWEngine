@@ -3,6 +3,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <vector>
 
 // Ads for games: rewarded ads (the player chooses to watch one for a reward, e.g. "continue")
 // and interstitials (a full-screen ad between games).
@@ -24,6 +25,14 @@ struct AdsConfig {
   std::string rewarded_unit = "ca-app-pub-3940256099942544/5224354917";
   std::string interstitial_unit = "ca-app-pub-3940256099942544/1033173712";
   float fake_seconds = 2.0f;  // how long a desktop fake ad "plays"
+
+  // Devices that always get test ads, even with real ad units (the developer's own phones:
+  // tapping your own real ads can get the AdMob account banned). The id to put here is printed
+  // by the SDKs in logcat on the device's first run ("...setTestDeviceIds(Arrays.asList("<id>"))"
+  // and "...addTestDeviceHashedId("<id>")"). Emulators are test devices automatically.
+  std::vector<std::string> test_devices;
+  // Test devices act as if they were in the EU, so the consent form can be checked from anywhere.
+  bool debug_consent_eea = false;
 };
 
 class Ads {
@@ -47,6 +56,8 @@ class Ads {
   // "Privacy" button (in the menu or settings) when this is true.
   virtual bool PrivacyOptionsRequired() const = 0;
   virtual void ShowPrivacyOptions() = 0;
+  // Forgets the player's consent answer, so the form shows again at the next start (debug tools).
+  virtual void ResetConsent() {}
 
   virtual std::string Describe() const = 0;  // one line for debug tools
 };

@@ -18,7 +18,10 @@ class BridgeAds : public Ads {
  public:
   explicit BridgeAds(const Config& config) {
     platform::SetBridgeHandler("ads", [this](const std::string& event, const std::string& json) { OnEvent(event, json); });
-    const Json args = {{"rewarded", config.rewarded_unit}, {"interstitial", config.interstitial_unit}};
+    const Json args = {{"rewarded", config.rewarded_unit},
+                       {"interstitial", config.interstitial_unit},
+                       {"test_devices", config.test_devices},
+                       {"debug_consent_eea", config.debug_consent_eea}};
     platform::BridgeCall("ads", "init", args.dump());
   }
   ~BridgeAds() override { platform::SetBridgeHandler("ads", nullptr); }
@@ -47,6 +50,7 @@ class BridgeAds : public Ads {
   bool Showing() const override { return rewarded_done_ != nullptr || interstitial_done_ != nullptr; }
   bool PrivacyOptionsRequired() const override { return privacy_required_; }
   void ShowPrivacyOptions() override { platform::BridgeCall("ads", "privacy_options"); }
+  void ResetConsent() override { platform::BridgeCall("ads", "reset_consent"); }
 
   std::string Describe() const override {
     return std::string("AdMob: rewarded ") + (rewarded_ready_ ? "ready" : "loading") + ", interstitial " +
