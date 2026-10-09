@@ -22,6 +22,15 @@ std::optional<SoundData> Decode(const uint8_t* bytes, size_t size, uint32_t samp
 
 enum class Bus : uint8_t { Effects, Music, Count };  // separately adjustable volumes
 
+// Audio produced while it plays instead of decoded up front: music. Read() runs on the audio
+// thread and must never block; it fills `frames` stereo frames (float, interleaved, at the
+// mixer's rate) and returns how many it wrote (fewer = the stream ended).
+class StreamSource {
+ public:
+  virtual ~StreamSource() = default;
+  virtual uint32_t Read(float* stereo, uint32_t frames) = 0;
+};
+
 struct PlayParams {
   float volume = 1.0f;
   float pitch = 1.0f;  // playback speed: 2 = an octave up (and twice as short)
@@ -45,6 +54,10 @@ class Mixer {
   SoundId AddSound(SoundData data);  // game thread; the data lives as long as the mixer
   void Play(SoundId sound, const PlayParams& params = {});
   void StopAll();
+  // Streams `source` on Bus::Music, fading in over `fade_seconds`; the stream playing before fades
+  // out over the same time (a crossfade). nullptr fades the music out. The source must outlive
+  // its playing (Audio keeps the music streams for its whole life).
+  void PlayStream(StreamSource* source, float fade_seconds);
 
   // ---- Settings (game thread; read by the audio thread) ----
   void SetMasterVolume(float volume) { master_.store(volume); }
@@ -63,9 +76,11 @@ class Mixer {
 
  private:
   struct Command {
-    enum class Kind : uint8_t { Play, StopAll } kind = Kind::Play;
+    enum class Kind : uint8_t { Play, StopAll, PlayStream } kind = Kind::Play;
     const SoundData* sound = nullptr;
     PlayParams params;
+    StreamSource* stream = nullptr;  // PlayStream
+    float fade_seconds = 0.0f;
   };
   struct Voice {
     const SoundData* sound = nullptr;  // null = free
@@ -80,6 +95,19 @@ class Mixer {
 
   bool Push(const Command& command);  // false if the queue is full (the play is dropped)
   void StartVoice(const Command& command);
+  void StartStream(const Command& command);
+  void MixStreams(float* out, uint32_t frames, float master);
+
+  // A streaming source with a gain moving linearly towards a target (fades without clicks).
+  struct StreamSlot {
+    StreamSource* source = nullptr;
+    float gain = 0.0f;
+    float target = 0.0f;
+    float step = 0.0f;  // gain change per frame
+  };
+  std::array<StreamSlot, 2> streams_;  // [0] = current, [1] = the one fading out (audio thread)
+  std::vector<float> stream_scratch_;   // decode buffer, allocated once (never in Mix)
+  static constexpr uint32_t kStreamChunk = 1024;  // frames decoded per step
 
   uint32_t sample_rate_;
   std::vector<std::unique_ptr<SoundData>> sounds_;  // owned; voices point into them

@@ -28,6 +28,7 @@ std::optional<SoundData> Decode(const uint8_t* bytes, size_t size, uint32_t samp
 
 Mixer::Mixer(uint32_t sample_rate, int max_voices) : sample_rate_(sample_rate), voices_(std::max(max_voices, 1)) {
   for (auto& volume : bus_volume_) volume.store(1.0f);
+  stream_scratch_.resize(kStreamChunk * 2);  // here, so the audio thread never allocates
 }
 
 Mixer::SoundId Mixer::AddSound(SoundData data) {
@@ -40,6 +41,14 @@ void Mixer::Play(SoundId sound, const PlayParams& params) {
   Command command;
   command.sound = sounds_[sound].get();  // the pointer stays valid: the SoundData never moves
   command.params = params;
+  Push(command);
+}
+
+void Mixer::PlayStream(StreamSource* source, float fade_seconds) {
+  Command command;
+  command.kind = Command::Kind::PlayStream;
+  command.stream = source;
+  command.fade_seconds = fade_seconds;
   Push(command);
 }
 
@@ -98,7 +107,9 @@ void Mixer::Mix(float* out, uint32_t frames) {
   size_t tail = tail_.load(std::memory_order_relaxed);
   while (tail != head_.load(std::memory_order_acquire)) {
     const Command& command = queue_[tail];
-    if (command.kind == Command::Kind::StopAll) {
+    if (command.kind == Command::Kind::PlayStream) {
+      StartStream(command);
+    } else if (command.kind == Command::Kind::StopAll) {
       for (Voice& voice : voices_) voice.sound = nullptr;
     } else {
       StartVoice(command);
@@ -139,8 +150,49 @@ void Mixer::Mix(float* out, uint32_t frames) {
   }
   active_voices_.store(active);
 
-  // 3. Several loud sounds can add up past full scale: clip rather than wrap around.
+  // 3. Music.
+  MixStreams(out, frames, master);
+
+  // 4. Several loud sounds can add up past full scale: clip rather than wrap around.
   for (uint32_t i = 0; i < frames * 2; ++i) out[i] = std::clamp(out[i], -1.0f, 1.0f);
+}
+
+void Mixer::StartStream(const Command& command) {
+  // The current stream (if any) becomes the one fading out; whatever was fading before is cut.
+  const float fade_frames = std::max(command.fade_seconds, 0.001f) * static_cast<float>(sample_rate_);
+  if (streams_[0].source == command.stream) return;  // already playing
+  streams_[1] = streams_[0];
+  streams_[1].target = 0.0f;
+  streams_[1].step = streams_[1].gain / fade_frames;
+  streams_[0] = {};
+  if (!command.stream) return;  // just a fade-out
+  streams_[0].source = command.stream;
+  streams_[0].gain = 0.0f;
+  streams_[0].target = 1.0f;
+  streams_[0].step = 1.0f / fade_frames;
+}
+
+void Mixer::MixStreams(float* out, uint32_t frames, float master) {
+  const float bus = bus_volume_[static_cast<size_t>(Bus::Music)].load() * master;
+  for (StreamSlot& slot : streams_) {
+    if (!slot.source) continue;
+    uint32_t done = 0;
+    while (done < frames && slot.source) {
+      const uint32_t want = std::min(kStreamChunk, frames - done);
+      const uint32_t got = slot.source->Read(stream_scratch_.data(), want);
+      for (uint32_t i = 0; i < got; ++i) {
+        // Move the gain one step towards its target per frame: a linear fade.
+        if (slot.gain < slot.target) slot.gain = std::min(slot.gain + slot.step, slot.target);
+        if (slot.gain > slot.target) slot.gain = std::max(slot.gain - slot.step, slot.target);
+        const float g = slot.gain * bus;
+        out[(done + i) * 2] += stream_scratch_[i * 2] * g;
+        out[(done + i) * 2 + 1] += stream_scratch_[i * 2 + 1] * g;
+      }
+      done += got;
+      // Ended, or faded all the way out: the slot is free.
+      if (got < want || (slot.target == 0.0f && slot.gain <= 0.0f)) slot = {};
+    }
+  }
 }
 
 }  // namespace wlw::audio

@@ -1,6 +1,7 @@
 // Tests for wlw::audio: decoding and the Mixer. No audio device needed: the mixer is driven
 // directly, the way the device's callback would.
 #include <cmath>
+#include <algorithm>
 #include <cstring>
 #include <vector>
 
@@ -51,6 +52,64 @@ std::vector<float> Mix(Mixer& mixer, uint32_t frames) {
   std::vector<float> out(frames * 2, -99.0f);  // garbage: Mix must overwrite everything
   mixer.Mix(out.data(), frames);
   return out;
+}
+
+// A stream that plays a constant level, forever or for `length` frames.
+class ConstantStream : public StreamSource {
+ public:
+  ConstantStream(float level, uint32_t length = 0) : level_(level), left_(length), endless_(length == 0) {}
+  uint32_t Read(float* stereo, uint32_t frames) override {
+    const uint32_t n = endless_ ? frames : std::min(frames, left_);
+    for (uint32_t i = 0; i < n * 2; ++i) stereo[i] = level_;
+    if (!endless_) left_ -= n;
+    return n;
+  }
+
+ private:
+  float level_;
+  uint32_t left_;
+  bool endless_;
+};
+
+void TestStreamsFadeAndCrossfade() {
+  Mixer mixer(1000);  // 1000 frames per second: a 0.1 s fade is 100 frames
+  ConstantStream a(0.5f), b(-0.5f);
+  std::vector<float> out(2 * 400);
+  mixer.PlayStream(&a, 0.1f);
+  mixer.Mix(out.data(), 50);
+  CHECK(out[0] > 0.0f && out[0] < 0.02f);                   // fading in from silence
+  CHECK(Near(out[49 * 2], 0.25f, 0.02f));                   // halfway through the fade
+  mixer.Mix(out.data(), 100);
+  CHECK(Near(out[99 * 2], 0.5f) && Near(out[99 * 2 + 1], 0.5f));  // fully in
+  mixer.SetBusVolume(Bus::Music, 0.5f);
+  mixer.Mix(out.data(), 10);
+  CHECK(Near(out[0], 0.25f));  // the music bus volume applies
+  mixer.SetBusVolume(Bus::Music, 1.0f);
+
+  // Crossfade: a fades out while b fades in; halfway they cancel out (0.25 - 0.25).
+  mixer.PlayStream(&b, 0.1f);
+  mixer.Mix(out.data(), 200);
+  CHECK(Near(out[49 * 2], 0.0f, 0.03f));
+  CHECK(Near(out[199 * 2], -0.5f));  // only b left
+  mixer.PlayStream(&b, 0.1f);        // already playing: nothing changes
+  mixer.Mix(out.data(), 10);
+  CHECK(Near(out[9 * 2], -0.5f));
+
+  // Stop: fades to silence, then the slot is free.
+  mixer.PlayStream(nullptr, 0.1f);
+  mixer.Mix(out.data(), 200);
+  CHECK(Near(out[199 * 2], 0.0f) && Near(out[50 * 2], -0.25f, 0.03f));
+
+  // A stream that ends stops by itself (its remaining frames are silence).
+  ConstantStream short_one(0.5f, 30);
+  mixer.PlayStream(&short_one, 0.001f);
+  mixer.Mix(out.data(), 60);
+  CHECK(Near(out[20 * 2], 0.5f) && Near(out[45 * 2], 0.0f));
+  // Muting silences music too.
+  mixer.PlayStream(&a, 0.001f);
+  mixer.SetMuted(true);
+  mixer.Mix(out.data(), 20);
+  CHECK(Near(out[10 * 2], 0.0f));
 }
 
 }  // namespace
@@ -141,5 +200,6 @@ int main() {
   TestPitchAndEnd();
   TestVoiceLimits();
   TestManyPlaysInOneFrame();
+  TestStreamsFadeAndCrossfade();
   return TestResult("audio");
 }

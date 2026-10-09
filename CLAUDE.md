@@ -13,7 +13,8 @@ Remote: `git@github.com:aboelbisher/WLWEngine.git`, branch `main`.
 ```
 engine/wlw/
   audio/      Audio (miniaudio device: WASAPI / AAudio...) + Mixer (decoded PCM, lock-free command queue,
-              voices with pitch/pan, per-sound caps, buses). Application::Audio(); silent in background
+              voices with pitch/pan, per-sound caps, buses). Application::Audio(); silent in background.
+              Music: Audio::PlayMusic streams a file (decode thread -> lock-free ring -> Mixer stream slots with crossfades)
   anim/       ease.h (Penner easing curves), tween.h (Tween<T>: value-type tweens the game owns and samples)
   fx/         ParticleSystem: CPU simulation (fixed capacity, swap-remove, bursts) -> instances
   debug/      DebugUI: Dear ImGui (third_party/imgui) fed from Input, drawn via Window::SetOverlay; games add
