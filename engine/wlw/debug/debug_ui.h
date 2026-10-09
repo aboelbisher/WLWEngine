@@ -30,6 +30,12 @@ class DebugUI {
 
   bool IsOpen() const { return open_; }
   void SetOpen(bool open) { open_ = open; }
+  // Closes the panel and hides the toggle button for `seconds` (clean screenshots and screen
+  // recordings); it comes back by itself, so it can't get lost.
+  void HideFor(float seconds) {
+    open_ = false;
+    hidden_for_ = seconds;
+  }
 
  private:
   void FeedInput(float dt);
@@ -37,6 +43,7 @@ class DebugUI {
 
   scene::Window& window_;
   bool open_ = false;
+  float hidden_for_ = 0.0f;  // seconds left with the toggle button hidden
   bool imgui_pointer_down_ = false;  // the button state ImGui has been told about
   int overlay_id_ = -1;
 };

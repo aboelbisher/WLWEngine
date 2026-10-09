@@ -62,7 +62,11 @@ void DebugUI::BeginFrame(float dt) {
   ImGui::NewFrame();
 
   if (window_.GetInput().WasKeyPressed(input::Key::F1)) open_ = !open_;
-  DrawToggleButton();
+  if (hidden_for_ > 0.0f) {
+    hidden_for_ -= dt;  // hidden (HideFor): no button, F1 still works
+  } else {
+    DrawToggleButton();
+  }
 
   // Who owns the pointer this frame: if it's over (or dragging) an ImGui window, the game
   // doesn't see it. ImGui decides this in NewFrame from the current position and buttons.

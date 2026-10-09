@@ -89,6 +89,9 @@ class Application {
   app::ScreenStack& Screens() { return screens_; }
   // Sound output (see audio::Audio). Silent, but usable, if the device has no audio output.
   audio::Audio& Audio() { return *audio_; }
+#if WLW_DEBUG_UI
+  debug::DebugUI& DebugUi() { return *debug_ui_; }  // e.g. HideFor() before a screenshot
+#endif
   const std::shared_ptr<scene::Window>& WindowPtr() const { return window_; }
   const AppConfig& Config() const { return config_; }
 
