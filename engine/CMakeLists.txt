@@ -67,6 +67,8 @@ add_library(wlw STATIC
   wlw/input/input.cpp
   wlw/input/input.h
 
+  wlw/platform/bridge.h
+  wlw/platform/bridge.cpp
   wlw/platform/platform.h
 
   wlw/rendering/gl.h

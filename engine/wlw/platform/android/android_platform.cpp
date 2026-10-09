@@ -29,6 +29,7 @@
 #include <android_native_app_glue.h>
 
 #include "wlw/app/application.h"
+#include "wlw/platform/bridge.h"
 #include "wlw/platform/platform.h"
 #include "wlw/scene/window.h"
 
@@ -493,6 +494,82 @@ void WriteLog(LogLevel level, const char* message) {
   __android_log_write(priority, "WLW", message);
 }
 
+// ---- The native bridge (bridge.h): C++ <-> com.wlw.WlwBridge (Kotlin) ----
+namespace {
+
+jclass g_bridge_class = nullptr;     // global ref; null if the app has no Kotlin side
+jmethodID g_bridge_call = nullptr;   // static void call(String service, String method, String json)
+
+std::string ToString(JNIEnv* env, jstring text) {
+  if (!text) return {};
+  const char* chars = env->GetStringUTFChars(text, nullptr);
+  std::string result(chars ? chars : "");
+  env->ReleaseStringUTFChars(text, chars);
+  return result;
+}
+
+// WlwBridge.nativePost(service, event, json): called by Kotlin on any thread.
+void JNICALL NativePost(JNIEnv* env, jclass, jstring service, jstring event, jstring json) {
+  PostBridgeMessage(ToString(env, service), ToString(env, event), ToString(env, json));
+}
+
+// Finds WlwBridge and connects both directions. The class must be looked up through the
+// activity's class loader: on a thread we attached ourselves, FindClass only sees system classes.
+// And the native method is registered by hand: NativeActivity loads our library without
+// System.loadLibrary, so the JVM wouldn't find Java_com_wlw_... symbols by itself.
+void ConnectBridge(JNIEnv* env, jobject activity) {
+  jobject loader = env->CallObjectMethod(
+      activity, env->GetMethodID(env->GetObjectClass(activity), "getClassLoader", "()Ljava/lang/ClassLoader;"));
+  jclass loader_class = env->FindClass("java/lang/ClassLoader");
+  jmethodID load_class = env->GetMethodID(loader_class, "loadClass", "(Ljava/lang/String;)Ljava/lang/Class;");
+  jstring name = env->NewStringUTF("com.wlw.WlwBridge");
+  auto bridge = static_cast<jclass>(env->CallObjectMethod(loader, load_class, name));
+  env->DeleteLocalRef(name);
+  if (env->ExceptionCheck() || !bridge) {
+    env->ExceptionClear();
+    WLW_LOG_INFO("No com.wlw.WlwBridge class: the native bridge is off (an app without Kotlin code)");
+    return;
+  }
+  static const JNINativeMethod kNatives[] = {
+      {"nativePost", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V", reinterpret_cast<void*>(NativePost)},
+  };
+  if (env->RegisterNatives(bridge, kNatives, 1) != JNI_OK) {
+    env->ExceptionClear();
+    WLW_LOG_ERROR("Bridge: couldn't register WlwBridge.nativePost");
+    return;
+  }
+  g_bridge_call = env->GetStaticMethodID(bridge, "call", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V");
+  if (!g_bridge_call) {
+    env->ExceptionClear();
+    WLW_LOG_ERROR("Bridge: WlwBridge.call(String, String, String) is missing");
+    return;
+  }
+  g_bridge_class = static_cast<jclass>(env->NewGlobalRef(bridge));
+}
+
+}  // namespace
+
+bool HasBridge() { return g_bridge_class != nullptr; }
+
+bool BridgeCall(const std::string& service, const std::string& method, const std::string& json_args) {
+  if (!g_app || !g_bridge_class) return false;
+  JNIEnv* env = nullptr;
+  if (g_app->activity->vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) != JNI_OK) return false;
+  jstring j_service = env->NewStringUTF(service.c_str());
+  jstring j_method = env->NewStringUTF(method.c_str());
+  jstring j_args = env->NewStringUTF(json_args.c_str());
+  env->CallStaticVoidMethod(g_bridge_class, g_bridge_call, j_service, j_method, j_args);
+  const bool failed = env->ExceptionCheck();
+  if (failed) {
+    env->ExceptionDescribe();  // to logcat
+    env->ExceptionClear();
+  }
+  env->DeleteLocalRef(j_service);
+  env->DeleteLocalRef(j_method);
+  env->DeleteLocalRef(j_args);
+  return !failed;
+}
+
 // ---- entry point (app/entry_point.h) ----
 void RunAndroidApp(android_app* app, std::unique_ptr<Application> (*create_app)()) {
   g_app = app;
@@ -500,6 +577,7 @@ void RunAndroidApp(android_app* app, std::unique_ptr<Application> (*create_app)(
   // vibration...). Detached again before the thread ends, as the JVM requires.
   JNIEnv* env = nullptr;
   app->activity->vm->AttachCurrentThread(&env, nullptr);
+  ConnectBridge(env, app->activity->clazz);
   app->onAppCmd = OnAppCmd;
   app->onInputEvent = OnInputEvent;
 
@@ -513,6 +591,10 @@ void RunAndroidApp(android_app* app, std::unique_ptr<Application> (*create_app)(
   if (!app->destroyRequested) {
     ANativeActivity_finish(app->activity);
     while (!app->destroyRequested) PollEvents(-1);
+  }
+  if (g_bridge_class) {
+    env->DeleteGlobalRef(g_bridge_class);
+    g_bridge_class = nullptr;
   }
   app->activity->vm->DetachCurrentThread();
   g_app = nullptr;

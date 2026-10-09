@@ -23,6 +23,7 @@
 #include <unistd.h>  // fsync
 #endif
 
+#include "wlw/platform/bridge.h"
 #include "wlw/platform/platform.h"
 #include "wlw/scene/window.h"
 
@@ -159,6 +160,10 @@ SafeAreaInsets GetSafeAreaInsets() { return {}; }  // desktop windows have no cu
 bool MoveToBackground() { return false; }  // no such thing on desktop: the app quits instead
 
 void Vibrate(int, float) {}  // desktops don't vibrate
+
+// No platform-language side on desktop: games use C++ fakes for SDK features (see bridge.h).
+bool HasBridge() { return false; }
+bool BridgeCall(const std::string&, const std::string&, const std::string&) { return false; }
 
 void WriteLog(LogLevel level, const char* message) {
   static const char* kPrefix[] = {"", "[warning] ", "[error] "};

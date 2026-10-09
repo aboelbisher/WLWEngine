@@ -2,6 +2,7 @@
 
 #include "wlw/core/log.h"
 #include "wlw/audio/audio.h"
+#include "wlw/platform/bridge.h"
 #include "wlw/platform/platform.h"
 #include "wlw/ui/canvas.h"
 #include "wlw/ui/ui_renderer.h"
@@ -83,6 +84,10 @@ int Application::Run() {
     if (input.WasKeyPressed(input::Key::Back) || input.WasKeyPressed(input::Key::Escape)) {
       if (!screens_.Back() && !OnBack() && !platform::MoveToBackground()) Quit();
     }
+
+    // Results from platform code (an ad closed, a cloud save arrived...) reach the game here, on
+    // its own thread, before this frame's updates.
+    platform::DispatchBridgeMessages();
 
     const int steps = timestep_.Advance(frame_seconds);
     for (int i = 0; i < steps; ++i) {

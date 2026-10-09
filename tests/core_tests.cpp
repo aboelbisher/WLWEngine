@@ -1,10 +1,13 @@
-// Tests for small engine building blocks: core::Random, and the platform's save-file functions.
+// Tests for small engine building blocks: core::Random, the platform's save-file functions and the
+// native bridge's message queue.
 #include <filesystem>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "check.h"
 #include "wlw/core/random.h"
+#include "wlw/platform/bridge.h"
 #include "wlw/platform/platform.h"
 
 using wlw::core::Random;
@@ -54,9 +57,40 @@ static void TestAtomicWriteAndRead() {
   fs::remove_all(folder);
 }
 
+static void TestBridgeQueue() {
+  using namespace wlw::platform;
+  CHECK(!HasBridge());  // desktop: no platform-language side
+  CHECK(!BridgeCall("ads", "init"));
+
+  std::vector<std::string> seen;
+  SetBridgeHandler("test", [&](const std::string& event, const std::string& json) { seen.push_back(event + json); });
+  // Posted from other threads (as Android's UI thread does), delivered in order on this one.
+  std::thread first([] { PostBridgeMessage("test", "a", "1"); });
+  first.join();
+  std::thread second([] { PostBridgeMessage("test", "b", "2"); });
+  second.join();
+  PostBridgeMessage("nobody", "x", "{}");  // no handler: dropped
+  CHECK(seen.empty());                     // nothing runs before the dispatch
+  CHECK(DispatchBridgeMessages() == 3);
+  CHECK(seen.size() == 2 && seen[0] == "a1" && seen[1] == "b2");
+
+  // A handler that posts again: delivered at the next dispatch, not in a loop.
+  SetBridgeHandler("test", [&](const std::string& event, const std::string&) {
+    seen.push_back(event);
+    if (event == "ping") PostBridgeMessage("test", "pong", "");
+  });
+  PostBridgeMessage("test", "ping", "");
+  CHECK(DispatchBridgeMessages() == 1);
+  CHECK(DispatchBridgeMessages() == 1);
+  CHECK(seen.back() == "pong");
+  SetBridgeHandler("test", nullptr);
+  CHECK(DispatchBridgeMessages() == 0);
+}
+
 int main() {
   TestRandomIsPinned();
   TestRandomRangesAndState();
   TestAtomicWriteAndRead();
+  TestBridgeQueue();
   return TestResult("core");
 }

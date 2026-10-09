@@ -1,10 +1,12 @@
-// Tests for wlw::kit: save files (backup, corruption, migrations), dates and streaks, and merging
-// progress from two devices.
+// Tests for wlw::kit: save files (backup, corruption, migrations), dates and streaks, merging
+// progress from two devices, the desktop fake ads and the interstitial pacing rules.
 #include <filesystem>
 #include <string>
 #include <vector>
 
 #include "check.h"
+#include "wlw/kit/ad_pacing.h"
+#include "wlw/kit/ads.h"
 #include "wlw/kit/daily.h"
 #include "wlw/kit/progress.h"
 #include "wlw/kit/save_store.h"
@@ -225,6 +227,55 @@ static void TestLevels() {
   CHECK(LevelProgress::FromJson(a.ToJson()) == a);
 }
 
+static void TestFakeAds() {
+  FakeAds ads(2.0f);
+  CHECK(ads.RewardedReady() && ads.InterstitialReady() && !ads.Showing());
+  int rewards = 0, misses = 0;
+  ads.ShowRewarded([&](bool rewarded) { rewarded ? ++rewards : ++misses; });
+  CHECK(ads.Showing() && ads.ShowingRewarded());
+  ads.ShowRewarded([&](bool rewarded) { rewarded ? ++rewards : ++misses; });  // one at a time
+  CHECK(misses == 1);
+  ads.Update(1.0f);
+  CHECK(ads.Showing() && Near(ads.Progress(), 0.5f) && rewards == 0);
+  ads.Update(1.0f);
+  CHECK(!ads.Showing() && rewards == 1);
+
+  ads.ShowRewarded([&](bool rewarded) { rewarded ? ++rewards : ++misses; });
+  ads.Skip();  // closed early: no reward
+  ads.Update(0.1f);
+  CHECK(rewards == 1 && misses == 2);
+
+  bool closed = false;
+  ads.ShowInterstitial([&] { closed = true; });
+  CHECK(ads.Showing() && !ads.ShowingRewarded());
+  ads.Update(2.5f);
+  CHECK(closed);
+
+  ads.available = false;  // no fill: the callback answers at once
+  CHECK(!ads.RewardedReady());
+  ads.ShowRewarded([&](bool rewarded) { rewarded ? ++rewards : ++misses; });
+  CHECK(misses == 3 && !ads.Showing());
+  closed = false;
+  ads.ShowInterstitial([&] { closed = true; });
+  CHECK(closed);
+}
+
+static void TestAdPacing() {
+  AdPacing pacing({/*first_after_games=*/3, /*games_between=*/3, /*min_seconds_between=*/120.0});
+  pacing.GameFinished();
+  pacing.GameFinished();
+  CHECK(!pacing.InterstitialDue(1000.0));  // the first games are ad-free
+  pacing.GameFinished();
+  CHECK(pacing.InterstitialDue(1000.0));
+  pacing.InterstitialShown(1000.0);
+  for (int i = 0; i < 3; ++i) pacing.GameFinished();
+  CHECK(!pacing.InterstitialDue(1100.0));  // 3 games, but only 100 s later
+  CHECK(pacing.InterstitialDue(1120.0));
+  pacing.RewardedWatched(1130.0);  // the player chose to watch one: that counts
+  CHECK(!pacing.InterstitialDue(1130.0));
+  CHECK(pacing.GamesSinceAd() == 0 && pacing.GamesFinished() == 6);
+}
+
 int main() {
   TestSaveAndLoad();
   TestBackupSurvivesACorruptFile();
@@ -235,5 +286,7 @@ int main() {
   TestCounters();
   TestScores();
   TestLevels();
+  TestFakeAds();
+  TestAdPacing();
   return TestResult("kit");
 }

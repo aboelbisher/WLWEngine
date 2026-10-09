@@ -1,7 +1,11 @@
 # wlw::kit - game-level building blocks shared by games: save files, scores, level progress,
-# daily streaks, the cloud-save interface. Built on the engine (wlw::wlw); the engine never uses
-# it. Games link it next to the engine: target_link_libraries(<game> PRIVATE wlw::kit)
+# daily streaks, ads (AdMob through the native bridge; android/ holds the Kotlin side), the
+# cloud-save interface. Built on the engine (wlw::wlw); the engine never uses it.
+# Games link it next to the engine: target_link_libraries(<game> PRIVATE wlw::kit)
 add_library(wlw_kit STATIC
+  wlw/kit/ad_pacing.h
+  wlw/kit/ads.h
+  wlw/kit/ads.cpp
   wlw/kit/cloud_sync.h
   wlw/kit/daily.h
   wlw/kit/daily.cpp
