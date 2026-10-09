@@ -1,4 +1,4 @@
-# Unit tests for engine code that runs without a window or GPU (math, input, audio mixing, animation, particles, meshes, UI layout, screens).
+# Unit tests for engine code that runs without a window or GPU (math incl. exact cover, input, audio mixing, animation, particles, meshes, UI layout, screens).
 # Built only when the engine is the top-level project. Run: ctest --test-dir build/<preset>
 function(wlw_add_engine_test name)
   add_executable(${name} ${name}.cpp check.h)
@@ -8,6 +8,7 @@ endfunction()
 
 wlw_add_engine_test(anim_tests)
 wlw_add_engine_test(audio_tests)
+wlw_add_engine_test(exact_cover_tests)
 wlw_add_engine_test(fx_tests)
 wlw_add_engine_test(input_tests)
 wlw_add_engine_test(picking_tests)

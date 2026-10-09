@@ -22,6 +22,7 @@ engine/wlw/
               Screen + ScreenStack (game states: deferred push/pop/replace, overlays, fades, Back routing)
   core/       math types, FixedTimestep, log.h (WLW_LOG_*), logger.h (FAIL_IF), mesh/model, collision.h (AABB, Ray, Plane, IntersectPlane)
   input/      Input: keys (pressed vs held), pointer (mouse/first finger), swipes, taps
+  math/       ExactCover: Knuth's Algorithm X with Dancing Links (exact cover search, counting, hints)
   platform/   THE ONLY PER-OS CODE: platform.h interface + glfw/glfw_platform.cpp (desktop)
               + android/android_platform.cpp (NativeActivity + EGL). iOS goes here later.
   rendering/  RenderingDriver/RenderDevice interfaces + one GL backend for GL 3.3 core AND GLES 3.0
@@ -33,7 +34,7 @@ engine/wlw/
   utils/      image/glTF loaders, texture cache, primitives.h (procedural cube, bevelled cube, sphere, gem meshes)
 samples/      small games, built only when the engine is the top-level project (desktop):
               snake/ (Snake + its rules tests)
-tests/        engine unit tests (no window/GPU: anim, audio, fx, input, picking, primitives, ui); test data in tests/data/, also top-level only; ctest
+tests/        engine unit tests (no window/GPU: anim, audio, exact cover, fx, input, picking, primitives, ui); test data in tests/data/, also top-level only; ctest
 third_party/  glad (desktop only), stb, tinygltf + nlohmann json, miniaudio 0.11.25, stb_vorbis, Dear ImGui 1.92.9b (vendored)
 cmake/WLWHelpers.cmake  wlw_add_game(), wlw_add_assets(), wlw_set_warnings()
 vcpkg/ + vcpkg.json     desktop deps (glm, glfw3). Android fetches glm via FetchContent instead.
