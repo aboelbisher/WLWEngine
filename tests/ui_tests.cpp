@@ -1,5 +1,6 @@
 // Tests for the UI layer's CPU side: font baking, text measuring/layout, Canvas units and batching.
 // (Drawing itself needs a GPU; these check everything that's computed before it.)
+#include <cmath>
 #include <string>
 
 #include "check.h"
@@ -109,6 +110,26 @@ static void TestCanvasTextAndBatches(const Font& font_a) {
   CHECK(rect.params.x == 2.0f && Near(rect.params.y, 20.0f) && Near(rect.params.z, 5.0f) && Near(rect.params.w, 5.0f));
 }
 
+static void TestCanvasLine() {
+  Canvas canvas;
+  canvas.BeginFrame({400.0f, 800.0f}, {}, {400.0f, 800.0f});
+  canvas.Line({10.0f, 20.0f}, {30.0f, 20.0f}, 4.0f, {1, 1, 1, 1});  // horizontal, 20 long
+  CHECK(canvas.QuadCount() == 1);
+  const auto& v = canvas.Vertices();
+  // A capsule: half length 10 + 2 (the round ends), half thickness 2, radius 2.
+  CHECK(Near(v[0].params.y, 12.0f) && Near(v[0].params.z, 2.0f) && Near(v[0].params.w, 2.0f));
+  CHECK(Near(v[0].position.x, 8.0f) && Near(v[0].position.y, 18.0f) && Near(v[2].position.x, 32.0f));
+
+  canvas.Line({0.0f, 0.0f}, {30.0f, 40.0f}, 2.0f, {1, 1, 1, 1});  // diagonal, 50 long
+  for (size_t i = 4; i < 8; ++i) {
+    // Every corner is the same distance from the centre (15, 20): a rotated rectangle.
+    CHECK(Near(glm::length(v[i].position - glm::vec2(15.0f, 20.0f)), std::sqrt(26.0f * 26.0f + 1.0f), 1e-3f));
+    CHECK(Near(std::fabs(v[i].uv.x), 26.0f) && Near(std::fabs(v[i].uv.y), 1.0f));  // uv in the line's own frame
+  }
+  canvas.Line({5.0f, 5.0f}, {5.0f, 5.0f}, 2.0f, {1, 1, 1, 1});  // zero length: nothing
+  CHECK(canvas.QuadCount() == 2);
+}
+
 int main() {
   auto font = LoadTestFont();
   if (font) {
@@ -119,5 +140,6 @@ int main() {
     TestCanvasTextAndBatches(*font);
   }
   TestCanvasUnits();
+  TestCanvasLine();
   return TestResult("ui");
 }

@@ -80,6 +80,8 @@ class Canvas {
 
   // A filled rectangle; corner_radius rounds the corners (anti-aliased edges either way).
   void FillRect(const Rect& rect, const core::Color& color, float corner_radius = 0.0f);
+  // A straight line with round ends, at any angle (e.g. over the 3D scene, between projected points).
+  void Line(glm::vec2 from, glm::vec2 to, float thickness, const core::Color& color);
   // A single line of text. `position` is where the alignment edge (left / centre / right)
   // meets the vertical middle of the line, so centring text on a point is just Align::Center.
   void Text(const Font& font, std::string_view text, glm::vec2 position, float size, Align align = Align::Left,
@@ -106,6 +108,8 @@ class Canvas {
  private:
   void AddQuad(const Font* font, const glm::vec2& min, const glm::vec2& max, const glm::vec2& uv_min,
                const glm::vec2& uv_max, const core::Color& color, const glm::vec4& params);
+  void AddQuad(const Font* font, const glm::vec2 (&corners)[4], const glm::vec2 (&uvs)[4], const core::Color& color,
+               const glm::vec4& params);
   void AddText(const Font& font, std::string_view text, glm::vec2 pen, float size, const core::Color& color, float edge);
 
   glm::vec2 size_{1.0f};

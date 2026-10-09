@@ -27,6 +27,13 @@ glm::mat4 Canvas::Projection() const {
 
 void Canvas::AddQuad(const Font* font, const glm::vec2& min, const glm::vec2& max, const glm::vec2& uv_min,
                      const glm::vec2& uv_max, const core::Color& color, const glm::vec4& params) {
+  const glm::vec2 corners[4] = {{min.x, min.y}, {max.x, min.y}, {max.x, max.y}, {min.x, max.y}};
+  const glm::vec2 uvs[4] = {{uv_min.x, uv_min.y}, {uv_max.x, uv_min.y}, {uv_max.x, uv_max.y}, {uv_min.x, uv_max.y}};
+  AddQuad(font, corners, uvs, color, params);
+}
+
+void Canvas::AddQuad(const Font* font, const glm::vec2 (&corners)[4], const glm::vec2 (&uvs)[4], const core::Color& color,
+                     const glm::vec4& params) {
   // Batching: keep adding to the current run unless this quad needs a different atlas.
   // Rectangles (font == nullptr) don't sample any texture, so they fit in any run.
   if (batches_.empty() || (font && batches_.back().font && batches_.back().font != font)) {
@@ -36,10 +43,7 @@ void Canvas::AddQuad(const Font* font, const glm::vec2& min, const glm::vec2& ma
   if (font) batch.font = font;
   ++batch.quad_count;
 
-  vertices_.push_back({{min.x, min.y}, {uv_min.x, uv_min.y}, color, params});
-  vertices_.push_back({{max.x, min.y}, {uv_max.x, uv_min.y}, color, params});
-  vertices_.push_back({{max.x, max.y}, {uv_max.x, uv_max.y}, color, params});
-  vertices_.push_back({{min.x, max.y}, {uv_min.x, uv_max.y}, color, params});
+  for (int i = 0; i < 4; ++i) vertices_.push_back({corners[i], uvs[i], color, params});
 }
 
 void Canvas::FillRect(const Rect& rect, const core::Color& color, float corner_radius) {
@@ -48,6 +52,23 @@ void Canvas::FillRect(const Rect& rect, const core::Color& color, float corner_r
   const glm::vec2 half = rect.Size() * 0.5f;
   const float radius = std::clamp(corner_radius, 0.0f, std::min(half.x, half.y));
   AddQuad(nullptr, rect.min, rect.max, -half, half, color, {kKindRect, half.x, half.y, radius});
+}
+
+void Canvas::Line(glm::vec2 from, glm::vec2 to, float thickness, const core::Color& color) {
+  // A rounded rectangle turned along the line: its corners are rotated, but the uv still gives
+  // positions in the line's own frame, so the shader's rounded-box distance draws a capsule
+  // (round ends, anti-aliased) at any angle.
+  const glm::vec2 delta = to - from;
+  const float length = glm::length(delta);
+  if (length < 1e-4f) return;
+  const glm::vec2 along = delta / length;
+  const glm::vec2 across(-along.y, along.x);
+  const glm::vec2 half(length * 0.5f + thickness * 0.5f, thickness * 0.5f);
+  const glm::vec2 center = (from + to) * 0.5f;
+  const glm::vec2 corners[4] = {center - along * half.x - across * half.y, center + along * half.x - across * half.y,
+                                center + along * half.x + across * half.y, center - along * half.x + across * half.y};
+  const glm::vec2 uvs[4] = {{-half.x, -half.y}, {half.x, -half.y}, {half.x, half.y}, {-half.x, half.y}};
+  AddQuad(nullptr, corners, uvs, color, {kKindRect, half.x, half.y, half.y});
 }
 
 void Canvas::AddText(const Font& font, std::string_view text, glm::vec2 pen, float size, const core::Color& color,
