@@ -62,7 +62,9 @@ add_library(wlw STATIC
   wlw/fx/particle_system.h
 
   wlw/math/exact_cover.cpp
+  wlw/math/bit_grid.h
   wlw/math/exact_cover.h
+  wlw/math/game_search.h
 
   wlw/input/input.cpp
   wlw/input/input.h
