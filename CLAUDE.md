@@ -24,7 +24,9 @@ engine/wlw/
   input/      Input: keys (pressed vs held), pointer (mouse/first finger), swipes, taps
   math/       ExactCover: Knuth's Algorithm X with Dancing Links (exact cover search, counting, hints);
               BitGrid<W,H> (bitboards: a grid as 64-bit words, fits = one AND); game_search.h (Minimax with
-              alpha-beta, BestMove, Expectimax; a game = small class with Moves/Apply/Evaluate/MaxToMove)
+              alpha-beta, BestMove, Expectimax; a game = small class with Moves/Apply/Evaluate/MaxToMove);
+              gf2.h (linear algebra over GF(2): BitVector, SolveGf2 = Gaussian elimination with null space,
+              LightestSolution: Lights Out-style "which toggles clear it" problems)
   platform/   THE ONLY PER-OS CODE: platform.h interface + glfw/glfw_platform.cpp (desktop)
               + android/android_platform.cpp (NativeActivity + EGL). Also save files: GetSaveDirectory, WriteFileAtomic, ReadLocalFile. iOS goes here later.
               Native bridge (bridge.h/.cpp): BridgeCall(service, method, json) C++ -> Kotlin; Kotlin posts back
@@ -48,7 +50,7 @@ kit/wlw/kit/  wlw::kit: game-level building blocks shared by games (separate tar
               (UMP consent, load/show/retry); games add that dir to their sourceSets and depend on play-services-ads + UMP
 samples/      small games, built only when the engine is the top-level project (desktop):
               snake/ (Snake + its rules tests)
-tests/        engine unit tests (no window/GPU: anim, audio, core (random, atomic files, bridge queue), exact cover, search (bitboards, minimax, expectimax), fx, input, kit, picking, primitives, ui, screens); test data in tests/data/, also top-level only; ctest
+tests/        engine unit tests (no window/GPU: anim, audio, core (random, atomic files, bridge queue), exact cover, search (bitboards, minimax, expectimax), gf2 (Lights Out), fx, input, kit, picking, primitives, ui, screens); test data in tests/data/, also top-level only; ctest
 third_party/  glad (desktop only), stb, tinygltf + nlohmann json (also its own target wlw_json), miniaudio 0.11.25, stb_vorbis, Dear ImGui 1.92.9b (vendored)
 cmake/WLWHelpers.cmake  wlw_add_game(), wlw_add_assets(), wlw_set_warnings()
 vcpkg/ + vcpkg.json     desktop deps (glm, glfw3). Android fetches glm via FetchContent instead.

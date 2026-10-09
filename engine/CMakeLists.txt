@@ -65,6 +65,8 @@ add_library(wlw STATIC
   wlw/math/bit_grid.h
   wlw/math/exact_cover.h
   wlw/math/game_search.h
+  wlw/math/gf2.h
+  wlw/math/gf2.cpp
 
   wlw/input/input.cpp
   wlw/input/input.h
