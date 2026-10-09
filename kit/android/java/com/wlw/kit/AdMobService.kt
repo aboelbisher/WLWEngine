@@ -93,6 +93,8 @@ class AdMobService(private val activity: Activity) : WlwService {
             activity,
             params.build(),
             {
+                Log.i(TAG, "Consent: status ${info.consentStatus} (1 not required, 2 required, 3 obtained), " +
+                    "form available ${info.isConsentFormAvailable}, privacy options ${info.privacyOptionsRequirementStatus}")
                 UserMessagingPlatform.loadAndShowConsentFormIfRequired(activity) { formError ->
                     if (formError != null) Log.w(TAG, "Consent form: ${formError.message}")
                     startAds()
