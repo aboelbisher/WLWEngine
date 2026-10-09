@@ -421,6 +421,35 @@ bool MoveToBackground() {
   return moved;
 }
 
+void Vibrate(int milliseconds, float strength) {
+  if (!g_app || milliseconds <= 0) return;
+  JavaVM* vm = g_app->activity->vm;
+  JNIEnv* env = nullptr;
+  if (vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) != JNI_OK) return;  // attached in RunAndroidApp
+  env->PushLocalFrame(16);
+  // vibrator = activity.getSystemService("vibrator")
+  jobject activity = g_app->activity->clazz;
+  jmethodID get_service =
+      env->GetMethodID(env->GetObjectClass(activity), "getSystemService", "(Ljava/lang/String;)Ljava/lang/Object;");
+  jobject vibrator = env->CallObjectMethod(activity, get_service, env->NewStringUTF("vibrator"));
+  if (vibrator && !env->ExceptionCheck()) {
+    jclass vibrator_class = env->GetObjectClass(vibrator);
+    if (AConfiguration_getSdkVersion(g_app->config) >= 26) {
+      // Android 8+: VibrationEffect.createOneShot(ms, amplitude 1..255)
+      jclass effect_class = env->FindClass("android/os/VibrationEffect");
+      jmethodID one_shot = env->GetStaticMethodID(effect_class, "createOneShot", "(JI)Landroid/os/VibrationEffect;");
+      const jint amplitude = static_cast<jint>(std::clamp(strength, 0.0f, 1.0f) * 254.0f) + 1;
+      jobject effect = env->CallStaticObjectMethod(effect_class, one_shot, static_cast<jlong>(milliseconds), amplitude);
+      env->CallVoidMethod(vibrator, env->GetMethodID(vibrator_class, "vibrate", "(Landroid/os/VibrationEffect;)V"),
+                          effect);
+    } else {
+      env->CallVoidMethod(vibrator, env->GetMethodID(vibrator_class, "vibrate", "(J)V"), static_cast<jlong>(milliseconds));
+    }
+  }
+  if (env->ExceptionCheck()) env->ExceptionClear();  // e.g. no VIBRATE permission: just don't vibrate
+  env->PopLocalFrame(nullptr);
+}
+
 void WriteLog(LogLevel level, const char* message) {
   const int priority = level == LogLevel::Error   ? ANDROID_LOG_ERROR
                        : level == LogLevel::Warning ? ANDROID_LOG_WARN
@@ -431,6 +460,10 @@ void WriteLog(LogLevel level, const char* message) {
 // ---- entry point (app/entry_point.h) ----
 void RunAndroidApp(android_app* app, std::unique_ptr<Application> (*create_app)()) {
   g_app = app;
+  // Attach this thread (android_main's) to the Java VM once, for all JNI calls (insets, Back,
+  // vibration...). Detached again before the thread ends, as the JVM requires.
+  JNIEnv* env = nullptr;
+  app->activity->vm->AttachCurrentThread(&env, nullptr);
   app->onAppCmd = OnAppCmd;
   app->onInputEvent = OnInputEvent;
 
@@ -445,6 +478,7 @@ void RunAndroidApp(android_app* app, std::unique_ptr<Application> (*create_app)(
     ANativeActivity_finish(app->activity);
     while (!app->destroyRequested) PollEvents(-1);
   }
+  app->activity->vm->DetachCurrentThread();
   g_app = nullptr;
 }
 

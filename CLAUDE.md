@@ -12,6 +12,8 @@ Remote: `git@github.com:aboelbisher/WLWEngine.git`, branch `main`.
 ## Layout
 ```
 engine/wlw/
+  audio/      Audio (miniaudio device: WASAPI / AAudio...) + Mixer (decoded PCM, lock-free command queue,
+              voices with pitch/pan, per-sound caps, buses). Application::Audio(); silent in background
   anim/       ease.h (Penner easing curves), tween.h (Tween<T>: value-type tweens the game owns and samples)
   fx/         ParticleSystem: CPU simulation (fixed capacity, swap-remove, bursts) -> instances
   debug/      DebugUI: Dear ImGui (third_party/imgui) fed from Input, drawn via Window::SetOverlay; games add
@@ -31,8 +33,8 @@ engine/wlw/
   utils/      image/glTF loaders, texture cache, primitives.h (procedural cube, bevelled cube, sphere, gem meshes)
 samples/      small games, built only when the engine is the top-level project (desktop):
               snake/ (Snake + its rules tests)
-tests/        engine unit tests (no window/GPU: anim, fx, input, picking, primitives, ui); test data in tests/data/, also top-level only; ctest
-third_party/  glad (desktop only), stb, tinygltf + nlohmann json, Dear ImGui 1.92.9b (vendored)
+tests/        engine unit tests (no window/GPU: anim, audio, fx, input, picking, primitives, ui); test data in tests/data/, also top-level only; ctest
+third_party/  glad (desktop only), stb, tinygltf + nlohmann json, miniaudio 0.11.25, stb_vorbis, Dear ImGui 1.92.9b (vendored)
 cmake/WLWHelpers.cmake  wlw_add_game(), wlw_add_assets(), wlw_set_warnings()
 vcpkg/ + vcpkg.json     desktop deps (glm, glfw3). Android fetches glm via FetchContent instead.
 ```

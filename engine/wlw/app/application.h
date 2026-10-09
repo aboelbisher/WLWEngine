@@ -12,6 +12,9 @@
 
 namespace wlw {
 
+namespace audio {
+class Audio;
+}  // namespace audio
 namespace ui {
 class Canvas;
 class UIRenderer;
@@ -84,6 +87,8 @@ class Application {
   // Game states (menu, play, pause...): push Screens here; the engine updates the top one and
   // draws the visible ones, after the Application's own On* hooks. Optional.
   app::ScreenStack& Screens() { return screens_; }
+  // Sound output (see audio::Audio). Silent, but usable, if the device has no audio output.
+  audio::Audio& Audio() { return *audio_; }
   const std::shared_ptr<scene::Window>& WindowPtr() const { return window_; }
   const AppConfig& Config() const { return config_; }
 
@@ -99,6 +104,7 @@ class Application {
   // Destroyed in reverse order: the window handle first, the engine (GL + platform shutdown) last.
   std::unique_ptr<WLWEngine> engine_;
   std::shared_ptr<scene::Window> window_;
+  std::unique_ptr<audio::Audio> audio_;
   std::unique_ptr<ui::Canvas> canvas_;
   std::unique_ptr<ui::UIRenderer> ui_renderer_;  // GL objects: destroyed before the window/engine
   int ui_overlay_id_ = -1;

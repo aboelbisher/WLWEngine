@@ -90,6 +90,8 @@ SafeAreaInsets GetSafeAreaInsets() { return {}; }  // desktop windows have no cu
 
 bool MoveToBackground() { return false; }  // no such thing on desktop: the app quits instead
 
+void Vibrate(int, float) {}  // desktops don't vibrate
+
 void WriteLog(LogLevel level, const char* message) {
   static const char* kPrefix[] = {"", "[warning] ", "[error] "};
   FILE* out = level == LogLevel::Error ? stderr : stdout;

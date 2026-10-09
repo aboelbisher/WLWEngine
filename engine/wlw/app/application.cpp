@@ -1,6 +1,7 @@
 #include "wlw/app/application.h"
 
 #include "wlw/core/log.h"
+#include "wlw/audio/audio.h"
 #include "wlw/platform/platform.h"
 #include "wlw/ui/canvas.h"
 #include "wlw/ui/ui_renderer.h"
@@ -32,6 +33,7 @@ int Application::Run() {
     WLW_LOG_ERROR("Engine failed to start");
     return 1;
   }
+  audio_ = std::make_unique<audio::Audio>();
   // The game UI layer, drawn over the 3D scene (and under the debug UI, created next).
   canvas_ = std::make_unique<ui::Canvas>();
   ui_renderer_ = ui::UIRenderer::Create();
@@ -50,14 +52,18 @@ int Application::Run() {
   const Clock::time_point start = previous;
 
   while (!quit_requested_ && !window_->ShouldClose()) {
+    // Paused before resumed: coming back from the background, both can arrive in one frame (the
+    // loop doesn't run while the app is away), and the game must end up paused but audible.
+    if (window_->ConsumePaused()) {
+      audio_->Suspend();  // silent in the background
+      OnAppPaused();
+      screens_.AppPaused();  // e.g. the game screen opens its pause panel
+    }
     if (window_->ConsumeResumed()) {
       // Back from the background (mobile): don't count the time we were away as one huge frame.
       previous = Clock::now();
       timestep_.Reset();
-    }
-    if (window_->ConsumePaused()) {
-      OnAppPaused();
-      screens_.AppPaused();  // e.g. the game screen opens its pause panel
+      audio_->Resume();
     }
     const Clock::time_point now = Clock::now();
     const double frame_seconds = std::chrono::duration<double>(now - previous).count();

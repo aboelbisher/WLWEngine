@@ -24,3 +24,8 @@ add_library(wlw_imgui STATIC
   imgui/imgui_widgets.cpp)
 target_include_directories(wlw_imgui SYSTEM PUBLIC imgui imgui/backends)
 set_target_properties(wlw_imgui PROPERTIES FOLDER "third_party" POSITION_INDEPENDENT_CODE ON)
+
+# ---- miniaudio v0.11.25 (public domain / MIT-0) + stb_vorbis: audio output and decoding ----
+# Header-only; compiled once in the engine (wlw/audio/miniaudio_impl.cpp).
+add_library(wlw_miniaudio INTERFACE)
+target_include_directories(wlw_miniaudio SYSTEM INTERFACE miniaudio stb)

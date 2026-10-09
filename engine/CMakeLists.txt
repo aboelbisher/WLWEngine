@@ -35,6 +35,12 @@ add_library(wlw STATIC
   wlw/app/application.cpp
   wlw/app/application.h
   wlw/app/entry_point.h
+
+  wlw/audio/audio.cpp
+  wlw/audio/audio.h
+  wlw/audio/miniaudio_impl.cpp
+  wlw/audio/mixer.cpp
+  wlw/audio/mixer.h
   wlw/app/screen.cpp
   wlw/app/screen.h
 
@@ -113,7 +119,7 @@ set_target_properties(wlw PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_compile_definitions(wlw PUBLIC WLW_RENDERER_GL)  # the OpenGL / OpenGL ES backend
 target_link_libraries(wlw
   PUBLIC  glm::glm
-  PRIVATE wlw_tinygltf wlw_stb)
+  PRIVATE wlw_tinygltf wlw_stb wlw_miniaudio)
 
 if(WLW_PLATFORM STREQUAL "glfw")
   # Desktop: GLFW window + OpenGL 3.3 core loaded by glad.
@@ -136,6 +142,7 @@ elseif(WLW_PLATFORM STREQUAL "android")
   target_sources(wlw PRIVATE wlw/platform/android/android_platform.cpp)
   target_compile_definitions(wlw PUBLIC WLW_PLATFORM_ANDROID WLW_GLES)
   target_link_libraries(wlw PUBLIC wlw_native_app_glue EGL GLESv3 android log)
+  target_link_libraries(wlw PRIVATE dl)  # miniaudio loads AAudio / OpenSL ES at runtime
 endif()
 
 # ---- Debug UI (Dear ImGui) ----

@@ -51,6 +51,11 @@ SafeAreaInsets GetSafeAreaInsets();
 // doesn't exist (desktop), and the caller quits instead.
 bool MoveToBackground();
 
+// A short vibration ("haptic feedback"): `strength` 0..1 where the device supports amplitude.
+// Android needs <uses-permission android:name="android.permission.VIBRATE"/> in the game's
+// manifest. No-op on desktop.
+void Vibrate(int milliseconds, float strength = 1.0f);
+
 void WriteLog(LogLevel level, const char* message);
 
 }  // namespace wlw::platform
