@@ -13,25 +13,17 @@ float ParticleSystem::Particle::Size() const {
 }
 
 ParticleSystem::ParticleSystem(size_t capacity, uint32_t seed)
-    : capacity_(capacity), rng_state_(seed != 0 ? seed : 1u) {
+    : capacity_(capacity), rng_(seed) {
   particles_.reserve(capacity);  // the only allocation: bursts never grow the array
-}
-
-float ParticleSystem::Random01() {
-  // xorshift32: tiny and fast; visuals don't need a high-quality or portable sequence.
-  rng_state_ ^= rng_state_ << 13;
-  rng_state_ ^= rng_state_ >> 17;
-  rng_state_ ^= rng_state_ << 5;
-  return static_cast<float>(rng_state_ >> 8) * (1.0f / 16777216.0f);  // 24 bits -> [0, 1)
 }
 
 glm::vec3 ParticleSystem::RandomDirectionInCone(const glm::vec3& axis, float half_angle_degrees) {
   // Uniform over the cone's cap: pick cos(theta) uniformly in [cos(half_angle), 1] (picking the
   // angle itself uniformly would bunch directions up around the axis), and a random turn phi.
   const float cos_max = std::cos(glm::radians(std::clamp(half_angle_degrees, 0.0f, 180.0f)));
-  const float cos_theta = RandomRange(cos_max, 1.0f);
+  const float cos_theta = rng_.Range(cos_max, 1.0f);
   const float sin_theta = std::sqrt(std::max(0.0f, 1.0f - cos_theta * cos_theta));
-  const float phi = RandomRange(0.0f, 6.2831853f);
+  const float phi = rng_.Range(0.0f, 6.2831853f);
 
   // Any two unit vectors perpendicular to the axis (and each other) to build the direction from.
   const glm::vec3 helper = std::abs(axis.y) < 0.99f ? glm::vec3(0, 1, 0) : glm::vec3(1, 0, 0);
@@ -42,7 +34,7 @@ glm::vec3 ParticleSystem::RandomDirectionInCone(const glm::vec3& axis, float hal
 
 int ParticleSystem::Burst(const BurstSettings& settings, const glm::vec3& origin) {
   const int wanted = settings.count_min +
-                     static_cast<int>(Random01() * static_cast<float>(settings.count_max - settings.count_min + 1));
+                     static_cast<int>(rng_.Unit() * static_cast<float>(settings.count_max - settings.count_min + 1));
   const int room = static_cast<int>(capacity_ - particles_.size());
   const int count = std::clamp(wanted, 0, room);  // never beyond the capacity
   const float length = glm::length(settings.direction);
@@ -51,17 +43,17 @@ int ParticleSystem::Burst(const BurstSettings& settings, const glm::vec3& origin
   for (int i = 0; i < count; ++i) {
     Particle p;
     const float j = settings.position_jitter;
-    p.position = origin + glm::vec3(RandomRange(-j, j), RandomRange(-j, j), RandomRange(-j, j));
-    p.velocity = RandomDirectionInCone(axis, settings.spread_degrees) * RandomRange(settings.speed_min, settings.speed_max);
-    p.rotation = glm::vec3(RandomRange(0, 360), RandomRange(0, 360), RandomRange(0, 360));
+    p.position = origin + glm::vec3(rng_.Range(-j, j), rng_.Range(-j, j), rng_.Range(-j, j));
+    p.velocity = RandomDirectionInCone(axis, settings.spread_degrees) * rng_.Range(settings.speed_min, settings.speed_max);
+    p.rotation = glm::vec3(rng_.Range(0, 360), rng_.Range(0, 360), rng_.Range(0, 360));
     const float s = settings.spin_max;
-    p.spin = glm::vec3(RandomRange(-s, s), RandomRange(-s, s), RandomRange(-s, s));
+    p.spin = glm::vec3(rng_.Range(-s, s), rng_.Range(-s, s), rng_.Range(-s, s));
     p.size_start = settings.size_start;
     p.size_end = settings.size_end;
-    const float b = 1.0f + RandomRange(-settings.brightness_jitter, settings.brightness_jitter);
+    const float b = 1.0f + rng_.Range(-settings.brightness_jitter, settings.brightness_jitter);
     p.color = {std::min(settings.color.r * b, 1.0f), std::min(settings.color.g * b, 1.0f),
                std::min(settings.color.b * b, 1.0f), settings.color.a};
-    p.lifetime = RandomRange(settings.lifetime_min, settings.lifetime_max);
+    p.lifetime = rng_.Range(settings.lifetime_min, settings.lifetime_max);
     p.age = -settings.delay;
     particles_.push_back(p);
   }

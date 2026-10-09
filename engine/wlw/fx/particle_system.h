@@ -7,6 +7,7 @@
 #include <glm/glm.hpp>
 
 #include "wlw/core/color.h"
+#include "wlw/core/random.h"
 #include "wlw/rendering/instance_buffer.h"
 
 namespace wlw::fx {
@@ -75,13 +76,11 @@ class ParticleSystem {
   float drag = 0.5f;
 
  private:
-  float Random01();
-  float RandomRange(float min, float max) { return min + (max - min) * Random01(); }
   glm::vec3 RandomDirectionInCone(const glm::vec3& axis, float half_angle_degrees);
 
   std::vector<Particle> particles_;
   size_t capacity_;
-  uint32_t rng_state_;
+  core::Random rng_;  // visuals: any sequence would do, but one shared generator is simpler
 };
 
 }  // namespace wlw::fx

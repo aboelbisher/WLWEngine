@@ -11,7 +11,13 @@
 #ifdef WLW_PLATFORM_ANDROID
 
 #include <algorithm>
+#include <cstdio>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <memory>
+
+#include <unistd.h>  // fsync
 
 #include <EGL/egl.h>
 #include <GLES3/gl3.h>
@@ -448,6 +454,36 @@ void Vibrate(int milliseconds, float strength) {
   }
   if (env->ExceptionCheck()) env->ExceptionClear();  // e.g. no VIBRATE permission: just don't vibrate
   env->PopLocalFrame(nullptr);
+}
+
+std::string GetSaveDirectory(const std::string& app_name) {
+  // NativeActivity gives us the app's private internal storage (/data/data/<package>/files).
+  if (!g_app || !g_app->activity->internalDataPath) return {};
+  const std::filesystem::path folder = std::filesystem::path(g_app->activity->internalDataPath) / app_name;
+  std::error_code error;
+  std::filesystem::create_directories(folder, error);
+  return std::filesystem::is_directory(folder, error) ? folder.string() : std::string();
+}
+
+bool WriteFileAtomic(const std::string& path, const std::vector<uint8_t>& data) {
+  const std::string temp = path + ".tmp";
+  FILE* file = std::fopen(temp.c_str(), "wb");
+  if (!file) return false;
+  bool ok = data.empty() || std::fwrite(data.data(), 1, data.size(), file) == data.size();
+  ok = ok && std::fflush(file) == 0;     // C library buffer -> kernel
+  ok = ok && fsync(fileno(file)) == 0;   // kernel -> flash storage
+  std::fclose(file);
+  if (!ok || std::rename(temp.c_str(), path.c_str()) != 0) {  // POSIX rename: atomic replace
+    std::remove(temp.c_str());
+    return false;
+  }
+  return true;
+}
+
+std::optional<std::vector<uint8_t>> ReadLocalFile(const std::string& path) {
+  std::ifstream file(path, std::ios::binary);
+  if (!file) return std::nullopt;
+  return std::vector<uint8_t>(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
 }
 
 void WriteLog(LogLevel level, const char* message) {

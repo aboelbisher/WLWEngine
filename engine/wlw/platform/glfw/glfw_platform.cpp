@@ -3,6 +3,7 @@
 #ifdef WLW_PLATFORM_GLFW
 
 #include <cstdio>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
@@ -14,8 +15,12 @@
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <windows.h>  // GetModuleFileNameW (after glad/GLFW, which set up the GL macros)
+#include <io.h>  // _commit
 #elif defined(__APPLE__)
 #include <mach-o/dyld.h>
+#endif
+#if !defined(_WIN32)
+#include <unistd.h>  // fsync
 #endif
 
 #include "wlw/platform/platform.h"
@@ -82,6 +87,69 @@ std::optional<std::vector<uint8_t>> ReadFile(const std::string& path) {
   if (!file && std::filesystem::path(path).is_relative()) {
     file.open(ExecutableDirectory() / path, std::ios::binary);  // e.g. launched from elsewhere
   }
+  if (!file) return std::nullopt;
+  return std::vector<uint8_t>(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
+}
+
+
+// ---- Save data ----
+namespace {
+std::filesystem::path FromUtf8(const std::string& path) { return std::filesystem::path(std::u8string(path.begin(), path.end())); }
+std::string ToUtf8(const std::filesystem::path& path) {
+  const std::u8string text = path.u8string();
+  return std::string(text.begin(), text.end());
+}
+}  // namespace
+
+std::string GetSaveDirectory(const std::string& app_name) {
+  std::filesystem::path base;
+#if defined(_WIN32)
+  if (const wchar_t* appdata = _wgetenv(L"APPDATA")) base = appdata;
+#elif defined(__APPLE__)
+  if (const char* home = std::getenv("HOME")) base = std::filesystem::path(home) / "Library" / "Application Support";
+#else
+  if (const char* xdg = std::getenv("XDG_DATA_HOME"); xdg && *xdg) {
+    base = xdg;
+  } else if (const char* home = std::getenv("HOME")) {
+    base = std::filesystem::path(home) / ".local" / "share";
+  }
+#endif
+  if (base.empty()) return {};
+  const std::filesystem::path folder = base / FromUtf8(app_name);
+  std::error_code error;
+  std::filesystem::create_directories(folder, error);
+  return std::filesystem::is_directory(folder, error) ? ToUtf8(folder) : std::string();
+}
+
+bool WriteFileAtomic(const std::string& path, const std::vector<uint8_t>& data) {
+  const std::filesystem::path target = FromUtf8(path);
+  std::filesystem::path temp = target;
+  temp += ".tmp";
+#if defined(_WIN32)
+  FILE* file = _wfopen(temp.c_str(), L"wb");
+#else
+  FILE* file = std::fopen(temp.c_str(), "wb");
+#endif
+  if (!file) return false;
+  bool ok = data.empty() || std::fwrite(data.data(), 1, data.size(), file) == data.size();
+  ok = ok && std::fflush(file) == 0;  // C library buffer -> OS
+#if defined(_WIN32)
+  ok = ok && _commit(_fileno(file)) == 0;  // OS cache -> disk
+#else
+  ok = ok && fsync(fileno(file)) == 0;
+#endif
+  std::fclose(file);
+  std::error_code error;
+  if (ok) std::filesystem::rename(temp, target, error);  // replaces the old file in one step
+  if (!ok || error) {
+    std::filesystem::remove(temp, error);
+    return false;
+  }
+  return true;
+}
+
+std::optional<std::vector<uint8_t>> ReadLocalFile(const std::string& path) {
+  std::ifstream file(FromUtf8(path), std::ios::binary);
   if (!file) return std::nullopt;
   return std::vector<uint8_t>(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
 }

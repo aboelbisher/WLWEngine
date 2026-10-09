@@ -1,5 +1,7 @@
 #include "wlw/math/exact_cover.h"
 
+#include "wlw/core/random.h"
+
 #include <algorithm>
 #include <numeric>
 
@@ -135,17 +137,14 @@ ExactCover::Result ExactCover::Solve(int64_t max_solutions, uint32_t shuffle_see
     links.up[i] = links.down[i] = links.column[i] = i;
   }
 
-  // Row order decides which solution is found first. Shuffled with a small seeded generator
-  // (xorshift) so the same seed always gives the same order on every platform.
+  // Row order decides which solution is found first. Shuffled with the engine's deterministic
+  // generator, so the same seed gives the same order on every platform.
   std::vector<int> order(rows_.size());
   std::iota(order.begin(), order.end(), 0);
   if (shuffle_seed != 0) {
-    uint32_t state = shuffle_seed;
+    core::Random random(shuffle_seed);
     for (size_t i = order.size(); i > 1; --i) {  // Fisher-Yates
-      state ^= state << 13;
-      state ^= state >> 17;
-      state ^= state << 5;
-      std::swap(order[i - 1], order[state % i]);
+      std::swap(order[i - 1], order[random.Below(static_cast<int>(i))]);
     }
   }
   std::vector<int> first_node(rows_.size(), -1);

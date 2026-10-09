@@ -36,6 +36,19 @@ bool LoadGLFunctions();
 // assets/.
 std::optional<std::vector<uint8_t>> ReadFile(const std::string& path);
 
+// ---- Save data: a writable folder private to the app ----
+// Android: the app's internal storage (no permission needed; removed on uninstall; included in
+// Android's Auto Backup). Windows: %APPDATA%\<app>. macOS: ~/Library/Application Support/<app>.
+// Linux: $XDG_DATA_HOME/<app> or ~/.local/share/<app>. Created if missing; "" if impossible.
+// Paths are UTF-8.
+std::string GetSaveDirectory(const std::string& app_name);
+// Writes a file so a crash or power loss can never leave it half-written: the data goes to
+// "<path>.tmp", is flushed all the way to the disk, then renamed over <path>. A rename is
+// all-or-nothing, so <path> is always either the complete old file or the complete new one.
+bool WriteFileAtomic(const std::string& path, const std::vector<uint8_t>& data);
+// Reads a file from the device's file system (save data), not from the assets.
+std::optional<std::vector<uint8_t>> ReadLocalFile(const std::string& path);
+
 // The parts of the screen covered by system UI or hardware: status bar, camera cutout/notch,
 // gesture or navigation bar. Keep important UI inside. In framebuffer pixels; all 0 on desktop.
 struct SafeAreaInsets {

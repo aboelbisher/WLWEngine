@@ -6,6 +6,7 @@
 #include "check.h"
 #include "wlw/ui/canvas.h"
 #include "wlw/ui/font.h"
+#include "wlw/ui/layout.h"
 
 using namespace wlw::ui;
 
@@ -130,6 +131,27 @@ static void TestCanvasLine() {
   CHECK(canvas.QuadCount() == 2);
 }
 
+static void TestLayoutAndToggle(const Font& font) {
+  const Rect area{{0.0f, 0.0f}, {100.0f, 50.0f}};
+  CHECK(Near(Centered({10.0f, 20.0f}, {4.0f, 6.0f}).min.x, 8.0f) && Near(Centered({10.0f, 20.0f}, {4.0f, 6.0f}).max.y, 23.0f));
+  CHECK(Near(Inset(area, 5.0f).min.x, 5.0f) && Near(Inset(area, 5.0f).max.y, 45.0f));
+  const Rect last_row = Row(area, 1, 2, 10.0f);  // two rows of 20 with a 10 gap
+  CHECK(Near(last_row.min.y, 30.0f) && Near(last_row.max.y, 50.0f) && Near(last_row.max.x, 100.0f));
+  const Rect middle = Column(area, 1, 3, 5.0f);  // three columns of 30 with 5 gaps
+  CHECK(Near(middle.min.x, 35.0f) && Near(middle.max.x, 65.0f));
+
+  Canvas canvas;
+  canvas.BeginFrame({400.0f, 800.0f}, {}, {400.0f, 800.0f});
+  PointerState tap;
+  tap.position = {50.0f, 25.0f};
+  tap.pressed = tap.released = true;
+  canvas.SetPointer(tap);
+  bool sound = true;
+  CHECK(canvas.Toggle(font, "SOUND", sound, area) && !sound);  // clicked: flipped
+  canvas.SetPointer({});
+  CHECK(!canvas.Toggle(font, "SOUND", sound, area) && !sound);  // not clicked: unchanged
+}
+
 int main() {
   auto font = LoadTestFont();
   if (font) {
@@ -138,6 +160,7 @@ int main() {
     TestLayout(*font);
     TestOutlineEdge(*font);
     TestCanvasTextAndBatches(*font);
+    TestLayoutAndToggle(*font);
   }
   TestCanvasUnits();
   TestCanvasLine();

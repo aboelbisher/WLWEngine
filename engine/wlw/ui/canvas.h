@@ -45,6 +45,18 @@ struct TextStyle {
   core::Color outline_color{0.0f, 0.0f, 0.0f, 1.0f};
   glm::vec2 shadow_offset{0.0f};  // in Canvas units; zero = no shadow
   core::Color shadow_color{0.0f, 0.0f, 0.0f, 0.5f};
+
+  // Chunky outlined text with a drop shadow: readable over anything (game HUDs).
+  static TextStyle Outlined(const core::Color& color, const core::Color& ink = {0.06f, 0.07f, 0.12f, 1.0f},
+                            float alpha = 1.0f) {
+    TextStyle style;
+    style.color = {color.r, color.g, color.b, color.a * alpha};
+    style.outline = 0.07f;
+    style.outline_color = {ink.r, ink.g, ink.b, ink.a * alpha};
+    style.shadow_offset = {0.0f, 3.0f};
+    style.shadow_color = {0.0f, 0.0f, 0.0f, 0.45f * alpha};
+    return style;
+  }
 };
 
 // What the GPU gets per corner of a quad (see the UI shader in ui_renderer_gl.cpp).
@@ -92,6 +104,12 @@ class Canvas {
   // frame it was clicked (pressed on it and released on it - sliding off cancels). It shrinks
   // a little while held. Only responds while the canvas is interactive (see SetInteractive).
   bool Button(const Font& font, std::string_view label, const Rect& rect, const ButtonStyle& style = {});
+  // An on/off switch drawn as a button reading "<label> ON" or "<label> OFF" (dimmed when off).
+  // Flips `value` and returns true on the frame it was clicked.
+  bool Toggle(const Font& font, std::string_view label, bool& value, const Rect& rect, const ButtonStyle& style = {});
+  // A rounded box with a soft shadow under it: the background of dialogs and panels.
+  void Panel(const Rect& rect, const core::Color& fill, float corner_radius = 24.0f,
+             const core::Color& shadow = {0.0f, 0.0f, 0.0f, 0.35f});
 
   void SetPointer(const PointerState& pointer) { pointer_ = pointer; }
   const PointerState& Pointer() const { return pointer_; }

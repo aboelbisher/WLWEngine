@@ -51,6 +51,7 @@ add_library(wlw STATIC
   wlw/core/log.h
   wlw/core/logger.h
   wlw/core/mesh.h
+  wlw/core/random.h
   wlw/core/model.h
   wlw/core/vector2.h
   wlw/core/vector3.h
@@ -100,6 +101,7 @@ add_library(wlw STATIC
   wlw/ui/canvas.h
   wlw/ui/font.cpp
   wlw/ui/font.h
+  wlw/ui/layout.h
   wlw/ui/ui_renderer.h
   wlw/ui/ui_renderer_gl.cpp
 

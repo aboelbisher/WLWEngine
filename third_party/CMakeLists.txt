@@ -13,6 +13,10 @@ add_library(wlw_tinygltf INTERFACE)
 target_include_directories(wlw_tinygltf SYSTEM INTERFACE tinygltf)
 target_link_libraries(wlw_tinygltf INTERFACE wlw_stb)
 
+# nlohmann json on its own (it ships in the tinygltf folder): wlw::kit uses it for save files
+add_library(wlw_json INTERFACE)
+target_include_directories(wlw_json SYSTEM INTERFACE tinygltf)
+
 # ---- Dear ImGui v1.92.9b (MIT; vendored core + OpenGL3 renderer backend): the debug UI ----
 # Linked by the engine only when WLW_DEBUG_UI is on. The backend is compiled by the engine
 # (wlw/debug/imgui_gl_backend.cpp) so it uses the engine's GL headers.

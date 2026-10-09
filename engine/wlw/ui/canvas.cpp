@@ -1,6 +1,7 @@
 #include "wlw/ui/canvas.h"
 
 #include <algorithm>
+#include <string>
 
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -140,4 +141,22 @@ bool Canvas::Button(const Font& font, std::string_view label, const Rect& rect, 
   return clicked;
 }
 
+
+bool Canvas::Toggle(const Font& font, std::string_view label, bool& value, const Rect& rect, const ButtonStyle& style) {
+  ButtonStyle look = style;
+  if (!value) {  // off: the same button, faded
+    look.fill = {style.fill.r * 0.55f, style.fill.g * 0.55f, style.fill.b * 0.55f, style.fill.a};
+    look.text = {style.text.r, style.text.g, style.text.b, style.text.a * 0.6f};
+  }
+  std::string text(label);
+  text += value ? " ON" : " OFF";
+  if (!Button(font, text, rect, look)) return false;
+  value = !value;
+  return true;
+}
+
+void Canvas::Panel(const Rect& rect, const core::Color& fill, float corner_radius, const core::Color& shadow) {
+  if (shadow.a > 0.0f) FillRect({rect.min + glm::vec2(0.0f, 6.0f), rect.max + glm::vec2(0.0f, 6.0f)}, shadow, corner_radius);
+  FillRect(rect, fill, corner_radius);
+}
 }  // namespace wlw::ui

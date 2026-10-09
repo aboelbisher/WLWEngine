@@ -7,6 +7,7 @@ include(WLWHelpers)
 
 add_subdirectory(third_party)
 add_subdirectory(engine)
+add_subdirectory(kit)
 
 # ---- Samples and unit tests (desktop only) ----
 # Built only when the engine is the top-level project, so games that include the engine as a

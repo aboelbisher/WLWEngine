@@ -20,22 +20,27 @@ engine/wlw/
               panels in Application::OnDebugUI() (#if WLW_DEBUG_UI). F1 / "Debug" button. Off in release builds
   app/        Application (game loop: OnStart/OnFixedUpdate/OnUpdate/OnRender), entry_point.h (WLW_MAIN),
               Screen + ScreenStack (game states: deferred push/pop/replace, overlays, fades, Back routing)
-  core/       math types, FixedTimestep, log.h (WLW_LOG_*), logger.h (FAIL_IF), mesh/model, collision.h (AABB, Ray, Plane, IntersectPlane)
+  core/       math types, FixedTimestep, Random (SplitMix64: deterministic everywhere, state saveable), log.h (WLW_LOG_*), logger.h (FAIL_IF), mesh/model, collision.h (AABB, Ray, Plane, IntersectPlane)
   input/      Input: keys (pressed vs held), pointer (mouse/first finger), swipes, taps
   math/       ExactCover: Knuth's Algorithm X with Dancing Links (exact cover search, counting, hints)
   platform/   THE ONLY PER-OS CODE: platform.h interface + glfw/glfw_platform.cpp (desktop)
-              + android/android_platform.cpp (NativeActivity + EGL). iOS goes here later.
+              + android/android_platform.cpp (NativeActivity + EGL). Also save files: GetSaveDirectory, WriteFileAtomic, ReadLocalFile. iOS goes here later.
   rendering/  RenderingDriver/RenderDevice interfaces + one GL backend for GL 3.3 core AND GLES 3.0
   scene/      Node (scene graph, local transforms, visibility, instancing: SetInstances = one draw call for N copies), Window (surface + scene + input),
               cameras (FollowCamera = perspective, OrthographicCamera = parallel/top-down;
               Camera3D::ScreenPointToRay for picking, fed with Input::SurfaceSize())
   ui/         2D UI layer: Font (TTF -> SDF atlas, stb_truetype), Canvas (virtual units, safe area, text,
-              rounded rects, batched quads), UIRenderer (GL). Canvas::Button = immediate-mode button. Games draw in Application::OnRenderUI()
+              rounded rects, batched quads), UIRenderer (GL). Canvas::Button/Toggle/Panel = immediate-mode widgets,
+              layout.h (Centered, Inset, Row, Column). Games draw in Application::OnRenderUI()
   utils/      image/glTF loaders, texture cache, primitives.h (procedural cube, bevelled cube, sphere, gem meshes)
+kit/wlw/kit/  wlw::kit: game-level building blocks shared by games (separate target on top of the engine; the
+              engine never includes it). SaveStore (JSON file, atomic write, .bak fallback, versions + migrations),
+              progress.h (DeviceId, Counters, Scores, LevelProgress: all mergeable, for cloud sync), daily.h (Date,
+              Today, DailyLog streaks), cloud_sync.h (interface only; implementations come with the native bridge)
 samples/      small games, built only when the engine is the top-level project (desktop):
               snake/ (Snake + its rules tests)
-tests/        engine unit tests (no window/GPU: anim, audio, exact cover, fx, input, picking, primitives, ui); test data in tests/data/, also top-level only; ctest
-third_party/  glad (desktop only), stb, tinygltf + nlohmann json, miniaudio 0.11.25, stb_vorbis, Dear ImGui 1.92.9b (vendored)
+tests/        engine unit tests (no window/GPU: anim, audio, core (random, atomic files), exact cover, fx, input, kit, picking, primitives, ui, screens); test data in tests/data/, also top-level only; ctest
+third_party/  glad (desktop only), stb, tinygltf + nlohmann json (also its own target wlw_json), miniaudio 0.11.25, stb_vorbis, Dear ImGui 1.92.9b (vendored)
 cmake/WLWHelpers.cmake  wlw_add_game(), wlw_add_assets(), wlw_set_warnings()
 vcpkg/ + vcpkg.json     desktop deps (glm, glfw3). Android fetches glm via FetchContent instead.
 ```
