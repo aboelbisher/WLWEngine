@@ -17,7 +17,8 @@ engine/wlw/
               Music: Audio::PlayMusic streams a file (decode thread -> lock-free ring -> Mixer stream slots with crossfades)
   anim/       ease.h (Penner easing curves), tween.h (Tween<T>: value-type tweens the game owns and samples),
               shake.h (trauma-based screen shake: trauma decays, offset = trauma^2 x smooth noise)
-  fx/         ParticleSystem: CPU simulation (fixed capacity, swap-remove, bursts) -> instances
+  fx/         ParticleSystem: CPU simulation (fixed capacity, swap-remove, bursts, Emit = one exact particle,
+              optional Floor rectangle they bounce on and fall past) -> instances
   debug/      DebugUI: Dear ImGui (third_party/imgui) fed from Input, drawn via Window::SetOverlay; games add
               panels in Application::OnDebugUI() (#if WLW_DEBUG_UI). F1 / "Debug" button. Off in release builds
   app/        Application (game loop: OnStart/OnFixedUpdate/OnUpdate/OnRender; SetTimeScale = hit-stop / slow motion

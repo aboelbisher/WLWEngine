@@ -32,6 +32,12 @@ glm::vec3 ParticleSystem::RandomDirectionInCone(const glm::vec3& axis, float hal
   return axis * cos_theta + (u * std::cos(phi) + v * std::sin(phi)) * sin_theta;
 }
 
+bool ParticleSystem::Emit(const Particle& particle) {
+  if (particles_.size() >= capacity_) return false;  // full: like a burst, it's cut, not grown
+  particles_.push_back(particle);
+  return true;
+}
+
 int ParticleSystem::Burst(const BurstSettings& settings, const glm::vec3& origin) {
   const int wanted = settings.count_min +
                      static_cast<int>(rng_.Unit() * static_cast<float>(settings.count_max - settings.count_min + 1));
@@ -72,8 +78,23 @@ void ParticleSystem::Update(float dt) {
     // Semi-implicit Euler: update velocity first, then move with the new velocity. Stable and
     // cheap, which is all a short-lived visual effect needs.
     p.velocity = (p.velocity + gravity * dt) * damping;
+    const float bottom_before = p.position.y - p.Size() * 0.5f;
     p.position += p.velocity * dt;
     p.rotation += p.spin * dt;
+    if (floor) {
+      // The floor stops a particle that was above it and is now below it, inside its rectangle.
+      // (One that went past an edge and fell below stays below: it never pops back up.)
+      const float half = p.Size() * 0.5f;
+      const bool inside = p.position.x >= floor->min.x && p.position.x <= floor->max.x &&
+                          p.position.z >= floor->min.y && p.position.z <= floor->max.y;
+      if (inside && bottom_before >= floor->height - 1e-4f && p.position.y - half < floor->height) {
+        p.position.y = floor->height + half;
+        const float keep = 1.0f - std::clamp(floor->friction, 0.0f, 1.0f);
+        p.velocity = {p.velocity.x * keep, -p.velocity.y * floor->bounce, p.velocity.z * keep};
+        p.spin *= keep;
+        if (p.velocity.y < 0.6f) p.velocity.y = 0.0f;  // too slow to hop again: it rests (and slides)
+      }
+    }
     p.age += dt;
     if (p.age >= p.lifetime) {
       p = particles_.back();  // swap-remove: the last particle takes this slot...

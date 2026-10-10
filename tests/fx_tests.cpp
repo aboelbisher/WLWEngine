@@ -1,4 +1,5 @@
 // Tests for wlw::fx::ParticleSystem: spawning, lifetime, motion, capacity, instances.
+#include <algorithm>
 #include <cmath>
 
 #include <glm/glm.hpp>
@@ -110,6 +111,73 @@ static void TestDelayAndInstances() {
   CHECK(Near(glm::length(glm::vec3(instances[0].transform[0])), 0.5f, 1e-3f));
 }
 
+static void TestEmitExactly() {
+  ParticleSystem system(2);
+  ParticleSystem::Particle p;
+  p.position = {1.0f, 2.0f, 3.0f};
+  p.velocity = {0.0f, 0.0f, 0.0f};
+  p.color = {0.2f, 0.4f, 0.6f, 1.0f};
+  p.size_start = p.size_end = 0.5f;
+  p.lifetime = 1.0f;
+  CHECK(system.Emit(p) && system.Count() == 1);
+  // Exactly as given: no randomness anywhere.
+  const ParticleSystem::Particle& out = system.Particles()[0];
+  CHECK(out.position == p.position && out.color.g == 0.4f && out.Size() == 0.5f);
+  // Delayed with a negative age, like a burst.
+  p.age = -0.5f;
+  CHECK(system.Emit(p));
+  CHECK(!system.Emit(p) && system.Count() == 2);  // full: refused, not grown
+}
+
+static void TestFloorBounceAndEdge() {
+  ParticleSystem system(4);
+  system.drag = 0.0f;
+  system.gravity = {0.0f, -10.0f, 0.0f};
+  system.floor = ParticleSystem::Floor{0.0f, {-1.0f, -1.0f}, {1.0f, 1.0f}, 0.5f, 0.5f};
+  ParticleSystem::Particle p;
+  p.size_start = p.size_end = 0.2f;
+  p.lifetime = 10.0f;
+  // Dropped onto the floor from 1 unit up: it lands, bounces back up slower, and ends up resting
+  // on top (its bottom on the floor), never below.
+  p.position = {0.0f, 1.0f, 0.0f};
+  p.velocity = {0.5f, 0.0f, 0.0f};  // and drifting sideways
+  system.Emit(p);
+  float lowest = 1e9f, peak_after_bounce = 0.0f;
+  bool bounced = false;
+  for (int i = 0; i < 600; ++i) {
+    system.Update(1.0f / 120.0f);
+    const ParticleSystem::Particle& q = system.Particles()[0];
+    lowest = std::min(lowest, q.position.y);
+    if (q.velocity.y > 0.0f) bounced = true;
+    if (bounced) peak_after_bounce = std::max(peak_after_bounce, q.position.y);
+    if (q.position.x > 0.9f) break;  // stay on the floor for this part
+  }
+  CHECK(bounced && lowest >= 0.1f - 1e-3f);           // never sank in: the cube's half size above
+  CHECK(peak_after_bounce > 0.1f && peak_after_bounce < 0.6f);  // lower than where it fell from
+  // Sliding loses speed at each bounce (friction).
+  CHECK(system.Particles()[0].velocity.x < 0.5f);
+
+  // Past the edge there's no floor: a particle falls right through.
+  ParticleSystem edge(1);
+  edge.floor = system.floor;
+  edge.drag = 0.0f;
+  ParticleSystem::Particle off = p;
+  off.position = {3.0f, 1.0f, 0.0f};
+  off.velocity = {0.0f, 0.0f, 0.0f};
+  edge.Emit(off);
+  for (int i = 0; i < 120; ++i) edge.Update(1.0f / 60.0f);
+  CHECK(edge.Particles()[0].position.y < -1.0f);
+  // And one that fell below, moving back over the floor, doesn't pop up through it.
+  ParticleSystem under(1);
+  under.floor = system.floor;
+  ParticleSystem::Particle below = p;
+  below.position = {0.0f, -0.5f, 0.0f};
+  below.velocity = {0.0f, 0.0f, 0.0f};
+  under.Emit(below);
+  under.Update(1.0f / 60.0f);
+  CHECK(under.Particles()[0].position.y < -0.5f);
+}
+
 int main() {
   TestBurstCountAndCapacity();
   TestParticlesDieAtTheirLifetime();
@@ -117,5 +185,7 @@ int main() {
   TestDragIsFrameRateIndependent();
   TestDirectionsStayInTheCone();
   TestDelayAndInstances();
+  TestEmitExactly();
+  TestFloorBounceAndEdge();
   return TestResult("fx");
 }

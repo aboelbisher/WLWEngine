@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <vector>
 
 #include <glm/glm.hpp>
@@ -56,6 +57,10 @@ class ParticleSystem {
 
   explicit ParticleSystem(size_t capacity = 1024, uint32_t seed = 0x2545F491u);
 
+  // Spawns one particle exactly as given (bursts are random): a block flying off the board, a piece
+  // of debris that must start where something was. A negative `age` delays it, like a burst's
+  // delay. Returns false (and adds nothing) when the system is full.
+  bool Emit(const Particle& particle);
   // Spawns a burst at `origin`. Returns how many particles were actually created.
   int Burst(const BurstSettings& settings, const glm::vec3& origin);
 
@@ -73,6 +78,17 @@ class ParticleSystem {
   // Applied to every particle. Drag is "fraction of speed lost per second"-like: velocity is
   // multiplied by exp(-drag * dt), which gives the same motion at any frame rate.
   glm::vec3 gravity{0.0f, -9.8f, 0.0f};
+  // An optional floor: a horizontal rectangle (x from min.x to max.x, z from min.y to max.y) at
+  // `height`. Particles falling onto it bounce (losing speed) and slide (losing more), and come to
+  // rest; past its edges they fall on by. Particles count as cubes of their current size.
+  struct Floor {
+    float height = 0.0f;
+    glm::vec2 min{-1e9f, -1e9f};
+    glm::vec2 max{1e9f, 1e9f};
+    float bounce = 0.35f;    // share of the downward speed kept, upwards (0 = dead stop, 1 = no loss)
+    float friction = 0.5f;   // share of the sideways speed and spin lost at each bounce
+  };
+  std::optional<Floor> floor;
   float drag = 0.5f;
 
  private:
