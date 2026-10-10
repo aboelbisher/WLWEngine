@@ -1,9 +1,13 @@
-// Tests for the UI layer's CPU side: font baking, text measuring/layout, Canvas units and batching.
+// Tests for the UI layer's CPU side: font baking, text measuring/layout, Canvas units and batching
+// (incl. ShaderRect), a ShaderMaterial's params.
 // (Drawing itself needs a GPU; these check everything that's computed before it.)
 #include <cmath>
+#include <memory>
 #include <string>
+#include <variant>
 
 #include "check.h"
+#include "wlw/rendering/shader_material.h"
 #include "wlw/ui/canvas.h"
 #include "wlw/ui/font.h"
 #include "wlw/ui/layout.h"
@@ -152,6 +156,41 @@ static void TestLayoutAndToggle(const Font& font) {
   CHECK(!canvas.Toggle(font, "SOUND", sound, area) && !sound);  // not clicked: unchanged
 }
 
+// A ShaderMaterial's params: stored by name, set again = replaced (no GPU needed).
+static void TestMaterialParams() {
+  auto material = wlw::rendering::ShaderMaterial::Create(nullptr);  // no shader: no GPU needed
+  CHECK(!material->IsValid() && material->Params().empty() && material->AsShaderMaterial() == material.get());
+  material->SetParam("uTime", 1.5f);
+  material->SetParam("uTint", glm::vec4(1.0f, 0.5f, 0.0f, 1.0f));
+  material->SetParam("uTime", 2.5f);
+  CHECK(material->Params().size() == 2);
+  const auto* time = material->GetParam("uTime");
+  CHECK(time && std::holds_alternative<float>(*time) && Near(std::get<float>(*time), 2.5f));
+  CHECK(material->GetParam("uMissing") == nullptr);
+}
+
+// A ShaderRect is one quad in a run of its own, with uv 0..1, between the runs around it.
+static void TestCanvasShaderRect() {
+  Canvas canvas;
+  canvas.BeginFrame({400.0f, 800.0f}, {}, {400.0f, 800.0f});
+  auto material = wlw::rendering::ShaderMaterial::Create(nullptr);  // no shader: no GPU needed
+  canvas.FillRect({{0.0f, 0.0f}, {10.0f, 10.0f}}, {1, 1, 1, 1});
+  canvas.ShaderRect({{20.0f, 30.0f}, {120.0f, 80.0f}}, material, {1.0f, 0.0f, 0.0f, 1.0f});
+  canvas.FillRect({{0.0f, 0.0f}, {10.0f, 10.0f}}, {1, 1, 1, 1});
+  canvas.FillRect({{0.0f, 0.0f}, {10.0f, 10.0f}}, {1, 1, 1, 1});
+  canvas.ShaderRect({{0.0f, 0.0f}, {1.0f, 1.0f}}, nullptr);  // no material: nothing
+  const auto& batches = canvas.Batches();
+  CHECK(batches.size() == 3 && canvas.QuadCount() == 4);
+  CHECK(!batches[0].material && batches[0].quad_count == 1);
+  CHECK(batches[1].material == material && batches[1].first_quad == 1 && batches[1].quad_count == 1);
+  CHECK(!batches[2].material && batches[2].first_quad == 2 && batches[2].quad_count == 2);
+  const auto& v = canvas.Vertices();
+  CHECK(Near(v[4].position.x, 20.0f) && Near(v[4].position.y, 30.0f) && Near(v[6].position.x, 120.0f) &&
+        Near(v[6].position.y, 80.0f));
+  CHECK(Near(v[4].uv.x, 0.0f) && Near(v[4].uv.y, 0.0f) && Near(v[6].uv.x, 1.0f) && Near(v[6].uv.y, 1.0f));
+  CHECK(Near(v[5].color.r, 1.0f) && Near(v[5].color.g, 0.0f));
+}
+
 int main() {
   auto font = LoadTestFont();
   if (font) {
@@ -164,5 +203,7 @@ int main() {
   }
   TestCanvasUnits();
   TestCanvasLine();
+  TestMaterialParams();
+  TestCanvasShaderRect();
   return TestResult("ui");
 }

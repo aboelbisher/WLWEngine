@@ -39,13 +39,17 @@ engine/wlw/
               + services; games subclass it and add its java dir to their Gradle sourceSets).
   rendering/  RenderingDriver/RenderDevice interfaces + one GL backend for GL 3.3 core AND GLES 3.0. Per frame: gather lights +
               drawables, shadow pass (depth from the shadow light into a 2D depth texture), main pass (up to 4 lights, PCF shadows)
+              Custom shaders (shader.h): one text (shader_type canvas|mesh; fragment(), optional vertex()) -> RenderDevice::CreateShader(code) -> ShaderMaterial::Create(shader)
+              + SetParam(name, float/vec/mat4/texture); node/mesh SetMaterial or Canvas::ShaderRect. Engine inputs are prepended
+              (documented in shader.h). Data textures: CreateTexture2D(w, h, {R8/RGB8/RGBA8/R16F/RGBA16F}) + WTexture2D::Update
   scene/      Node (scene graph, local transforms, visibility, instancing: SetInstances = one draw call for N copies), Window (surface + scene + input),
               cameras (FollowCamera = perspective, OrthographicCamera = parallel/top-down;
               Camera3D::ScreenPointToRay for picking, fed with Input::SurfaceSize()).
               Lights are nodes (light.h: DirectionalLight / PointLight / SpotLight, added with AddNode); nodes opt in to
               SetCastsShadow / SetReceivesShadow; shadow_map.h fits the light's box to the casters (texel-snapped)
   ui/         2D UI layer: Font (TTF -> SDF atlas, stb_truetype), Canvas (virtual units, safe area, text,
-              rounded rects, batched quads), UIRenderer (GL). Canvas::Button/Toggle/Panel = immediate-mode widgets,
+              rounded rects, batched quads, ShaderRect = a rect drawn by a material's shader), UIRenderer (GL).
+              Canvas::Button/Toggle/Panel = immediate-mode widgets,
               layout.h (Centered, Inset, Row, Column). Games draw in Application::OnRenderUI()
   utils/      image/glTF loaders, texture cache, primitives.h (procedural cube, bevelled cube, sphere, gem meshes)
 kit/wlw/kit/  wlw::kit: game-level building blocks shared by games (separate target on top of the engine; the
@@ -57,7 +61,7 @@ kit/wlw/kit/  wlw::kit: game-level building blocks shared by games (separate tar
               (UMP consent, load/show/retry); games add that dir to their sourceSets and depend on play-services-ads + UMP
 samples/      small games, built only when the engine is the top-level project (desktop):
               snake/ (Snake + its rules tests)
-tests/        engine unit tests (no window/GPU: anim, audio, core (random, atomic files, bridge queue), exact cover, search (bitboards, minimax, expectimax), gf2 (Lights Out), lighting (light nodes, shadow-box fitting), fx, input, kit, picking, primitives, ui, screens); test data in tests/data/, also top-level only; ctest
+tests/        engine unit tests (no window/GPU: anim, audio, core (random, atomic files, bridge queue), exact cover, search (bitboards, minimax, expectimax), gf2 (Lights Out), shader text splitting, lighting (light nodes, shadow-box fitting), fx, input, kit, picking, primitives, ui, screens); test data in tests/data/, also top-level only; ctest
 third_party/  glad (desktop only), stb, tinygltf + nlohmann json (also its own target wlw_json), miniaudio 0.11.25, stb_vorbis, Dear ImGui 1.92.9b (vendored)
 cmake/WLWHelpers.cmake  wlw_add_game(), wlw_add_assets(), wlw_set_warnings()
 vcpkg/ + vcpkg.json     desktop deps (glm, glfw3). Android fetches glm via FetchContent instead.

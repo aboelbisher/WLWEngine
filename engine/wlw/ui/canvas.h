@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <memory>
 #include <string_view>
 #include <vector>
 
@@ -8,6 +9,7 @@
 
 #include "wlw/core/color.h"
 #include "wlw/platform/platform.h"
+#include "wlw/rendering/shader_material.h"
 #include "wlw/ui/font.h"
 
 namespace wlw::ui {
@@ -72,6 +74,7 @@ struct UIBatch {
   const Font* font = nullptr;
   size_t first_quad = 0;
   size_t quad_count = 0;
+  std::shared_ptr<rendering::ShaderMaterial> material;  // a ShaderRect: one quad, drawn with this material's shader
 };
 
 // The 2D UI layer, drawn over the 3D scene (Application::OnRenderUI). Immediate mode: draw
@@ -98,6 +101,13 @@ class Canvas {
   // meets the vertical middle of the line, so centring text on a point is just Align::Center.
   void Text(const Font& font, std::string_view text, glm::vec2 position, float size, Align align = Align::Left,
             const TextStyle& style = {});
+
+  // A rectangle drawn by a custom shader: the ShaderMaterial's Target::Canvas shader (see
+  // rendering/shader.h) with its params; vUV goes 0..1 across the rect, vColor is `tint`. Drawn in
+  // order with everything else (e.g. first, as a background). Each one is its own draw call.
+  // Nothing is drawn if the material has no valid canvas shader.
+  void ShaderRect(const Rect& rect, std::shared_ptr<rendering::ShaderMaterial> material,
+                  const core::Color& tint = {1.0f, 1.0f, 1.0f, 1.0f});
 
   // ---- Widgets ----
   // An immediate-mode button: call it every frame you want it shown; it returns true on the

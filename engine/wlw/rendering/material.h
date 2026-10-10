@@ -34,6 +34,10 @@ namespace wlw::rendering {
 	};
 
 
+	class ShaderMaterial;
+
+	// The engine's own look: a texture, and (the older way) a light. For a game's own shader use
+	// ShaderMaterial (shader_material.h), which nodes and meshes take the same way.
 	class Material {
 	public:
 
@@ -57,6 +61,9 @@ namespace wlw::rendering {
 		std::optional<Lighting> GetLighting() const {
 			return lighting_;
 		}
+
+		// Non-null for a ShaderMaterial: the renderers draw it with its shader instead.
+		virtual const ShaderMaterial* AsShaderMaterial() const { return nullptr; }
 
 		static std::unique_ptr<Material> Create();
 

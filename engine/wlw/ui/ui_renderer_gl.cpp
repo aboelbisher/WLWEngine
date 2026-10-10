@@ -11,6 +11,7 @@
 #include "wlw/core/log.h"
 #include "wlw/platform/platform.h"
 #include "wlw/rendering/gl.h"
+#include "wlw/rendering/gl_shader.h"
 #include "wlw/ui/ui_renderer.h"
 
 namespace wlw::ui {
@@ -151,9 +152,12 @@ class GLUIRenderer : public UIRenderer {
     glActiveTexture(GL_TEXTURE0);
     glBindVertexArray(vao_);
     for (const UIBatch& batch : canvas.Batches()) {
+      if (batch.material) {
+        DrawShaderRect(canvas, batch);
+        continue;
+      }
       glBindTexture(GL_TEXTURE_2D, batch.font ? AtlasTexture(*batch.font) : white_texture_);
-      glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(batch.quad_count * 6), GL_UNSIGNED_INT,
-                     reinterpret_cast<void*>(batch.first_quad * 6 * sizeof(uint32_t)));
+      DrawQuads(batch);
     }
     glBindVertexArray(0);
     glBindTexture(GL_TEXTURE_2D, 0);
@@ -162,6 +166,27 @@ class GLUIRenderer : public UIRenderer {
   }
 
  private:
+  static void DrawQuads(const UIBatch& batch) {
+    glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(batch.quad_count * 6), GL_UNSIGNED_INT,
+                   reinterpret_cast<void*>(batch.first_quad * 6 * sizeof(uint32_t)));
+  }
+
+  // A Canvas::ShaderRect: its quad with the material's canvas shader, then back to the UI's.
+  void DrawShaderRect(const Canvas& canvas, const UIBatch& batch) {
+    const rendering::ShaderMaterial& material = *batch.material;
+    if (!material.IsValid() || material.GetShader()->GetTarget() != rendering::Shader::Target::Canvas) return;
+    const auto& shader = static_cast<const rendering::GLShader&>(*material.GetShader());
+    const UIVertex* corners = &canvas.Vertices()[batch.first_quad * 4];  // top left, ..., bottom right = [2]
+    const glm::vec2 size = (corners[2].position - corners[0].position) * canvas.PixelsPerUnit();
+    glUseProgram(shader.Program());
+    glUniformMatrix4fv(shader.Location("uProjection"), 1, GL_FALSE, glm::value_ptr(canvas.Projection()));
+    glUniform2f(shader.Location("uSize"), size.x, size.y);
+    shader.ApplyParams(material, 0);
+    DrawQuads(batch);
+    glUseProgram(program_);
+    glActiveTexture(GL_TEXTURE0);
+  }
+
   static void UploadR8(GLuint texture, int width, int height, const uint8_t* pixels) {
     glBindTexture(GL_TEXTURE_2D, texture);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);  // rows of single bytes aren't 4-byte aligned

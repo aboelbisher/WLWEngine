@@ -10,6 +10,7 @@ namespace wlw::ui {
 namespace {
 constexpr float kKindText = 1.0f;
 constexpr float kKindRect = 2.0f;
+constexpr float kKindShader = 3.0f;  // drawn by a material's shader, not the UI's
 }  // namespace
 
 void Canvas::BeginFrame(glm::vec2 framebuffer_pixels, const platform::SafeAreaInsets& insets, glm::vec2 reference) {
@@ -36,8 +37,10 @@ void Canvas::AddQuad(const Font* font, const glm::vec2& min, const glm::vec2& ma
 void Canvas::AddQuad(const Font* font, const glm::vec2 (&corners)[4], const glm::vec2 (&uvs)[4], const core::Color& color,
                      const glm::vec4& params) {
   // Batching: keep adding to the current run unless this quad needs a different atlas.
-  // Rectangles (font == nullptr) don't sample any texture, so they fit in any run.
-  if (batches_.empty() || (font && batches_.back().font && batches_.back().font != font)) {
+  // Rectangles (font == nullptr) don't sample any texture, so they fit in any run. A ShaderRect's
+  // run is its own: whatever comes after it starts a new one.
+  if (batches_.empty() || batches_.back().material ||
+      (font && batches_.back().font && batches_.back().font != font)) {
     batches_.push_back({font, QuadCount(), 0});
   }
   UIBatch& batch = batches_.back();
@@ -53,6 +56,14 @@ void Canvas::FillRect(const Rect& rect, const core::Color& color, float corner_r
   const glm::vec2 half = rect.Size() * 0.5f;
   const float radius = std::clamp(corner_radius, 0.0f, std::min(half.x, half.y));
   AddQuad(nullptr, rect.min, rect.max, -half, half, color, {kKindRect, half.x, half.y, radius});
+}
+
+void Canvas::ShaderRect(const Rect& rect, std::shared_ptr<rendering::ShaderMaterial> material, const core::Color& tint) {
+  if (!material) return;
+  batches_.push_back({nullptr, QuadCount(), 1, std::move(material)});
+  const glm::vec2 corners[4] = {rect.min, {rect.max.x, rect.min.y}, rect.max, {rect.min.x, rect.max.y}};
+  const glm::vec2 uvs[4] = {{0.0f, 0.0f}, {1.0f, 0.0f}, {1.0f, 1.0f}, {0.0f, 1.0f}};
+  for (int i = 0; i < 4; ++i) vertices_.push_back({corners[i], uvs[i], tint, {kKindShader, 0.0f, 0.0f, 0.0f}});
 }
 
 void Canvas::Line(glm::vec2 from, glm::vec2 to, float thickness, const core::Color& color) {

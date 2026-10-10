@@ -79,6 +79,8 @@ add_library(wlw STATIC
 
   wlw/rendering/gl.h
   wlw/rendering/gl_index_buffer.h
+  wlw/rendering/gl_shader.cpp
+  wlw/rendering/gl_shader.h
   wlw/rendering/gl_instance_buffer.h
   wlw/rendering/gl_vertex_buffer.h
   wlw/rendering/index_buffer.h
@@ -89,6 +91,9 @@ add_library(wlw STATIC
   wlw/rendering/render_device_gl.cpp
   wlw/rendering/rendering_driver.h
   wlw/rendering/rendering_driver_gl.cpp
+  wlw/rendering/shader.cpp
+  wlw/rendering/shader.h
+  wlw/rendering/shader_material.h
   wlw/rendering/shaders/basic_shaders.h
   wlw/rendering/shaders/skybox_shaders.h
   wlw/rendering/texture.cpp

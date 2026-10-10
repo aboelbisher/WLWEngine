@@ -16,6 +16,7 @@
 #include "wlw/rendering/render_device.h"
 #include "wlw/rendering/gl_index_buffer.h"
 #include "wlw/rendering/gl_instance_buffer.h"
+#include "wlw/rendering/gl_shader.h"
 #include "wlw/rendering/gl_vertex_buffer.h"
 #include "wlw/scene/light.h"
 #include "wlw/scene/shadow_map.h"
@@ -264,6 +265,9 @@ public:
     glUniformMatrix4fv(m_Uniforms.view, 1, GL_FALSE, glm::value_ptr(view));
     glUniformMatrix4fv(m_Uniforms.projection, 1, GL_FALSE, glm::value_ptr(proj));
     core::Vector3 camPos = camera->GetPosition();
+    frame_view_ = view;  // for custom shaders (UseCustomShader)
+    frame_projection_ = proj;
+    frame_camera_ = {camPos.x, camPos.y, camPos.z};
     glUniform3f(m_Uniforms.viewPos, camPos.x, camPos.y, camPos.z);
     // The projection matrix tells the two kinds apart: w is 1 for orthographic (no divide by depth),
     // -z for perspective. Row 2 of the view matrix is the camera's backward axis in world space.
@@ -349,7 +353,15 @@ public:
     glUniform1i(instanced_location, instanced);
 
     for (const auto& mesh : node.GetModel()->meshes) {
+      // A ShaderMaterial draws the mesh with its own shader instead (the mesh's material first).
+      const ShaderMaterial* custom = nullptr;
       if (!shadow_pass) {
+        custom = DrawableShaderMaterial(mesh->GetMaterial());
+        if (!custom) custom = DrawableShaderMaterial(node.GetMaterial());
+      }
+      if (custom) {
+        UseShaderMaterial(*custom, node.GetModelMatrix(), instanced);
+      } else if (!shadow_pass) {
         glUniform1i(m_Uniforms.use_texture, false);
         if (material_lights) glUniform1i(m_Uniforms.useLighting, false);
         BindMaterial(node.GetMaterial(), material_lights);
@@ -383,7 +395,31 @@ public:
 
       vertex_buffer->Unbind();
       index_buffer->Unbind();
+      if (custom) glUseProgram(m_ShaderID_3D);  // back to the engine's for the next mesh
     }
+  }
+
+  // The material as a ShaderMaterial with a working 3D shader, else null (an invalid one falls
+  // back to the engine's shader).
+  static const ShaderMaterial* DrawableShaderMaterial(const std::shared_ptr<rendering::Material>& material) {
+    const ShaderMaterial* shader_material = material ? material->AsShaderMaterial() : nullptr;
+    if (!shader_material || !shader_material->IsValid()) return nullptr;
+    if (shader_material->GetShader()->GetTarget() != Shader::Target::Mesh) return nullptr;
+    return shader_material;
+  }
+
+  // Switches to a ShaderMaterial's shader and gives it the engine's inputs (see shader.h) and the
+  // material's params. Its textures start at unit 2: units 0-1 belong to the engine's shader
+  // (model texture, shadow map), which stay bound for the nodes drawn after.
+  void UseShaderMaterial(const ShaderMaterial& material, const glm::mat4& model, bool instanced) {
+    const auto& shader = static_cast<const GLShader&>(*material.GetShader());
+    glUseProgram(shader.Program());
+    glUniformMatrix4fv(shader.Location("uModel"), 1, GL_FALSE, glm::value_ptr(model));
+    glUniformMatrix4fv(shader.Location("uView"), 1, GL_FALSE, glm::value_ptr(frame_view_));
+    glUniformMatrix4fv(shader.Location("uProjection"), 1, GL_FALSE, glm::value_ptr(frame_projection_));
+    glUniform3fv(shader.Location("uCameraPos"), 1, glm::value_ptr(frame_camera_));
+    glUniform1i(shader.Location("uInstanced"), instanced);
+    shader.ApplyParams(material, 2);
   }
 
   // Renders every shadow caster's depth into the shadow map (made or resized on demand). Returns
@@ -639,6 +675,10 @@ private:
   int shadow_map_size_ = 0;
   bool shadow_failed_ = false;      // the framebuffer was refused once: don't retry every frame
   bool warned_shadow_type_ = false;
+  // This frame's camera, for custom shaders.
+  glm::mat4 frame_view_{1.0f};
+  glm::mat4 frame_projection_{1.0f};
+  glm::vec3 frame_camera_{0.0f};
   std::shared_ptr<scene::Window> main_window_;
   RenderDevice* device_;
 };

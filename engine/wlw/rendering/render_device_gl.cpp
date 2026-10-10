@@ -2,32 +2,72 @@
 
 #include "wlw/rendering/gl.h"
 #include "render_device.h"
+#include <vector>
+
 #include "wlw/rendering/gl_index_buffer.h"
+#include "wlw/rendering/gl_shader.h"
 #include "wlw/rendering/gl_vertex_buffer.h"
 #include "wlw/platform/platform.h"
 
 namespace wlw::rendering {
 
+namespace {
+
+// How each TextureFormat is stored and uploaded.
+struct GLFormat {
+  GLint internal_format;
+  GLenum format;
+  GLenum type;
+  size_t texel_bytes;  // of the data the game passes in
+};
+
+GLFormat ToGL(TextureFormat format) {
+  switch (format) {
+    case TextureFormat::R8: return {GL_R8, GL_RED, GL_UNSIGNED_BYTE, 1};
+    case TextureFormat::RGB8: return {GL_RGB8, GL_RGB, GL_UNSIGNED_BYTE, 3};
+    case TextureFormat::RGBA8: return {GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE, 4};
+    case TextureFormat::R16F: return {GL_R16F, GL_RED, GL_FLOAT, 4};
+    case TextureFormat::RGBA16F: return {GL_RGBA16F, GL_RGBA, GL_FLOAT, 16};
+  }
+  return {GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE, 4};
+}
+
+}  // namespace
+
 class GLTexture2D : public WTexture2D {
 public:
-  GLTexture2D(const utils::RawImage& data) {
+  // An image file's texture: repeating, mipmapped (it may be drawn small, far away in 3D).
+  explicit GLTexture2D(const utils::RawImage& data)
+      : GLTexture2D(static_cast<int>(data.size.x), static_cast<int>(data.size.y),
+                    data.channels == 4   ? TextureFormat::RGBA8
+                    : data.channels == 1 ? TextureFormat::R8
+                                         : TextureFormat::RGB8,
+                    /*smooth=*/true, /*repeat=*/true, /*mipmaps=*/true, data.pixels.data()) {}
+
+  GLTexture2D(int width, int height, TextureFormat format, bool smooth, bool repeat, bool mipmaps, const void* pixels)
+      : mipmaps_(mipmaps) {
+    width_ = width;
+    height_ = height;
+    format_ = format;
     glGenTextures(1, &gpu_id_);
     glBindTexture(GL_TEXTURE_2D, gpu_id_);
-
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    const GLint wrap = repeat ? GL_REPEAT : GL_CLAMP_TO_EDGE;
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, wrap);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, wrap);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,
+                    mipmaps ? GL_LINEAR_MIPMAP_LINEAR : (smooth ? GL_LINEAR : GL_NEAREST));
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, smooth ? GL_LINEAR : GL_NEAREST);
 
     // Sized internal formats (GL_RGB8...) are required by GLES 3.0 and fine on desktop GL.
-    GLenum format = GL_RGB;
-    GLint internal_format = GL_RGB8;
-    if (data.channels == 4) { format = GL_RGBA; internal_format = GL_RGBA8; }
-    else if (data.channels == 1) { format = GL_RED; internal_format = GL_R8; }
-
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);  // rows of RGB images aren't always 4-byte aligned
-    glTexImage2D(GL_TEXTURE_2D, 0, internal_format, (int)data.size.x, (int)data.size.y, 0, format, GL_UNSIGNED_BYTE, data.pixels.data());
-    glGenerateMipmap(GL_TEXTURE_2D);
+    const GLFormat gl = ToGL(format);
+    std::vector<unsigned char> zeros;
+    if (!pixels) {  // GL leaves a texture without data undefined: start it at zero
+      zeros.assign(static_cast<size_t>(width) * height * gl.texel_bytes, 0);
+      pixels = zeros.data();
+    }
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);  // rows of RGB / R8 images aren't always 4-byte aligned
+    glTexImage2D(GL_TEXTURE_2D, 0, gl.internal_format, width, height, 0, gl.format, gl.type, pixels);
+    if (mipmaps) glGenerateMipmap(GL_TEXTURE_2D);
   }
 
   ~GLTexture2D() {
@@ -42,6 +82,17 @@ public:
   void Unbind() const override {
     glBindTexture(GL_TEXTURE_2D, 0);
   }
+
+  void Update(const void* pixels) override {
+    const GLFormat gl = ToGL(format_);
+    glBindTexture(GL_TEXTURE_2D, gpu_id_);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width_, height_, gl.format, gl.type, pixels);
+    if (mipmaps_) glGenerateMipmap(GL_TEXTURE_2D);
+  }
+
+private:
+  bool mipmaps_ = false;
 };
 
 class GLCubemap : public WCubemap {
@@ -95,6 +146,16 @@ public:
 
   std::shared_ptr<WTexture2D> CreateTexture2D(const utils::RawImage& data) override {
     return std::make_shared<GLTexture2D>(data);
+  }
+
+  std::shared_ptr<WTexture2D> CreateTexture2D(int width, int height, const TextureSettings& settings,
+                                              const void* pixels) override {
+    return std::make_shared<GLTexture2D>(width, height, settings.format, settings.smooth, settings.repeat,
+                                         /*mipmaps=*/false, pixels);
+  }
+
+  std::shared_ptr<Shader> CreateShader(const std::string& code) override {
+    return std::make_shared<GLShader>(code);
   }
 
   std::shared_ptr<WCubemap> CreateCubemap(const std::array<utils::RawImage, 6>& faces) override {
