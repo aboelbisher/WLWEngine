@@ -15,11 +15,13 @@ engine/wlw/
   audio/      Audio (miniaudio device: WASAPI / AAudio...) + Mixer (decoded PCM, lock-free command queue,
               voices with pitch/pan, per-sound caps, buses). Application::Audio(); silent in background.
               Music: Audio::PlayMusic streams a file (decode thread -> lock-free ring -> Mixer stream slots with crossfades)
-  anim/       ease.h (Penner easing curves), tween.h (Tween<T>: value-type tweens the game owns and samples)
+  anim/       ease.h (Penner easing curves), tween.h (Tween<T>: value-type tweens the game owns and samples),
+              shake.h (trauma-based screen shake: trauma decays, offset = trauma^2 x smooth noise)
   fx/         ParticleSystem: CPU simulation (fixed capacity, swap-remove, bursts) -> instances
   debug/      DebugUI: Dear ImGui (third_party/imgui) fed from Input, drawn via Window::SetOverlay; games add
               panels in Application::OnDebugUI() (#if WLW_DEBUG_UI). F1 / "Debug" button. Off in release builds
-  app/        Application (game loop: OnStart/OnFixedUpdate/OnUpdate/OnRender), entry_point.h (WLW_MAIN),
+  app/        Application (game loop: OnStart/OnFixedUpdate/OnUpdate/OnRender; SetTimeScale = hit-stop / slow motion
+              on game time via core/time_scale.h), entry_point.h (WLW_MAIN),
               Screen + ScreenStack (game states: deferred push/pop/replace, overlays, fades, Back routing)
   core/       math types, FixedTimestep, Random (SplitMix64: deterministic everywhere, state saveable), log.h (WLW_LOG_*), logger.h (FAIL_IF), mesh/model, collision.h (AABB, Ray, Plane, IntersectPlane)
   input/      Input: keys (pressed vs held), pointer (mouse/first finger), swipes, taps
