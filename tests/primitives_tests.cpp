@@ -59,8 +59,22 @@ static void TestPlainCubeStillClosed() {
   CHECK(Near(CheckClosedSolid(*mesh), 8.0f, 1e-3f));
 }
 
+static void TestPlane() {
+  // 4 corners, 2 triangles, both facing up (counter-clockwise seen from above), spanning the size.
+  const auto mesh = utils::createPlaneWithNormals(4.0f, 2.0f);
+  const auto& v = mesh->GetVertices();
+  const auto& index = mesh->GetIndices();
+  CHECK(v.size() == 4 && index.size() == 6);
+  for (size_t i = 0; i + 2 < index.size(); i += 3) {
+    const glm::vec3 a = ToGlm(v[index[i]].position), b = ToGlm(v[index[i + 1]].position), c = ToGlm(v[index[i + 2]].position);
+    CHECK(glm::cross(b - a, c - a).y > 0.0f);
+  }
+  for (const auto& vertex : v) CHECK(Near(vertex.normal.y, 1.0f) && Near(std::abs(vertex.position.x), 2.0f) && Near(std::abs(vertex.position.z), 1.0f));
+}
+
 int main() {
   TestBeveledCube();
   TestPlainCubeStillClosed();
+  TestPlane();
   return TestResult("primitives");
 }

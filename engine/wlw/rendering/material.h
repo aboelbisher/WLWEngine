@@ -61,6 +61,7 @@ namespace wlw::rendering {
 		static std::unique_ptr<Material> Create();
 
 		float metallic = 0.0f;
+		float shininess = 32.0f;  // specular highlight sharpness under scene lights (LightNode)
 		float roughness = 1.0f;
 		std::string name;
 

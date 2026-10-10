@@ -34,10 +34,13 @@ engine/wlw/
               (WlwBridge.post) -> queue -> SetBridgeHandler callbacks on the GAME thread (Application dispatches
               once per frame). Kotlin side: android/java/com/wlw/ (WlwBridge, WlwService, WlwActivity = NativeActivity
               + services; games subclass it and add its java dir to their Gradle sourceSets).
-  rendering/  RenderingDriver/RenderDevice interfaces + one GL backend for GL 3.3 core AND GLES 3.0
+  rendering/  RenderingDriver/RenderDevice interfaces + one GL backend for GL 3.3 core AND GLES 3.0. Per frame: gather lights +
+              drawables, shadow pass (depth from the shadow light into a 2D depth texture), main pass (up to 4 lights, PCF shadows)
   scene/      Node (scene graph, local transforms, visibility, instancing: SetInstances = one draw call for N copies), Window (surface + scene + input),
               cameras (FollowCamera = perspective, OrthographicCamera = parallel/top-down;
-              Camera3D::ScreenPointToRay for picking, fed with Input::SurfaceSize())
+              Camera3D::ScreenPointToRay for picking, fed with Input::SurfaceSize()).
+              Lights are nodes (light.h: DirectionalLight / PointLight / SpotLight, added with AddNode); nodes opt in to
+              SetCastsShadow / SetReceivesShadow; shadow_map.h fits the light's box to the casters (texel-snapped)
   ui/         2D UI layer: Font (TTF -> SDF atlas, stb_truetype), Canvas (virtual units, safe area, text,
               rounded rects, batched quads), UIRenderer (GL). Canvas::Button/Toggle/Panel = immediate-mode widgets,
               layout.h (Centered, Inset, Row, Column). Games draw in Application::OnRenderUI()
@@ -51,7 +54,7 @@ kit/wlw/kit/  wlw::kit: game-level building blocks shared by games (separate tar
               (UMP consent, load/show/retry); games add that dir to their sourceSets and depend on play-services-ads + UMP
 samples/      small games, built only when the engine is the top-level project (desktop):
               snake/ (Snake + its rules tests)
-tests/        engine unit tests (no window/GPU: anim, audio, core (random, atomic files, bridge queue), exact cover, search (bitboards, minimax, expectimax), gf2 (Lights Out), fx, input, kit, picking, primitives, ui, screens); test data in tests/data/, also top-level only; ctest
+tests/        engine unit tests (no window/GPU: anim, audio, core (random, atomic files, bridge queue), exact cover, search (bitboards, minimax, expectimax), gf2 (Lights Out), lighting (light nodes, shadow-box fitting), fx, input, kit, picking, primitives, ui, screens); test data in tests/data/, also top-level only; ctest
 third_party/  glad (desktop only), stb, tinygltf + nlohmann json (also its own target wlw_json), miniaudio 0.11.25, stb_vorbis, Dear ImGui 1.92.9b (vendored)
 cmake/WLWHelpers.cmake  wlw_add_game(), wlw_add_assets(), wlw_set_warnings()
 vcpkg/ + vcpkg.json     desktop deps (glm, glfw3). Android fetches glm via FetchContent instead.
@@ -93,7 +96,8 @@ changes didn't break anything; keep it building when the engine API changes.
 
 ## Known gaps / tech debt
 - The glTF loader still reads files with `fopen`, so glTF models don't load from APK assets yet.
-- Lights are stored inside materials, not in the scene. `Window` owns the scene (a separate
+- Only one directional light casts shadows (point/spot shadows need cube/perspective maps). A material's own
+  `Lighting` is the old way, used only when the scene has no light nodes (Snake). `Window` owns the scene (a separate
   `Scene` class is planned).
 - `Window`'s default camera is an `FPSCamera`; games normally replace it with `SetCamera()`.
 - Touch input uses only the first finger (no multi-touch yet).

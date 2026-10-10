@@ -209,6 +209,26 @@ inline std::shared_ptr<core::Mesh<core::Vertex3D>> createCubeWithNormals(float s
 }
 
 
+// A flat rectangle in the XZ plane, facing up (+Y), centred on the origin: a floor or a ground
+// for shadows to land on. One quad, two triangles.
+inline std::shared_ptr<core::Mesh<core::Vertex3D>> createPlaneWithNormals(
+    float width = 1.0f, float depth = 1.0f, const core::Color& color = {1.0f, 1.0f, 1.0f, 1.0f}) {
+  const float hw = width / 2.0f, hd = depth / 2.0f;
+  const core::Vector3 up = {0.0f, 1.0f, 0.0f};
+  std::vector<core::Vertex3D> vertices = {
+      {{-hw, 0.0f, hd}, color, up, {0.0f, 0.0f}},
+      {{hw, 0.0f, hd}, color, up, {1.0f, 0.0f}},
+      {{hw, 0.0f, -hd}, color, up, {1.0f, 1.0f}},
+      {{-hw, 0.0f, -hd}, color, up, {0.0f, 1.0f}},
+  };
+  // Counter-clockwise seen from above, like the cube's top face.
+  std::vector<uint32_t> indices = {0, 1, 2, 2, 3, 0};
+  auto mesh = std::make_shared<core::Mesh<core::Vertex3D>>();
+  mesh->SetVertices(vertices);
+  mesh->SetIndices(indices);
+  return mesh;
+}
+
 // A cube with chamfered (bevelled) edges: 6 faces shrunk inwards by `bevel`, 12 slanted strips
 // along the edges and 8 small triangles at the corners. Every facet has its own flat normal, so
 // the edges catch the light differently from the faces - that's what makes it read as a solid,

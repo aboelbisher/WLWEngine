@@ -20,6 +20,8 @@
 
 namespace wlw::scene {
 
+class LightNode;  // light.h: a node that is a light source
+
 // A scene-graph node. Position / rotation / scale are LOCAL (relative to the parent);
 // GetModelMatrix() returns the WORLD matrix = parent's world matrix * local matrix.
 template <core::OnlyVerticesTypes T>
@@ -92,6 +94,17 @@ public:
 	uint64_t GetInstancesVersion() const { return instances_version_; }
 	rendering::WInstanceBuffer* GetInstanceBuffer() const { return instance_buffer_.get(); }
 	void SetInstanceBuffer(std::unique_ptr<rendering::WInstanceBuffer> buffer) { instance_buffer_ = std::move(buffer); }
+
+	// ---- Shadows ----
+	// Opt-in per node (both default to false): a caster blocks the light of shadow-casting lights
+	// (it's drawn into their shadow maps), a receiver shows the shadows that fall on it.
+	void SetCastsShadow(bool casts) { casts_shadow_ = casts; }
+	bool CastsShadow() const { return casts_shadow_; }
+	void SetReceivesShadow(bool receives) { receives_shadow_ = receives; }
+	bool ReceivesShadow() const { return receives_shadow_; }
+
+	// Light sources are nodes too (LightNode); the renderer asks every node whether it is one.
+	virtual const LightNode* AsLight() const { return nullptr; }
 
 	// ---- Visibility ----
 	// Hidden nodes (and everything under them) are skipped by the renderer but stay in the scene.
@@ -205,6 +218,8 @@ private:
 	core::Vector3 rotation_angles_degrees_ = {0, 0, 0};
 	glm::mat4 local_matrix_ = glm::mat4(1.0f);
 	bool visible_ = true;
+	bool casts_shadow_ = false;
+	bool receives_shadow_ = false;
 
 	Node* parent_ = nullptr;  // non-owning; cleared when the parent is destroyed or removes us
 	int id_in_parent_ = -1;
