@@ -30,6 +30,7 @@ add_library(wlw STATIC
   wlw/wlw.cpp
 
   wlw/anim/ease.h
+  wlw/anim/shake.h
   wlw/anim/tween.h
 
   wlw/app/application.cpp
@@ -47,6 +48,7 @@ add_library(wlw STATIC
   wlw/core/collision.h
   wlw/core/color.h
   wlw/core/fixed_timestep.h
+  wlw/core/time_scale.h
   wlw/core/log.cpp
   wlw/core/log.h
   wlw/core/logger.h

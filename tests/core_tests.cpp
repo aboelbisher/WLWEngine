@@ -7,6 +7,7 @@
 
 #include "check.h"
 #include "wlw/core/random.h"
+#include "wlw/core/time_scale.h"
 #include "wlw/platform/bridge.h"
 #include "wlw/platform/platform.h"
 
@@ -87,8 +88,38 @@ static void TestBridgeQueue() {
   CHECK(DispatchBridgeMessages() == 0);
 }
 
+static void TestTimeScale() {
+  wlw::core::TimeScale time;
+  CHECK(Near(time.Apply(0.016f), 0.016f) && time.Normal());  // normal speed by default
+
+  // Hit-stop: frozen for 60 ms of real time. The frame that crosses the end is split.
+  time.Set(0.0f, 0.06f);
+  CHECK(Near(time.Apply(0.05f), 0.0f));
+  CHECK(Near(time.Apply(0.02f), 0.01f));  // 10 ms frozen, then 10 ms at normal speed
+  CHECK(time.Normal() && Near(time.Apply(0.016f), 0.016f));
+
+  // Slow motion with an eased recovery: 0.5 for 0.2 s, then linearly back to 1 over 0.2 s.
+  time.Set(0.5f, 0.2f, 0.2f);
+  CHECK(Near(time.Apply(0.2f), 0.1f));
+  CHECK(Near(time.Scale(), 0.5f));
+  CHECK(Near(time.Apply(0.1f), 0.1f * (0.5f + 0.75f) / 2.0f));  // halfway: the average of 0.5 and 0.75
+  CHECK(Near(time.Scale(), 0.75f));
+  CHECK(Near(time.Apply(0.3f), 0.1f * (0.75f + 1.0f) / 2.0f + 0.2f));  // the rest of the ramp, then normal
+  CHECK(time.Normal());
+
+  // Held until told otherwise; a zero hold goes straight to the recovery.
+  time.Set(0.25f);
+  for (int i = 0; i < 100; ++i) time.Apply(0.1f);
+  CHECK(Near(time.Apply(0.1f), 0.025f));
+  time.Set(0.0f, 0.0f, 0.1f);
+  CHECK(Near(time.Apply(0.1f), 0.05f) && time.Normal());
+  time.Set(0.3f, 0.0f);
+  CHECK(time.Normal());
+}
+
 int main() {
   TestRandomIsPinned();
+  TestTimeScale();
   TestRandomRangesAndState();
   TestAtomicWriteAndRead();
   TestBridgeQueue();

@@ -4,6 +4,7 @@
 #include <glm/glm.hpp>
 
 #include "check.h"
+#include "wlw/anim/shake.h"
 #include "wlw/anim/tween.h"
 
 using namespace wlw::anim;
@@ -74,11 +75,48 @@ static void TestTweenEdgeCases() {
   CHECK(instant.Done() && Near(instant.Value(), 5.0f));
 }
 
+static void TestShake() {
+  Shake shake(7);
+  CHECK(!shake.Active() && shake.Offset() == glm::vec2(0.0f));  // no trauma, no movement
+  // Trauma adds up and is capped at 1; the movement scales with trauma squared.
+  shake.AddTrauma(0.3f);
+  shake.AddTrauma(0.3f);
+  CHECK(Near(shake.Trauma(), 0.6f) && Near(shake.Amount(), 0.36f));
+  shake.AddTrauma(5.0f);
+  CHECK(Near(shake.Trauma(), 1.0f));
+  // Offsets stay within max_offset, and change smoothly between frames (no jitter).
+  bool bounded = true, smooth = true, moved = false;
+  glm::vec2 previous = shake.Offset();
+  for (int i = 0; i < 60; ++i) {
+    shake.Update(1.0f / 240.0f);
+    const glm::vec2 offset = shake.Offset();
+    bounded = bounded && std::abs(offset.x) <= shake.max_offset && std::abs(offset.y) <= shake.max_offset;
+    smooth = smooth && glm::length(offset - previous) < shake.max_offset * 0.4f;
+    moved = moved || glm::length(offset - previous) > 0.0f;
+    previous = offset;
+  }
+  CHECK(bounded && smooth && moved);
+  // It decays at `decay` per second, down to nothing.
+  const float before = shake.Trauma();
+  shake.Update(0.1f);
+  CHECK(Near(shake.Trauma(), before - 0.1f * shake.decay));
+  shake.Update(10.0f);
+  CHECK(!shake.Active() && shake.Offset() == glm::vec2(0.0f));
+  // The same seed and the same updates give the same shake.
+  Shake a(3), b(3);
+  a.AddTrauma(0.8f);
+  b.AddTrauma(0.8f);
+  a.Update(0.05f);
+  b.Update(0.05f);
+  CHECK(a.Offset() == b.Offset());
+}
+
 int main() {
   TestEaseEndpoints();
   TestEaseShapes();
   TestTweenTiming();
   TestTweenEasedAndOtherTypes();
   TestTweenEdgeCases();
+  TestShake();
   return TestResult("anim");
 }

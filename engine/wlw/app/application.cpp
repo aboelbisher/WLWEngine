@@ -89,14 +89,16 @@ int Application::Run() {
     // its own thread, before this frame's updates.
     platform::DispatchBridgeMessages();
 
-    const int steps = timestep_.Advance(frame_seconds);
+    // Game time: real time through the time scale (hit-stop, slow motion). Once per frame.
+    const float game_dt = time_scale_.Apply(frame_dt);
+    const int steps = timestep_.Advance(game_dt);
     for (int i = 0; i < steps; ++i) {
       OnFixedUpdate(timestep_.Step());
       screens_.FixedUpdate(timestep_.Step());
     }
 
-    OnUpdate(frame_dt);
-    screens_.Update(frame_dt);
+    OnUpdate(game_dt);
+    screens_.Update(game_dt);
     OnRender(timestep_.Alpha());
     screens_.Render(timestep_.Alpha());
 

@@ -4,6 +4,7 @@
 #include <string>
 
 #include "wlw/core/fixed_timestep.h"
+#include "wlw/core/time_scale.h"
 #include "wlw/core/vector2.h"
 #include "wlw/input/input.h"
 #include "wlw/scene/window.h"
@@ -60,9 +61,10 @@ class Application {
  protected:
   // Called once, after the window and the renderer exist. Build your scene here.
   virtual void OnStart() {}
-  // Called 0..N times per frame with a constant dt (AppConfig::fixed_timestep).
+  // Called 0..N times per frame with a constant dt (AppConfig::fixed_timestep). Game time: runs
+  // slower or not at all under SetTimeScale.
   virtual void OnFixedUpdate(float dt) {}
-  // Called once per frame with the real (clamped) frame time.
+  // Called once per frame with the (clamped) frame time, in game time (see SetTimeScale).
   virtual void OnUpdate(float dt) {}
   // Called once per frame before drawing. alpha in [0, 1) = progress towards the next fixed step.
   virtual void OnRender(float alpha) {}
@@ -95,7 +97,15 @@ class Application {
   const std::shared_ptr<scene::Window>& WindowPtr() const { return window_; }
   const AppConfig& Config() const { return config_; }
 
-  double TimeSinceStart() const { return time_since_start_; }  // seconds
+  double TimeSinceStart() const { return time_since_start_; }  // seconds, real time
+
+  // Game time speed: hit-stop (SetTimeScale(0, 0.06f)), slow motion (SetTimeScale(0.4f, 0.3f, 0.2f)),
+  // pause (SetTimeScale(0)). It scales the dt of OnFixedUpdate, OnUpdate and the screens' (Fixed)Update;
+  // screen fades, the debug UI, audio and input stay in real time. See core::TimeScale.
+  void SetTimeScale(float scale, float hold_seconds = -1.0f, float recover_seconds = 0.0f) {
+    time_scale_.Set(scale, hold_seconds, recover_seconds);
+  }
+  float TimeScale() const { return time_scale_.Scale(); }
   float Fps() const { return fps_; }
   float FrameMs() const { return frame_ms_; }
 
@@ -118,6 +128,7 @@ class Application {
   bool show_imgui_demo_ = false;
 #endif
   core::FixedTimestep timestep_;
+  core::TimeScale time_scale_;
 
   bool quit_requested_ = false;
   double time_since_start_ = 0.0;
