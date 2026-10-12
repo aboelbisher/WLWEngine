@@ -35,13 +35,18 @@ class Scene {
     skybox_ = nullptr;
   }
 
-  // Visits every node: top-level nodes first, then their children, level by level.
+  // Visits every node: top-level nodes first, then their children, level by level. Called every
+  // frame by the renderer, so it reuses its lists (no allocations once they're big enough); a
+  // callback that walks the scene again gets fresh ones.
   void IterateOverNodes(const std::function<void(const std::shared_ptr<Node3D>&)>& callback) const {
-    std::vector<std::shared_ptr<Node3D>> current;
-    current.reserve(nodes_.size());
+    std::vector<std::shared_ptr<Node3D>> own_current, own_next;
+    const bool reuse = !walking_;
+    std::vector<std::shared_ptr<Node3D>>& current = reuse ? scratch_current_ : own_current;
+    std::vector<std::shared_ptr<Node3D>>& next = reuse ? scratch_next_ : own_next;
+    walking_ = true;
+    current.clear();
     for (const auto& [_, node] : nodes_) current.push_back(node);
 
-    std::vector<std::shared_ptr<Node3D>> next;
     while (!current.empty()) {
       next.clear();
       for (const auto& node : current) {
@@ -50,12 +55,17 @@ class Scene {
       }
       current.swap(next);
     }
+    next.clear();  // the last level: don't keep nodes alive through the scratch lists
+    if (reuse) walking_ = false;
   }
 
  private:
   Nodes3DMap nodes_;
   int next_id_ = 0;
   std::shared_ptr<rendering::WCubemap> skybox_;
+  // IterateOverNodes' reused lists.
+  mutable std::vector<std::shared_ptr<Node3D>> scratch_current_, scratch_next_;
+  mutable bool walking_ = false;
 };
 
 }  // namespace wlw::scene

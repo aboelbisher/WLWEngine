@@ -30,6 +30,7 @@ namespace wlw::rendering {
 		bool HasTexture() const {
 			return texture_ != nullptr;
 		}
+		const WTexture* GetTexture() const { return texture_.get(); }
 
 		// Non-null for a ShaderMaterial: the renderers draw it with its shader instead.
 		virtual const ShaderMaterial* AsShaderMaterial() const { return nullptr; }

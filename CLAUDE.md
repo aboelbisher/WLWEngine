@@ -45,6 +45,13 @@ engine/wlw/
               + services; games subclass it and add its java dir to their Gradle sourceSets).
   rendering/  RenderingDriver/RenderDevice interfaces + one GL backend for GL 3.3 core AND GLES 3.0. Per viewport: gather lights +
               drawables, upload the per-frame block, shadow pass (depth from the shadow light), main pass (PCF shadows).
+              Draw order (render_list.h): BuildDrawList makes one DrawItem per visible mesh (each node culled once, its world
+              box and model matrix computed once) with a 64-bit sort key: opaque = program, texture, depth front to back;
+              transparent = depth back to front (Ericson's "Order your graphics draw calls around!"); one SortDrawOrder.
+              GLStateCache (gl_state_cache.h) skips redundant program / blend / depth-write / texture calls; Reset per viewport
+              (UI and ImGui change state too). Lists are reused every frame (no allocations once warm). RenderStats has program
+              changes, texture binds, skipped calls and CPU gather / sort / submit us (engine panel). Measure with -O2: a debug
+              (-O0) Android build is ~10x slower (Bluzzle: ~330 us gather at -O0, 24 us at -O2).
               SHADERS are files: rendering/shaders/** (mesh, shadow, skybox, ui .vert/.frag; wlw/frame.glsl, lighting.glsl,
               shadows.glsl, common.glsl, color.glsl; custom/* = what wraps a game's shader), embedded at build time by
               cmake/EmbedShaders.cmake (shader_library.h: FindShaderFile, AddShaderFile for a game's own includes).
@@ -61,9 +68,9 @@ engine/wlw/
               (documented in shader.h; may #include wlw/lighting.glsl and use SceneLighting). Data textures: CreateTexture2D(w, h, {R8/RGB8/RGBA8/R16F/RGBA16F}) + WTexture2D::Update
               Blending (blend_mode.h): Material::blend = Opaque / Alpha / Additive / Multiply (ShaderMaterial too), depth_write
               (default: only Opaque writes depth). Every shader outputs PREMULTIPLIED alpha, so gl_blend.h has one table for
-              3D, canvas and custom shaders. Render queues (render_queue.h): each viewport draws opaque meshes first, then
-              transparent ones sorted back to front (SortBackToFront, by bounding-box centre along the view direction),
-              depth-tested but not written. An opaque material writes alpha 1 (no BLEND variant).
+              3D, canvas and custom shaders. Opaque meshes draw first, then transparent ones back to front (by bounding-box
+              centre along the view direction): both come from the draw list's sort keys (render_list.h); transparent ones
+              are depth-tested but not written. An opaque material writes alpha 1 (no BLEND variant).
   scene/      Node (scene graph, local transforms, visibility, instancing: SetInstances = one draw call for N copies).
               Scene (scene.h) = the world: nodes, lights, skybox; owned by nobody who looks at it. Viewport (viewport.h) =
               "draw this Scene from this camera into this picture" + a 2D Canvas over it (like Godot's SubViewport):
@@ -98,7 +105,7 @@ kit/wlw/kit/  wlw::kit: game-level building blocks shared by games (separate tar
               (UMP consent, load/show/retry); games add that dir to their sourceSets and depend on play-services-ads + UMP
 samples/      small games, built only when the engine is the top-level project (desktop):
               snake/ (Snake + its rules tests)
-tests/        engine unit tests (no window/GPU: shader system (preprocessor, embedded files in every variant, std140 layout, lights, variants, UI kinds), systems (order, starting, Back), blending (depth-write rule, queues, back-to-front, canvas batches, images, falloff texture), viewports (scenes, sizes, update modes), anim, audio, core (random, atomic files, bridge queue), exact cover, search (bitboards, minimax, expectimax), gf2 (Lights Out), shader text splitting, lighting (light nodes, shadow-box fitting), fx, input, kit, picking, primitives, ui (canvas, safe area, widgets), screens); test data in tests/data/, also top-level only; ctest
+tests/        engine unit tests (no window/GPU: draw order (sort keys), shader system (preprocessor, embedded files in every variant, std140 layout, lights, variants, UI kinds), systems (order, starting, Back), blending (depth-write rule, canvas batches, images, falloff texture), viewports (scenes, sizes, update modes), anim, audio, core (random, atomic files, bridge queue), exact cover, search (bitboards, minimax, expectimax), gf2 (Lights Out), shader text splitting, lighting (light nodes, shadow-box fitting), fx, input, kit, picking, primitives, ui (canvas, safe area, widgets), screens); test data in tests/data/, also top-level only; ctest
 third_party/  glad (desktop only), stb, tinygltf + nlohmann json (also its own target wlw_json), miniaudio 0.11.25, stb_vorbis, Dear ImGui 1.92.9b (vendored)
 cmake/WLWHelpers.cmake  wlw_add_game(), wlw_add_assets(), wlw_set_warnings()
 vcpkg/ + vcpkg.json     desktop deps (glm, glfw3). Android fetches glm via FetchContent instead.
@@ -142,6 +149,8 @@ changes didn't break anything; keep it building when the engine API changes.
 - The glTF loader still reads files with `fopen`, so glTF models don't load from APK assets yet.
 - Only one directional light casts shadows (point/spot shadows need cube/perspective maps).
 - glTF materials ignore baseColorFactor (materials have no colour yet; it used to go into the removed per-material light).
+- Node world bounds (GetAABB) are recomputed once per frame per node, not cached with dirty flags; render lists are
+  rebuilt every frame (no cached draw commands for static nodes, unlike Unreal). Fine for hundreds of nodes.
 - No shader program cache on disk yet (glProgramBinary): every launch compiles its variants (~25-60 ms on the emulator).
 - A viewport's default camera is an `FPSCamera`; games normally replace it with `SetCamera()`.
 - Shadows: one shadow map shared by every viewport (each viewport's shadow pass redraws it).

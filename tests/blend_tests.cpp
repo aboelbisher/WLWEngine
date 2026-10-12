@@ -1,20 +1,18 @@
-// Tests for blend modes (rendering/blend_mode.h): materials' depth-write rule, the render queues and
-// back-to-front sorting (render_queue.h), per-draw blending on the Canvas, ShaderMaterial defaults, Image batching, and the
-// radial falloff texture (utils/textures.h). CPU only.
+// Tests for blend modes (rendering/blend_mode.h): materials' depth-write rule, per-draw blending on
+// the Canvas, ShaderMaterial defaults, Image batching, and the radial falloff texture
+// (utils/textures.h). CPU only. (Draw order: render_list_tests.)
 #include <memory>
 #include <vector>
 
-#include <glm/gtc/matrix_transform.hpp>
+#include <glm/glm.hpp>
 
 #include "check.h"
 #include "wlw/rendering/material.h"
-#include "wlw/rendering/render_queue.h"
 #include "wlw/ui/canvas.h"
 #include "wlw/utils/textures.h"
 
 using namespace wlw;
 using rendering::BlendMode;
-using rendering::RenderQueue;
 
 namespace {
 
@@ -39,17 +37,6 @@ class FakeShader : public rendering::Shader {
   explicit FakeShader(Target target) { target_ = target; }
 };
 
-struct Item {
-  int id;
-  glm::vec3 center;
-};
-
-std::vector<int> Ids(const std::vector<Item>& items) {
-  std::vector<int> ids;
-  for (const Item& item : items) ids.push_back(item.id);
-  return ids;
-}
-
 }  // namespace
 
 static void TestDepthWriteRule() {
@@ -64,40 +51,6 @@ static void TestDepthWriteRule() {
   material.blend = BlendMode::Opaque;
   material.depth_write = false;
   CHECK(!material.DepthWrite());
-}
-
-static void TestQueues() {
-  CHECK(rendering::QueueFor(BlendMode::Opaque) == RenderQueue::Opaque);
-  CHECK(rendering::QueueFor(BlendMode::Alpha) == RenderQueue::Transparent);
-  CHECK(rendering::QueueFor(BlendMode::Additive) == RenderQueue::Transparent);
-  CHECK(rendering::QueueFor(BlendMode::Multiply) == RenderQueue::Transparent);
-}
-
-static void TestBackToFront() {
-  auto center = [](const Item& item) { return item.center; };
-
-  // A perspective-style camera at z = 10 looking down -z: smaller z = farther.
-  const glm::mat4 view = glm::lookAt(glm::vec3(0.0f, 0.0f, 10.0f), glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-  std::vector<Item> items = {{1, {0.0f, 0.0f, 5.0f}}, {2, {0.0f, 0.0f, -20.0f}}, {3, {3.0f, 1.0f, 0.0f}}};
-  rendering::SortBackToFront(items, view, center);
-  CHECK((Ids(items) == std::vector<int>{2, 3, 1}));
-
-  // Distance is measured along the view direction, not from the camera point: sideways offsets
-  // don't change the order (what an orthographic camera needs).
-  std::vector<Item> sideways = {{1, {50.0f, 0.0f, 1.0f}}, {2, {0.0f, 0.0f, 0.0f}}};
-  rendering::SortBackToFront(sideways, view, center);
-  CHECK((Ids(sideways) == std::vector<int>{2, 1}));
-
-  // A tilted top-down camera (like Bluzzle's): looking down and forward along -z.
-  const glm::mat4 tilted = glm::lookAt(glm::vec3(0.0f, 20.0f, 8.0f), glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-  std::vector<Item> board = {{1, {0.0f, 0.0f, 3.0f}}, {2, {0.0f, 0.0f, -3.0f}}, {3, {0.0f, 2.0f, 0.0f}}};
-  rendering::SortBackToFront(board, tilted, center);
-  CHECK((Ids(board) == std::vector<int>{2, 1, 3}));  // the far row, the near row, then what's raised towards the camera
-
-  // Equal distances keep their order (stable: no flicker between frames).
-  std::vector<Item> ties = {{1, {0.0f, 0.0f, 0.0f}}, {2, {1.0f, 0.0f, 0.0f}}, {3, {-1.0f, 0.0f, 0.0f}}};
-  rendering::SortBackToFront(ties, view, center);
-  CHECK((Ids(ties) == std::vector<int>{1, 2, 3}));
 }
 
 static void TestCanvasBlendPerDraw() {
@@ -190,8 +143,6 @@ static void TestRadialFalloff() {
 
 int main() {
   TestDepthWriteRule();
-  TestQueues();
-  TestBackToFront();
   TestCanvasBlendPerDraw();
   TestShaderMaterialBlend();
   TestImageBatching();

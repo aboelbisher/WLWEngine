@@ -22,7 +22,8 @@
 #include "wlw/rendering/gl_vertex_buffer.h"
 #include "wlw/rendering/mesh_variant.h"
 #include "wlw/rendering/render_device.h"
-#include "wlw/rendering/render_queue.h"
+#include "wlw/rendering/render_list.h"
+#include "wlw/rendering/gl_state_cache.h"
 #include "wlw/scene/light.h"
 #include "wlw/scene/shadow_map.h"
 #include "wlw/scene/window.h"
@@ -31,7 +32,7 @@
 namespace wlw::rendering {
 
 // The 3D renderer on GL 3.3 / GLES 3.0. Per viewport:
-//   1. gather   visible lights and drawables (opaque / transparent), shadow bounds
+//   1. gather   visible lights and drawables (each one's world box computed once), shadow bounds
 //   2. frame    the per-frame uniform block (camera, lights, shadow) uploaded once (frame_uniforms.h)
 //   3. shadows  casters' depth from the shadow light into the shadow map
 //   4. main     skybox, opaque meshes, then transparent ones back to front; each mesh with the
@@ -126,14 +127,25 @@ public:
   // What one viewport draws, gathered from its scene before any drawing starts.
   struct Frame {
     std::vector<const scene::LightNode*> lights;  // visible light nodes (the block takes kMaxLightsPerType of each type)
-    std::vector<scene::Node3D*> drawables;         // visible nodes with something to draw (the shadow pass)
-    std::vector<scene::Node3D*> opaque;            // ...with an opaque mesh (main pass, first)
-    std::vector<scene::Node3D*> transparent;       // ...with a blending mesh (main pass, then, back to front)
+    struct Drawable {
+      scene::Node3D* node;
+      scene::AABB box;  // world bounds, computed once per frame (GetAABB walks every mesh / copy)
+    };
+    std::vector<Drawable> drawables;               // visible nodes with something to draw
     scene::AABB casters{}, receivers{};            // around every shadow caster / receiver
     bool has_casters = false, has_receivers = false;
     const scene::LightNode* shadow_light = nullptr;  // the directional light that casts shadows, if any
     bool shadow_active = false;                      // a shadow map is drawn this frame
     scene::ShadowFrustum shadow_frustum;
+
+    // Empties it for the next viewport, keeping the lists' memory (no allocations per frame).
+    void Clear() {
+      lights.clear();
+      drawables.clear();
+      has_casters = has_receivers = false;
+      shadow_light = nullptr;
+      shadow_active = false;
+    }
   };
 
   // One frame of a window: its offscreen viewports into their textures (in the order added, so
@@ -181,12 +193,13 @@ public:
           const bool shadows = light->CastsShadows() && light->GetType() == scene::LightNode::Type::Directional;
           if (shadows && frame.shadow_light == nullptr) frame.shadow_light = light;
         } else if (node->GetModel() && !node->GetModel()->meshes.empty()) {
-          frame.drawables.push_back(node.get());
+          frame.drawables.push_back({node.get(), {}});
           any_caster |= node->CastsShadow();
         }
       });
       frame.shadow_active = frame.shadow_light != nullptr && any_caster;  // as if the map can be made
-      for (scene::Node3D* node : frame.drawables) {
+      for (const Frame::Drawable& drawable : frame.drawables) {
+        scene::Node3D* node = drawable.node;
         for (const auto& mesh : node->GetModel()->meshes) {
           if (!DrawableShaderMaterial(mesh->GetMaterial()) && !DrawableShaderMaterial(node->GetMaterial())) {
             MeshProgramFor(MeshVariantKey(DrawFor(*node, *mesh, frame)));
@@ -205,26 +218,42 @@ public:
   // One viewport into the framebuffer that is bound: its scene through its camera, then its
   // canvas over it.
   void DrawViewport(scene::Viewport& viewport, glm::ivec2 pixels, bool has_depth) {
-    current_program_ = 0;  // the UI renderer and the debug UI switch programs too: don't trust the cache
+    using Clock = std::chrono::steady_clock;
     const std::shared_ptr<scene::Scene>& scene = viewport.GetScene();
     const std::shared_ptr<scene::Camera3D>& camera = viewport.GetCamera();
     const bool draw_scene = scene != nullptr && camera != nullptr;
+    state_.Reset();  // the UI renderer and the debug UI change GL state too: don't trust the cache
+    state_.ResetCounters();
+    scene::RenderStats stats;
 
-    // Gather, the frame block, and the shadow pass first: the shadow pass draws into its own
+    // Gather, the frame block and the draw list first, then the shadow pass: it draws into its own
     // framebuffer and reads the block's light-space matrix.
-    Frame frame;
+    frame_.Clear();
+    draw_items_.clear();
+    draw_order_.clear();
+    node_slots_.clear();
+    const auto start = Clock::now();
     if (draw_scene) {
       if (pixels.x > 0 && pixels.y > 0) {  // a minimized window has no size
         camera->UpdateSize({static_cast<float>(pixels.x), static_cast<float>(pixels.y)});
       }
-      GatherScene(*scene, frame);
-      PrepareShadow(frame);
-      UploadFrame(*camera, frame);
-      if (frame.shadow_active) DrawShadowMap(frame);
+      GatherScene(*scene, frame_);
+      PrepareShadow(frame_);
+      SetCameraMatrices(*camera);
+      BuildDrawList(frame_, stats);
+    }
+    const auto gathered = Clock::now();
+    SortDrawOrder(draw_order_);
+    const auto sorted = Clock::now();
+    // GPU work from here on: the frame block, instance data, the shadow and main passes.
+    if (draw_scene) {
+      UploadFrame(*camera, frame_);
+      for (NodeSlot& slot : node_slots_) slot.instances = PrepareInstances(*slot.node);
+      if (frame_.shadow_active) DrawShadowMap(frame_);
     }
 
     SetViewport(0, 0, pixels.x, pixels.y);
-    glDepthMask(GL_TRUE);
+    state_.SetDepthWrite(true);
     GLbitfield clear_bits = has_depth ? GL_DEPTH_BUFFER_BIT : 0;
     if (const auto& color = viewport.GetClearColor()) {
       glClearColor(color->r, color->g, color->b, color->a);
@@ -232,8 +261,16 @@ public:
     }
     if (clear_bits) glClear(clear_bits);
 
-    scene::RenderStats stats;
-    if (draw_scene) DrawMainPass(*scene, frame, stats);
+    if (draw_scene) DrawMainPass(*scene, frame_, stats);
+    const auto submitted = Clock::now();
+
+    auto micros = [](Clock::duration d) { return std::chrono::duration<float, std::micro>(d).count(); };
+    stats.gather_us = micros(gathered - start);
+    stats.sort_us = micros(sorted - gathered);
+    stats.submit_us = micros(submitted - sorted);
+    stats.program_changes = state_.ProgramChanges();
+    stats.texture_binds = state_.TextureBinds();
+    stats.state_calls_skipped = state_.Skipped();
     viewport.SetRenderStats(stats);
 
     ui_renderer_->Draw(viewport.GetCanvas(), {static_cast<float>(pixels.x), static_cast<float>(pixels.y)});
@@ -250,17 +287,10 @@ public:
       auto model = node->GetModel();
       if (model == nullptr || model->meshes.empty()) return;
       if (node->IsInstanced() && node->GetInstances().empty()) return;  // instanced with zero copies
-      frame.drawables.push_back(node.get());
-      bool has_opaque = false, has_transparent = false;
-      for (const auto& mesh : model->meshes) {
-        const bool opaque = QueueFor(EffectiveMaterialBlend(*node, *mesh)) == RenderQueue::Opaque;
-        has_opaque |= opaque;
-        has_transparent |= !opaque;
-      }
-      if (has_opaque) frame.opaque.push_back(node.get());
-      if (has_transparent) frame.transparent.push_back(node.get());
-      if (node->CastsShadow()) Grow(frame.casters, frame.has_casters, node->GetAABB());
-      if (node->ReceivesShadow()) Grow(frame.receivers, frame.has_receivers, node->GetAABB());
+      const scene::AABB box = node->GetAABB();
+      frame.drawables.push_back({node.get(), box});
+      if (node->CastsShadow()) Grow(frame.casters, frame.has_casters, box);
+      if (node->ReceivesShadow()) Grow(frame.receivers, frame.has_receivers, box);
     });
 
     // The shadow light: the first directional light that casts shadows.
@@ -286,6 +316,12 @@ public:
     frame.shadow_active = true;
   }
 
+  // This viewport's camera, for culling and depth (BuildDrawList): no GL.
+  void SetCameraMatrices(scene::Camera3D& camera) {
+    scene_view_ = camera.GetViewMatrix();
+    scene_view_projection_ = camera.GetProjectionMatrix() * scene_view_;
+  }
+
   // --- 2. FRAME: the per-frame uniform block, read by every program this viewport draws with ---
   void UploadFrame(scene::Camera3D& camera, const Frame& frame) {
     FrameUniforms block;
@@ -305,30 +341,79 @@ public:
                              frame.shadow_frustum.texel_world * 1.5f, 0.0f};
     }
     SetFrameLights(block, frame.lights, frame.shadow_active ? frame.shadow_light : nullptr);
-    scene_view_ = block.view;
-    scene_view_projection_ = block.view_projection;
 
     glBindBuffer(GL_UNIFORM_BUFFER, frame_ubo_);
     glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(FrameUniforms), &block);
     glBindBufferBase(GL_UNIFORM_BUFFER, kFrameBlockBinding, frame_ubo_);
   }
 
-  // --- 3. SHADOWS: every caster's depth, seen from the shadow light ---
+  // --- 3. DRAW LIST: one item per visible mesh, each with its sort key (render_list.h) ---
+  void BuildDrawList(const Frame& frame, scene::RenderStats& stats) {
+    const scene::Frustum frustum = scene::Frustum::FromMatrix(scene_view_projection_);
+    for (const Frame::Drawable& drawable : frame.drawables) {
+      scene::Node3D* node = drawable.node;
+      const scene::AABB& box = drawable.box;
+      if (!frustum.TestAABB(box)) {
+        ++stats.culled_nodes;
+        continue;
+      }
+      // Distance in front of the camera along its view direction (right for both camera kinds).
+      const glm::vec3 center((box.min.x + box.max.x) * 0.5f, (box.min.y + box.max.y) * 0.5f,
+                             (box.min.z + box.max.z) * 0.5f);
+      const float depth = -(scene_view_ * glm::vec4(center, 1.0f)).z;
+      const bool instanced = node->IsInstanced();
+      const auto slot = static_cast<uint32_t>(node_slots_.size());
+      // Normals: transpose(inverse(model)), once per node on the CPU (instanced copies do it per vertex).
+      const glm::mat4 model = node->GetModelMatrix();
+      node_slots_.push_back({node, model, instanced ? glm::mat3(1.0f) : glm::mat3(glm::transpose(glm::inverse(model))),
+                             nullptr});  // instance data goes to the GPU after sorting (DrawViewport)
+
+      for (const auto& mesh : node->GetModel()->meshes) {
+        DrawItem item;
+        item.node = node;
+        item.mesh = mesh.get();
+        item.node_slot = slot;
+        item.material = EffectiveMaterial(*node, *mesh);
+        item.blend = item.material ? item.material->blend : BlendMode::Opaque;
+        item.depth_write = item.material ? item.material->DepthWrite() : true;
+        item.custom = DrawableShaderMaterial(mesh->GetMaterial());
+        if (!item.custom) item.custom = DrawableShaderMaterial(node->GetMaterial());
+        GLuint program = 0;
+        if (item.custom) {
+          program = static_cast<const GLShader&>(*item.custom->GetShader()).Program();
+        } else {
+          item.program = &MeshProgramFor(MeshVariantKey(DrawFor(*node, *mesh, frame)));
+          program = item.program->id;
+          if (program == 0) continue;  // didn't compile (logged)
+          if (const Material* textured = TexturedMaterial(*node, *mesh)) item.texture = textured->GetTexture()->GetID();
+        }
+        const auto index = static_cast<uint32_t>(draw_items_.size());
+        draw_items_.push_back(item);
+        const uint64_t key = item.blend == BlendMode::Opaque ? OpaqueSortKey(program, item.texture, depth)
+                                                             : TransparentSortKey(depth, program);
+        draw_order_.push_back({key, index});
+      }
+    }
+  }
+
+  // --- 4. SHADOWS: every caster's depth, seen from the shadow light ---
   void DrawShadowMap(const Frame& frame) {
     GLint previous_framebuffer = 0;  // not always 0: the platform may draw into its own
     glGetIntegerv(GL_FRAMEBUFFER_BINDING, &previous_framebuffer);
     glBindFramebuffer(GL_FRAMEBUFFER, shadow_framebuffer_);
     glViewport(0, 0, shadow_map_size_, shadow_map_size_);
-    glDepthMask(GL_TRUE);
+    state_.SetBlendMode(BlendMode::Opaque);
+    state_.SetDepthWrite(true);
     glClear(GL_DEPTH_BUFFER_BIT);
     // A depth bias that grows with the surface's slope to the light: against "shadow acne".
     glEnable(GL_POLYGON_OFFSET_FILL);
     glPolygonOffset(1.5f, 3.0f);
-    for (scene::Node3D* node : frame.drawables) {
+    for (const Frame::Drawable& drawable : frame.drawables) {
+      scene::Node3D* node = drawable.node;
       if (!node->CastsShadow()) continue;
       const ShadowProgram& program = ShadowProgramFor(node->IsInstanced());
       if (program.id == 0) continue;
-      UseProgram(program.id);
+      state_.UseProgram(program.id);
       glUniformMatrix4fv(program.model, 1, GL_FALSE, glm::value_ptr(node->GetModelMatrix()));
       GLInstanceBuffer* instances = PrepareInstances(*node);
       for (const auto& mesh : node->GetModel()->meshes) DrawMesh(*node, *mesh, instances, nullptr);
@@ -337,18 +422,18 @@ public:
     glBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(previous_framebuffer));
   }
 
-  // --- 4. MAIN PASS: skybox, opaque meshes, then transparent ones back to front ---
+  // --- 5. MAIN PASS: the skybox, then the draw list in key order ---
   void DrawMainPass(const scene::Scene& scene, const Frame& frame, scene::RenderStats& stats) {
     if (const auto& skybox = scene.GetSkybox()) {
       glDisable(GL_DEPTH_TEST);
-      glDepthMask(GL_FALSE);
       glDisable(GL_CULL_FACE);
-      UseProgram(skybox_program_);
+      state_.SetDepthWrite(false);
+      state_.SetBlendMode(BlendMode::Opaque);
+      state_.UseProgram(skybox_program_);
       glBindVertexArray(skybox_vao_);
       skybox->Bind(0);
       glDrawArrays(GL_TRIANGLES, 0, 36);
       glBindVertexArray(0);
-      glDepthMask(GL_TRUE);
       glEnable(GL_DEPTH_TEST);
     }
 
@@ -359,74 +444,30 @@ public:
       glActiveTexture(GL_TEXTURE0);
     }
 
-    const glm::mat4& view = scene_view_;
-    const scene::Frustum frustum = scene::Frustum::FromMatrix(scene_view_projection_);
-
-    // Opaque first: any order, the depth buffer sorts them per pixel.
-    for (scene::Node3D* node : frame.opaque) {
-      if (!frustum.TestAABB(node->GetAABB())) {
-        ++stats.culled_nodes;
-        continue;
-      }
-      DrawNode(*node, frame, RenderQueue::Opaque, stats);
-    }
-
-    // Then whatever blends: farthest first, so each one blends over what's behind it.
-    std::vector<scene::Node3D*> transparent;
-    transparent.reserve(frame.transparent.size());
-    for (scene::Node3D* node : frame.transparent) {
-      if (frustum.TestAABB(node->GetAABB())) {
-        transparent.push_back(node);
-      } else if (std::find(frame.opaque.begin(), frame.opaque.end(), node) == frame.opaque.end()) {
-        ++stats.culled_nodes;  // not counted twice for a node with meshes in both queues
-      }
-    }
-    SortBackToFront(transparent, view, [](const scene::Node3D* node) {
-      const scene::AABB box = node->GetAABB();
-      return glm::vec3((box.min.x + box.max.x) * 0.5f, (box.min.y + box.max.y) * 0.5f, (box.min.z + box.max.z) * 0.5f);
-    });
-    for (scene::Node3D* node : transparent) DrawNode(*node, frame, RenderQueue::Transparent, stats);
-
-    ApplyBlendMode(BlendMode::Opaque);  // back to the defaults for whatever draws next
-    glDepthMask(GL_TRUE);
-    UseProgram(0);
-  }
-
-  // A node's meshes that belong to `queue`, each with its material's blend state and shader: its
-  // ShaderMaterial's, else the engine's variant for its features.
-  void DrawNode(scene::Node3D& node, const Frame& frame, RenderQueue queue, scene::RenderStats& stats) {
-    const glm::mat4& model = node.GetModelMatrix();
-    const bool instanced = node.IsInstanced();
-    // Normals: transpose(inverse(model)), once per node on the CPU (instanced copies do it per vertex).
-    const glm::mat3 normal_matrix = instanced ? glm::mat3(1.0f) : glm::mat3(glm::transpose(glm::inverse(model)));
-    GLInstanceBuffer* instances = PrepareInstances(node);
-
-    for (const auto& mesh : node.GetModel()->meshes) {
-      const BlendMode blend = EffectiveMaterialBlend(node, *mesh);
-      if (QueueFor(blend) != queue) continue;  // drawn in the other queue
-      ApplyBlendMode(blend);
-      glDepthMask(EffectiveDepthWrite(node, *mesh) ? GL_TRUE : GL_FALSE);
-      if (queue == RenderQueue::Transparent) ++stats.transparent_draw_calls;
-
-      const ShaderMaterial* custom = DrawableShaderMaterial(mesh->GetMaterial());
-      if (!custom) custom = DrawableShaderMaterial(node.GetMaterial());
-      if (custom) {
-        UseShaderMaterial(*custom, model, instanced);
+    for (const DrawOrder& order : draw_order_) {
+      const DrawItem& item = draw_items_[order.item];
+      const NodeSlot& slot = node_slots_[item.node_slot];
+      state_.SetBlendMode(item.blend);
+      state_.SetDepthWrite(item.depth_write);
+      if (IsTransparentKey(order.key)) ++stats.transparent_draw_calls;
+      const glm::mat4& model = slot.model;
+      if (item.custom) {
+        UseShaderMaterial(*item.custom, model, item.node->IsInstanced());
       } else {
-        const MeshProgram& program = MeshProgramFor(MeshVariantKey(DrawFor(node, *mesh, frame)));
-        if (program.id == 0) continue;  // didn't compile (logged)
-        UseProgram(program.id);
+        const MeshProgram& program = *item.program;
+        state_.UseProgram(program.id);
         glUniformMatrix4fv(program.model, 1, GL_FALSE, glm::value_ptr(model));
-        if (!instanced) glUniformMatrix3fv(program.normal_matrix, 1, GL_FALSE, glm::value_ptr(normal_matrix));
-        const Material* material = EffectiveMaterial(node, *mesh);
-        glUniform1f(program.shininess, material ? material->shininess : 32.0f);
-        if (const Material* textured = TexturedMaterial(node, *mesh)) {
-          glActiveTexture(GL_TEXTURE0);
-          textured->BindTexture();
+        if (slot.instances == nullptr) {
+          glUniformMatrix3fv(program.normal_matrix, 1, GL_FALSE, glm::value_ptr(slot.normal_matrix));
         }
+        glUniform1f(program.shininess, item.material ? item.material->shininess : 32.0f);
+        if (item.texture) state_.BindTexture0(item.texture);
       }
-      DrawMesh(node, *mesh, instances, &stats);
+      DrawMesh(*item.node, *item.mesh, slot.instances, &stats);
     }
+
+    state_.SetBlendMode(BlendMode::Opaque);  // back to the defaults for whatever draws next
+    state_.SetDepthWrite(true);
   }
 
   // The draw's features, which pick its shader variant.
@@ -514,7 +555,7 @@ public:
   // shadow map, which stay bound for the nodes drawn after.
   void UseShaderMaterial(const ShaderMaterial& material, const glm::mat4& model, bool instanced) {
     const auto& shader = static_cast<const GLShader&>(*material.GetShader());
-    UseProgram(shader.Program());
+    state_.UseProgram(shader.Program());
     glUniformMatrix4fv(shader.Location("uModel"), 1, GL_FALSE, glm::value_ptr(model));
     glUniform1i(shader.Location("uInstanced"), instanced);
     shader.ApplyParams(material, 2);
@@ -532,6 +573,26 @@ public:
     GLint model = -1;
   };
 
+  // One mesh to draw this frame (main pass), made by BuildDrawList; drawn in the order of its key.
+  struct DrawItem {
+    scene::Node3D* node = nullptr;
+    core::Mesh<core::Vertex3D>* mesh = nullptr;
+    uint32_t node_slot = 0;                  // its node's per-frame data (node_slots_)
+    const Material* material = nullptr;      // the material deciding its look (mesh's, else node's)
+    const ShaderMaterial* custom = nullptr;  // drawn with this material's shader...
+    const MeshProgram* program = nullptr;    // ...or with this engine variant
+    GLuint texture = 0;                      // engine variant: its texture on unit 0 (0 = none)
+    BlendMode blend = BlendMode::Opaque;
+    bool depth_write = true;
+  };
+  // What a node's meshes share, worked out once per frame.
+  struct NodeSlot {
+    scene::Node3D* node = nullptr;
+    glm::mat4 model{1.0f};                   // world matrix (walks the parents once)
+    glm::mat3 normal_matrix{1.0f};           // plain nodes (instanced: per vertex)
+    GLInstanceBuffer* instances = nullptr;   // instanced nodes (set just before drawing)
+  };
+
   // The engine's 3D shader for a variant key: compiled the first time it's needed, then cached.
   const MeshProgram& MeshProgramFor(uint32_t key) {
     auto [it, inserted] = mesh_programs_.try_emplace(key);
@@ -544,7 +605,7 @@ public:
     program.normal_matrix = glGetUniformLocation(program.id, "uNormalMatrix");
     program.shininess = glGetUniformLocation(program.id, "uShininess");
     // Two sampler types may never share a texture unit: the mesh texture uses 0, shadows 1.
-    UseProgram(program.id);
+    state_.UseProgram(program.id);
     glUniform1i(glGetUniformLocation(program.id, "uTexture"), 0);
     glUniform1i(glGetUniformLocation(program.id, "uShadowMap"), 1);
     if (warmed_up_) {  // not prepared by WarmUp: it costs a frame now (worth knowing on phones)
@@ -566,12 +627,6 @@ public:
     std::string name;
     for (const std::string& define : MeshVariantDefines(key)) name += " " + define;
     return name.empty() ? " (none)" : name;
-  }
-
-  void UseProgram(GLuint program) {
-    if (program == current_program_) return;
-    glUseProgram(program);
-    current_program_ = program;
   }
 
   // ---- Shadow map ----
@@ -668,7 +723,12 @@ private:
   GLuint skybox_vao_ = 0;
   GLuint skybox_vbo_ = 0;
   GLuint frame_ubo_ = 0;
-  GLuint current_program_ = 0;  // what glUseProgram last set (to skip redundant switches)
+  GLStateCache state_;          // program, blend, depth writes, unit-0 texture: skips redundant GL calls
+  // Per-viewport lists, reused every frame (cleared, never shrunk: no allocations once warm).
+  Frame frame_;
+  std::vector<DrawItem> draw_items_;
+  std::vector<NodeSlot> node_slots_;
+  std::vector<DrawOrder> draw_order_;
   bool warmed_up_ = false;
 
   // This viewport's camera (set by UploadFrame), for culling and sorting.

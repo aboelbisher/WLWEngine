@@ -87,6 +87,7 @@ add_library(wlw STATIC
   wlw/rendering/gl_program.cpp
   wlw/rendering/gl_program.h
   wlw/rendering/gl_shader.cpp
+  wlw/rendering/gl_state_cache.h
   wlw/rendering/gl_shader.h
   wlw/rendering/gl_instance_buffer.h
   wlw/rendering/gl_vertex_buffer.h
@@ -97,7 +98,7 @@ add_library(wlw STATIC
   wlw/rendering/mesh_variant.h
   wlw/rendering/render_device.h
   wlw/rendering/render_device_gl.cpp
-  wlw/rendering/render_queue.h
+  wlw/rendering/render_list.h
   wlw/rendering/render_target.h
   wlw/rendering/rendering_driver.h
   wlw/rendering/rendering_driver_gl.cpp

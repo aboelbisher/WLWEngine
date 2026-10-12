@@ -15,6 +15,9 @@ void EnginePanel::OnDebugUI() {
   const scene::RenderStats& stats = window.GetScreen().GetRenderStats();
   ImGui::Text("%d draw calls (%d transparent), %d instances, %d culled", stats.draw_calls,
               stats.transparent_draw_calls, stats.instances, stats.culled_nodes);
+  ImGui::Text("%d program changes, %d texture binds, %d state calls skipped", stats.program_changes,
+              stats.texture_binds, stats.state_calls_skipped);
+  ImGui::Text("CPU: gather %.0f us, sort %.0f us, submit %.0f us", stats.gather_us, stats.sort_us, stats.submit_us);
   // Offscreen viewports: size, format, update mode, GPU memory of their texture, last frame's draws.
   for (const auto& [_, viewport] : window.GetViewports()) {
     const rendering::RenderTarget* target = viewport->GetTarget();

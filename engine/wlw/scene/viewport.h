@@ -24,6 +24,14 @@ struct RenderStats {
   int transparent_draw_calls = 0;  // of those, drawn in the transparent queue (blending, back to front)
   int instances = 0;     // copies drawn by instanced calls
   int culled_nodes = 0;  // skipped by frustum culling
+  // GPU state work (main pass + shadow pass): what changed, and what the state cache saved.
+  int program_changes = 0;
+  int texture_binds = 0;
+  int state_calls_skipped = 0;
+  // CPU time spent on it, in microseconds.
+  float gather_us = 0.0f;  // walking the scene, culling, building the draw list
+  float sort_us = 0.0f;    // sorting the draw list
+  float submit_us = 0.0f;  // shadow + main pass: GL calls
 };
 
 struct ViewportSettings {
