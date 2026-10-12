@@ -2,13 +2,15 @@
 
 #include <memory>
 #include <string>
+#include <utility>
 
+#include "wlw/app/screen.h"
+#include "wlw/app/system.h"
+#include "wlw/app/time.h"
 #include "wlw/core/fixed_timestep.h"
-#include "wlw/core/time_scale.h"
 #include "wlw/core/vector2.h"
 #include "wlw/input/input.h"
 #include "wlw/scene/window.h"
-#include "wlw/app/screen.h"
 #include "wlw/wlw.h"
 
 namespace wlw {
@@ -17,12 +19,13 @@ namespace audio {
 class Audio;
 }  // namespace audio
 namespace ui {
-class Canvas;
 struct UIContext;
 }  // namespace ui
 namespace debug {
 class DebugUI;
 }
+
+namespace app {
 
 struct AppConfig {
   std::string title = "WLWengine";
@@ -34,108 +37,92 @@ struct AppConfig {
   core::Vector2 ui_reference_size = {640, 360};
 };
 
-// Base class for a game. It owns the engine, the window and the main loop; a game overrides
-// the On*() hooks and/or pushes Screens (game states). One frame of Run() looks like this
-// (each hook is followed by the same call on the screens: top only for updates, all visible
-// screens for drawing):
+// The app: owns the services (engine and renderer, window, input, audio, screens, time) and runs
+// the main loop. Games don't subclass it: they add Systems (always running) and push Screens (one
+// state at a time). A game's main.cpp:
 //
-//   measure frame time; Back -> screens, OnBack(), else leave
-//   OnFixedUpdate(step)  x N   <- game logic / physics, always with the same dt
-//   OnUpdate(frame_time)       <- per-frame work: input, camera
-//   OnRender(alpha)            <- push the latest state to the scene, interpolated by alpha
-//   OnRenderUI(ui)             <- 2D UI over the scene (ui.canvas, widgets from ui/widgets.h)
-//   OnDebugUI()                <- debug panels (WLW_DEBUG_UI builds, while the debug UI is open)
-//   draw + present, then poll input for the next frame; apply screen changes
-class Application {
+//   std::unique_ptr<wlw::app::Application> MakeApp() {
+//     auto app = std::make_unique<wlw::app::Application>(MakeConfig());
+//     app->AddSystem<MyGame>();
+//     return app;
+//   }
+//   WLW_MAIN(MakeApp)
+//
+// One frame (systems in the order added, then the screens: top only for updates, every visible
+// one for drawing):
+//
+//    1. lifecycle       paused?  -> systems.OnAppPaused, screens   (audio suspends)
+//                       resumed? -> systems.OnAppResumed          (audio resumes, clock restarts)
+//    2. time            measure, clamp, apply the time scale
+//    3. back            screens (top first) -> systems (last added first) -> else leave
+//    4. platform        native-bridge messages (ads...) on the game thread
+//    5. OnFixedUpdate   x N, constant dt                <- game logic / physics
+//    6. OnUpdate        per frame, game time            <- input, camera
+//    7. OnRender        alpha in [0, 1)                 <- push the state to the scene, interpolated
+//    8. OnRenderUI      canvases begun by the engine    <- 2D UI over the scene, then screen fades
+//    9. OnDebugUI       WLW_DEBUG_UI builds, while open <- ImGui panels (the engine's first)
+//   10. draw + present, then poll input; apply queued screen changes
+class Application final {
  public:
   explicit Application(AppConfig config = {});
-  virtual ~Application();
+  ~Application();
 
   Application(const Application&) = delete;
   Application& operator=(const Application&) = delete;
+
+  // Adds a system; they run in the order added. Started (OnStart) when Run begins, or at the
+  // next frame when added while running. Returns it, e.g. to wire systems together.
+  template <typename T, typename... Args>
+  T& AddSystem(Args&&... args) {
+    return static_cast<T&>(systems_.Add(std::make_unique<T>(std::forward<Args>(args)...), this));
+  }
+  // The first system of type T, else null (a short search: for setup, not per frame).
+  template <typename T>
+  T* GetSystem() const {
+    return systems_.Get<T>();
+  }
 
   // Runs until Quit() is called or the window is closed. Returns the process exit code.
   int Run();
   void Quit() { quit_requested_ = true; }
 
- protected:
-  // Called once, after the window and the renderer exist. Build your scene here.
-  virtual void OnStart() {}
-  // Called 0..N times per frame with a constant dt (AppConfig::fixed_timestep). Game time: runs
-  // slower or not at all under SetTimeScale.
-  virtual void OnFixedUpdate(float dt) {}
-  // Called once per frame with the (clamped) frame time, in game time (see SetTimeScale).
-  virtual void OnUpdate(float dt) {}
-  // Called once per frame before drawing. alpha in [0, 1) = progress towards the next fixed step.
-  virtual void OnRender(float alpha) {}
-  // Called once per frame after OnRender: draw the 2D UI (HUD, menus) on the canvas. It's drawn
-  // over the 3D scene, in Canvas units (see ui::Canvas).
-  virtual void OnRenderUI(ui::UIContext& ui) {}
-  // Called once after the loop ends, while the engine is still alive.
-  virtual void OnShutdown() {}
-  // Back (Android) / Escape (desktop) that no screen handled. Return true if handled; otherwise
-  // the app goes to the background on Android and quits on desktop.
-  virtual bool OnBack() { return false; }
-  // The app went to the background (mobile). Screens get Screen::OnAppPaused too.
-  virtual void OnAppPaused() {}
-  // Build debug panels here with the Dear ImGui API (ImGui::Begin, SliderFloat, Button...).
-  // Called once per frame after OnRender while the debug UI is open (F1 or its "Debug" button).
-  // Only called in builds with WLW_DEBUG_UI=1: wrap overrides in `#if WLW_DEBUG_UI`.
-  virtual void OnDebugUI() {}
-
-  WLWEngine& Engine() { return *engine_; }
-  input::Input& Input() { return window_->GetInput(); }  // keys, pointer/touch, swipes, taps
+  // ---- Services ----
   scene::Window& Window() { return *window_; }
-  // Game states (menu, play, pause...): push Screens here; the engine updates the top one and
-  // draws the visible ones, after the Application's own On* hooks. Optional.
-  app::ScreenStack& Screens() { return screens_; }
-  // Sound output (see audio::Audio). Silent, but usable, if the device has no audio output.
-  audio::Audio& Audio() { return *audio_; }
+  input::Input& Input() { return window_->GetInput(); }  // keys, pointer/touch, swipes, taps
+  audio::Audio& Audio() { return *audio_; }               // silent, but usable, without an audio device
+  rendering::RenderDevice& Device() { return *engine_->GetRenderDevice(); }  // textures, shaders, targets
+  ScreenStack& Screens() { return screens_; }             // game states (menu, play, pause...)
+  app::Time& Time() { return time_; }                     // this frame's time; the time scale
+  const AppConfig& Config() const { return config_; }
 #if WLW_DEBUG_UI
   debug::DebugUI& DebugUi() { return *debug_ui_; }  // e.g. HideFor() before a screenshot
 #endif
-  const std::shared_ptr<scene::Window>& WindowPtr() const { return window_; }
-  const AppConfig& Config() const { return config_; }
-
-  double TimeSinceStart() const { return time_since_start_; }  // seconds, real time
-
-  // Game time speed: hit-stop (SetTimeScale(0, 0.06f)), slow motion (SetTimeScale(0.4f, 0.3f, 0.2f)),
-  // pause (SetTimeScale(0)). It scales the dt of OnFixedUpdate, OnUpdate and the screens' (Fixed)Update;
-  // screen fades, the debug UI, audio and input stay in real time. See core::TimeScale.
-  void SetTimeScale(float scale, float hold_seconds = -1.0f, float recover_seconds = 0.0f) {
-    time_scale_.Set(scale, hold_seconds, recover_seconds);
-  }
-  float TimeScale() const { return time_scale_.Scale(); }
-  float Fps() const { return fps_; }
-  float FrameMs() const { return frame_ms_; }
 
  private:
+  void BuildUI();  // phase 8: canvases, pointer, safe area, OnRenderUI, screens, fades
   void UpdateStats(double frame_seconds);
-  void BuildUI();  // the 2D UI for this frame: canvas setup, OnRenderUI, screens, fades
 
   AppConfig config_;
-  // Destroyed in reverse order: the window handle first, the engine (GL + platform shutdown) last.
+  // Destroyed in reverse order: screens and systems first (they may hold GPU resources and
+  // references to each other), then the UI and audio, the window handle, and the engine (GL +
+  // platform shutdown) last.
   std::unique_ptr<WLWEngine> engine_;
   std::shared_ptr<scene::Window> window_;
   std::unique_ptr<audio::Audio> audio_;
   std::unique_ptr<ui::UIContext> ui_;  // the UI layer over the screen's canvas (pointer, safe area, widget state)
-  app::ScreenStack screens_;  // emptied at the end of Run(), while the game's members still exist
 #if WLW_DEBUG_UI
-  void DrawEngineDebugWindow();  // always shown while the debug UI is open: stats, ImGui demo
-  std::unique_ptr<debug::DebugUI> debug_ui_;  // destroyed before the window and the engine
-  bool show_imgui_demo_ = false;
+  std::unique_ptr<debug::DebugUI> debug_ui_;
 #endif
+  SystemList systems_;
+  ScreenStack screens_;  // emptied at the end of Run(), while the systems are still alive
   core::FixedTimestep timestep_;
-  core::TimeScale time_scale_;
-
+  app::Time time_;
   bool quit_requested_ = false;
-  double time_since_start_ = 0.0;
 
-  // Rolling stats, refreshed twice a second.
+  // Stats accumulators, folded into time_ twice a second.
   int stats_frames_ = 0;
   double stats_seconds_ = 0.0;
-  float fps_ = 0.0f;
-  float frame_ms_ = 0.0f;
 };
 
+}  // namespace app
 }  // namespace wlw

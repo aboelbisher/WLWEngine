@@ -25,4 +25,5 @@ target_compile_definitions(ui_tests PRIVATE WLW_TEST_FONT="${CMAKE_CURRENT_SOURC
 wlw_add_engine_test(screen_tests)
 wlw_add_engine_test(search_tests)
 wlw_add_engine_test(shader_tests)
+wlw_add_engine_test(system_tests)
 target_compile_definitions(screen_tests PRIVATE WLW_TEST_FONT="${CMAKE_CURRENT_SOURCE_DIR}/data/LilitaOne-Regular.ttf")

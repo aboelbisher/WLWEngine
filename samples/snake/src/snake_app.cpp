@@ -21,19 +21,17 @@ std::shared_ptr<wlw::core::Model<wlw::core::Vertex3D>> MakeModel(std::shared_ptr
   return model;
 }
 
-wlw::AppConfig MakeConfig() {
-  wlw::AppConfig config;
+uint32_t RandomSeed() { return std::random_device{}(); }
+
+}  // namespace
+
+wlw::app::AppConfig SnakeApp::MakeConfig() {
+  wlw::app::AppConfig config;
   config.title = "WLWSnake";
   config.window_size = {1280, 720};
   config.show_stats_in_title = false;  // the title shows the score instead
   return config;
 }
-
-uint32_t RandomSeed() { return std::random_device{}(); }
-
-}  // namespace
-
-SnakeApp::SnakeApp() : Application(MakeConfig()) {}
 
 void SnakeApp::OnStart() {
   using namespace wlw;
@@ -58,13 +56,13 @@ void SnakeApp::OnStart() {
   food_node_ = std::make_shared<scene::Node3D>();
   food_node_->SetModel(food_model_);
   food_node_->SetMaterial(material_);
-  Window().GetScreen().GetScene()->AddNode(food_node_);
+  App().Window().GetScreen().GetScene()->AddNode(food_node_);
 
   particle_node_ = std::make_shared<scene::Node3D>();
   particle_node_->SetModel(MakeModel(utils::createCubeWithNormals(1.0f)));  // white: tinted per particle
   particle_node_->SetMaterial(material_);
   particle_node_->SetInstances({});
-  Window().GetScreen().GetScene()->AddNode(particle_node_);
+  App().Window().GetScreen().GetScene()->AddNode(particle_node_);
 
   SetupCameras();
 
@@ -93,7 +91,7 @@ void SnakeApp::SetupCameras() {
   perspective_camera_ = scene::FollowCamera::Create(center_node);
   FitPerspectiveCameraToScreen();
 
-  Window().GetScreen().SetCamera(ortho_camera_);
+  App().Window().GetScreen().SetCamera(ortho_camera_);
 }
 
 void SnakeApp::BuildBoard() {
@@ -106,7 +104,7 @@ void SnakeApp::BuildBoard() {
       tile->SetMaterial(material_);
       tile->SetScale({1.0f, 0.1f, 1.0f});
       tile->SetPosition({(float)x, -0.05f, (float)z});
-      Window().GetScreen().GetScene()->AddNode(tile);
+      App().Window().GetScreen().GetScene()->AddNode(tile);
     }
   }
 }
@@ -170,9 +168,9 @@ void SnakeApp::OnUpdate(float dt) {
 void SnakeApp::ReadInput() {
   using wlw::input::Key;
   using wlw::input::Swipe;
-  const wlw::input::Input& in = Input();
+  const wlw::input::Input& in = App().Input();
 
-  if (in.WasKeyPressed(Key::Escape)) Quit();
+  if (in.WasKeyPressed(Key::Escape)) App().Quit();
   if (in.WasKeyPressed(Key::I)) {
     interpolate_ = !interpolate_;
     WLW_LOG_INFO("Interpolation %s", interpolate_ ? "ON (smooth)" : "OFF (cell to cell)");
@@ -180,9 +178,9 @@ void SnakeApp::ReadInput() {
   if (in.WasKeyPressed(Key::P)) {
     orthographic_ = !orthographic_;
     if (orthographic_) {
-      Window().GetScreen().SetCamera(ortho_camera_);
+      App().Window().GetScreen().SetCamera(ortho_camera_);
     } else {
-      Window().GetScreen().SetCamera(perspective_camera_);
+      App().Window().GetScreen().SetCamera(perspective_camera_);
     }
     WLW_LOG_INFO("Projection: %s", orthographic_ ? "orthographic (top-down)" : "perspective (tilted)");
   }
@@ -210,7 +208,7 @@ void SnakeApp::ReadInput() {
 // Keeps the whole board visible in the perspective view on any aspect ratio. With perspective the
 // visible area depends on distance and field of view, so the camera backs off until the board fits.
 void SnakeApp::FitPerspectiveCameraToScreen() {
-  const wlw::core::Vector2 size = Window().GetSize();
+  const wlw::core::Vector2 size = App().Window().GetSize();
   if (size.x <= 0 || size.y <= 0) return;
   const float aspect = size.x / size.y;
   const float vertical_fov = glm::radians(45.0f);  // FollowCamera's field of view
@@ -227,7 +225,7 @@ void SnakeApp::FitPerspectiveCameraToScreen() {
 void SnakeApp::OnRender(float alpha) {
   float t = 1.0f;
   if (interpolate_ && game_.GetState() == SnakeGame::State::Playing) {
-    t = std::clamp((move_timer_ + alpha * Config().fixed_timestep) / game_.MoveInterval(), 0.0f, 1.0f);
+    t = std::clamp((move_timer_ + alpha * App().Config().fixed_timestep) / game_.MoveInterval(), 0.0f, 1.0f);
   }
   SyncSnakeNodes(t);
 
@@ -274,7 +272,7 @@ SnakeApp::NodePtr SnakeApp::AcquireSegmentNode(size_t index) {
     auto node = std::make_shared<wlw::scene::Node3D>();
     node->SetModel(body_model_);  // meshes/models are shared by all segments: one GPU copy
     node->SetMaterial(material_);
-    Window().GetScreen().GetScene()->AddNode(node);
+    App().Window().GetScreen().GetScene()->AddNode(node);
     segment_nodes_.push_back(node);
   }
   return segment_nodes_[index];
@@ -283,7 +281,7 @@ SnakeApp::NodePtr SnakeApp::AcquireSegmentNode(size_t index) {
 void SnakeApp::UpdateTitle() {
   std::string title = "WLWSnake | Score " + std::to_string(game_.Score());
   if (game_.GetState() == SnakeGame::State::GameOver) title += " | GAME OVER - Space to restart";
-  Window().SetTitle(title);
+  App().Window().SetTitle(title);
 }
 
 }  // namespace snake
@@ -296,15 +294,15 @@ namespace snake {
 // Debug panel (F1 / "Debug" button): a small example of the engine's debug UI.
 void SnakeApp::OnDebugUI() {
   ImGui::Begin("Snake");
-  ImGui::Text("%.0f fps (%.2f ms)", Fps(), FrameMs());
+  ImGui::Text("%.0f fps (%.2f ms)", App().Time().Fps(), App().Time().FrameMs());
   ImGui::Text("Score %d, length %zu", game_.Score(), game_.Body().size());
   ImGui::Text("Move interval %.3f s", game_.MoveInterval());
   ImGui::Checkbox("Interpolate", &interpolate_);
   if (ImGui::Checkbox("Orthographic", &orthographic_)) {
     if (orthographic_) {
-      Window().GetScreen().SetCamera(ortho_camera_);
+      App().Window().GetScreen().SetCamera(ortho_camera_);
     } else {
-      Window().GetScreen().SetCamera(perspective_camera_);
+      App().Window().GetScreen().SetCamera(perspective_camera_);
     }
   }
   if (ImGui::Button("Restart")) Restart();

@@ -60,18 +60,23 @@ add_subdirectory(external/WLWengine)
 wlw_add_game(my_game SOURCES main.cpp ASSETS assets)   # .exe on desktop, .so on Android
 ```
 
-A game derives from `wlw::Application` and overrides its hooks:
+A game is a `wlw::app::System` (it runs for the app's whole life; `Screen`s are its states) and overrides the hooks it needs; `App()` gives the services (window, input, audio, screens, time):
 
 ```cpp
-class MyGame : public wlw::Application {
- protected:
+class MyGame : public wlw::app::System {
+ public:
   void OnStart() override {}                 // build the scene
   void OnFixedUpdate(float dt) override {}   // game logic, constant dt
   void OnUpdate(float dt) override {}        // per-frame: input, camera
   void OnRender(float alpha) override {}     // interpolate state into nodes
 };
 
-WLW_MAIN(MyGame)   // #include "wlw/app/entry_point.h": main() on desktop, android_main() on Android
+std::unique_ptr<wlw::app::Application> MakeApp() {
+  auto app = std::make_unique<wlw::app::Application>(wlw::app::AppConfig{.title = "My Game"});
+  app->AddSystem<MyGame>();
+  return app;
+}
+WLW_MAIN(MakeApp)   // #include "wlw/app/entry_point.h": main() on desktop, android_main() on Android
 ```
 
 ## Git workflow

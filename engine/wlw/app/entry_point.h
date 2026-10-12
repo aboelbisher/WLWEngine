@@ -1,11 +1,16 @@
 #pragma once
 
-// WLW_MAIN(MyGameClass) defines the program entry point for the current platform, so a game's
-// main.cpp is identical everywhere:
+// WLW_MAIN(make_app) defines the program entry point for the current platform, so a game's
+// main.cpp is identical everywhere. `make_app` is the game's function that builds its app:
 //
 //   #include "wlw/app/entry_point.h"
-//   #include "my_game.h"
-//   WLW_MAIN(MyGame)
+//
+//   std::unique_ptr<wlw::app::Application> MakeApp() {
+//     auto app = std::make_unique<wlw::app::Application>(MakeConfig());
+//     app->AddSystem<MyGame>();
+//     return app;
+//   }
+//   WLW_MAIN(MakeApp)
 //
 // Desktop: a normal main(). Android: android_main(), called by NativeActivity on its own thread.
 // (iOS will get its own variant here.)
@@ -18,22 +23,20 @@
 
 struct android_app;
 namespace wlw::platform {
-void RunAndroidApp(android_app* app, std::unique_ptr<Application> (*create_app)());
+void RunAndroidApp(android_app* app, std::unique_ptr<::wlw::app::Application> (*create_app)());
 }
 
-#define WLW_MAIN(AppClass)                                                                    \
-  extern "C" void android_main(struct android_app* app) {                                     \
-    ::wlw::platform::RunAndroidApp(app, []() -> std::unique_ptr<::wlw::Application> {         \
-      return std::make_unique<AppClass>();                                                    \
-    });                                                                                       \
+#define WLW_MAIN(make_app)                                \
+  extern "C" void android_main(struct android_app* app) { \
+    ::wlw::platform::RunAndroidApp(app, &make_app);       \
   }
 
 #else
 
-#define WLW_MAIN(AppClass) \
-  int main() {             \
-    AppClass app;          \
-    return app.Run();      \
+#define WLW_MAIN(make_app)                                          \
+  int main() {                                                      \
+    std::unique_ptr<::wlw::app::Application> app = make_app();      \
+    return app ? app->Run() : 1;                                    \
   }
 
 #endif

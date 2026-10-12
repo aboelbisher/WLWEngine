@@ -13,16 +13,22 @@ Remote: `git@github.com:aboelbisher/WLWEngine.git`, branch `main`.
 ```
 engine/wlw/
   audio/      Audio (miniaudio device: WASAPI / AAudio...) + Mixer (decoded PCM, lock-free command queue,
-              voices with pitch/pan, per-sound caps, buses). Application::Audio(); silent in background.
+              voices with pitch/pan, per-sound caps, buses). App().Audio(); silent in background.
               Music: Audio::PlayMusic streams a file (decode thread -> lock-free ring -> Mixer stream slots with crossfades)
   anim/       ease.h (Penner easing curves), tween.h (Tween<T>: value-type tweens the game owns and samples),
               shake.h (trauma-based screen shake: trauma decays, offset = trauma^2 x smooth noise)
   fx/         ParticleSystem: CPU simulation (fixed capacity, swap-remove, bursts, Emit = one exact particle,
               optional Floor rectangle they bounce on and fall past) -> instances
   debug/      DebugUI: Dear ImGui (third_party/imgui) fed from Input, drawn via Window::SetOverlay; games add
-              panels in Application::OnDebugUI() (#if WLW_DEBUG_UI). F1 / "Debug" button. Off in release builds
-  app/        Application (game loop: OnStart/OnFixedUpdate/OnUpdate/OnRender; SetTimeScale = hit-stop / slow motion
-              on game time via core/time_scale.h), entry_point.h (WLW_MAIN),
+              panels in System::OnDebugUI() (#if WLW_DEBUG_UI); the engine's own window is debug::EnginePanel (a
+              System the Application adds first). F1 / "Debug" button. Off in release builds
+  app/        Application (final: owns the services and runs the loop; see the frame in application.h): Window(),
+              Input(), Audio(), Device(), Screens(), Time(), Config(). Games add Systems (system.h: always running,
+              like Unreal subsystems / Godot autoloads; hooks OnStart/OnFixedUpdate/OnUpdate/OnRender/OnRenderUI/
+              OnDebugUI/OnBack/OnAppPaused/OnAppResumed/OnShutdown, run in the order added, then the screens'; App()
+              = the services) and push Screens. SystemList = the testable dispatch. Time (time.h): Delta, RealDelta,
+              FixedStep, Alpha, SinceStart, SetScale (hit-stop / slow motion via core/time_scale.h), Fps.
+              entry_point.h: WLW_MAIN(make_app) with the game's MakeApp() (builds the Application, adds its systems),
               Screen + ScreenStack (game states: deferred push/pop/replace, overlays, fades, Back routing)
   core/       math types, FixedTimestep, Random (SplitMix64: deterministic everywhere, state saveable), log.h (WLW_LOG_*), logger.h (FAIL_IF), mesh/model, collision.h (AABB, Ray, Plane, IntersectPlane)
   input/      Input: keys (pressed vs held), pointer (mouse/first finger), swipes, taps
@@ -81,7 +87,7 @@ kit/wlw/kit/  wlw::kit: game-level building blocks shared by games (separate tar
               (UMP consent, load/show/retry); games add that dir to their sourceSets and depend on play-services-ads + UMP
 samples/      small games, built only when the engine is the top-level project (desktop):
               snake/ (Snake + its rules tests)
-tests/        engine unit tests (no window/GPU: blending (depth-write rule, queues, back-to-front, canvas batches, images, falloff texture), viewports (scenes, sizes, update modes), anim, audio, core (random, atomic files, bridge queue), exact cover, search (bitboards, minimax, expectimax), gf2 (Lights Out), shader text splitting, lighting (light nodes, shadow-box fitting), fx, input, kit, picking, primitives, ui (canvas, safe area, widgets), screens); test data in tests/data/, also top-level only; ctest
+tests/        engine unit tests (no window/GPU: systems (order, starting, Back), blending (depth-write rule, queues, back-to-front, canvas batches, images, falloff texture), viewports (scenes, sizes, update modes), anim, audio, core (random, atomic files, bridge queue), exact cover, search (bitboards, minimax, expectimax), gf2 (Lights Out), shader text splitting, lighting (light nodes, shadow-box fitting), fx, input, kit, picking, primitives, ui (canvas, safe area, widgets), screens); test data in tests/data/, also top-level only; ctest
 third_party/  glad (desktop only), stb, tinygltf + nlohmann json (also its own target wlw_json), miniaudio 0.11.25, stb_vorbis, Dear ImGui 1.92.9b (vendored)
 cmake/WLWHelpers.cmake  wlw_add_game(), wlw_add_assets(), wlw_set_warnings()
 vcpkg/ + vcpkg.json     desktop deps (glm, glfw3). Android fetches glm via FetchContent instead.

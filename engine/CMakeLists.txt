@@ -44,6 +44,8 @@ add_library(wlw STATIC
   wlw/audio/mixer.h
   wlw/app/screen.cpp
   wlw/app/screen.h
+  wlw/app/system.h
+  wlw/app/time.h
 
   wlw/core/collision.h
   wlw/core/color.h
@@ -187,6 +189,8 @@ if(WLW_DEBUG_UI)
   target_sources(wlw PRIVATE
     wlw/debug/debug_ui.cpp
     wlw/debug/debug_ui.h
+    wlw/debug/engine_panel.cpp
+    wlw/debug/engine_panel.h
     wlw/debug/imgui_gl_backend.cpp)
   target_compile_definitions(wlw PUBLIC WLW_DEBUG_UI=1)
   target_link_libraries(wlw PUBLIC wlw_imgui)  # games use the ImGui API in OnDebugUI()

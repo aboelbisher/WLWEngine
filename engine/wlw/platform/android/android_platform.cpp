@@ -571,7 +571,7 @@ bool BridgeCall(const std::string& service, const std::string& method, const std
 }
 
 // ---- entry point (app/entry_point.h) ----
-void RunAndroidApp(android_app* app, std::unique_ptr<Application> (*create_app)()) {
+void RunAndroidApp(android_app* app, std::unique_ptr<::wlw::app::Application> (*create_app)()) {
   g_app = app;
   // Attach this thread (android_main's) to the Java VM once, for all JNI calls (insets, Back,
   // vibration...). Detached again before the thread ends, as the JVM requires.
@@ -582,8 +582,8 @@ void RunAndroidApp(android_app* app, std::unique_ptr<Application> (*create_app)(
   app->onInputEvent = OnInputEvent;
 
   {
-    std::unique_ptr<Application> game = create_app();
-    game->Run();
+    std::unique_ptr<::wlw::app::Application> game = create_app();
+    if (game) game->Run();
   }  // game, engine and window are destroyed here
 
   // If the game quit on its own, ask Android to close the activity. The glue requires

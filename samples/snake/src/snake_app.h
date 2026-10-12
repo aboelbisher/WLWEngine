@@ -15,9 +15,9 @@ namespace snake {
 
 // The "view + controller" side of the game: turns input into SnakeGame calls, advances the game
 // on its tick, and mirrors the game state into scene nodes. All rules live in SnakeGame.
-class SnakeApp : public wlw::Application {
+class SnakeApp : public wlw::app::System {
  public:
-  SnakeApp();
+  static wlw::app::AppConfig MakeConfig();
 
  protected:
   void OnStart() override;
