@@ -36,6 +36,8 @@ namespace wlw::rendering {
 //                         sets gl_Position and out vWorldPos, vNormal, vUV, vColor.
 //   fragment() gets:      in vec3 vWorldPos; in vec3 vNormal (world, not normalized);
 //                         in vec2 vUV; in vec4 vColor; out vec4 FragColor;
+//                         FragColor is premultiplied alpha (rgb * a); it only blends if the
+//                         material's `blend` isn't Opaque (see blend_mode.h).
 //   The scene's lights and shadows aren't passed in (yet): light it in the shader. In the shadow
 //   pass the node is drawn as its plain mesh (a vertex() that moves vertices isn't seen there).
 class Shader {

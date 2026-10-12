@@ -42,6 +42,11 @@ engine/wlw/
               Custom shaders (shader.h): one text (shader_type canvas|mesh; fragment(), optional vertex()) -> RenderDevice::CreateShader(code) -> ShaderMaterial::Create(shader)
               + SetParam(name, float/vec/mat4/texture); node/mesh SetMaterial or Canvas::ShaderRect. Engine inputs are prepended
               (documented in shader.h). Data textures: CreateTexture2D(w, h, {R8/RGB8/RGBA8/R16F/RGBA16F}) + WTexture2D::Update
+              Blending (blend_mode.h): Material::blend = Opaque / Alpha / Additive / Multiply (ShaderMaterial too), depth_write
+              (default: only Opaque writes depth). Every shader outputs PREMULTIPLIED alpha, so gl_blend.h has one table for
+              3D, canvas and custom shaders. Render queues (render_queue.h): each viewport draws opaque meshes first, then
+              transparent ones sorted back to front (SortBackToFront, by bounding-box centre along the view direction),
+              depth-tested but not written. An opaque material forces alpha 1 (uniform `opaque`).
   scene/      Node (scene graph, local transforms, visibility, instancing: SetInstances = one draw call for N copies).
               Scene (scene.h) = the world: nodes, lights, skybox; owned by nobody who looks at it. Viewport (viewport.h) =
               "draw this Scene from this camera into this picture" + a 2D Canvas over it (like Godot's SubViewport):
@@ -57,6 +62,7 @@ engine/wlw/
               SetCastsShadow / SetReceivesShadow; shadow_map.h fits the light's box to the casters (texel-snapped)
   ui/         2D UI layer: Font (TTF -> SDF atlas, stb_truetype), Canvas (virtual units, safe area, text,
               rounded rects, batched quads, ShaderRect = a rect drawn by a material's shader), UIRenderer (GL).
+              Canvas::SetBlendMode (per batch, Alpha again every frame), SoftCircle (a (1-d²)² dot: glows, metaballs).
               Canvas::Button/Toggle/Panel = immediate-mode widgets,
               layout.h (Centered, Inset, Row, Column). Games draw in Application::OnRenderUI() (the canvas is
               Window::GetScreen().GetCanvas(); an offscreen viewport's canvas is drawn into its texture)
@@ -70,7 +76,7 @@ kit/wlw/kit/  wlw::kit: game-level building blocks shared by games (separate tar
               (UMP consent, load/show/retry); games add that dir to their sourceSets and depend on play-services-ads + UMP
 samples/      small games, built only when the engine is the top-level project (desktop):
               snake/ (Snake + its rules tests)
-tests/        engine unit tests (no window/GPU: viewports (scenes, sizes, update modes), anim, audio, core (random, atomic files, bridge queue), exact cover, search (bitboards, minimax, expectimax), gf2 (Lights Out), shader text splitting, lighting (light nodes, shadow-box fitting), fx, input, kit, picking, primitives, ui, screens); test data in tests/data/, also top-level only; ctest
+tests/        engine unit tests (no window/GPU: blending (depth-write rule, queues, back-to-front, canvas batches), viewports (scenes, sizes, update modes), anim, audio, core (random, atomic files, bridge queue), exact cover, search (bitboards, minimax, expectimax), gf2 (Lights Out), shader text splitting, lighting (light nodes, shadow-box fitting), fx, input, kit, picking, primitives, ui, screens); test data in tests/data/, also top-level only; ctest
 third_party/  glad (desktop only), stb, tinygltf + nlohmann json (also its own target wlw_json), miniaudio 0.11.25, stb_vorbis, Dear ImGui 1.92.9b (vendored)
 cmake/WLWHelpers.cmake  wlw_add_game(), wlw_add_assets(), wlw_set_warnings()
 vcpkg/ + vcpkg.json     desktop deps (glm, glfw3). Android fetches glm via FetchContent instead.

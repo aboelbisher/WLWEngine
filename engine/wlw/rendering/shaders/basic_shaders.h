@@ -36,7 +36,7 @@ layout (location = 3) in vec2 UV;
 layout (location = 4) in mat4 aInstanceTransform;
 layout (location = 8) in vec4 aInstanceTint;
 
-out vec3 vertexColor;
+out vec4 vertexColor;  // rgb + alpha (instanced: times the copy's tint)
 out vec3 vertexNormal;
 out vec3 vertexPos;
 out vec2 vertUV;
@@ -57,7 +57,7 @@ void main()
     gl_Position = projection * view * worldPos;
 
     vertexPos = worldPos.xyz;
-    vertexColor = instanced ? aColor.xyz * aInstanceTint.xyz : aColor.xyz;
+    vertexColor = instanced ? aColor * aInstanceTint : aColor;
     vertUV = UV;
     // Pushing the lookup point out along the normal keeps a surface from shadowing itself
     // ("shadow acne": the depth it compares against was stored at nearly the same depth).
@@ -70,7 +70,7 @@ void main()
 inline constexpr const char* fragment3DShaderSource = R"(
 #define MAX_LIGHTS 4
 
-in vec3 vertexColor;
+in vec4 vertexColor;
 in vec3 vertexNormal;
 in vec3 vertexPos;
 in vec2 vertUV;
@@ -102,6 +102,7 @@ uniform float shadowTexel;     // 1 / map size
 
 uniform bool use_texture;
 uniform sampler2D model_texture;
+uniform bool opaque;  // the material is BlendMode::Opaque: alpha is 1
 
 out vec4 FragColor;
 
@@ -123,10 +124,13 @@ float ShadowVisibility()
 
 void main()
 {
-    vec3 objectColor = use_texture ? texture(model_texture, vertUV).xyz : vertexColor;
+    // Alpha only matters for materials that blend (see blend_mode.h); output is premultiplied.
+    vec4 base = use_texture ? texture(model_texture, vertUV) * vec4(1.0, 1.0, 1.0, vertexColor.a) : vertexColor;
+    vec3 objectColor = base.rgb;
+    float alpha = opaque ? 1.0 : base.a;  // opaque draws never leave see-through pixels behind
 
     if (!useLighting) {
-      FragColor = vec4(objectColor, 1.0);
+      FragColor = vec4(objectColor * alpha, alpha);
       return;
     }
 
@@ -163,7 +167,7 @@ void main()
         vec3 direct = (diff + spec) * lightColors[i] * attenuation * cone * lit;
         result += ambient + direct;
     }
-    FragColor = vec4(result * objectColor, 1.0);
+    FragColor = vec4(result * objectColor * alpha, alpha);
 }
 )";
 

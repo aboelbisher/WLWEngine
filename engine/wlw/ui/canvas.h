@@ -9,6 +9,7 @@
 
 #include "wlw/core/color.h"
 #include "wlw/platform/platform.h"
+#include "wlw/rendering/blend_mode.h"
 #include "wlw/rendering/shader_material.h"
 #include "wlw/ui/font.h"
 
@@ -66,7 +67,7 @@ struct UIVertex {
   glm::vec2 position{0.0f};  // Canvas units
   glm::vec2 uv{0.0f};        // text: atlas coordinate; rect: position relative to the rect centre
   core::Color color{1.0f, 1.0f, 1.0f, 1.0f};
-  glm::vec4 params{0.0f};  // x = kind (1 text, 2 rect); text: y = SDF edge; rect: y,z = half size, w = radius
+  glm::vec4 params{0.0f};  // x = kind (1 text, 2 rect, 3 shader, 4 soft circle); text: y = SDF edge; rect: y,z = half size, w = radius
 };
 
 // A run of consecutive quads that can be drawn in one call (same font atlas, or none).
@@ -75,6 +76,7 @@ struct UIBatch {
   size_t first_quad = 0;
   size_t quad_count = 0;
   std::shared_ptr<rendering::ShaderMaterial> material;  // a ShaderRect: one quad, drawn with this material's shader
+  rendering::BlendMode blend = rendering::BlendMode::Alpha;  // see Canvas::SetBlendMode
 };
 
 // The 2D UI layer, drawn over the 3D scene (Application::OnRenderUI). Immediate mode: draw
@@ -108,6 +110,17 @@ class Canvas {
   // Nothing is drawn if the material has no valid canvas shader.
   void ShaderRect(const Rect& rect, std::shared_ptr<rendering::ShaderMaterial> material,
                   const core::Color& tint = {1.0f, 1.0f, 1.0f, 1.0f});
+
+  // A round dot that fades smoothly from `color` at the centre to nothing at `radius` ((1 - d²)²:
+  // no hard edge anywhere). Glow, light spots, soft shadows; drawn Additive into a viewport, many
+  // overlapping dots add up into a density field (metaballs: threshold it for a liquid surface).
+  void SoftCircle(glm::vec2 center, float radius, const core::Color& color);
+
+  // How the quads drawn after this blend with what's under them (see rendering/blend_mode.h),
+  // ShaderRects included. Alpha (normal transparency) at the start of every frame; e.g. Additive
+  // for glows, then back to Alpha. Changing it starts a new draw call.
+  void SetBlendMode(rendering::BlendMode blend) { blend_ = blend; }
+  rendering::BlendMode GetBlendMode() const { return blend_; }
 
   // ---- Widgets ----
   // An immediate-mode button: call it every frame you want it shown; it returns true on the
@@ -148,6 +161,7 @@ class Canvas {
   std::vector<GlyphQuad> glyph_scratch_;  // reused: no allocation per Text() call
   PointerState pointer_;
   bool interactive_ = true;
+  rendering::BlendMode blend_ = rendering::BlendMode::Alpha;
   uint64_t active_button_ = 0;  // the button the pointer went down on (0 = none); kept across frames
 };
 

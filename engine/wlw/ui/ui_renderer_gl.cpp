@@ -11,6 +11,7 @@
 #include "wlw/core/log.h"
 #include "wlw/platform/platform.h"
 #include "wlw/rendering/gl.h"
+#include "wlw/rendering/gl_blend.h"
 #include "wlw/rendering/gl_shader.h"
 #include "wlw/ui/ui_renderer.h"
 
@@ -41,6 +42,7 @@ void main() {
 //       pixel, so the edge is anti-aliased over ~1 pixel at any text size.
 //   2 = rectangle with rounded corners: uv = position from the centre, params.yz = half size,
 //       params.w = radius. The signed distance to a rounded box is computed per pixel.
+//   4 = soft circle: uv = -1..1 across it; fades as (1 - d²)² with the distance from the centre.
 // Output is premultiplied alpha (rgb already multiplied by alpha): blends correctly, also when
 // layers of semi-transparent UI overlap.
 constexpr const char* kFragmentShader = R"(
@@ -51,7 +53,10 @@ uniform sampler2D uAtlas;
 out vec4 FragColor;
 void main() {
     float coverage;
-    if (vParams.x < 1.5) {
+    if (vParams.x > 3.5) {
+        float f = max(1.0 - dot(vUV, vUV), 0.0);
+        coverage = f * f;
+    } else if (vParams.x < 1.5) {
         float d = texture(uAtlas, vUV).r;
         float w = max(fwidth(d) * 0.7, 1e-4);
         coverage = smoothstep(vParams.y - w, vParams.y + w, d);
@@ -143,8 +148,6 @@ class GLUIRenderer : public UIRenderer {
     glViewport(0, 0, static_cast<GLsizei>(framebuffer_pixels.x), static_cast<GLsizei>(framebuffer_pixels.y));
     glDisable(GL_DEPTH_TEST);
     glDisable(GL_CULL_FACE);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);  // premultiplied alpha
 
     glUseProgram(program_);
     glUniformMatrix4fv(projection_location_, 1, GL_FALSE, glm::value_ptr(canvas.Projection()));
@@ -152,6 +155,7 @@ class GLUIRenderer : public UIRenderer {
     glActiveTexture(GL_TEXTURE0);
     glBindVertexArray(vao_);
     for (const UIBatch& batch : canvas.Batches()) {
+      rendering::ApplyBlendMode(batch.blend);  // premultiplied output (see blend_mode.h)
       if (batch.material) {
         DrawShaderRect(canvas, batch);
         continue;

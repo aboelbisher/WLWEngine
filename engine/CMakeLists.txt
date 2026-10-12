@@ -77,7 +77,9 @@ add_library(wlw STATIC
   wlw/platform/bridge.cpp
   wlw/platform/platform.h
 
+  wlw/rendering/blend_mode.h
   wlw/rendering/gl.h
+  wlw/rendering/gl_blend.h
   wlw/rendering/gl_index_buffer.h
   wlw/rendering/gl_shader.cpp
   wlw/rendering/gl_shader.h
@@ -89,6 +91,7 @@ add_library(wlw STATIC
   wlw/rendering/material_gl.cpp
   wlw/rendering/render_device.h
   wlw/rendering/render_device_gl.cpp
+  wlw/rendering/render_queue.h
   wlw/rendering/render_target.h
   wlw/rendering/rendering_driver.h
   wlw/rendering/rendering_driver_gl.cpp

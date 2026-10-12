@@ -14,10 +14,12 @@
 #include "wlw/platform/platform.h"
 #include "rendering_driver.h"
 #include "wlw/rendering/render_device.h"
+#include "wlw/rendering/gl_blend.h"
 #include "wlw/rendering/gl_index_buffer.h"
 #include "wlw/rendering/gl_instance_buffer.h"
 #include "wlw/rendering/gl_shader.h"
 #include "wlw/rendering/gl_vertex_buffer.h"
+#include "wlw/rendering/render_queue.h"
 #include "wlw/scene/light.h"
 #include "wlw/scene/shadow_map.h"
 #include "wlw/ui/ui_renderer.h"
@@ -55,6 +57,7 @@ public:
         GLint use_texture;
         GLint model_texture;
         GLint instanced;
+        GLint opaque;
         
         GLint skyboxView;
         GLint skyboxProj;
@@ -130,6 +133,7 @@ public:
     m_Uniforms.use_texture = glGetUniformLocation(m_ShaderID_3D, "use_texture");
     m_Uniforms.model_texture = glGetUniformLocation(m_ShaderID_3D, "model_texture");
     m_Uniforms.instanced = glGetUniformLocation(m_ShaderID_3D, "instanced");
+    m_Uniforms.opaque = glGetUniformLocation(m_ShaderID_3D, "opaque");
     // Two sampler types may never share a texture unit: the model texture uses 0, shadows 1.
     glUseProgram(m_ShaderID_3D);
     glUniform1i(m_Uniforms.model_texture, 0);
@@ -195,7 +199,9 @@ public:
   // What one viewport draws, gathered from its scene before any drawing starts.
   struct Frame {
     std::vector<const scene::LightNode*> lights;  // visible light nodes, at most kMaxLights
-    std::vector<scene::Node3D*> drawables;         // visible nodes with something to draw
+    std::vector<scene::Node3D*> drawables;         // visible nodes with something to draw (the shadow pass)
+    std::vector<scene::Node3D*> opaque;            // ...with an opaque mesh (main pass, first)
+    std::vector<scene::Node3D*> transparent;       // ...with a blending mesh (main pass, then, back to front)
     scene::AABB casters{}, receivers{};            // around every shadow caster / receiver
     bool has_casters = false, has_receivers = false;
     int shadow_light = -1;                         // index into lights
@@ -276,6 +282,14 @@ public:
       if (model == nullptr || model->meshes.empty()) return;
       if (node->IsInstanced() && node->GetInstances().empty()) return;  // instanced with zero copies
       frame.drawables.push_back(node.get());
+      bool has_opaque = false, has_transparent = false;
+      for (const auto& mesh : model->meshes) {
+        const bool opaque = QueueFor(EffectiveMaterialBlend(*node, *mesh)) == RenderQueue::Opaque;
+        has_opaque |= opaque;
+        has_transparent |= !opaque;
+      }
+      if (has_opaque) frame.opaque.push_back(node.get());
+      if (has_transparent) frame.transparent.push_back(node.get());
       if (node->CastsShadow()) Grow(frame.casters, frame.has_casters, node->GetAABB());
       if (node->ReceivesShadow()) Grow(frame.receivers, frame.has_receivers, node->GetAABB());
     });
@@ -367,15 +381,53 @@ public:
 
     scene::Frustum frustum = scene::Frustum::FromMatrix(proj * view);
 
-    for (scene::Node3D* node : frame.drawables) {
+    // Opaque first: any order, the depth buffer sorts them per pixel.
+    for (scene::Node3D* node : frame.opaque) {
       if (!frustum.TestAABB(node->GetAABB())) {
           ++stats.culled_nodes;
           continue;
       }
       glUniform1i(m_Uniforms.receiveShadow, node->ReceivesShadow());
-      DrawNode(*node, /*shadow_pass=*/false, material_lights, stats);
+      DrawNode(*node, /*shadow_pass=*/false, material_lights, stats, RenderQueue::Opaque);
     }
+
+    // Then whatever blends: farthest first, so each one blends over what's behind it.
+    std::vector<scene::Node3D*> transparent;
+    transparent.reserve(frame.transparent.size());
+    for (scene::Node3D* node : frame.transparent) {
+      if (frustum.TestAABB(node->GetAABB())) {
+        transparent.push_back(node);
+      } else if (std::find(frame.opaque.begin(), frame.opaque.end(), node) == frame.opaque.end()) {
+        ++stats.culled_nodes;  // not counted twice for a node with meshes in both queues
+      }
+    }
+    SortBackToFront(transparent, view, [](const scene::Node3D* node) {
+      const scene::AABB box = node->GetAABB();
+      return glm::vec3((box.min.x + box.max.x) * 0.5f, (box.min.y + box.max.y) * 0.5f, (box.min.z + box.max.z) * 0.5f);
+    });
+    for (scene::Node3D* node : transparent) {
+      glUniform1i(m_Uniforms.receiveShadow, node->ReceivesShadow());
+      DrawNode(*node, /*shadow_pass=*/false, material_lights, stats, RenderQueue::Transparent);
+    }
+
     glUniform1i(m_Uniforms.instanced, 0);
+    ApplyBlendMode(BlendMode::Opaque);  // back to the defaults for whatever draws next
+    glDepthMask(GL_TRUE);
+  }
+
+  // The blend mode a mesh draws with: its own material's, else its node's (like the rest of the
+  // material: the mesh's wins).
+  template <typename MeshT>
+  static BlendMode EffectiveMaterialBlend(const scene::Node3D& node, const MeshT& mesh) {
+    if (const auto& material = mesh.GetMaterial()) return material->blend;
+    if (const auto& material = node.GetMaterial()) return material->blend;
+    return BlendMode::Opaque;
+  }
+  template <typename MeshT>
+  static bool EffectiveDepthWrite(const scene::Node3D& node, const MeshT& mesh) {
+    if (const auto& material = mesh.GetMaterial()) return material->DepthWrite();
+    if (const auto& material = node.GetMaterial()) return material->DepthWrite();
+    return true;
   }
 
   static void Grow(scene::AABB& box, bool& has_box, const scene::AABB& add) {
@@ -390,7 +442,10 @@ public:
 
   // Draws one node's meshes with the program in use. In the shadow pass only geometry matters;
   // in the main pass each mesh's material sets its texture (and its light, when the scene has none).
-  void DrawNode(scene::Node3D& node, bool shadow_pass, bool material_lights, scene::RenderStats& stats) {
+  // `queue` (main pass): only the meshes whose material belongs to it are drawn, with its blend
+  // state; the shadow pass draws every mesh.
+  void DrawNode(scene::Node3D& node, bool shadow_pass, bool material_lights, scene::RenderStats& stats,
+                RenderQueue queue = RenderQueue::Opaque) {
     const GLint model_location = shadow_pass ? shadow_uniforms_.model : m_Uniforms.model;
     const GLint instanced_location = shadow_pass ? shadow_uniforms_.instanced : m_Uniforms.instanced;
     glUniformMatrix4fv(model_location, 1, GL_FALSE, glm::value_ptr(node.GetModelMatrix()));
@@ -407,6 +462,14 @@ public:
     glUniform1i(instanced_location, instanced);
 
     for (const auto& mesh : node.GetModel()->meshes) {
+      const BlendMode blend = EffectiveMaterialBlend(node, *mesh);
+      if (!shadow_pass) {
+        if (QueueFor(blend) != queue) continue;  // drawn in the other queue
+        ApplyBlendMode(blend);
+        glDepthMask(EffectiveDepthWrite(node, *mesh) ? GL_TRUE : GL_FALSE);
+        if (queue == RenderQueue::Transparent) ++stats.transparent_draw_calls;
+      }
+
       // A ShaderMaterial draws the mesh with its own shader instead (the mesh's material first).
       const ShaderMaterial* custom = nullptr;
       if (!shadow_pass) {
@@ -417,6 +480,7 @@ public:
         UseShaderMaterial(*custom, node.GetModelMatrix(), instanced);
       } else if (!shadow_pass) {
         glUniform1i(m_Uniforms.use_texture, false);
+        glUniform1i(m_Uniforms.opaque, blend == BlendMode::Opaque);
         if (material_lights) glUniform1i(m_Uniforms.useLighting, false);
         BindMaterial(node.GetMaterial(), material_lights);
         BindMaterial(mesh->GetMaterial(), material_lights);  // the mesh's own material wins

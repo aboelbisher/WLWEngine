@@ -4,6 +4,7 @@
 #include <optional>
 #include <string>
 
+#include "wlw/rendering/blend_mode.h"
 #include "wlw/rendering/texture.h"
 #include "wlw/core/color.h"
 #include "wlw/core/vector3.h"
@@ -66,6 +67,17 @@ namespace wlw::rendering {
 		virtual const ShaderMaterial* AsShaderMaterial() const { return nullptr; }
 
 		static std::unique_ptr<Material> Create();
+
+		// Writes depth? Opaque materials do, the others don't, unless depth_write says otherwise.
+		bool DepthWrite() const { return depth_write.value_or(blend == BlendMode::Opaque); }
+
+		// How it blends with what's behind it (see blend_mode.h). Not Opaque: drawn after the opaque
+		// objects, back to front; alpha comes from the vertex colour x texture x instance tint (a
+		// ShaderMaterial: its FragColor.a, premultiplied).
+		BlendMode blend = BlendMode::Opaque;
+		// Depth writing: nullopt = the default for the blend mode (see DepthWrite). Turn it on for a
+		// see-through object that must still hide what's drawn after it (rare).
+		std::optional<bool> depth_write;
 
 		float metallic = 0.0f;
 		float shininess = 32.0f;  // specular highlight sharpness under scene lights (LightNode)

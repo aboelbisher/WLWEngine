@@ -21,6 +21,7 @@ namespace wlw::scene {
 // What the renderer did for a viewport's last drawn frame (shown in the debug UI).
 struct RenderStats {
   int draw_calls = 0;    // one per mesh drawn; an instanced node is one call for all its copies
+  int transparent_draw_calls = 0;  // of those, drawn in the transparent queue (blending, back to front)
   int instances = 0;     // copies drawn by instanced calls
   int culled_nodes = 0;  // skipped by frustum culling
 };

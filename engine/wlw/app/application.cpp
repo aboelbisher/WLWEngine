@@ -176,7 +176,8 @@ void Application::DrawEngineDebugWindow() {
   ImGui::Begin("Engine");
   ImGui::Text("%.0f fps, %.2f ms", fps_, frame_ms_);
   const scene::RenderStats& stats = window_->GetScreen().GetRenderStats();
-  ImGui::Text("%d draw calls, %d instances, %d culled", stats.draw_calls, stats.instances, stats.culled_nodes);
+  ImGui::Text("%d draw calls (%d transparent), %d instances, %d culled", stats.draw_calls,
+              stats.transparent_draw_calls, stats.instances, stats.culled_nodes);
   // Offscreen viewports: size, format, update mode, GPU memory of their texture, last frame's draws.
   for (const auto& [_, viewport] : window_->GetViewports()) {
     const rendering::RenderTarget* target = viewport->GetTarget();
