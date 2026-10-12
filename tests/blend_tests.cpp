@@ -1,5 +1,6 @@
 // Tests for blend modes (rendering/blend_mode.h): materials' depth-write rule, the render queues and
-// back-to-front sorting (render_queue.h), and the Canvas's blend state and SoftCircle. CPU only.
+// back-to-front sorting (render_queue.h), the Canvas's blend state and Image batching, and the
+// radial falloff texture (utils/textures.h). CPU only.
 #include <memory>
 #include <vector>
 
@@ -9,6 +10,7 @@
 #include "wlw/rendering/material.h"
 #include "wlw/rendering/render_queue.h"
 #include "wlw/ui/canvas.h"
+#include "wlw/utils/textures.h"
 
 using namespace wlw;
 using rendering::BlendMode;
@@ -21,6 +23,14 @@ class TestMaterial : public rendering::Material {
  public:
   void BindTexture() const override {}
   void UnbindTexture() const override {}
+};
+
+// A texture without a GPU (Canvas only compares pointers).
+class FakeTexture : public rendering::WTexture2D {
+ public:
+  void Bind(unsigned int) const override {}
+  void Unbind() const override {}
+  void Update(const void*) override {}
 };
 
 struct Item {
@@ -92,8 +102,8 @@ static void TestCanvasBlendBatches() {
   canvas.FillRect({{0, 0}, {10, 10}}, {1, 1, 1, 1});
   canvas.FillRect({{20, 0}, {30, 10}}, {1, 1, 1, 1});  // same mode: same batch
   canvas.SetBlendMode(BlendMode::Additive);
-  canvas.SoftCircle({50, 50}, 10.0f, {1, 0.5f, 0, 1});
-  canvas.SoftCircle({60, 50}, 10.0f, {1, 0.5f, 0, 1});  // still additive: same batch
+  canvas.FillRect({{50, 50}, {60, 60}}, {1, 0.5f, 0, 1});
+  canvas.FillRect({{60, 50}, {70, 60}}, {1, 0.5f, 0, 1});  // still additive: same batch
   canvas.SetBlendMode(BlendMode::Alpha);
   canvas.FillRect({{0, 80}, {10, 90}}, {1, 1, 1, 1});
 
@@ -115,19 +125,61 @@ static void TestCanvasBlendBatches() {
   CHECK(canvas.Batches().size() == 1 && canvas.Batches()[0].blend == BlendMode::Additive);
 }
 
-static void TestSoftCircle() {
+static void TestImageBatching() {
+  auto dot = std::make_shared<FakeTexture>();
+  auto other = std::make_shared<FakeTexture>();
   ui::Canvas canvas;
   canvas.BeginFrame({1000.0f, 1000.0f}, {}, {1000.0f, 1000.0f});
-  canvas.SoftCircle({100.0f, 200.0f}, 25.0f, {0.2f, 0.4f, 1.0f, 0.5f});
-  CHECK(canvas.QuadCount() == 1);
+
+  // Thousands of sprites with one texture: one draw call, and rectangles join it.
+  canvas.FillRect({{0, 0}, {10, 10}}, {1, 1, 1, 1});
+  for (int i = 0; i < 1000; ++i) canvas.Image({{float(i), 0}, {float(i) + 4, 4}}, dot, {1, 0.5f, 0, 0.8f});
+  canvas.FillRect({{0, 20}, {10, 30}}, {1, 1, 1, 1});
+  CHECK(canvas.Batches().size() == 1);
+  CHECK(canvas.Batches()[0].texture == dot && canvas.Batches()[0].quad_count == 1002);
+
+  // Another texture, or another blend mode: a new run.
+  canvas.Image({{0, 0}, {4, 4}}, other);
+  canvas.SetBlendMode(BlendMode::Additive);
+  canvas.Image({{0, 0}, {4, 4}}, other);
+  canvas.Image({{8, 0}, {12, 4}}, other);
+  CHECK(canvas.Batches().size() == 3);
+  CHECK(canvas.Batches()[1].texture == other && canvas.Batches()[1].quad_count == 1);
+  CHECK(canvas.Batches()[2].blend == BlendMode::Additive && canvas.Batches()[2].quad_count == 2);
+
+  // Text samples the font atlas, an image its texture: they never share a run.
+  canvas.SetBlendMode(BlendMode::Alpha);
+  canvas.Image({{0, 0}, {4, 4}}, dot);
+  CHECK(canvas.Batches().size() == 4 && canvas.Batches()[3].font == nullptr);
+
+  // Vertices: the rect's corners, the uv sub-rectangle, the tint, kind 4 (image).
+  canvas.BeginFrame({1000.0f, 1000.0f}, {}, {1000.0f, 1000.0f});
+  canvas.Image({{10, 20}, {30, 60}}, dot, {0.2f, 0.4f, 1.0f, 0.5f}, {{0.5f, 0.0f}, {1.0f, 0.5f}});
   const auto& v = canvas.Vertices();
-  // A square around the centre, uv -1..1 (the shader fades by distance), kind 4.
-  CHECK(v[0].position == glm::vec2(75.0f, 175.0f) && v[2].position == glm::vec2(125.0f, 225.0f));
-  CHECK(v[0].uv == glm::vec2(-1.0f, -1.0f) && v[2].uv == glm::vec2(1.0f, 1.0f));
+  CHECK(canvas.QuadCount() == 1);
+  CHECK(v[0].position == glm::vec2(10, 20) && v[2].position == glm::vec2(30, 60));
+  CHECK(v[0].uv == glm::vec2(0.5f, 0.0f) && v[2].uv == glm::vec2(1.0f, 0.5f));
   CHECK(v[0].params.x == 4.0f && v[0].color.a == 0.5f);
 
-  canvas.SoftCircle({0.0f, 0.0f}, 0.0f, {1, 1, 1, 1});  // nothing to draw
+  canvas.Image({{0, 0}, {4, 4}}, nullptr);  // no texture: nothing drawn
   CHECK(canvas.QuadCount() == 1);
+}
+
+static void TestRadialFalloff() {
+  const int size = 64;
+  const std::vector<uint8_t> pixels = utils::RadialFalloffPixels(size);
+  CHECK(pixels.size() == size * size * 4);
+  auto alpha = [&](int x, int y) { return static_cast<int>(pixels[(y * size + x) * 4 + 3]); };
+  CHECK(pixels[0] == 255 && pixels[1] == 255 && pixels[2] == 255);  // white: the tint gives the colour
+  CHECK(alpha(32, 32) > 250);                                          // full at the centre
+  CHECK(alpha(0, 0) == 0 && alpha(63, 0) == 0 && alpha(0, 63) == 0);   // nothing in the corners
+  CHECK(alpha(0, 32) < 10);                                            // fades out by the edge
+  // Symmetric, and falling steadily from the centre outwards.
+  CHECK(alpha(10, 32) == alpha(53, 32) && alpha(32, 10) == alpha(32, 53) && alpha(10, 32) == alpha(32, 10));
+  bool falling = true;
+  for (int x = 33; x < size; ++x) falling = falling && alpha(x, 32) <= alpha(x - 1, 32);
+  CHECK(falling);
+  CHECK(utils::RadialFalloffPixels(0).size() == 4);  // at least one texel
 }
 
 int main() {
@@ -135,6 +187,7 @@ int main() {
   TestQueues();
   TestBackToFront();
   TestCanvasBlendBatches();
-  TestSoftCircle();
+  TestImageBatching();
+  TestRadialFalloff();
   return TestResult("blend");
 }

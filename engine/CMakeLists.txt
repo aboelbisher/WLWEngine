@@ -133,6 +133,7 @@ add_library(wlw STATIC
   wlw/utils/libs_impl.cpp
   wlw/utils/primitives.h
   wlw/utils/texture_manager.h
+  wlw/utils/textures.h
 )
 add_library(wlw::wlw ALIAS wlw)
 

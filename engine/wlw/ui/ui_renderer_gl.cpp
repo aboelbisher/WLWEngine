@@ -42,7 +42,7 @@ void main() {
 //       pixel, so the edge is anti-aliased over ~1 pixel at any text size.
 //   2 = rectangle with rounded corners: uv = position from the centre, params.yz = half size,
 //       params.w = radius. The signed distance to a rounded box is computed per pixel.
-//   4 = soft circle: uv = -1..1 across it; fades as (1 - d²)² with the distance from the centre.
+//   4 = image: the bound texture (straight alpha, like image files) times the vertex colour.
 // Output is premultiplied alpha (rgb already multiplied by alpha): blends correctly, also when
 // layers of semi-transparent UI overlap.
 constexpr const char* kFragmentShader = R"(
@@ -52,11 +52,13 @@ in vec4 vParams;
 uniform sampler2D uAtlas;
 out vec4 FragColor;
 void main() {
-    float coverage;
     if (vParams.x > 3.5) {
-        float f = max(1.0 - dot(vUV, vUV), 0.0);
-        coverage = f * f;
-    } else if (vParams.x < 1.5) {
+        vec4 texel = texture(uAtlas, vUV) * vColor;
+        FragColor = vec4(texel.rgb * texel.a, texel.a);
+        return;
+    }
+    float coverage;
+    if (vParams.x < 1.5) {
         float d = texture(uAtlas, vUV).r;
         float w = max(fwidth(d) * 0.7, 1e-4);
         coverage = smoothstep(vParams.y - w, vParams.y + w, d);
@@ -160,7 +162,11 @@ class GLUIRenderer : public UIRenderer {
         DrawShaderRect(canvas, batch);
         continue;
       }
-      glBindTexture(GL_TEXTURE_2D, batch.font ? AtlasTexture(*batch.font) : white_texture_);
+      // The run's one texture on unit 0: a font atlas, an image, or (rectangles only) a white texel.
+      GLuint texture = white_texture_;
+      if (batch.font) texture = AtlasTexture(*batch.font);
+      else if (batch.texture) texture = batch.texture->GetID();
+      glBindTexture(GL_TEXTURE_2D, texture);
       DrawQuads(batch);
     }
     glBindVertexArray(0);

@@ -11,7 +11,7 @@ namespace {
 constexpr float kKindText = 1.0f;
 constexpr float kKindRect = 2.0f;
 constexpr float kKindShader = 3.0f;  // drawn by a material's shader, not the UI's
-constexpr float kKindSoftCircle = 4.0f;
+constexpr float kKindImage = 4.0f;
 }  // namespace
 
 void Canvas::BeginFrame(glm::vec2 framebuffer_pixels, const platform::SafeAreaInsets& insets, glm::vec2 reference) {
@@ -38,18 +38,34 @@ void Canvas::AddQuad(const Font* font, const glm::vec2& min, const glm::vec2& ma
 
 void Canvas::AddQuad(const Font* font, const glm::vec2 (&corners)[4], const glm::vec2 (&uvs)[4], const core::Color& color,
                      const glm::vec4& params) {
-  // Batching: keep adding to the current run unless this quad needs a different atlas or blend
-  // mode. Rectangles (font == nullptr) don't sample any texture, so they fit in any run. A
-  // ShaderRect's run is its own: whatever comes after it starts a new one.
-  if (batches_.empty() || batches_.back().material || batches_.back().blend != blend_ ||
-      (font && batches_.back().font && batches_.back().font != font)) {
-    batches_.push_back({font, QuadCount(), 0, nullptr, blend_});
-  }
-  UIBatch& batch = batches_.back();
-  if (font) batch.font = font;
-  ++batch.quad_count;
-
+  ++BatchFor(font, nullptr).quad_count;
   for (int i = 0; i < 4; ++i) vertices_.push_back({corners[i], uvs[i], color, params});
+}
+
+UIBatch& Canvas::BatchFor(const Font* font, const std::shared_ptr<rendering::WTexture2D>* texture) {
+  // Batching: keep adding to the current run unless this quad needs another blend mode or samples
+  // a different texture than the run does (a run samples at most one: a font atlas or an image).
+  // Rectangles sample nothing, so they fit in any run. A ShaderRect's run is its own: whatever
+  // comes after it starts a new one. Only pointers are compared: nothing is copied per quad.
+  const rendering::WTexture2D* image = texture ? texture->get() : nullptr;
+  const bool samples = font != nullptr || image != nullptr;
+  if (!batches_.empty()) {
+    UIBatch& last = batches_.back();
+    const bool last_samples = last.font != nullptr || last.texture != nullptr;
+    const bool same_texture = last.font == font && last.texture.get() == image;
+    if (!last.material && last.blend == blend_ && (!samples || !last_samples || same_texture)) {
+      if (font) last.font = font;                         // a run of rectangles becomes a text run...
+      if (image && !last.texture) last.texture = *texture;  // ...or an image run
+      return last;
+    }
+  }
+  UIBatch batch;
+  batch.font = font;
+  if (image) batch.texture = *texture;
+  batch.first_quad = QuadCount();
+  batch.blend = blend_;
+  batches_.push_back(std::move(batch));
+  return batches_.back();
 }
 
 void Canvas::FillRect(const Rect& rect, const core::Color& color, float corner_radius) {
@@ -62,16 +78,24 @@ void Canvas::FillRect(const Rect& rect, const core::Color& color, float corner_r
 
 void Canvas::ShaderRect(const Rect& rect, std::shared_ptr<rendering::ShaderMaterial> material, const core::Color& tint) {
   if (!material) return;
-  batches_.push_back({nullptr, QuadCount(), 1, std::move(material), blend_});
+  UIBatch batch;
+  batch.first_quad = QuadCount();
+  batch.quad_count = 1;
+  batch.material = std::move(material);
+  batch.blend = blend_;
+  batches_.push_back(std::move(batch));
   const glm::vec2 corners[4] = {rect.min, {rect.max.x, rect.min.y}, rect.max, {rect.min.x, rect.max.y}};
   const glm::vec2 uvs[4] = {{0.0f, 0.0f}, {1.0f, 0.0f}, {1.0f, 1.0f}, {0.0f, 1.0f}};
   for (int i = 0; i < 4; ++i) vertices_.push_back({corners[i], uvs[i], tint, {kKindShader, 0.0f, 0.0f, 0.0f}});
 }
 
-void Canvas::SoftCircle(glm::vec2 center, float radius, const core::Color& color) {
-  if (radius <= 0.0f) return;
-  // uv runs -1..1 across the square: the shader fades by the distance from the centre.
-  AddQuad(nullptr, center - radius, center + radius, {-1.0f, -1.0f}, {1.0f, 1.0f}, color, {kKindSoftCircle, 0.0f, 0.0f, 0.0f});
+void Canvas::Image(const Rect& rect, const std::shared_ptr<rendering::WTexture2D>& texture, const core::Color& tint,
+                   const Rect& uv) {
+  if (!texture) return;
+  ++BatchFor(nullptr, &texture).quad_count;
+  const glm::vec2 corners[4] = {rect.min, {rect.max.x, rect.min.y}, rect.max, {rect.min.x, rect.max.y}};
+  const glm::vec2 uvs[4] = {uv.min, {uv.max.x, uv.min.y}, uv.max, {uv.min.x, uv.max.y}};
+  for (int i = 0; i < 4; ++i) vertices_.push_back({corners[i], uvs[i], tint, {kKindImage, 0.0f, 0.0f, 0.0f}});
 }
 
 void Canvas::Line(glm::vec2 from, glm::vec2 to, float thickness, const core::Color& color) {

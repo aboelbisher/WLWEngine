@@ -67,12 +67,14 @@ struct UIVertex {
   glm::vec2 position{0.0f};  // Canvas units
   glm::vec2 uv{0.0f};        // text: atlas coordinate; rect: position relative to the rect centre
   core::Color color{1.0f, 1.0f, 1.0f, 1.0f};
-  glm::vec4 params{0.0f};  // x = kind (1 text, 2 rect, 3 shader, 4 soft circle); text: y = SDF edge; rect: y,z = half size, w = radius
+  glm::vec4 params{0.0f};  // x = kind (1 text, 2 rect, 3 shader, 4 image); text: y = SDF edge; rect: y,z = half size, w = radius
 };
 
-// A run of consecutive quads that can be drawn in one call (same font atlas, or none).
+// A run of consecutive quads that can be drawn in one call: same blend mode, and at most one
+// texture they sample (a font's atlas or an image's texture; rectangles sample none).
 struct UIBatch {
-  const Font* font = nullptr;
+  const Font* font = nullptr;                          // text: this font's atlas
+  std::shared_ptr<rendering::WTexture2D> texture;      // images: this texture (else null)
   size_t first_quad = 0;
   size_t quad_count = 0;
   std::shared_ptr<rendering::ShaderMaterial> material;  // a ShaderRect: one quad, drawn with this material's shader
@@ -111,10 +113,13 @@ class Canvas {
   void ShaderRect(const Rect& rect, std::shared_ptr<rendering::ShaderMaterial> material,
                   const core::Color& tint = {1.0f, 1.0f, 1.0f, 1.0f});
 
-  // A round dot that fades smoothly from `color` at the centre to nothing at `radius` ((1 - d²)²:
-  // no hard edge anywhere). Glow, light spots, soft shadows; drawn Additive into a viewport, many
-  // overlapping dots add up into a density field (metaballs: threshold it for a liquid surface).
-  void SoftCircle(glm::vec2 center, float radius, const core::Color& color);
+  // A texture over a rectangle (a sprite), multiplied by `tint`; `uv` picks the part of the texture
+  // (sprite sheets), (0, 0) = the first row uploaded. Texture alpha is straight (not premultiplied),
+  // like image files. Consecutive images with the same texture and blend mode are ONE draw call
+  // (rectangles join any run), so thousands of sprites stay cheap. A viewport's texture is
+  // upside down here (GL keeps row 0 at the bottom): pass uv = {{0, 1}, {1, 0}}.
+  void Image(const Rect& rect, const std::shared_ptr<rendering::WTexture2D>& texture,
+             const core::Color& tint = {1.0f, 1.0f, 1.0f, 1.0f}, const Rect& uv = {{0.0f, 0.0f}, {1.0f, 1.0f}});
 
   // How the quads drawn after this blend with what's under them (see rendering/blend_mode.h),
   // ShaderRects included. Alpha (normal transparency) at the start of every frame; e.g. Additive
@@ -147,6 +152,8 @@ class Canvas {
   glm::mat4 Projection() const;  // units -> clip space
 
  private:
+  // The batch for a quad sampling `font`'s atlas, `texture`, or nothing (both null).
+  UIBatch& BatchFor(const Font* font, const std::shared_ptr<rendering::WTexture2D>* texture);
   void AddQuad(const Font* font, const glm::vec2& min, const glm::vec2& max, const glm::vec2& uv_min,
                const glm::vec2& uv_max, const core::Color& color, const glm::vec4& params);
   void AddQuad(const Font* font, const glm::vec2 (&corners)[4], const glm::vec2 (&uvs)[4], const core::Color& color,

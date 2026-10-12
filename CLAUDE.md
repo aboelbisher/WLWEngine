@@ -62,11 +62,13 @@ engine/wlw/
               SetCastsShadow / SetReceivesShadow; shadow_map.h fits the light's box to the casters (texel-snapped)
   ui/         2D UI layer: Font (TTF -> SDF atlas, stb_truetype), Canvas (virtual units, safe area, text,
               rounded rects, batched quads, ShaderRect = a rect drawn by a material's shader), UIRenderer (GL).
-              Canvas::SetBlendMode (per batch, Alpha again every frame), SoftCircle (a (1-d²)² dot: glows, metaballs).
+              Canvas::Image(rect, texture, tint, uv) = sprites (batched by texture + blend mode: 1000s = 1 draw call),
+              Canvas::SetBlendMode (per batch, Alpha again every frame). Canvas = primitives only; shapes come from helpers.
               Canvas::Button/Toggle/Panel = immediate-mode widgets,
               layout.h (Centered, Inset, Row, Column). Games draw in Application::OnRenderUI() (the canvas is
               Window::GetScreen().GetCanvas(); an offscreen viewport's canvas is drawn into its texture)
-  utils/      image/glTF loaders, texture cache, primitives.h (procedural cube, bevelled cube, sphere, gem meshes)
+  utils/      image/glTF loaders, texture cache, primitives.h (procedural cube, bevelled cube, sphere, gem meshes),
+              textures.h (procedural textures: RadialFalloffTexture = a soft (1-d²)² dot for glows, particles, metaballs)
 kit/wlw/kit/  wlw::kit: game-level building blocks shared by games (separate target on top of the engine; the
               engine never includes it). SaveStore (JSON file, atomic write, .bak fallback, versions + migrations),
               progress.h (DeviceId, Counters, Scores, LevelProgress: all mergeable, for cloud sync), daily.h (Date,
@@ -76,7 +78,7 @@ kit/wlw/kit/  wlw::kit: game-level building blocks shared by games (separate tar
               (UMP consent, load/show/retry); games add that dir to their sourceSets and depend on play-services-ads + UMP
 samples/      small games, built only when the engine is the top-level project (desktop):
               snake/ (Snake + its rules tests)
-tests/        engine unit tests (no window/GPU: blending (depth-write rule, queues, back-to-front, canvas batches), viewports (scenes, sizes, update modes), anim, audio, core (random, atomic files, bridge queue), exact cover, search (bitboards, minimax, expectimax), gf2 (Lights Out), shader text splitting, lighting (light nodes, shadow-box fitting), fx, input, kit, picking, primitives, ui, screens); test data in tests/data/, also top-level only; ctest
+tests/        engine unit tests (no window/GPU: blending (depth-write rule, queues, back-to-front, canvas batches, images, falloff texture), viewports (scenes, sizes, update modes), anim, audio, core (random, atomic files, bridge queue), exact cover, search (bitboards, minimax, expectimax), gf2 (Lights Out), shader text splitting, lighting (light nodes, shadow-box fitting), fx, input, kit, picking, primitives, ui, screens); test data in tests/data/, also top-level only; ctest
 third_party/  glad (desktop only), stb, tinygltf + nlohmann json (also its own target wlw_json), miniaudio 0.11.25, stb_vorbis, Dear ImGui 1.92.9b (vendored)
 cmake/WLWHelpers.cmake  wlw_add_game(), wlw_add_assets(), wlw_set_warnings()
 vcpkg/ + vcpkg.json     desktop deps (glm, glfw3). Android fetches glm via FetchContent instead.
