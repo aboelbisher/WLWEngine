@@ -22,6 +22,10 @@ public:
 	virtual bool Initialize(std::shared_ptr<scene::Window> window) = 0;
 	virtual void AttachWindow(std::shared_ptr<scene::Window> window) = 0;
   virtual void DrawWindow(std::shared_ptr<scene::Window> window) = 0;
+  // Compiles the shader variants everything in the window's scenes needs now, so the first frames
+  // don't stall on it (the Application calls it once the game has built its scenes). Variants
+  // needed later still compile when first used.
+  virtual void WarmUp(scene::Window& window) = 0;
 
   virtual void SetViewport(int x, int y, int width, int height) = 0;
   virtual void Clear() = 0;

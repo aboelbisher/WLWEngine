@@ -8,10 +8,10 @@
 namespace wlw::ui {
 
 namespace {
-constexpr float kKindText = 1.0f;
-constexpr float kKindRect = 2.0f;
-constexpr float kKindShader = 3.0f;  // drawn by a material's shader, not the UI's
-constexpr float kKindImage = 4.0f;
+constexpr float kKindText = static_cast<float>(QuadKind::Text);
+constexpr float kKindRect = static_cast<float>(QuadKind::Rect);
+constexpr float kKindShader = static_cast<float>(QuadKind::Shader);  // drawn by a material's shader, not the UI's
+constexpr float kKindImage = static_cast<float>(QuadKind::Image);
 }  // namespace
 
 void Canvas::BeginFrame(glm::vec2 framebuffer_pixels, glm::vec2 reference) {

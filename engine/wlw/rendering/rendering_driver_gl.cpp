@@ -1,74 +1,49 @@
 #ifdef WLW_RENDERER_GL
 
 #include <algorithm>
-#include <array>
+#include <chrono>
 #include <cmath>
+#include <unordered_map>
 #include <vector>
 
-#include "wlw/rendering/gl.h"
+#include <glm/gtc/type_ptr.hpp>
 
-#include "shaders/basic_shaders.h"
-#include "shaders/skybox_shaders.h"
+#include "wlw/rendering/gl.h"
 
 #include "wlw/core/logger.h"
 #include "wlw/platform/platform.h"
 #include "rendering_driver.h"
-#include "wlw/rendering/render_device.h"
+#include "wlw/rendering/frame_uniforms.h"
 #include "wlw/rendering/gl_blend.h"
 #include "wlw/rendering/gl_index_buffer.h"
 #include "wlw/rendering/gl_instance_buffer.h"
+#include "wlw/rendering/gl_program.h"
 #include "wlw/rendering/gl_shader.h"
 #include "wlw/rendering/gl_vertex_buffer.h"
+#include "wlw/rendering/mesh_variant.h"
+#include "wlw/rendering/render_device.h"
 #include "wlw/rendering/render_queue.h"
 #include "wlw/scene/light.h"
 #include "wlw/scene/shadow_map.h"
+#include "wlw/scene/window.h"
 #include "wlw/ui/ui_renderer.h"
 
 namespace wlw::rendering {
 
-
+// The 3D renderer on GL 3.3 / GLES 3.0. Per viewport:
+//   1. gather   visible lights and drawables (opaque / transparent), shadow bounds
+//   2. frame    the per-frame uniform block (camera, lights, shadow) uploaded once (frame_uniforms.h)
+//   3. shadows  casters' depth from the shadow light into the shadow map
+//   4. main     skybox, opaque meshes, then transparent ones back to front; each mesh with the
+//               shader variant its features need (mesh_variant.h), or its ShaderMaterial's shader
+//   5. canvas   the viewport's 2D canvas on top
 class GLRenderingDriver : public RenderingDriver {
 public:
-    struct UniformLocations {
-        GLint model;
-        GLint view;
-        GLint projection;
-        GLint viewPos;
-        GLint viewOrthographic;
-        GLint viewForward;
-        GLint useLighting;
-        GLint lightCount;
-        GLint lightTypes;
-        GLint lightPositions;
-        GLint lightDirections;
-        GLint lightColors;
-        GLint lightAmbients;
-        GLint lightAttenuations;
-        GLint lightCones;
-        GLint shininess;
-        GLint shadowLight;
-        GLint receiveShadow;
-        GLint shadowMap;
-        GLint shadowStrength;
-        GLint shadowSoftness;
-        GLint shadowTexel;
-        GLint shadowNormalOffset;
-        GLint lightSpace;
-        GLint use_texture;
-        GLint model_texture;
-        GLint instanced;
-        GLint opaque;
-        
-        GLint skyboxView;
-        GLint skyboxProj;
-    } m_Uniforms;
+  explicit GLRenderingDriver(RenderDevice* device) : device_(device) {}
 
-    GLRenderingDriver(RenderDevice* device) : device_(device) {}
+  RenderDevice* GetDevice() override { return device_; }
 
-    RenderDevice* GetDevice() override { return device_; }
-
-	bool Initialize(std::shared_ptr<scene::Window> window) override {
-
+  bool Initialize(std::shared_ptr<scene::Window> window) override {
     main_window_ = window;
 
     // The platform layer creates the OS window and its GL context (GLFW on desktop, EGL on
@@ -92,66 +67,13 @@ public:
                  reinterpret_cast<const char*>(glGetString(GL_RENDERER)),
                  reinterpret_cast<const char*>(glGetString(GL_VERSION)));
 
-    m_ShaderID_2D = CreateProgram(vertex2DShaderSource, fragment2DShaderSource);
-    if (m_ShaderID_2D == 0) return false;
-
-    m_ShaderID_3D = CreateProgram(vertex3DShaderSource, fragment3DShaderSource);
-    if (m_ShaderID_3D == 0) return false;
-
-    m_ShaderID_Skybox = CreateProgram(skyboxVertexShaderSource, skyboxFragmentShaderSource);
-    if (m_ShaderID_Skybox == 0) return false;
-
-    glUseProgram(m_ShaderID_Skybox);
-    glUniform1i(glGetUniformLocation(m_ShaderID_Skybox, "skybox"), 0);
+    skybox_program_ = BuildEngineProgram("skybox.vert", "skybox.frag");
+    if (skybox_program_ == 0) return false;
+    glUseProgram(skybox_program_);
+    glUniform1i(glGetUniformLocation(skybox_program_, "uSkybox"), 0);
     glUseProgram(0);
 
-    m_Uniforms.model = glGetUniformLocation(m_ShaderID_3D, "model");
-    m_Uniforms.view = glGetUniformLocation(m_ShaderID_3D, "view");
-    m_Uniforms.projection = glGetUniformLocation(m_ShaderID_3D, "projection");
-    m_Uniforms.viewPos = glGetUniformLocation(m_ShaderID_3D, "viewPos");
-    m_Uniforms.viewOrthographic = glGetUniformLocation(m_ShaderID_3D, "viewOrthographic");
-    m_Uniforms.viewForward = glGetUniformLocation(m_ShaderID_3D, "viewForward");
-    m_Uniforms.useLighting = glGetUniformLocation(m_ShaderID_3D, "useLighting");
-    m_Uniforms.lightCount = glGetUniformLocation(m_ShaderID_3D, "lightCount");
-    // Arrays: the location of element 0; glUniform*v fills the following elements from there.
-    m_Uniforms.lightTypes = glGetUniformLocation(m_ShaderID_3D, "lightTypes[0]");
-    m_Uniforms.lightPositions = glGetUniformLocation(m_ShaderID_3D, "lightPositions[0]");
-    m_Uniforms.lightDirections = glGetUniformLocation(m_ShaderID_3D, "lightDirections[0]");
-    m_Uniforms.lightColors = glGetUniformLocation(m_ShaderID_3D, "lightColors[0]");
-    m_Uniforms.lightAmbients = glGetUniformLocation(m_ShaderID_3D, "lightAmbients[0]");
-    m_Uniforms.lightAttenuations = glGetUniformLocation(m_ShaderID_3D, "lightAttenuations[0]");
-    m_Uniforms.lightCones = glGetUniformLocation(m_ShaderID_3D, "lightCones[0]");
-    m_Uniforms.shininess = glGetUniformLocation(m_ShaderID_3D, "shininess");
-    m_Uniforms.shadowLight = glGetUniformLocation(m_ShaderID_3D, "shadowLight");
-    m_Uniforms.receiveShadow = glGetUniformLocation(m_ShaderID_3D, "receiveShadow");
-    m_Uniforms.shadowMap = glGetUniformLocation(m_ShaderID_3D, "shadowMap");
-    m_Uniforms.shadowStrength = glGetUniformLocation(m_ShaderID_3D, "shadowStrength");
-    m_Uniforms.shadowSoftness = glGetUniformLocation(m_ShaderID_3D, "shadowSoftness");
-    m_Uniforms.shadowTexel = glGetUniformLocation(m_ShaderID_3D, "shadowTexel");
-    m_Uniforms.shadowNormalOffset = glGetUniformLocation(m_ShaderID_3D, "shadowNormalOffset");
-    m_Uniforms.lightSpace = glGetUniformLocation(m_ShaderID_3D, "lightSpace");
-    m_Uniforms.use_texture = glGetUniformLocation(m_ShaderID_3D, "use_texture");
-    m_Uniforms.model_texture = glGetUniformLocation(m_ShaderID_3D, "model_texture");
-    m_Uniforms.instanced = glGetUniformLocation(m_ShaderID_3D, "instanced");
-    m_Uniforms.opaque = glGetUniformLocation(m_ShaderID_3D, "opaque");
-    // Two sampler types may never share a texture unit: the model texture uses 0, shadows 1.
-    glUseProgram(m_ShaderID_3D);
-    glUniform1i(m_Uniforms.model_texture, 0);
-    glUniform1i(m_Uniforms.shadowMap, 1);
-    glUniform1i(m_Uniforms.shadowLight, -1);
-    glUniform1i(m_Uniforms.lightCount, 0);
-    glUseProgram(0);
-
-    m_ShaderID_Shadow = CreateProgram(vertexShadowShaderSource, fragmentShadowShaderSource);
-    if (m_ShaderID_Shadow == 0) return false;
-    shadow_uniforms_.model = glGetUniformLocation(m_ShaderID_Shadow, "model");
-    shadow_uniforms_.lightSpace = glGetUniformLocation(m_ShaderID_Shadow, "lightSpace");
-    shadow_uniforms_.instanced = glGetUniformLocation(m_ShaderID_Shadow, "instanced");
-
-    m_Uniforms.skyboxView = glGetUniformLocation(m_ShaderID_Skybox, "view");
-    m_Uniforms.skyboxProj = glGetUniformLocation(m_ShaderID_Skybox, "projection");
-
-    float skyboxVertices[] = {
+    const float skybox_vertices[] = {
         -1.0f,  1.0f, -1.0f, -1.0f, -1.0f, -1.0f,  1.0f, -1.0f, -1.0f,
          1.0f, -1.0f, -1.0f,  1.0f,  1.0f, -1.0f, -1.0f,  1.0f, -1.0f,
         -1.0f, -1.0f,  1.0f, -1.0f, -1.0f, -1.0f, -1.0f,  1.0f, -1.0f,
@@ -165,20 +87,27 @@ public:
         -1.0f, -1.0f, -1.0f, -1.0f, -1.0f,  1.0f,  1.0f, -1.0f, -1.0f,
          1.0f, -1.0f, -1.0f, -1.0f, -1.0f,  1.0f,  1.0f, -1.0f,  1.0f
     };
-    glGenVertexArrays(1, &m_SkyboxVAO);
-    glGenBuffers(1, &m_SkyboxVBO);
-    glBindVertexArray(m_SkyboxVAO);
-    glBindBuffer(GL_ARRAY_BUFFER, m_SkyboxVBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(skyboxVertices), &skyboxVertices, GL_STATIC_DRAW);
+    glGenVertexArrays(1, &skybox_vao_);
+    glGenBuffers(1, &skybox_vbo_);
+    glBindVertexArray(skybox_vao_);
+    glBindBuffer(GL_ARRAY_BUFFER, skybox_vbo_);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(skybox_vertices), skybox_vertices, GL_STATIC_DRAW);
     glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), nullptr);
+    glBindVertexArray(0);
+
+    // The per-frame uniform block's buffer: every program reads it at kFrameBlockBinding.
+    glGenBuffers(1, &frame_ubo_);
+    glBindBuffer(GL_UNIFORM_BUFFER, frame_ubo_);
+    glBufferData(GL_UNIFORM_BUFFER, sizeof(FrameUniforms), nullptr, GL_DYNAMIC_DRAW);
+    glBindBufferBase(GL_UNIFORM_BUFFER, kFrameBlockBinding, frame_ubo_);
 
     // Draws each viewport's 2D canvas (the screen's is the game UI).
     ui_renderer_ = ui::UIRenderer::Create();
 
     glEnable(GL_DEPTH_TEST);
     return true;
-	}
+  }
 
   void AttachWindow(std::shared_ptr<scene::Window> window) override {
     if (FAIL_IF(main_window_ == nullptr, "null window, did u forgot to initialise the rendering driver ? ")) {
@@ -187,9 +116,7 @@ public:
     window->Initialize(main_window_.get());  // shares GPU resources with the main window
   }
 
-  void SetViewport(int x, int y, int width, int height) override {
-    glViewport(x, y, width, height);
-  }
+  void SetViewport(int x, int y, int width, int height) override { glViewport(x, y, width, height); }
 
   void Clear() override {
     glClearColor(0.1f, 0.1f, 0.15f, 1.0f);
@@ -198,13 +125,15 @@ public:
 
   // What one viewport draws, gathered from its scene before any drawing starts.
   struct Frame {
-    std::vector<const scene::LightNode*> lights;  // visible light nodes, at most kMaxLights
+    std::vector<const scene::LightNode*> lights;  // visible light nodes (the block takes kMaxLightsPerType of each type)
     std::vector<scene::Node3D*> drawables;         // visible nodes with something to draw (the shadow pass)
     std::vector<scene::Node3D*> opaque;            // ...with an opaque mesh (main pass, first)
     std::vector<scene::Node3D*> transparent;       // ...with a blending mesh (main pass, then, back to front)
     scene::AABB casters{}, receivers{};            // around every shadow caster / receiver
     bool has_casters = false, has_receivers = false;
-    int shadow_light = -1;                         // index into lights
+    const scene::LightNode* shadow_light = nullptr;  // the directional light that casts shadows, if any
+    bool shadow_active = false;                      // a shadow map is drawn this frame
+    scene::ShadowFrustum shadow_frustum;
   };
 
   // One frame of a window: its offscreen viewports into their textures (in the order added, so
@@ -236,22 +165,62 @@ public:
     window->SwapBuffers();
   }
 
-  // One viewport into the framebuffer that is bound: its scene through its camera (shadow pass,
-  // then the main pass), then its canvas over it.
+  void WarmUp(scene::Window& window) override {
+    window.MakeContextCurrent();
+    const auto start = std::chrono::steady_clock::now();
+    const size_t before = mesh_programs_.size();
+    // Every node with a mesh counts, visible or not and with or without copies: games build
+    // pools of hidden nodes and instanced nodes that fill up later, and those draw soon.
+    auto warm = [this](const scene::Viewport& viewport) {
+      if (!viewport.GetScene()) return;
+      Frame frame;
+      bool any_caster = false;
+      viewport.GetScene()->IterateOverNodes([&](const std::shared_ptr<scene::Node3D>& node) {
+        if (const scene::LightNode* light = node->AsLight()) {
+          frame.lights.push_back(light);
+          const bool shadows = light->CastsShadows() && light->GetType() == scene::LightNode::Type::Directional;
+          if (shadows && frame.shadow_light == nullptr) frame.shadow_light = light;
+        } else if (node->GetModel() && !node->GetModel()->meshes.empty()) {
+          frame.drawables.push_back(node.get());
+          any_caster |= node->CastsShadow();
+        }
+      });
+      frame.shadow_active = frame.shadow_light != nullptr && any_caster;  // as if the map can be made
+      for (scene::Node3D* node : frame.drawables) {
+        for (const auto& mesh : node->GetModel()->meshes) {
+          if (!DrawableShaderMaterial(mesh->GetMaterial()) && !DrawableShaderMaterial(node->GetMaterial())) {
+            MeshProgramFor(MeshVariantKey(DrawFor(*node, *mesh, frame)));
+          }
+        }
+        if (frame.shadow_active && node->CastsShadow()) ShadowProgramFor(node->IsInstanced());
+      }
+    };
+    for (const auto& [_, viewport] : window.GetViewports()) warm(*viewport);
+    warm(window.GetScreen());
+    warmed_up_ = true;
+    const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+    WLW_LOG_INFO("Shader warm-up: %zu mesh variant(s) compiled in %.1f ms", mesh_programs_.size() - before, ms);
+  }
+
+  // One viewport into the framebuffer that is bound: its scene through its camera, then its
+  // canvas over it.
   void DrawViewport(scene::Viewport& viewport, glm::ivec2 pixels, bool has_depth) {
+    current_program_ = 0;  // the UI renderer and the debug UI switch programs too: don't trust the cache
     const std::shared_ptr<scene::Scene>& scene = viewport.GetScene();
     const std::shared_ptr<scene::Camera3D>& camera = viewport.GetCamera();
     const bool draw_scene = scene != nullptr && camera != nullptr;
 
-    // Gather + shadow pass first: the shadow pass draws into its own framebuffer.
+    // Gather, the frame block, and the shadow pass first: the shadow pass draws into its own
+    // framebuffer and reads the block's light-space matrix.
     Frame frame;
-    scene::ShadowFrustum shadow_frustum;
     if (draw_scene) {
       if (pixels.x > 0 && pixels.y > 0) {  // a minimized window has no size
         camera->UpdateSize({static_cast<float>(pixels.x), static_cast<float>(pixels.y)});
       }
       GatherScene(*scene, frame);
-      DrawShadows(frame, shadow_frustum);
+      PrepareShadow(frame);
+      UploadFrame(*camera, frame);
+      if (frame.shadow_active) DrawShadowMap(frame);
     }
 
     SetViewport(0, 0, pixels.x, pixels.y);
@@ -264,7 +233,7 @@ public:
     if (clear_bits) glClear(clear_bits);
 
     scene::RenderStats stats;
-    if (draw_scene) DrawMainPass(*scene, *camera, frame, shadow_frustum, stats);
+    if (draw_scene) DrawMainPass(*scene, frame, stats);
     viewport.SetRenderStats(stats);
 
     ui_renderer_->Draw(viewport.GetCanvas(), {static_cast<float>(pixels.x), static_cast<float>(pixels.y)});
@@ -275,7 +244,7 @@ public:
     scene.IterateOverNodes([&frame](const std::shared_ptr<scene::Node3D>& node) {
       if (!node->IsVisibleInHierarchy()) return;
       if (const scene::LightNode* light = node->AsLight()) {
-        if (static_cast<int>(frame.lights.size()) < scene::LightNode::kMaxLights) frame.lights.push_back(light);
+        frame.lights.push_back(light);
         return;
       }
       auto model = node->GetModel();
@@ -295,100 +264,111 @@ public:
     });
 
     // The shadow light: the first directional light that casts shadows.
-    for (int i = 0; i < static_cast<int>(frame.lights.size()); ++i) {
-      const scene::LightNode* light = frame.lights[i];
+    for (const scene::LightNode* light : frame.lights) {
       if (!light->CastsShadows()) continue;
       if (light->GetType() != scene::LightNode::Type::Directional) {
         if (!warned_shadow_type_) WLW_LOG_WARN("Only directional lights cast shadows (for now): ignoring the others");
         warned_shadow_type_ = true;
         continue;
       }
-      if (frame.shadow_light < 0) frame.shadow_light = i;
+      if (frame.shadow_light == nullptr) frame.shadow_light = light;
     }
   }
 
-  // --- 2. SHADOW PASS: the depth of every caster, seen from the shadow light ---
-  void DrawShadows(Frame& frame, scene::ShadowFrustum& shadow_frustum) {
-    if (frame.shadow_light >= 0 && frame.has_casters) {
-      const scene::LightNode* light = frame.lights[frame.shadow_light];
-      shadow_frustum = scene::FitDirectionalShadow(light->GetDirection(), frame.casters,
-                                                   frame.has_receivers ? frame.receivers : frame.casters, light->shadow.map_size);
-      if (!DrawShadowMap(frame, light->shadow.map_size, shadow_frustum.ViewProjection())) frame.shadow_light = -1;
-    } else {
-      frame.shadow_light = -1;
-    }
+  // The shadow light's box around the casters, and the shadow map to draw it into.
+  void PrepareShadow(Frame& frame) {
+    if (frame.shadow_light == nullptr || !frame.has_casters) return;
+    const scene::LightNode& light = *frame.shadow_light;
+    if (!EnsureShadowMap(light.shadow.map_size)) return;
+    frame.shadow_frustum = scene::FitDirectionalShadow(light.GetDirection(), frame.casters,
+                                                       frame.has_receivers ? frame.receivers : frame.casters,
+                                                       shadow_map_size_);
+    frame.shadow_active = true;
   }
 
-  // --- 3. MAIN PASS: skybox, then every visible drawable, lit (and shadowed) ---
-  void DrawMainPass(const scene::Scene& scene, scene::Camera3D& camera, const Frame& frame,
-                    const scene::ShadowFrustum& shadow_frustum, scene::RenderStats& stats) {
-    glm::mat4 view = camera.GetViewMatrix();
-    glm::mat4 proj = camera.GetProjectionMatrix();
+  // --- 2. FRAME: the per-frame uniform block, read by every program this viewport draws with ---
+  void UploadFrame(scene::Camera3D& camera, const Frame& frame) {
+    FrameUniforms block;
+    block.view = camera.GetViewMatrix();
+    block.projection = camera.GetProjectionMatrix();
+    block.view_projection = block.projection * block.view;
+    const core::Vector3 position = camera.GetPosition();
+    // The projection tells the two kinds apart: w is 1 for orthographic (no divide by depth), -z for
+    // perspective. Row 2 of the view matrix is the camera's backward axis in world space.
+    block.camera_position = {position.x, position.y, position.z, block.projection[3][3] == 1.0f ? 1.0f : 0.0f};
+    block.view_forward = {-block.view[0][2], -block.view[1][2], -block.view[2][2], 0.0f};
+    if (frame.shadow_active) {
+      const scene::ShadowSettings& settings = frame.shadow_light->shadow;
+      block.light_space = frame.shadow_frustum.ViewProjection();
+      block.view_forward.w = settings.strength;
+      block.shadow_params = {settings.softness, 1.0f / static_cast<float>(shadow_map_size_),
+                             frame.shadow_frustum.texel_world * 1.5f, 0.0f};
+    }
+    SetFrameLights(block, frame.lights, frame.shadow_active ? frame.shadow_light : nullptr);
+    scene_view_ = block.view;
+    scene_view_projection_ = block.view_projection;
 
-    // Skybox first.
+    glBindBuffer(GL_UNIFORM_BUFFER, frame_ubo_);
+    glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(FrameUniforms), &block);
+    glBindBufferBase(GL_UNIFORM_BUFFER, kFrameBlockBinding, frame_ubo_);
+  }
+
+  // --- 3. SHADOWS: every caster's depth, seen from the shadow light ---
+  void DrawShadowMap(const Frame& frame) {
+    GLint previous_framebuffer = 0;  // not always 0: the platform may draw into its own
+    glGetIntegerv(GL_FRAMEBUFFER_BINDING, &previous_framebuffer);
+    glBindFramebuffer(GL_FRAMEBUFFER, shadow_framebuffer_);
+    glViewport(0, 0, shadow_map_size_, shadow_map_size_);
+    glDepthMask(GL_TRUE);
+    glClear(GL_DEPTH_BUFFER_BIT);
+    // A depth bias that grows with the surface's slope to the light: against "shadow acne".
+    glEnable(GL_POLYGON_OFFSET_FILL);
+    glPolygonOffset(1.5f, 3.0f);
+    for (scene::Node3D* node : frame.drawables) {
+      if (!node->CastsShadow()) continue;
+      const ShadowProgram& program = ShadowProgramFor(node->IsInstanced());
+      if (program.id == 0) continue;
+      UseProgram(program.id);
+      glUniformMatrix4fv(program.model, 1, GL_FALSE, glm::value_ptr(node->GetModelMatrix()));
+      GLInstanceBuffer* instances = PrepareInstances(*node);
+      for (const auto& mesh : node->GetModel()->meshes) DrawMesh(*node, *mesh, instances, nullptr);
+    }
+    glDisable(GL_POLYGON_OFFSET_FILL);
+    glBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(previous_framebuffer));
+  }
+
+  // --- 4. MAIN PASS: skybox, opaque meshes, then transparent ones back to front ---
+  void DrawMainPass(const scene::Scene& scene, const Frame& frame, scene::RenderStats& stats) {
     if (const auto& skybox = scene.GetSkybox()) {
-        glDisable(GL_DEPTH_TEST);
-        glDepthMask(GL_FALSE);
-        glDisable(GL_CULL_FACE);
-
-        glUseProgram(m_ShaderID_Skybox);
-
-        glm::mat4 staticView = glm::mat4(glm::mat3(view));
-        glUniformMatrix4fv(m_Uniforms.skyboxView, 1, GL_FALSE, glm::value_ptr(staticView));
-        glUniformMatrix4fv(m_Uniforms.skyboxProj, 1, GL_FALSE, glm::value_ptr(proj));
-
-        glBindVertexArray(m_SkyboxVAO);
-        skybox->Bind(0);
-        glDrawArrays(GL_TRIANGLES, 0, 36);
-        glBindVertexArray(0);
-
-        glDepthMask(GL_TRUE);
-        glEnable(GL_DEPTH_TEST);
+      glDisable(GL_DEPTH_TEST);
+      glDepthMask(GL_FALSE);
+      glDisable(GL_CULL_FACE);
+      UseProgram(skybox_program_);
+      glBindVertexArray(skybox_vao_);
+      skybox->Bind(0);
+      glDrawArrays(GL_TRIANGLES, 0, 36);
+      glBindVertexArray(0);
+      glDepthMask(GL_TRUE);
+      glEnable(GL_DEPTH_TEST);
     }
 
-    glUseProgram(m_ShaderID_3D);
-    glUniformMatrix4fv(m_Uniforms.view, 1, GL_FALSE, glm::value_ptr(view));
-    glUniformMatrix4fv(m_Uniforms.projection, 1, GL_FALSE, glm::value_ptr(proj));
-    core::Vector3 camPos = camera.GetPosition();
-    frame_view_ = view;  // for custom shaders (UseCustomShader)
-    frame_projection_ = proj;
-    frame_camera_ = {camPos.x, camPos.y, camPos.z};
-    glUniform3f(m_Uniforms.viewPos, camPos.x, camPos.y, camPos.z);
-    // The projection matrix tells the two kinds apart: w is 1 for orthographic (no divide by depth),
-    // -z for perspective. Row 2 of the view matrix is the camera's backward axis in world space.
-    glUniform1i(m_Uniforms.viewOrthographic, proj[3][3] == 1.0f);
-    glUniform3f(m_Uniforms.viewForward, -view[0][2], -view[1][2], -view[2][2]);
-
-    // Shadows: the map on texture unit 1 (unit 0 is the model texture).
-    glUniform1i(m_Uniforms.shadowLight, frame.shadow_light);
-    if (frame.shadow_light >= 0) {
-      const scene::ShadowSettings& settings = frame.lights[frame.shadow_light]->shadow;
+    // The shadow map on texture unit 1 (unit 0: the mesh's texture; units 2+: ShaderMaterials').
+    if (frame.shadow_active) {
       glActiveTexture(GL_TEXTURE1);
       glBindTexture(GL_TEXTURE_2D, shadow_texture_);
       glActiveTexture(GL_TEXTURE0);
-      glUniformMatrix4fv(m_Uniforms.lightSpace, 1, GL_FALSE, glm::value_ptr(shadow_frustum.ViewProjection()));
-      glUniform1f(m_Uniforms.shadowStrength, settings.strength);
-      glUniform1f(m_Uniforms.shadowSoftness, settings.softness);
-      glUniform1f(m_Uniforms.shadowTexel, 1.0f / static_cast<float>(shadow_map_size_));
-      glUniform1f(m_Uniforms.shadowNormalOffset, shadow_frustum.texel_world * 1.5f);
-    } else {
-      glUniformMatrix4fv(m_Uniforms.lightSpace, 1, GL_FALSE, glm::value_ptr(glm::mat4(1.0f)));
-      glUniform1f(m_Uniforms.shadowNormalOffset, 0.0f);
     }
-    // Scene lights, if there are any, light everything; otherwise each material's own light does.
-    const bool material_lights = frame.lights.empty();
-    if (!material_lights) UploadSceneLights(frame.lights);
 
-    scene::Frustum frustum = scene::Frustum::FromMatrix(proj * view);
+    const glm::mat4& view = scene_view_;
+    const scene::Frustum frustum = scene::Frustum::FromMatrix(scene_view_projection_);
 
     // Opaque first: any order, the depth buffer sorts them per pixel.
     for (scene::Node3D* node : frame.opaque) {
       if (!frustum.TestAABB(node->GetAABB())) {
-          ++stats.culled_nodes;
-          continue;
+        ++stats.culled_nodes;
+        continue;
       }
-      glUniform1i(m_Uniforms.receiveShadow, node->ReceivesShadow());
-      DrawNode(*node, /*shadow_pass=*/false, material_lights, stats, RenderQueue::Opaque);
+      DrawNode(*node, frame, RenderQueue::Opaque, stats);
     }
 
     // Then whatever blends: farthest first, so each one blends over what's behind it.
@@ -405,116 +385,119 @@ public:
       const scene::AABB box = node->GetAABB();
       return glm::vec3((box.min.x + box.max.x) * 0.5f, (box.min.y + box.max.y) * 0.5f, (box.min.z + box.max.z) * 0.5f);
     });
-    for (scene::Node3D* node : transparent) {
-      glUniform1i(m_Uniforms.receiveShadow, node->ReceivesShadow());
-      DrawNode(*node, /*shadow_pass=*/false, material_lights, stats, RenderQueue::Transparent);
-    }
+    for (scene::Node3D* node : transparent) DrawNode(*node, frame, RenderQueue::Transparent, stats);
 
-    glUniform1i(m_Uniforms.instanced, 0);
     ApplyBlendMode(BlendMode::Opaque);  // back to the defaults for whatever draws next
     glDepthMask(GL_TRUE);
+    UseProgram(0);
   }
 
-  // The blend mode a mesh draws with: its own material's, else its node's (like the rest of the
-  // material: the mesh's wins).
-  template <typename MeshT>
-  static BlendMode EffectiveMaterialBlend(const scene::Node3D& node, const MeshT& mesh) {
-    if (const auto& material = mesh.GetMaterial()) return material->blend;
-    if (const auto& material = node.GetMaterial()) return material->blend;
-    return BlendMode::Opaque;
-  }
-  template <typename MeshT>
-  static bool EffectiveDepthWrite(const scene::Node3D& node, const MeshT& mesh) {
-    if (const auto& material = mesh.GetMaterial()) return material->DepthWrite();
-    if (const auto& material = node.GetMaterial()) return material->DepthWrite();
-    return true;
-  }
-
-  static void Grow(scene::AABB& box, bool& has_box, const scene::AABB& add) {
-    if (!has_box) {
-      box = add;
-      has_box = true;
-      return;
-    }
-    box.min = {std::min(box.min.x, add.min.x), std::min(box.min.y, add.min.y), std::min(box.min.z, add.min.z)};
-    box.max = {std::max(box.max.x, add.max.x), std::max(box.max.y, add.max.y), std::max(box.max.z, add.max.z)};
-  }
-
-  // Draws one node's meshes with the program in use. In the shadow pass only geometry matters;
-  // in the main pass each mesh's material sets its texture (and its light, when the scene has none).
-  // `queue` (main pass): only the meshes whose material belongs to it are drawn, with its blend
-  // state; the shadow pass draws every mesh.
-  void DrawNode(scene::Node3D& node, bool shadow_pass, bool material_lights, scene::RenderStats& stats,
-                RenderQueue queue = RenderQueue::Opaque) {
-    const GLint model_location = shadow_pass ? shadow_uniforms_.model : m_Uniforms.model;
-    const GLint instanced_location = shadow_pass ? shadow_uniforms_.instanced : m_Uniforms.instanced;
-    glUniformMatrix4fv(model_location, 1, GL_FALSE, glm::value_ptr(node.GetModelMatrix()));
-
-    // Instanced: one draw call per mesh for all copies. The per-instance data goes to the GPU
-    // only when it changed (GLInstanceBuffer::Upload compares versions).
+  // A node's meshes that belong to `queue`, each with its material's blend state and shader: its
+  // ShaderMaterial's, else the engine's variant for its features.
+  void DrawNode(scene::Node3D& node, const Frame& frame, RenderQueue queue, scene::RenderStats& stats) {
+    const glm::mat4& model = node.GetModelMatrix();
     const bool instanced = node.IsInstanced();
-    GLInstanceBuffer* instance_buffer = nullptr;
-    if (instanced) {
-      if (!node.GetInstanceBuffer()) node.SetInstanceBuffer(std::make_unique<GLInstanceBuffer>());
-      instance_buffer = static_cast<GLInstanceBuffer*>(node.GetInstanceBuffer());
-      instance_buffer->Upload(node.GetInstances(), node.GetInstancesVersion());
-    }
-    glUniform1i(instanced_location, instanced);
+    // Normals: transpose(inverse(model)), once per node on the CPU (instanced copies do it per vertex).
+    const glm::mat3 normal_matrix = instanced ? glm::mat3(1.0f) : glm::mat3(glm::transpose(glm::inverse(model)));
+    GLInstanceBuffer* instances = PrepareInstances(node);
 
     for (const auto& mesh : node.GetModel()->meshes) {
       const BlendMode blend = EffectiveMaterialBlend(node, *mesh);
-      if (!shadow_pass) {
-        if (QueueFor(blend) != queue) continue;  // drawn in the other queue
-        ApplyBlendMode(blend);
-        glDepthMask(EffectiveDepthWrite(node, *mesh) ? GL_TRUE : GL_FALSE);
-        if (queue == RenderQueue::Transparent) ++stats.transparent_draw_calls;
-      }
+      if (QueueFor(blend) != queue) continue;  // drawn in the other queue
+      ApplyBlendMode(blend);
+      glDepthMask(EffectiveDepthWrite(node, *mesh) ? GL_TRUE : GL_FALSE);
+      if (queue == RenderQueue::Transparent) ++stats.transparent_draw_calls;
 
-      // A ShaderMaterial draws the mesh with its own shader instead (the mesh's material first).
-      const ShaderMaterial* custom = nullptr;
-      if (!shadow_pass) {
-        custom = DrawableShaderMaterial(mesh->GetMaterial());
-        if (!custom) custom = DrawableShaderMaterial(node.GetMaterial());
-      }
+      const ShaderMaterial* custom = DrawableShaderMaterial(mesh->GetMaterial());
+      if (!custom) custom = DrawableShaderMaterial(node.GetMaterial());
       if (custom) {
-        UseShaderMaterial(*custom, node.GetModelMatrix(), instanced);
-      } else if (!shadow_pass) {
-        glUniform1i(m_Uniforms.use_texture, false);
-        glUniform1i(m_Uniforms.opaque, blend == BlendMode::Opaque);
-        if (material_lights) glUniform1i(m_Uniforms.useLighting, false);
-        BindMaterial(node.GetMaterial(), material_lights);
-        BindMaterial(mesh->GetMaterial(), material_lights);  // the mesh's own material wins
-      }
-
-      if (!mesh->GetVertexBuffer()) {
-          mesh->SetVertexBuffer(device_->CreateVertexBuffer(mesh->GetVertices()));
-      }
-      if (!mesh->GetIndexBuffer()) {
-          mesh->SetIndexBuffer(device_->CreateIndexBuffer(mesh->GetIndices()));
-      }
-
-      const auto* vertex_buffer = mesh->GetVertexBuffer();
-      const auto* index_buffer = mesh->GetIndexBuffer();
-
-      vertex_buffer->Bind();
-      index_buffer->Bind();
-
-      const auto index_count = static_cast<GLsizei>(mesh->GetIndices().size());
-      if (instanced) {
-        const auto count = static_cast<GLsizei>(node.GetInstances().size());
-        instance_buffer->Attach();
-        glDrawElementsInstanced(GL_TRIANGLES, index_count, GL_UNSIGNED_INT, nullptr, count);
-        GLInstanceBuffer::Detach();
-        stats.instances += count;
+        UseShaderMaterial(*custom, model, instanced);
       } else {
-        DrawIndexed(static_cast<uint32_t>(index_count));
+        const MeshProgram& program = MeshProgramFor(MeshVariantKey(DrawFor(node, *mesh, frame)));
+        if (program.id == 0) continue;  // didn't compile (logged)
+        UseProgram(program.id);
+        glUniformMatrix4fv(program.model, 1, GL_FALSE, glm::value_ptr(model));
+        if (!instanced) glUniformMatrix3fv(program.normal_matrix, 1, GL_FALSE, glm::value_ptr(normal_matrix));
+        const Material* material = EffectiveMaterial(node, *mesh);
+        glUniform1f(program.shininess, material ? material->shininess : 32.0f);
+        if (const Material* textured = TexturedMaterial(node, *mesh)) {
+          glActiveTexture(GL_TEXTURE0);
+          textured->BindTexture();
+        }
       }
-      ++stats.draw_calls;
-
-      vertex_buffer->Unbind();
-      index_buffer->Unbind();
-      if (custom) glUseProgram(m_ShaderID_3D);  // back to the engine's for the next mesh
+      DrawMesh(node, *mesh, instances, &stats);
     }
+  }
+
+  // The draw's features, which pick its shader variant.
+  template <typename MeshT>
+  static MeshDraw DrawFor(const scene::Node3D& node, const MeshT& mesh, const Frame& frame) {
+    MeshDraw draw;
+    draw.instanced = node.IsInstanced();
+    draw.textured = TexturedMaterial(node, mesh) != nullptr;
+    draw.scene_lit = !frame.lights.empty();
+    draw.shadow_active = frame.shadow_active;
+    draw.receives_shadow = node.ReceivesShadow();
+    draw.blends = EffectiveMaterialBlend(node, mesh) != BlendMode::Opaque;
+    return draw;
+  }
+
+  // The material that decides a mesh's look: its own, else its node's (the mesh's wins).
+  template <typename MeshT>
+  static const Material* EffectiveMaterial(const scene::Node3D& node, const MeshT& mesh) {
+    if (const auto& material = mesh.GetMaterial()) return material.get();
+    return node.GetMaterial().get();
+  }
+  // The material whose texture the mesh shows: its own if it has one, else its node's.
+  template <typename MeshT>
+  static const Material* TexturedMaterial(const scene::Node3D& node, const MeshT& mesh) {
+    if (const auto& material = mesh.GetMaterial(); material && material->HasTexture()) return material.get();
+    if (const auto& material = node.GetMaterial(); material && material->HasTexture()) return material.get();
+    return nullptr;
+  }
+  template <typename MeshT>
+  static BlendMode EffectiveMaterialBlend(const scene::Node3D& node, const MeshT& mesh) {
+    const Material* material = EffectiveMaterial(node, mesh);
+    return material ? material->blend : BlendMode::Opaque;
+  }
+  template <typename MeshT>
+  static bool EffectiveDepthWrite(const scene::Node3D& node, const MeshT& mesh) {
+    const Material* material = EffectiveMaterial(node, mesh);
+    return material ? material->DepthWrite() : true;
+  }
+
+  // An instanced node's per-copy data on the GPU (uploaded only when it changed: Upload compares
+  // versions); null for a plain node.
+  static GLInstanceBuffer* PrepareInstances(scene::Node3D& node) {
+    if (!node.IsInstanced()) return nullptr;
+    if (!node.GetInstanceBuffer()) node.SetInstanceBuffer(std::make_unique<GLInstanceBuffer>());
+    auto* buffer = static_cast<GLInstanceBuffer*>(node.GetInstanceBuffer());
+    buffer->Upload(node.GetInstances(), node.GetInstancesVersion());
+    return buffer;
+  }
+
+  // Draws one mesh with whatever program is in use: once, or once per copy (one call either way).
+  template <typename MeshT>
+  void DrawMesh(scene::Node3D& node, MeshT& mesh, GLInstanceBuffer* instances, scene::RenderStats* stats) {
+    if (!mesh.GetVertexBuffer()) mesh.SetVertexBuffer(device_->CreateVertexBuffer(mesh.GetVertices()));
+    if (!mesh.GetIndexBuffer()) mesh.SetIndexBuffer(device_->CreateIndexBuffer(mesh.GetIndices()));
+    const auto* vertex_buffer = mesh.GetVertexBuffer();
+    const auto* index_buffer = mesh.GetIndexBuffer();
+    vertex_buffer->Bind();
+    index_buffer->Bind();
+    const auto index_count = static_cast<GLsizei>(mesh.GetIndices().size());
+    if (instances) {
+      const auto count = static_cast<GLsizei>(node.GetInstances().size());
+      instances->Attach();
+      glDrawElementsInstanced(GL_TRIANGLES, index_count, GL_UNSIGNED_INT, nullptr, count);
+      GLInstanceBuffer::Detach();
+      if (stats) stats->instances += count;
+    } else {
+      glDrawElements(GL_TRIANGLES, index_count, GL_UNSIGNED_INT, nullptr);
+    }
+    if (stats) ++stats->draw_calls;
+    vertex_buffer->Unbind();
+    index_buffer->Unbind();
   }
 
   // The material as a ShaderMaterial with a working 3D shader, else null (an invalid one falls
@@ -526,47 +509,72 @@ public:
     return shader_material;
   }
 
-  // Switches to a ShaderMaterial's shader and gives it the engine's inputs (see shader.h) and the
-  // material's params. Its textures start at unit 2: units 0-1 belong to the engine's shader
-  // (model texture, shadow map), which stay bound for the nodes drawn after.
+  // A ShaderMaterial's shader with its model matrix and params (the camera and lights come from
+  // the frame block). Its textures start at unit 2: units 0-1 are the mesh texture and the
+  // shadow map, which stay bound for the nodes drawn after.
   void UseShaderMaterial(const ShaderMaterial& material, const glm::mat4& model, bool instanced) {
     const auto& shader = static_cast<const GLShader&>(*material.GetShader());
-    glUseProgram(shader.Program());
+    UseProgram(shader.Program());
     glUniformMatrix4fv(shader.Location("uModel"), 1, GL_FALSE, glm::value_ptr(model));
-    glUniformMatrix4fv(shader.Location("uView"), 1, GL_FALSE, glm::value_ptr(frame_view_));
-    glUniformMatrix4fv(shader.Location("uProjection"), 1, GL_FALSE, glm::value_ptr(frame_projection_));
-    glUniform3fv(shader.Location("uCameraPos"), 1, glm::value_ptr(frame_camera_));
     glUniform1i(shader.Location("uInstanced"), instanced);
     shader.ApplyParams(material, 2);
   }
 
-  // Renders every shadow caster's depth into the shadow map (made or resized on demand). Returns
-  // false if the map can't be made; then there are simply no shadows.
-  bool DrawShadowMap(const Frame& frame, int map_size, const glm::mat4& light_space) {
-    if (!EnsureShadowMap(map_size)) return false;
+  // ---- Programs ----
+  struct MeshProgram {
+    GLuint id = 0;
+    GLint model = -1;
+    GLint normal_matrix = -1;
+    GLint shininess = -1;
+  };
+  struct ShadowProgram {
+    GLuint id = 0;
+    GLint model = -1;
+  };
 
-    GLint previous_framebuffer = 0;  // not always 0: the platform may draw into its own
-    glGetIntegerv(GL_FRAMEBUFFER_BINDING, &previous_framebuffer);
-    glBindFramebuffer(GL_FRAMEBUFFER, shadow_framebuffer_);
-    glViewport(0, 0, shadow_map_size_, shadow_map_size_);
-    glClear(GL_DEPTH_BUFFER_BIT);
-
-    glUseProgram(m_ShaderID_Shadow);
-    glUniformMatrix4fv(shadow_uniforms_.lightSpace, 1, GL_FALSE, glm::value_ptr(light_space));
-    // A depth bias that grows with the surface's slope to the light: against "shadow acne".
-    glEnable(GL_POLYGON_OFFSET_FILL);
-    glPolygonOffset(1.5f, 3.0f);
-    scene::RenderStats unused;
-    for (scene::Node3D* node : frame.drawables) {
-      if (node->CastsShadow()) DrawNode(*node, /*shadow_pass=*/true, false, unused);
+  // The engine's 3D shader for a variant key: compiled the first time it's needed, then cached.
+  const MeshProgram& MeshProgramFor(uint32_t key) {
+    auto [it, inserted] = mesh_programs_.try_emplace(key);
+    if (!inserted) return it->second;
+    const auto start = std::chrono::steady_clock::now();
+    MeshProgram& program = it->second;
+    program.id = BuildEngineProgram("mesh.vert", "mesh.frag", MeshVariantDefines(key));
+    if (program.id == 0) return program;
+    program.model = glGetUniformLocation(program.id, "uModel");
+    program.normal_matrix = glGetUniformLocation(program.id, "uNormalMatrix");
+    program.shininess = glGetUniformLocation(program.id, "uShininess");
+    // Two sampler types may never share a texture unit: the mesh texture uses 0, shadows 1.
+    UseProgram(program.id);
+    glUniform1i(glGetUniformLocation(program.id, "uTexture"), 0);
+    glUniform1i(glGetUniformLocation(program.id, "uShadowMap"), 1);
+    if (warmed_up_) {  // not prepared by WarmUp: it costs a frame now (worth knowing on phones)
+      const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+      WLW_LOG_INFO("Shader variant compiled during play (%.1f ms):%s", ms, VariantName(key).c_str());
     }
-    glDisable(GL_POLYGON_OFFSET_FILL);
-    glUniform1i(shadow_uniforms_.instanced, 0);
-
-    glBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(previous_framebuffer));
-    return true;
+    return program;
   }
 
+  const ShadowProgram& ShadowProgramFor(bool instanced) {
+    ShadowProgram& program = shadow_programs_[instanced ? 1 : 0];
+    if (program.id != 0) return program;
+    program.id = BuildEngineProgram("shadow.vert", "shadow.frag", MeshVariantDefines(instanced ? kMeshInstanced : 0));
+    if (program.id != 0) program.model = glGetUniformLocation(program.id, "uModel");
+    return program;
+  }
+
+  static std::string VariantName(uint32_t key) {
+    std::string name;
+    for (const std::string& define : MeshVariantDefines(key)) name += " " + define;
+    return name.empty() ? " (none)" : name;
+  }
+
+  void UseProgram(GLuint program) {
+    if (program == current_program_) return;
+    glUseProgram(program);
+    current_program_ = program;
+  }
+
+  // ---- Shadow map ----
   bool EnsureShadowMap(int map_size) {
     map_size = std::clamp(map_size, 64, 4096);
     if (shadow_framebuffer_ != 0 && shadow_map_size_ == map_size) return true;
@@ -600,7 +608,6 @@ public:
     if (!complete) {
       WLW_LOG_ERROR("Shadow map framebuffer incomplete: shadows are off");
       DeleteShadowMap();
-      ui_renderer_.reset();
       shadow_failed_ = true;
       return false;
     }
@@ -617,106 +624,33 @@ public:
     shadow_map_size_ = 0;
   }
 
-  // The shader's light arrays, filled one light at a time.
-  struct LightArrays {
-    int count = 0;
-    std::array<GLint, scene::LightNode::kMaxLights> types{};
-    std::array<glm::vec3, scene::LightNode::kMaxLights> positions{}, directions{}, colors{}, attenuations{};
-    std::array<GLfloat, scene::LightNode::kMaxLights> ambients{};
-    std::array<glm::vec2, scene::LightNode::kMaxLights> cones{};
-
-    void Add(int type, const glm::vec3& position, const glm::vec3& direction, const glm::vec3& color, float ambient,
-             const glm::vec3& attenuation, const glm::vec2& cone) {
-      if (count >= scene::LightNode::kMaxLights) return;
-      types[count] = type;
-      positions[count] = position;
-      directions[count] = direction;
-      colors[count] = color;
-      ambients[count] = ambient;
-      attenuations[count] = attenuation;
-      cones[count] = cone;
-      ++count;
-    }
-    void Upload(const UniformLocations& u) const {
-      glUniform1i(u.lightCount, count);
-      if (count == 0) return;
-      glUniform1iv(u.lightTypes, count, types.data());
-      glUniform3fv(u.lightPositions, count, glm::value_ptr(positions[0]));
-      glUniform3fv(u.lightDirections, count, glm::value_ptr(directions[0]));
-      glUniform3fv(u.lightColors, count, glm::value_ptr(colors[0]));
-      glUniform1fv(u.lightAmbients, count, ambients.data());
-      glUniform3fv(u.lightAttenuations, count, glm::value_ptr(attenuations[0]));
-      glUniform2fv(u.lightCones, count, glm::value_ptr(cones[0]));
-    }
-  };
-
-  // The scene's light nodes -> the shader's light arrays.
-  void UploadSceneLights(const std::vector<const scene::LightNode*>& lights) {
-    LightArrays arrays;
-    for (const scene::LightNode* light : lights) {
-      glm::vec3 attenuation(1.0f, 0.0f, 0.0f);
-      glm::vec2 cone(-1.0f, -1.0f);
-      float range = 0.0f;
-      if (const auto* point = dynamic_cast<const scene::PointLight*>(light)) range = point->GetRange();
-      if (const auto* spot = dynamic_cast<const scene::SpotLight*>(light)) {
-        range = spot->GetRange();
-        cone = {std::cos(glm::radians(spot->GetInnerDegrees())), std::cos(glm::radians(spot->GetOuterDegrees()))};
-      }
-      // A falloff that is down to about 1% at `range` (the classic constant/linear/quadratic form).
-      if (range > 0.0f) attenuation = {1.0f, 4.5f / range, 75.0f / (range * range)};
-      const core::Vector3 position = light->GetWorldPosition();
-      arrays.Add(static_cast<int>(light->GetType()), {position.x, position.y, position.z}, light->GetDirection(),
-                 light->GetColor() * light->GetIntensity(), light->GetAmbient(), attenuation, cone);
-    }
-    arrays.Upload(m_Uniforms);
-    glUniform1i(m_Uniforms.useLighting, true);
-  }
-
-  // A material's texture, and (the older way, used when the scene has no light nodes) its light.
-  void BindMaterial(const std::shared_ptr<rendering::Material>& material, bool material_lights) {
-    if (!material) return;
-
-    if (material->HasTexture()) {
-      glUniform1i(m_Uniforms.use_texture, true);
-      glActiveTexture(GL_TEXTURE0);
-      material->BindTexture();
-      glUniform1i(m_Uniforms.model_texture, 0);
-    }
-
-    if (!material_lights) {
-      glUniform1f(m_Uniforms.shininess, material->shininess);
+  static void Grow(scene::AABB& box, bool& has_box, const scene::AABB& add) {
+    if (!has_box) {
+      box = add;
+      has_box = true;
       return;
     }
-    if (const auto& lighting = material->GetLighting()) {
-      LightArrays arrays;
-      arrays.Add(static_cast<int>(lighting->type), {lighting->position.x, lighting->position.y, lighting->position.z},
-                 {lighting->direction.x, lighting->direction.y, lighting->direction.z},
-                 {lighting->color.r, lighting->color.g, lighting->color.b}, lighting->ambient_strength,
-                 {lighting->constant, lighting->linear, lighting->quadratic}, {lighting->cutOff, lighting->outerCutOff});
-      arrays.Upload(m_Uniforms);
-      glUniform1i(m_Uniforms.useLighting, true);
-      glUniform1f(m_Uniforms.shininess, lighting->shininess);
-    }
-  }
-
-  void DrawIndexed(uint32_t indexCount) {
-    glDrawElements(GL_TRIANGLES, indexCount, GL_UNSIGNED_INT, nullptr);
+    box.min = {std::min(box.min.x, add.min.x), std::min(box.min.y, add.min.y), std::min(box.min.z, add.min.z)};
+    box.max = {std::max(box.max.x, add.max.x), std::max(box.max.y, add.max.y), std::max(box.max.z, add.max.z)};
   }
 
   ~GLRenderingDriver() override {
-    if (!platform::IsAlive()) {
-      return;
-    }
+    if (!platform::IsAlive()) return;
     // Free our GL objects while the main window's context still exists...
     if (main_window_) {
       main_window_->MakeContextCurrent();
-      glDeleteProgram(m_ShaderID_2D);
-      glDeleteProgram(m_ShaderID_3D);
-      glDeleteProgram(m_ShaderID_Skybox);
-      glDeleteProgram(m_ShaderID_Shadow);
+      ui_renderer_.reset();
+      for (const auto& [_, program] : mesh_programs_) {
+        if (program.id) glDeleteProgram(program.id);
+      }
+      for (const ShadowProgram& program : shadow_programs_) {
+        if (program.id) glDeleteProgram(program.id);
+      }
+      if (skybox_program_) glDeleteProgram(skybox_program_);
+      if (frame_ubo_) glDeleteBuffers(1, &frame_ubo_);
       DeleteShadowMap();
-      glDeleteVertexArrays(1, &m_SkyboxVAO);
-      glDeleteBuffers(1, &m_SkyboxVBO);
+      glDeleteVertexArrays(1, &skybox_vao_);
+      glDeleteBuffers(1, &skybox_vbo_);
     }
     main_window_.reset();
     // ...then shut the platform down (destroys any windows / contexts still open).
@@ -724,90 +658,35 @@ public:
   }
 
 private:
-  GLuint CompileShader(GLenum type, const char* source) {
-    GLuint id = glCreateShader(type);
-    // Prepend the GLSL version for this GL flavour (see rendering/gl.h).
-    const char* sources[] = {kGLSLHeader, source};
-    glShaderSource(id, 2, sources, nullptr);
-    glCompileShader(id);
+  RenderDevice* device_;
+  std::shared_ptr<scene::Window> main_window_;
+  std::unique_ptr<ui::UIRenderer> ui_renderer_;
 
-    int result;
-    glGetShaderiv(id, GL_COMPILE_STATUS, &result);
-    if (result == GL_FALSE) {
-      int length = 0;
-      glGetShaderiv(id, GL_INFO_LOG_LENGTH, &length);
-      std::vector<char> message(length > 1 ? length : 1, '\0');
-      glGetShaderInfoLog(id, length, &length, message.data());
-      WLW_LOG_ERROR("Failed to compile %s shader:\n%s", type == GL_VERTEX_SHADER ? "vertex" : "fragment", message.data());
-      glDeleteShader(id);
-      return 0;
-    }
-    return id;
-  }
+  std::unordered_map<uint32_t, MeshProgram> mesh_programs_;  // by variant key
+  ShadowProgram shadow_programs_[2];                          // plain, instanced
+  GLuint skybox_program_ = 0;
+  GLuint skybox_vao_ = 0;
+  GLuint skybox_vbo_ = 0;
+  GLuint frame_ubo_ = 0;
+  GLuint current_program_ = 0;  // what glUseProgram last set (to skip redundant switches)
+  bool warmed_up_ = false;
 
-  GLuint CreateProgram(const char* vsSource, const char* fsSource) {
-    GLuint vs = CompileShader(GL_VERTEX_SHADER, vsSource);
-    GLuint fs = CompileShader(GL_FRAGMENT_SHADER, fsSource);
-    if (vs == 0 || fs == 0) {
-      if (vs) glDeleteShader(vs);
-      if (fs) glDeleteShader(fs);
-      return 0;
-    }
-
-    GLuint program = glCreateProgram();
-    glAttachShader(program, vs);
-    glAttachShader(program, fs);
-    glLinkProgram(program);
-    glDeleteShader(vs);  // the linked program keeps what it needs
-    glDeleteShader(fs);
-
-    GLint linked = GL_FALSE;
-    glGetProgramiv(program, GL_LINK_STATUS, &linked);
-    if (linked != GL_TRUE) {
-      GLint length = 0;
-      glGetProgramiv(program, GL_INFO_LOG_LENGTH, &length);
-      std::vector<char> message(length > 1 ? length : 1, '\0');
-      glGetProgramInfoLog(program, (GLsizei)message.size(), nullptr, message.data());
-      WLW_LOG_ERROR("Failed to link shader program:\n%s", message.data());
-      glDeleteProgram(program);
-      return 0;
-    }
-    return program;
- }
-
-private:
-  GLuint m_ShaderID_2D = 0; 
-  GLuint m_ShaderID_3D = 0; 
-  GLuint m_ShaderID_Skybox = 0;
-  GLuint m_SkyboxVAO = 0;
-  GLuint m_SkyboxVBO = 0;
+  // This viewport's camera (set by UploadFrame), for culling and sorting.
+  glm::mat4 scene_view_{1.0f};
+  glm::mat4 scene_view_projection_{1.0f};
 
   // Shadows (see DrawShadowMap).
-  GLuint m_ShaderID_Shadow = 0;
-  struct {
-    GLint model = -1;
-    GLint lightSpace = -1;
-    GLint instanced = -1;
-  } shadow_uniforms_;
   GLuint shadow_framebuffer_ = 0;
   GLuint shadow_texture_ = 0;
   int shadow_map_size_ = 0;
   bool shadow_failed_ = false;      // the framebuffer was refused once: don't retry every frame
   bool warned_shadow_type_ = false;
-  // This frame's camera, for custom shaders.
-  glm::mat4 frame_view_{1.0f};
-  glm::mat4 frame_projection_{1.0f};
-  glm::vec3 frame_camera_{0.0f};
-  std::shared_ptr<scene::Window> main_window_;
-  std::unique_ptr<ui::UIRenderer> ui_renderer_;
-  RenderDevice* device_;
 };
 
 std::unique_ptr<RenderingDriver> RenderingDriver::Create(RenderDevice* device) {
-	return std::make_unique<GLRenderingDriver>(device);
+  return std::make_unique<GLRenderingDriver>(device);
 }
 
-} // namespace wlw::rendering
+}  // namespace wlw::rendering
 
-
-#endif // WLW_RENDERER_GL
+#endif  // WLW_RENDERER_GL

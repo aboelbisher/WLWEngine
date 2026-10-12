@@ -18,14 +18,14 @@ struct ShadowSettings {
 // A light source is a node: added to the scene with Window::AddNode like geometry, moved and
 // turned like any node (and with its parent), hidden with SetVisible(false). It has no model, so
 // nothing is drawn for it; the renderer gathers the visible lights every frame and lights the
-// scene with them (up to kMaxLights).
+// scene with them (up to kMaxLights of each type).
 //
 // Directional and spot lights shine along the node's forward axis, -Z, turned by its rotation.
 // SetDirection is the convenient way to aim them.
 class LightNode : public Node3D {
  public:
   enum class Type { Directional = 0, Point = 1, Spot = 2 };
-  static constexpr int kMaxLights = 4;
+  static constexpr int kMaxLights = 4;  // of each type (rendering::kMaxLightsPerType)
 
   Type GetType() const { return type_; }
   const LightNode* AsLight() const override { return this; }

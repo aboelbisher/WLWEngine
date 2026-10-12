@@ -14,7 +14,7 @@
 namespace wlw::rendering {
 
 // GL buffer holding a node's per-instance data, fed to the 3D shader's instance attributes
-// (locations 4..7 = transform, 8 = tint; see basic_shaders.h).
+// (locations 4..7 = transform, 8 = tint; see shaders/mesh.vert).
 class GLInstanceBuffer : public WInstanceBuffer {
  public:
   static constexpr GLuint kTransformLocation = 4;  // a mat4 attribute uses 4 vec4 locations

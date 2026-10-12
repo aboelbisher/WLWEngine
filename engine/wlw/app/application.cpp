@@ -41,6 +41,8 @@ int Application::Run() {
   debug_ui_ = std::make_unique<debug::DebugUI>(*window_);  // needs the GL context Start() made
 #endif
   systems_.StartPending();  // the systems added before Run, in order
+  // The scenes they built: compile the shader variants they need now, not during the first frames.
+  engine_->GetRenderingDriver()->WarmUp(*window_);
 
   // steady_clock: monotonic (never jumps when the system clock changes), available on every platform.
   using Clock = std::chrono::steady_clock;

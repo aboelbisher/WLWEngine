@@ -82,7 +82,10 @@ add_library(wlw STATIC
   wlw/rendering/blend_mode.h
   wlw/rendering/gl.h
   wlw/rendering/gl_blend.h
+  wlw/rendering/frame_uniforms.h
   wlw/rendering/gl_index_buffer.h
+  wlw/rendering/gl_program.cpp
+  wlw/rendering/gl_program.h
   wlw/rendering/gl_shader.cpp
   wlw/rendering/gl_shader.h
   wlw/rendering/gl_instance_buffer.h
@@ -91,6 +94,7 @@ add_library(wlw STATIC
   wlw/rendering/instance_buffer.h
   wlw/rendering/material.h
   wlw/rendering/material_gl.cpp
+  wlw/rendering/mesh_variant.h
   wlw/rendering/render_device.h
   wlw/rendering/render_device_gl.cpp
   wlw/rendering/render_queue.h
@@ -99,9 +103,11 @@ add_library(wlw STATIC
   wlw/rendering/rendering_driver_gl.cpp
   wlw/rendering/shader.cpp
   wlw/rendering/shader.h
+  wlw/rendering/shader_library.cpp
+  wlw/rendering/shader_library.h
   wlw/rendering/shader_material.h
-  wlw/rendering/shaders/basic_shaders.h
-  wlw/rendering/shaders/skybox_shaders.h
+  wlw/rendering/shader_preprocessor.cpp
+  wlw/rendering/shader_preprocessor.h
   wlw/rendering/texture.cpp
   wlw/rendering/texture.h
   wlw/rendering/vertex_buffer.h
@@ -141,6 +147,23 @@ add_library(wlw STATIC
   wlw/utils/textures.h
 )
 add_library(wlw::wlw ALIAS wlw)
+
+# ---- Shaders: engine/wlw/rendering/shaders/**.{glsl,vert,frag}, embedded in the binary ----
+# cmake/EmbedShaders.cmake turns them into a generated source (rendering/shader_library.h), so
+# nothing is read from disk or the APK; editing a shader file re-runs it on the next build.
+set(_wlw_shader_dir "${CMAKE_CURRENT_SOURCE_DIR}/wlw/rendering/shaders")
+file(GLOB_RECURSE _wlw_shader_files CONFIGURE_DEPENDS
+  "${_wlw_shader_dir}/*.glsl" "${_wlw_shader_dir}/*.vert" "${_wlw_shader_dir}/*.frag")
+set(_wlw_shaders_cpp "${CMAKE_CURRENT_BINARY_DIR}/generated/wlw_shader_files.cpp")
+add_custom_command(
+  OUTPUT "${_wlw_shaders_cpp}"
+  COMMAND "${CMAKE_COMMAND}" "-DSHADER_DIR=${_wlw_shader_dir}" "-DOUTPUT=${_wlw_shaders_cpp}"
+          -P "${CMAKE_CURRENT_SOURCE_DIR}/../cmake/EmbedShaders.cmake"
+  DEPENDS ${_wlw_shader_files} "${CMAKE_CURRENT_SOURCE_DIR}/../cmake/EmbedShaders.cmake"
+  COMMENT "Embedding engine shaders"
+  VERBATIM)
+set_source_files_properties(${_wlw_shader_files} PROPERTIES HEADER_FILE_ONLY TRUE)
+target_sources(wlw PRIVATE "${_wlw_shaders_cpp}" ${_wlw_shader_files})
 
 # Games include engine headers as "wlw/scene/window.h" etc.
 target_include_directories(wlw PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
@@ -203,4 +226,5 @@ wlw_set_warnings(wlw)
 
 # Keep the folder structure in IDEs (VS / Xcode / Android Studio)
 get_target_property(_wlw_sources wlw SOURCES)
+list(FILTER _wlw_sources EXCLUDE REGEX "/generated/")  # outside the source tree
 source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES ${_wlw_sources})

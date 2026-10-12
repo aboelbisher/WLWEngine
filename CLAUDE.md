@@ -43,16 +43,27 @@ engine/wlw/
               (WlwBridge.post) -> queue -> SetBridgeHandler callbacks on the GAME thread (Application dispatches
               once per frame). Kotlin side: android/java/com/wlw/ (WlwBridge, WlwService, WlwActivity = NativeActivity
               + services; games subclass it and add its java dir to their Gradle sourceSets).
-  rendering/  RenderingDriver/RenderDevice interfaces + one GL backend for GL 3.3 core AND GLES 3.0. Per frame: gather lights +
-              drawables, shadow pass (depth from the shadow light into a 2D depth texture), main pass (up to 4 lights, PCF shadows)
+  rendering/  RenderingDriver/RenderDevice interfaces + one GL backend for GL 3.3 core AND GLES 3.0. Per viewport: gather lights +
+              drawables, upload the per-frame block, shadow pass (depth from the shadow light), main pass (PCF shadows).
+              SHADERS are files: rendering/shaders/** (mesh, shadow, skybox, ui .vert/.frag; wlw/frame.glsl, lighting.glsl,
+              shadows.glsl, common.glsl, color.glsl; custom/* = what wraps a game's shader), embedded at build time by
+              cmake/EmbedShaders.cmake (shader_library.h: FindShaderFile, AddShaderFile for a game's own includes).
+              shader_preprocessor.h: #include (once, cycles reported), #defines, #line + MapShaderLog (errors name file:line).
+              gl_program.h: BuildProgram / BuildEngineProgram = the one way programs are made (binds the frame block).
+              Per-frame UBO WlwFrame (frame.glsl) <-> FrameUniforms (frame_uniforms.h, std140 offsets tested): camera,
+              lights by type (up to 4 directional + 4 point + 4 spot; SetFrameLights), shadow params.
+              Variants (mesh_variant.h): INSTANCED, TEXTURED, LIT, SHADOWS, BLEND as #defines, one cached program per
+              key; RenderingDriver::WarmUp (called by Application after OnStart) compiles what the scenes need, hidden and
+              empty-instanced nodes included; later compiles are logged ("compiled during play"). Normal matrix on the CPU
+              for plain nodes (instanced: per vertex, copies may be squashed).
               Custom shaders (shader.h): one text (shader_type canvas|mesh; fragment(), optional vertex()) -> RenderDevice::CreateShader(code) -> ShaderMaterial::Create(shader)
               + SetParam(name, float/vec/mat4/texture); node/mesh SetMaterial or Canvas::ShaderRect. Engine inputs are prepended
-              (documented in shader.h). Data textures: CreateTexture2D(w, h, {R8/RGB8/RGBA8/R16F/RGBA16F}) + WTexture2D::Update
+              (documented in shader.h; may #include wlw/lighting.glsl and use SceneLighting). Data textures: CreateTexture2D(w, h, {R8/RGB8/RGBA8/R16F/RGBA16F}) + WTexture2D::Update
               Blending (blend_mode.h): Material::blend = Opaque / Alpha / Additive / Multiply (ShaderMaterial too), depth_write
               (default: only Opaque writes depth). Every shader outputs PREMULTIPLIED alpha, so gl_blend.h has one table for
               3D, canvas and custom shaders. Render queues (render_queue.h): each viewport draws opaque meshes first, then
               transparent ones sorted back to front (SortBackToFront, by bounding-box centre along the view direction),
-              depth-tested but not written. An opaque material forces alpha 1 (uniform `opaque`).
+              depth-tested but not written. An opaque material writes alpha 1 (no BLEND variant).
   scene/      Node (scene graph, local transforms, visibility, instancing: SetInstances = one draw call for N copies).
               Scene (scene.h) = the world: nodes, lights, skybox; owned by nobody who looks at it. Viewport (viewport.h) =
               "draw this Scene from this camera into this picture" + a 2D Canvas over it (like Godot's SubViewport):
@@ -87,7 +98,7 @@ kit/wlw/kit/  wlw::kit: game-level building blocks shared by games (separate tar
               (UMP consent, load/show/retry); games add that dir to their sourceSets and depend on play-services-ads + UMP
 samples/      small games, built only when the engine is the top-level project (desktop):
               snake/ (Snake + its rules tests)
-tests/        engine unit tests (no window/GPU: systems (order, starting, Back), blending (depth-write rule, queues, back-to-front, canvas batches, images, falloff texture), viewports (scenes, sizes, update modes), anim, audio, core (random, atomic files, bridge queue), exact cover, search (bitboards, minimax, expectimax), gf2 (Lights Out), shader text splitting, lighting (light nodes, shadow-box fitting), fx, input, kit, picking, primitives, ui (canvas, safe area, widgets), screens); test data in tests/data/, also top-level only; ctest
+tests/        engine unit tests (no window/GPU: shader system (preprocessor, embedded files in every variant, std140 layout, lights, variants, UI kinds), systems (order, starting, Back), blending (depth-write rule, queues, back-to-front, canvas batches, images, falloff texture), viewports (scenes, sizes, update modes), anim, audio, core (random, atomic files, bridge queue), exact cover, search (bitboards, minimax, expectimax), gf2 (Lights Out), shader text splitting, lighting (light nodes, shadow-box fitting), fx, input, kit, picking, primitives, ui (canvas, safe area, widgets), screens); test data in tests/data/, also top-level only; ctest
 third_party/  glad (desktop only), stb, tinygltf + nlohmann json (also its own target wlw_json), miniaudio 0.11.25, stb_vorbis, Dear ImGui 1.92.9b (vendored)
 cmake/WLWHelpers.cmake  wlw_add_game(), wlw_add_assets(), wlw_set_warnings()
 vcpkg/ + vcpkg.json     desktop deps (glm, glfw3). Android fetches glm via FetchContent instead.
@@ -129,8 +140,9 @@ changes didn't break anything; keep it building when the engine API changes.
 
 ## Known gaps / tech debt
 - The glTF loader still reads files with `fopen`, so glTF models don't load from APK assets yet.
-- Only one directional light casts shadows (point/spot shadows need cube/perspective maps). A material's own
-  `Lighting` is the old way, used only when the scene has no light nodes (Snake).
+- Only one directional light casts shadows (point/spot shadows need cube/perspective maps).
+- glTF materials ignore baseColorFactor (materials have no colour yet; it used to go into the removed per-material light).
+- No shader program cache on disk yet (glProgramBinary): every launch compiles its variants (~25-60 ms on the emulator).
 - A viewport's default camera is an `FPSCamera`; games normally replace it with `SetCamera()`.
 - Shadows: one shadow map shared by every viewport (each viewport's shadow pass redraws it).
 - Touch input uses only the first finger (no multi-touch yet).

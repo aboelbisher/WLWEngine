@@ -165,11 +165,7 @@ namespace wlw::utils {
     for (const auto& gltfMat : model.materials) {
       std::shared_ptr<rendering::Material> material = rendering::Material::Create();
       material->name = gltfMat.name;
-      rendering::Lighting light_data{ .ambient_strength = 0.5f, .shininess = 32.0f };
-      if (gltfMat.pbrMetallicRoughness.baseColorFactor.size() == 4) {
-          light_data.color = { (float)gltfMat.pbrMetallicRoughness.baseColorFactor[0], (float)gltfMat.pbrMetallicRoughness.baseColorFactor[1], (float)gltfMat.pbrMetallicRoughness.baseColorFactor[2], (float)gltfMat.pbrMetallicRoughness.baseColorFactor[3] };
-      }
-      material->SetLighting(light_data);
+      material->shininess = 32.0f;  // light comes from the scene's light nodes (baseColorFactor isn't used yet)
       int texIdx = gltfMat.pbrMetallicRoughness.baseColorTexture.index;
       if (texIdx >= 0 && texIdx < (int)gpu_textures.size()) {
           material->SetTexture(gpu_textures[texIdx]);

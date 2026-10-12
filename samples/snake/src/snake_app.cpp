@@ -8,6 +8,7 @@
 #include <glm/glm.hpp>
 
 #include "wlw/core/log.h"
+#include "wlw/scene/light.h"
 #include "wlw/utils/primitives.h"
 
 namespace snake {
@@ -36,15 +37,14 @@ wlw::app::AppConfig SnakeApp::MakeConfig() {
 void SnakeApp::OnStart() {
   using namespace wlw;
 
-  rendering::Lighting sun;
-  sun.type = rendering::LightType::Directional;
-  // Tilted and with a tight highlight: seen from straight above, an overhead sun would put a
+  // Tilted, with a tight highlight: seen from straight above, an overhead sun would put a
   // specular highlight on every top face and wash the colours out.
-  sun.direction = {-0.5f, -1.0f, -0.7f};
-  sun.ambient_strength = 0.35f;
-  sun.shininess = 64.0f;
+  auto sun = std::make_shared<scene::DirectionalLight>();
+  sun->SetDirection({-0.5f, -1.0f, -0.7f});
+  sun->SetAmbient(0.35f);
+  App().Window().GetScreen().GetScene()->AddNode(sun);
   material_ = rendering::Material::Create();
-  material_->SetLighting(sun);
+  material_->shininess = 64.0f;
 
   head_model_ = MakeModel(utils::createCubeWithNormals(1.0f, Color{0.95f, 0.80f, 0.15f, 1.0f}));
   dead_head_model_ = MakeModel(utils::createCubeWithNormals(1.0f, Color{0.85f, 0.15f, 0.15f, 1.0f}));

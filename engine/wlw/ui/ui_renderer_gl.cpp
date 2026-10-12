@@ -12,6 +12,7 @@
 #include "wlw/platform/platform.h"
 #include "wlw/rendering/gl.h"
 #include "wlw/rendering/gl_blend.h"
+#include "wlw/rendering/gl_program.h"
 #include "wlw/rendering/gl_shader.h"
 #include "wlw/ui/ui_renderer.h"
 
@@ -19,89 +20,12 @@ namespace wlw::ui {
 
 namespace {
 
-constexpr const char* kVertexShader = R"(
-layout (location = 0) in vec2 aPos;
-layout (location = 1) in vec2 aUV;
-layout (location = 2) in vec4 aColor;
-layout (location = 3) in vec4 aParams;
-uniform mat4 uProjection;
-out vec2 vUV;
-out vec4 vColor;
-out vec4 vParams;
-void main() {
-    gl_Position = uProjection * vec4(aPos, 0.0, 1.0);
-    vUV = aUV;
-    vColor = aColor;
-    vParams = aParams;
-}
-)";
-
-// params.x picks the kind of quad:
-//   1 = SDF text: the atlas stores distance to the glyph edge (0.5 = edge); params.y is where to
-//       cut (lower = thicker, for outlines). fwidth() = how much the value changes per screen
-//       pixel, so the edge is anti-aliased over ~1 pixel at any text size.
-//   2 = rectangle with rounded corners: uv = position from the centre, params.yz = half size,
-//       params.w = radius. The signed distance to a rounded box is computed per pixel.
-//   4 = image: the bound texture (straight alpha, like image files) times the vertex colour.
-// Output is premultiplied alpha (rgb already multiplied by alpha): blends correctly, also when
-// layers of semi-transparent UI overlap.
-constexpr const char* kFragmentShader = R"(
-in vec2 vUV;
-in vec4 vColor;
-in vec4 vParams;
-uniform sampler2D uAtlas;
-out vec4 FragColor;
-void main() {
-    if (vParams.x > 3.5) {
-        vec4 texel = texture(uAtlas, vUV) * vColor;
-        FragColor = vec4(texel.rgb * texel.a, texel.a);
-        return;
-    }
-    float coverage;
-    if (vParams.x < 1.5) {
-        float d = texture(uAtlas, vUV).r;
-        float w = max(fwidth(d) * 0.7, 1e-4);
-        coverage = smoothstep(vParams.y - w, vParams.y + w, d);
-    } else {
-        vec2 q = abs(vUV) - vParams.yz + vParams.w;
-        float d = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - vParams.w;
-        coverage = clamp(0.5 - d / max(fwidth(d), 1e-4), 0.0, 1.0);
-    }
-    float a = vColor.a * coverage;
-    FragColor = vec4(vColor.rgb * a, a);
-}
-)";
-
-GLuint Compile(GLenum type, const char* source) {
-  const GLuint shader = glCreateShader(type);
-  const char* sources[] = {rendering::kGLSLHeader, source};
-  glShaderSource(shader, 2, sources, nullptr);
-  glCompileShader(shader);
-  GLint ok = GL_FALSE;
-  glGetShaderiv(shader, GL_COMPILE_STATUS, &ok);
-  if (ok != GL_TRUE) {
-    char log[1024];
-    glGetShaderInfoLog(shader, sizeof(log), nullptr, log);
-    WLW_LOG_ERROR("UI shader failed to compile:\n%s", log);
-    glDeleteShader(shader);
-    return 0;
-  }
-  return shader;
-}
-
 class GLUIRenderer : public UIRenderer {
  public:
   GLUIRenderer() {
-    const GLuint vs = Compile(GL_VERTEX_SHADER, kVertexShader);
-    const GLuint fs = Compile(GL_FRAGMENT_SHADER, kFragmentShader);
-    program_ = glCreateProgram();
-    if (vs) glAttachShader(program_, vs);
-    if (fs) glAttachShader(program_, fs);
-    glLinkProgram(program_);
-    if (vs) glDeleteShader(vs);
-    if (fs) glDeleteShader(fs);
+    program_ = rendering::BuildEngineProgram("ui.vert", "ui.frag");  // shaders/ui.{vert,frag}
     projection_location_ = glGetUniformLocation(program_, "uProjection");
-    atlas_location_ = glGetUniformLocation(program_, "uAtlas");
+    atlas_location_ = glGetUniformLocation(program_, "uTexture");
 
     glGenVertexArrays(1, &vao_);
     glGenBuffers(1, &vbo_);

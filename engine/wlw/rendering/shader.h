@@ -18,7 +18,9 @@ namespace wlw::rendering {
 //   }
 //   void vertex() { ... }          // optional, mesh shaders only: sets gl_Position and the v* outputs
 //
-// The engine declares its inputs before the text and adds main(). Each stage gets the whole text
+// The engine declares its inputs before the text (shaders/custom/*) and adds main(). The text may
+// #include shader files: the engine's (wlw/lighting.glsl, wlw/shadows.glsl, wlw/common.glsl,
+// wlw/color.glsl; see shader_library.h) and the game's own (AddShaderFile). Each stage gets the whole text
 // minus the other stage's function, so shared helpers must compile in both stages when there is a
 // vertex(): keep fragment-only built-ins (dFdx, fwidth, gl_FragCoord) inside fragment().
 // Error line numbers match the game's text.
@@ -30,7 +32,8 @@ namespace wlw::rendering {
 //   out vec4 FragColor;   // premultiplied alpha (rgb * a), like the rest of the UI
 //
 // Mesh shaders. Without vertex() the engine's does the usual transform (instancing included).
-//   Both stages:          uniform mat4 uModel, uView, uProjection; uniform vec3 uCameraPos;
+//   Both stages:          uniform mat4 uModel; the frame block (wlw/frame.glsl): uView, uProjection,
+//                         uViewProjection, uCameraPos (vec3), the lights, the shadow light...
 //   vertex() gets:        in aPos, aColor (vec4), aNormal, aUV; aInstanceTransform (mat4),
 //                         aInstanceTint (vec4); uniform bool uInstanced;
 //                         sets gl_Position and out vWorldPos, vNormal, vUV, vColor.
@@ -38,8 +41,10 @@ namespace wlw::rendering {
 //                         in vec2 vUV; in vec4 vColor; out vec4 FragColor;
 //                         FragColor is premultiplied alpha (rgb * a); it only blends if the
 //                         material's `blend` isn't Opaque (see blend_mode.h).
-//   The scene's lights and shadows aren't passed in (yet): light it in the shader. In the shadow
-//   pass the node is drawn as its plain mesh (a vertex() that moves vertices isn't seen there).
+//   Lighting: #include "wlw/lighting.glsl" and multiply by SceneLighting(vWorldPos,
+//   normalize(vNormal), ViewDirection(vWorldPos), shininess, 1.0): the scene's lights, like the
+//   engine's shader. In the shadow pass the node is drawn as its plain mesh (a vertex() that
+//   moves vertices isn't seen there).
 class Shader {
  public:
   enum class Target { Mesh, Canvas };

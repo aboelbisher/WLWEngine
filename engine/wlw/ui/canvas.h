@@ -51,6 +51,10 @@ struct TextStyle {
   }
 };
 
+// What the UI shader (shaders/ui.frag) draws for a quad: UIVertex::params.x. The values are ui.frag's
+// KIND_* defines (a test checks they agree); Shader quads are drawn by their material instead.
+enum class QuadKind : int { Text = 1, Rect = 2, Shader = 3, Image = 4 };
+
 // What the GPU gets per corner of a quad (see the UI shader in ui_renderer_gl.cpp).
 struct UIVertex {
   glm::vec2 position{0.0f};  // Canvas units
