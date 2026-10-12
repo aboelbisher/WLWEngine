@@ -1,4 +1,5 @@
-// Tests for the UI layer's CPU side: font baking, text measuring/layout, Canvas units and batching
+// Tests for the UI layer's CPU side: font baking, text measuring/layout, Canvas units and batching,
+// the safe area, widgets
 // (incl. ShaderRect), a ShaderMaterial's params.
 // (Drawing itself needs a GPU; these check everything that's computed before it.)
 #include <cmath>
@@ -11,6 +12,8 @@
 #include "wlw/ui/canvas.h"
 #include "wlw/ui/font.h"
 #include "wlw/ui/layout.h"
+#include "wlw/ui/ui_context.h"
+#include "wlw/ui/widgets.h"
 
 using namespace wlw::ui;
 
@@ -67,20 +70,22 @@ static void TestCanvasUnits() {
   wlw::platform::SafeAreaInsets insets;
   insets.top = 100.0f;    // status bar / camera cutout
   insets.bottom = 54.0f;  // gesture bar
-  canvas.BeginFrame({1080.0f, 2400.0f}, insets, {400.0f, 720.0f});
+  canvas.BeginFrame({1080.0f, 2400.0f}, {400.0f, 720.0f});
   CHECK(Near(canvas.PixelsPerUnit(), 2.7f));         // the width limits: 1080 / 400
   CHECK(Near(canvas.Size().x, 400.0f) && Near(canvas.Size().y, 2400.0f / 2.7f, 1e-2f));
-  CHECK(Near(canvas.SafeArea().min.y, 100.0f / 2.7f, 1e-3f));
-  CHECK(Near(canvas.SafeArea().max.y, (2400.0f - 54.0f) / 2.7f, 1e-2f));
+  // The safe area (the UI layer's): the insets, converted to canvas units.
+  const Rect safe = SafeAreaFor(canvas, insets);
+  CHECK(Near(safe.min.y, 100.0f / 2.7f, 1e-3f) && Near(safe.min.x, 0.0f));
+  CHECK(Near(safe.max.y, (2400.0f - 54.0f) / 2.7f, 1e-2f) && Near(safe.max.x, 400.0f));
   CHECK(Near(canvas.FromPixels({270.0f, 0.0f}).x, 100.0f));
 
-  canvas.BeginFrame({2400.0f, 1080.0f}, {}, {400.0f, 720.0f});  // landscape: the height limits
+  canvas.BeginFrame({2400.0f, 1080.0f}, {400.0f, 720.0f});  // landscape: the height limits
   CHECK(Near(canvas.PixelsPerUnit(), 1.5f));
 }
 
 static void TestCanvasTextAndBatches(const Font& font_a) {
   Canvas canvas;
-  canvas.BeginFrame({400.0f, 800.0f}, {}, {400.0f, 800.0f});
+  canvas.BeginFrame({400.0f, 800.0f}, {400.0f, 800.0f});
 
   canvas.Text(font_a, "123", {200.0f, 50.0f}, 40.0f, Align::Center);
   CHECK(canvas.QuadCount() == 3);
@@ -100,7 +105,7 @@ static void TestCanvasTextAndBatches(const Font& font_a) {
   CHECK(canvas.Batches().size() == 2 && canvas.Batches()[1].first_quad == 6);
 
   // Outline and shadow are extra copies of the glyphs, drawn first (behind).
-  canvas.BeginFrame({400.0f, 800.0f}, {}, {400.0f, 800.0f});
+  canvas.BeginFrame({400.0f, 800.0f}, {400.0f, 800.0f});
   TextStyle style;
   style.outline = 0.06f;
   style.shadow_offset = {2.0f, 3.0f};
@@ -117,7 +122,7 @@ static void TestCanvasTextAndBatches(const Font& font_a) {
 
 static void TestCanvasLine() {
   Canvas canvas;
-  canvas.BeginFrame({400.0f, 800.0f}, {}, {400.0f, 800.0f});
+  canvas.BeginFrame({400.0f, 800.0f}, {400.0f, 800.0f});
   canvas.Line({10.0f, 20.0f}, {30.0f, 20.0f}, 4.0f, {1, 1, 1, 1});  // horizontal, 20 long
   CHECK(canvas.QuadCount() == 1);
   const auto& v = canvas.Vertices();
@@ -145,15 +150,14 @@ static void TestLayoutAndToggle(const Font& font) {
   CHECK(Near(middle.min.x, 35.0f) && Near(middle.max.x, 65.0f));
 
   Canvas canvas;
-  canvas.BeginFrame({400.0f, 800.0f}, {}, {400.0f, 800.0f});
-  PointerState tap;
-  tap.position = {50.0f, 25.0f};
-  tap.pressed = tap.released = true;
-  canvas.SetPointer(tap);
+  canvas.BeginFrame({400.0f, 800.0f}, {400.0f, 800.0f});
+  UIContext ui(canvas);
+  ui.pointer.position = {50.0f, 25.0f};
+  ui.pointer.pressed = ui.pointer.released = true;
   bool sound = true;
-  CHECK(canvas.Toggle(font, "SOUND", sound, area) && !sound);  // clicked: flipped
-  canvas.SetPointer({});
-  CHECK(!canvas.Toggle(font, "SOUND", sound, area) && !sound);  // not clicked: unchanged
+  CHECK(Toggle(ui, font, "SOUND", sound, area) && !sound);  // clicked: flipped
+  ui.pointer = {};
+  CHECK(!Toggle(ui, font, "SOUND", sound, area) && !sound);  // not clicked: unchanged
 }
 
 // A ShaderMaterial's params: stored by name, set again = replaced (no GPU needed).
@@ -172,7 +176,7 @@ static void TestMaterialParams() {
 // A ShaderRect is one quad in a run of its own, with uv 0..1, between the runs around it.
 static void TestCanvasShaderRect() {
   Canvas canvas;
-  canvas.BeginFrame({400.0f, 800.0f}, {}, {400.0f, 800.0f});
+  canvas.BeginFrame({400.0f, 800.0f}, {400.0f, 800.0f});
   auto material = wlw::rendering::ShaderMaterial::Create(nullptr);  // no shader: no GPU needed
   canvas.FillRect({{0.0f, 0.0f}, {10.0f, 10.0f}}, {1, 1, 1, 1});
   canvas.ShaderRect({{20.0f, 30.0f}, {120.0f, 80.0f}}, material, {1.0f, 0.0f, 0.0f, 1.0f});

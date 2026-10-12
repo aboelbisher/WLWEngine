@@ -5,6 +5,7 @@
 #include "wlw/platform/bridge.h"
 #include "wlw/platform/platform.h"
 #include "wlw/ui/canvas.h"
+#include "wlw/ui/ui_context.h"
 #if WLW_DEBUG_UI
 #include "imgui.h"
 #include "wlw/debug/debug_ui.h"
@@ -32,6 +33,7 @@ int Application::Run() {
     return 1;
   }
   audio_ = std::make_unique<audio::Audio>();
+  ui_ = std::make_unique<ui::UIContext>(window_->GetScreen().GetCanvas());
 #if WLW_DEBUG_UI
   debug_ui_ = std::make_unique<debug::DebugUI>(*window_);  // needs the GL context Start() made
 #endif
@@ -120,11 +122,12 @@ void Application::BuildUI() {
   // when proportioned like the screen); the game draws into them during OnRenderUI.
   for (const auto& [_, viewport] : window_->GetViewports()) {
     const glm::ivec2 pixels = viewport->PixelSize({framebuffer.x, framebuffer.y});
-    viewport->GetCanvas().BeginFrame(glm::vec2(pixels), {}, reference);
+    viewport->GetCanvas().BeginFrame(glm::vec2(pixels), reference);
   }
 
-  ui::Canvas& canvas = window_->GetScreen().GetCanvas();  // the game UI, over the screen's scene
-  canvas.BeginFrame({framebuffer.x, framebuffer.y}, platform::GetSafeAreaInsets(), reference);
+  ui::Canvas& canvas = ui_->canvas;  // the game UI: the screen's canvas, over its scene
+  canvas.BeginFrame({framebuffer.x, framebuffer.y}, reference);
+  ui_->safe_area = ui::SafeAreaFor(canvas, platform::GetSafeAreaInsets());
 
   // The pointer for UI widgets, in Canvas units: pointer units -> framebuffer pixels -> units.
   // Uses the normal (blockable) queries, so the debug UI still takes precedence.
@@ -138,10 +141,10 @@ void Application::BuildUI() {
   pointer.down = input.IsPointerDown();
   pointer.pressed = input.WasPointerPressed();
   pointer.released = input.WasPointerReleased();
-  canvas.SetPointer(pointer);
+  ui_->pointer = pointer;
 
-  OnRenderUI(canvas);
-  screens_.RenderUI(canvas);
+  OnRenderUI(*ui_);
+  screens_.RenderUI(*ui_);
   if (const float fade = screens_.FadeAmount(); fade > 0.0f) {  // screen transitions
     canvas.FillRect({{0.0f, 0.0f}, canvas.Size()}, {0.0f, 0.0f, 0.0f, fade});
   }

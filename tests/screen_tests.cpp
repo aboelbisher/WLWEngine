@@ -1,4 +1,4 @@
-// Tests for game states (app::ScreenStack) and the immediate-mode ui::Canvas::Button.
+// Tests for game states (app::ScreenStack) and the immediate-mode ui::Button (widgets.h).
 #include <memory>
 #include <string>
 #include <vector>
@@ -6,6 +6,8 @@
 #include "check.h"
 #include "wlw/app/screen.h"
 #include "wlw/ui/canvas.h"
+#include "wlw/ui/ui_context.h"
+#include "wlw/ui/widgets.h"
 
 using wlw::app::Screen;
 using wlw::app::ScreenStack;
@@ -182,48 +184,51 @@ static void TestClearExitsEveryone() {
 
 // ---- Buttons ----
 
-static void Frame(wlw::ui::Canvas& canvas, glm::vec2 at, bool down, bool pressed, bool released) {
-  canvas.BeginFrame({400.0f, 800.0f}, {}, {400.0f, 800.0f});  // 1 unit = 1 pixel
+static void Frame(wlw::ui::UIContext& ui, glm::vec2 at, bool down, bool pressed, bool released) {
+  ui.canvas.BeginFrame({400.0f, 800.0f}, {400.0f, 800.0f});  // 1 unit = 1 pixel
+  ui.interactive = true;
   wlw::ui::PointerState pointer;
   pointer.position = at;
   pointer.down = down;
   pointer.pressed = pressed;
   pointer.released = released;
-  canvas.SetPointer(pointer);
+  ui.pointer = pointer;
 }
 
 static void TestButtonClicks(const wlw::ui::Font& font) {
   wlw::ui::Canvas canvas;
+  wlw::ui::UIContext ui(canvas);
+  using wlw::ui::Button;
   const wlw::ui::Rect play{{100.0f, 100.0f}, {300.0f, 160.0f}};
   const wlw::ui::Rect quit{{100.0f, 200.0f}, {300.0f, 260.0f}};
   const glm::vec2 on_play(200.0f, 130.0f), on_quit(200.0f, 230.0f), nowhere(10.0f, 10.0f);
 
   // Press and release on it (over two frames): one click, on release.
-  Frame(canvas, on_play, true, true, false);
-  CHECK(!canvas.Button(font, "PLAY", play));
-  Frame(canvas, on_play, false, false, true);
-  CHECK(canvas.Button(font, "PLAY", play));
-  CHECK(!canvas.Button(font, "QUIT", quit));
+  Frame(ui, on_play, true, true, false);
+  CHECK(!Button(ui, font, "PLAY", play));
+  Frame(ui, on_play, false, false, true);
+  CHECK(Button(ui, font, "PLAY", play));
+  CHECK(!Button(ui, font, "QUIT", quit));
 
   // A quick tap inside one frame still counts.
-  Frame(canvas, on_play, false, true, true);
-  CHECK(canvas.Button(font, "PLAY", play));
+  Frame(ui, on_play, false, true, true);
+  CHECK(Button(ui, font, "PLAY", play));
 
   // Press on it, slide off, release: cancelled. Press elsewhere, release on it: nothing.
-  Frame(canvas, on_play, true, true, false);
-  canvas.Button(font, "PLAY", play);
-  Frame(canvas, nowhere, false, false, true);
-  CHECK(!canvas.Button(font, "PLAY", play));
-  Frame(canvas, on_quit, true, true, false);
-  canvas.Button(font, "PLAY", play);
-  Frame(canvas, on_play, false, false, true);
-  CHECK(!canvas.Button(font, "PLAY", play));
+  Frame(ui, on_play, true, true, false);
+  Button(ui, font, "PLAY", play);
+  Frame(ui, nowhere, false, false, true);
+  CHECK(!Button(ui, font, "PLAY", play));
+  Frame(ui, on_quit, true, true, false);
+  Button(ui, font, "PLAY", play);
+  Frame(ui, on_play, false, false, true);
+  CHECK(!Button(ui, font, "PLAY", play));
 
   // Not interactive (a screen that isn't on top): drawn, but never clicked.
-  Frame(canvas, on_play, false, true, true);
-  canvas.SetInteractive(false);
+  Frame(ui, on_play, false, true, true);
+  ui.interactive = false;
   const size_t quads_before = canvas.QuadCount();
-  CHECK(!canvas.Button(font, "PLAY", play));
+  CHECK(!Button(ui, font, "PLAY", play));
   CHECK(canvas.QuadCount() > quads_before);
 }
 

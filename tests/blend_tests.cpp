@@ -103,7 +103,7 @@ static void TestBackToFront() {
 static void TestCanvasBlendPerDraw() {
   auto dot = std::make_shared<FakeTexture>();
   ui::Canvas canvas;
-  canvas.BeginFrame({1000.0f, 1000.0f}, {}, {1000.0f, 1000.0f});
+  canvas.BeginFrame({1000.0f, 1000.0f}, {1000.0f, 1000.0f});
 
   // UI shapes are Alpha; an image says its own mode; no state carries over between calls.
   canvas.FillRect({{0, 0}, {10, 10}}, {1, 1, 1, 1});
@@ -126,7 +126,7 @@ static void TestShaderMaterialBlend() {
 
   // A ShaderRect blends as its material says.
   ui::Canvas canvas;
-  canvas.BeginFrame({1000.0f, 1000.0f}, {}, {1000.0f, 1000.0f});
+  canvas.BeginFrame({1000.0f, 1000.0f}, {1000.0f, 1000.0f});
   canvas.ShaderRect({{0, 0}, {100, 100}}, canvas_material);
   canvas_material->blend = BlendMode::Additive;
   canvas.ShaderRect({{0, 0}, {100, 100}}, canvas_material);
@@ -138,7 +138,7 @@ static void TestImageBatching() {
   auto dot = std::make_shared<FakeTexture>();
   auto other = std::make_shared<FakeTexture>();
   ui::Canvas canvas;
-  canvas.BeginFrame({1000.0f, 1000.0f}, {}, {1000.0f, 1000.0f});
+  canvas.BeginFrame({1000.0f, 1000.0f}, {1000.0f, 1000.0f});
 
   // Thousands of sprites with one texture: one draw call, and rectangles join it.
   canvas.FillRect({{0, 0}, {10, 10}}, {1, 1, 1, 1});
@@ -159,7 +159,7 @@ static void TestImageBatching() {
   CHECK(canvas.Batches().size() == 4 && canvas.Batches()[3].font == nullptr);
 
   // Vertices: the rect's corners, the uv sub-rectangle, the tint, kind 4 (image).
-  canvas.BeginFrame({1000.0f, 1000.0f}, {}, {1000.0f, 1000.0f});
+  canvas.BeginFrame({1000.0f, 1000.0f}, {1000.0f, 1000.0f});
   canvas.Image({{10, 20}, {30, 60}}, dot, {.tint = {0.2f, 0.4f, 1.0f, 0.5f}, .uv = {{0.5f, 0.0f}, {1.0f, 0.5f}}});
   const auto& v = canvas.Vertices();
   CHECK(canvas.QuadCount() == 1);

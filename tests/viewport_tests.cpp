@@ -168,8 +168,8 @@ static void TestCanvasMatchesScreenUnits() {
   const glm::vec2 screen{1080.0f, 2400.0f};
   const glm::vec2 reference{360.0f, 640.0f};
   ui::Canvas screen_canvas;
-  screen_canvas.BeginFrame(screen, {}, reference);
-  view->GetCanvas().BeginFrame(glm::vec2(view->PixelSize(screen)), {}, reference);
+  screen_canvas.BeginFrame(screen, reference);
+  view->GetCanvas().BeginFrame(glm::vec2(view->PixelSize(screen)), reference);
   CHECK(Near(view->GetCanvas().Size().x, screen_canvas.Size().x, 0.01f));
   CHECK(Near(view->GetCanvas().Size().y, screen_canvas.Size().y, 0.01f));
   CHECK(Near(view->GetCanvas().PixelsPerUnit() * 2.0f, screen_canvas.PixelsPerUnit(), 0.01f));

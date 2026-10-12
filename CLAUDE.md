@@ -60,14 +60,16 @@ engine/wlw/
               Camera3D::ScreenPointToRay for picking, fed with Input::SurfaceSize()).
               Lights are nodes (light.h: DirectionalLight / PointLight / SpotLight, added with AddNode); nodes opt in to
               SetCastsShadow / SetReceivesShadow; shadow_map.h fits the light's box to the casters (texel-snapped)
-  ui/         2D UI layer: Font (TTF -> SDF atlas, stb_truetype), Canvas (virtual units, safe area, text,
-              rounded rects, batched quads, ShaderRect = a rect drawn by a material's shader), UIRenderer (GL).
-              Canvas::Image(rect, texture, ImageStyle{tint, uv, blend}) = sprites (batched by texture + blend: 1000s = 1 draw
-              call). Blending belongs to what you draw with: Image's style, ShaderRect's material (canvas shaders default
-              Alpha, mesh shaders Opaque), UI shapes Alpha; no canvas-wide state. Canvas = primitives; shapes come from helpers.
-              Canvas::Button/Toggle/Panel = immediate-mode widgets,
-              layout.h (Centered, Inset, Row, Column). Games draw in Application::OnRenderUI() (the canvas is
-              Window::GetScreen().GetCanvas(); an offscreen viewport's canvas is drawn into its texture)
+  ui/         Two layers, like the big engines (Godot RenderingServer canvas vs Control nodes, Slate draw elements vs UMG):
+              A. Canvas = the 2D DRAW LIST only: virtual units (reference size fits the screen), FillRect (rounded), Line,
+                 Text (Font: TTF -> SDF atlas), Image(rect, texture, ImageStyle{tint, uv, blend}) = sprites, ShaderRect (a
+                 rect drawn by a material's shader). Batched by texture + blend (1000s of sprites = 1 draw call); UIRenderer
+                 (GL) draws it. Blending belongs to what you draw with: Image's style, ShaderRect's material (canvas shaders
+                 default Alpha, mesh shaders Opaque), UI shapes Alpha. No widgets, input or screen geometry in it.
+              C. The UI layer: UIContext (ui_context.h: canvas + pointer + safe_area + interactive + widget memory; Application
+                 owns one and passes it to OnRenderUI(ui) / Screen::RenderUI(ui)), widgets.h (Button, Toggle: immediate mode,
+                 take the UIContext; Panel: drawing only), layout.h (Centered, Inset, Row, Column).
+              The UI canvas is Window::GetScreen().GetCanvas(); an offscreen viewport's canvas is drawn into its texture.
   utils/      image/glTF loaders, texture cache, primitives.h (procedural cube, bevelled cube, sphere, gem meshes),
               textures.h (procedural textures: RadialFalloffTexture = a soft (1-d²)² dot for glows, particles, metaballs)
 kit/wlw/kit/  wlw::kit: game-level building blocks shared by games (separate target on top of the engine; the
@@ -79,7 +81,7 @@ kit/wlw/kit/  wlw::kit: game-level building blocks shared by games (separate tar
               (UMP consent, load/show/retry); games add that dir to their sourceSets and depend on play-services-ads + UMP
 samples/      small games, built only when the engine is the top-level project (desktop):
               snake/ (Snake + its rules tests)
-tests/        engine unit tests (no window/GPU: blending (depth-write rule, queues, back-to-front, canvas batches, images, falloff texture), viewports (scenes, sizes, update modes), anim, audio, core (random, atomic files, bridge queue), exact cover, search (bitboards, minimax, expectimax), gf2 (Lights Out), shader text splitting, lighting (light nodes, shadow-box fitting), fx, input, kit, picking, primitives, ui, screens); test data in tests/data/, also top-level only; ctest
+tests/        engine unit tests (no window/GPU: blending (depth-write rule, queues, back-to-front, canvas batches, images, falloff texture), viewports (scenes, sizes, update modes), anim, audio, core (random, atomic files, bridge queue), exact cover, search (bitboards, minimax, expectimax), gf2 (Lights Out), shader text splitting, lighting (light nodes, shadow-box fitting), fx, input, kit, picking, primitives, ui (canvas, safe area, widgets), screens); test data in tests/data/, also top-level only; ctest
 third_party/  glad (desktop only), stb, tinygltf + nlohmann json (also its own target wlw_json), miniaudio 0.11.25, stb_vorbis, Dear ImGui 1.92.9b (vendored)
 cmake/WLWHelpers.cmake  wlw_add_game(), wlw_add_assets(), wlw_set_warnings()
 vcpkg/ + vcpkg.json     desktop deps (glm, glfw3). Android fetches glm via FetchContent instead.

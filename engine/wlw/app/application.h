@@ -18,6 +18,7 @@ class Audio;
 }  // namespace audio
 namespace ui {
 class Canvas;
+struct UIContext;
 }  // namespace ui
 namespace debug {
 class DebugUI;
@@ -42,7 +43,7 @@ struct AppConfig {
 //   OnFixedUpdate(step)  x N   <- game logic / physics, always with the same dt
 //   OnUpdate(frame_time)       <- per-frame work: input, camera
 //   OnRender(alpha)            <- push the latest state to the scene, interpolated by alpha
-//   OnRenderUI(canvas)         <- 2D UI over the scene
+//   OnRenderUI(ui)             <- 2D UI over the scene (ui.canvas, widgets from ui/widgets.h)
 //   OnDebugUI()                <- debug panels (WLW_DEBUG_UI builds, while the debug UI is open)
 //   draw + present, then poll input for the next frame; apply screen changes
 class Application {
@@ -69,7 +70,7 @@ class Application {
   virtual void OnRender(float alpha) {}
   // Called once per frame after OnRender: draw the 2D UI (HUD, menus) on the canvas. It's drawn
   // over the 3D scene, in Canvas units (see ui::Canvas).
-  virtual void OnRenderUI(ui::Canvas& canvas) {}
+  virtual void OnRenderUI(ui::UIContext& ui) {}
   // Called once after the loop ends, while the engine is still alive.
   virtual void OnShutdown() {}
   // Back (Android) / Escape (desktop) that no screen handled. Return true if handled; otherwise
@@ -117,6 +118,7 @@ class Application {
   std::unique_ptr<WLWEngine> engine_;
   std::shared_ptr<scene::Window> window_;
   std::unique_ptr<audio::Audio> audio_;
+  std::unique_ptr<ui::UIContext> ui_;  // the UI layer over the screen's canvas (pointer, safe area, widget state)
   app::ScreenStack screens_;  // emptied at the end of Run(), while the game's members still exist
 #if WLW_DEBUG_UI
   void DrawEngineDebugWindow();  // always shown while the debug UI is open: stats, ImGui demo

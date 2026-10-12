@@ -4,7 +4,7 @@
 #include <vector>
 
 namespace wlw::ui {
-class Canvas;
+struct UIContext;
 }
 
 namespace wlw::app {
@@ -32,7 +32,7 @@ class Screen {
   virtual void Update(float dt) {}
   // Every *visible* screen draws, bottom to top (see IsOverlay).
   virtual void Render(float alpha) {}
-  virtual void RenderUI(ui::Canvas& canvas) {}
+  virtual void RenderUI(ui::UIContext& ui) {}  // draw with ui.canvas, widgets from ui/widgets.h
   virtual void DebugUI() {}  // top screen only (WLW_DEBUG_UI builds)
 
   // Android Back / desktop Escape, top screen first. Return true if handled (e.g. a pause
@@ -84,7 +84,7 @@ class ScreenStack {
   void FixedUpdate(float dt);
   void Update(float dt);
   void Render(float alpha);
-  void RenderUI(ui::Canvas& canvas);
+  void RenderUI(ui::UIContext& ui);
   void DebugUI();
   bool Back();  // true if a screen handled it
   void AppPaused();

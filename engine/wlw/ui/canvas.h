@@ -8,7 +8,6 @@
 #include <glm/glm.hpp>
 
 #include "wlw/core/color.h"
-#include "wlw/platform/platform.h"
 #include "wlw/rendering/blend_mode.h"
 #include "wlw/rendering/shader_material.h"
 #include "wlw/ui/font.h"
@@ -22,23 +21,6 @@ struct Rect {
   glm::vec2 max{0.0f};
   glm::vec2 Center() const { return (min + max) * 0.5f; }
   glm::vec2 Size() const { return max - min; }
-};
-
-// How a ui::Canvas::Button looks.
-struct ButtonStyle {
-  core::Color fill{0.98f, 0.76f, 0.25f, 1.0f};
-  core::Color text{0.10f, 0.08f, 0.16f, 1.0f};
-  float text_size = 0.0f;  // 0 = 45% of the button height
-  float corner_radius = 14.0f;
-  core::Color shadow{0.0f, 0.0f, 0.0f, 0.35f};  // a darker slab under the button; alpha 0 = none
-};
-
-// The pointer as UI widgets see it this frame, in Canvas units (Application fills it in).
-struct PointerState {
-  glm::vec2 position{0.0f};
-  bool down = false;      // held
-  bool pressed = false;   // went down this frame
-  bool released = false;  // went up this frame
 };
 
 // How Canvas::Image draws its texture.
@@ -94,13 +76,16 @@ struct UIBatch {
 //
 // Coordinates are virtual units with (0, 0) top-left and y down. The screen is scaled so that
 // the app's reference size (AppConfig::ui_reference_size) fits on screen; the longer side gets
-// extra room, so lay out relative to Size() and SafeArea(), not to fixed numbers.
+// extra room, so lay out relative to Size() (and the UI's safe area: ui::UIContext), not to fixed
+// numbers.
+//
+// It only draws: widgets, input and screen geometry are the UI layer's (ui_context.h, widgets.h).
 class Canvas {
  public:
-  void BeginFrame(glm::vec2 framebuffer_pixels, const platform::SafeAreaInsets& insets_pixels, glm::vec2 reference);
+  // Empties it, sized for `framebuffer_pixels` with `reference` units fitting (see above).
+  void BeginFrame(glm::vec2 framebuffer_pixels, glm::vec2 reference);
 
-  glm::vec2 Size() const { return size_; }       // the whole screen, in units
-  Rect SafeArea() const { return safe_area_; }   // the part not covered by bars/cutouts
+  glm::vec2 Size() const { return size_; }       // the whole area it covers, in units
   float PixelsPerUnit() const { return pixels_per_unit_; }
   glm::vec2 FromPixels(glm::vec2 pixels) const { return pixels / pixels_per_unit_; }
 
@@ -128,25 +113,6 @@ class Canvas {
   // pass uv = {{0, 1}, {1, 0}}.
   void Image(const Rect& rect, const std::shared_ptr<rendering::WTexture2D>& texture, const ImageStyle& style = {});
 
-  // ---- Widgets ----
-  // An immediate-mode button: call it every frame you want it shown; it returns true on the
-  // frame it was clicked (pressed on it and released on it - sliding off cancels). It shrinks
-  // a little while held. Only responds while the canvas is interactive (see SetInteractive).
-  bool Button(const Font& font, std::string_view label, const Rect& rect, const ButtonStyle& style = {});
-  // An on/off switch drawn as a button reading "<label> ON" or "<label> OFF" (dimmed when off).
-  // Flips `value` and returns true on the frame it was clicked.
-  bool Toggle(const Font& font, std::string_view label, bool& value, const Rect& rect, const ButtonStyle& style = {});
-  // A rounded box with a soft shadow under it: the background of dialogs and panels.
-  void Panel(const Rect& rect, const core::Color& fill, float corner_radius = 24.0f,
-             const core::Color& shadow = {0.0f, 0.0f, 0.0f, 0.35f});
-
-  void SetPointer(const PointerState& pointer) { pointer_ = pointer; }
-  const PointerState& Pointer() const { return pointer_; }
-  // ScreenStack turns this off while drawing screens that aren't on top: their buttons are
-  // visible but can't be clicked.
-  void SetInteractive(bool interactive) { interactive_ = interactive; }
-  bool Interactive() const { return interactive_; }
-
   const std::vector<UIVertex>& Vertices() const { return vertices_; }  // 4 per quad
   const std::vector<UIBatch>& Batches() const { return batches_; }
   size_t QuadCount() const { return vertices_.size() / 4; }
@@ -163,14 +129,10 @@ class Canvas {
   void AddText(const Font& font, std::string_view text, glm::vec2 pen, float size, const core::Color& color, float edge);
 
   glm::vec2 size_{1.0f};
-  Rect safe_area_;
   float pixels_per_unit_ = 1.0f;
   std::vector<UIVertex> vertices_;
   std::vector<UIBatch> batches_;
   std::vector<GlyphQuad> glyph_scratch_;  // reused: no allocation per Text() call
-  PointerState pointer_;
-  bool interactive_ = true;
-  uint64_t active_button_ = 0;  // the button the pointer went down on (0 = none); kept across frames
 };
 
 }  // namespace wlw::ui

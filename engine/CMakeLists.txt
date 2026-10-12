@@ -123,8 +123,11 @@ add_library(wlw STATIC
   wlw/ui/font.cpp
   wlw/ui/font.h
   wlw/ui/layout.h
+  wlw/ui/ui_context.h
   wlw/ui/ui_renderer.h
   wlw/ui/ui_renderer_gl.cpp
+  wlw/ui/widgets.cpp
+  wlw/ui/widgets.h
 
   wlw/utils/gltf_loader.cpp
   wlw/utils/gltf_loader.h

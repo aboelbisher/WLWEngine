@@ -2,7 +2,7 @@
 
 #include <algorithm>
 
-#include "wlw/ui/canvas.h"
+#include "wlw/ui/ui_context.h"
 
 namespace wlw::app {
 
@@ -60,13 +60,13 @@ void ScreenStack::Render(float alpha) {
   for (size_t i = FirstVisible(); i < screens_.size(); ++i) screens_[i]->Render(alpha);
 }
 
-void ScreenStack::RenderUI(ui::Canvas& canvas) {
+void ScreenStack::RenderUI(ui::UIContext& ui) {
   for (size_t i = FirstVisible(); i < screens_.size(); ++i) {
     // Widgets (ui::Button) only respond on the top screen, and not during a fade.
-    canvas.SetInteractive(i + 1 == screens_.size() && !Transitioning());
-    screens_[i]->RenderUI(canvas);
+    ui.interactive = i + 1 == screens_.size() && !Transitioning();
+    screens_[i]->RenderUI(ui);
   }
-  canvas.SetInteractive(true);
+  ui.interactive = true;
 }
 
 void ScreenStack::DebugUI() {
