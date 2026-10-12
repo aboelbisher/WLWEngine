@@ -18,7 +18,6 @@ class Audio;
 }  // namespace audio
 namespace ui {
 class Canvas;
-class UIRenderer;
 }  // namespace ui
 namespace debug {
 class DebugUI;
@@ -118,9 +117,6 @@ class Application {
   std::unique_ptr<WLWEngine> engine_;
   std::shared_ptr<scene::Window> window_;
   std::unique_ptr<audio::Audio> audio_;
-  std::unique_ptr<ui::Canvas> canvas_;
-  std::unique_ptr<ui::UIRenderer> ui_renderer_;  // GL objects: destroyed before the window/engine
-  int ui_overlay_id_ = -1;
   app::ScreenStack screens_;  // emptied at the end of Run(), while the game's members still exist
 #if WLW_DEBUG_UI
   void DrawEngineDebugWindow();  // always shown while the debug UI is open: stats, ImGui demo

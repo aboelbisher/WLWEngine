@@ -10,6 +10,7 @@
 #include "wlw/core/vertex_3d.h"
 #include "wlw/utils/image_loader.h"
 #include "wlw/rendering/shader.h"
+#include "wlw/rendering/render_target.h"
 #include "wlw/rendering/texture.h"
 
 namespace wlw::rendering {
@@ -34,6 +35,15 @@ public:
   // A game's shader from its text (see shader.h), for a ShaderMaterial. Never null; check IsValid()
   // (errors are logged).
   virtual std::shared_ptr<Shader> CreateShader(const std::string& code) = 0;
+
+  // An offscreen picture to draw into (see render_target.h); normally made by a scene::Viewport.
+  // A format the GPU can't draw into falls back to RGBA8, with a warning (see CanRenderTo).
+  virtual std::shared_ptr<RenderTarget> CreateRenderTarget(int width, int height,
+                                                           const RenderTargetSettings& settings = {}) = 0;
+  // Whether the GPU can draw into this format. The 8-bit ones always; R16F / RGBA16F need
+  // EXT_color_buffer_half_float (or EXT_color_buffer_float) on GLES 3.0, which nearly every phone
+  // has. Needs the GL context.
+  virtual bool CanRenderTo(TextureFormat format) const = 0;
 
   static std::unique_ptr<RenderDevice> Create();
 };

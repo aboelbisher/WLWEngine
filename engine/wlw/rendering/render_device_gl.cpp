@@ -2,7 +2,11 @@
 
 #include "wlw/rendering/gl.h"
 #include "render_device.h"
+#include <algorithm>
+#include <cstring>
 #include <vector>
+
+#include "wlw/core/log.h"
 
 #include "wlw/rendering/gl_index_buffer.h"
 #include "wlw/rendering/gl_shader.h"
@@ -91,6 +95,17 @@ public:
     if (mipmaps_) glGenerateMipmap(GL_TEXTURE_2D);
   }
 
+  // New storage at another size, contents undefined (a render target that is drawn over next).
+  // The texture object stays the same, so materials holding it keep working.
+  void Reallocate(int width, int height) {
+    width_ = width;
+    height_ = height;
+    const GLFormat gl = ToGL(format_);
+    glBindTexture(GL_TEXTURE_2D, gpu_id_);
+    glTexImage2D(GL_TEXTURE_2D, 0, gl.internal_format, width, height, 0, gl.format, gl.type, nullptr);
+    glBindTexture(GL_TEXTURE_2D, 0);
+  }
+
 private:
   bool mipmaps_ = false;
 };
@@ -130,6 +145,56 @@ public:
   }
 };
 
+// A framebuffer object: a colour texture (GLTexture2D, handed out as the target's texture) plus,
+// if asked for, a depth renderbuffer (never sampled, so it needn't be a texture).
+class GLRenderTarget : public RenderTarget {
+public:
+  GLRenderTarget(int width, int height, const RenderTargetSettings& settings) {
+    settings_ = settings;
+    color_ = std::make_shared<GLTexture2D>(1, 1, settings.format, settings.smooth, /*repeat=*/false,
+                                           /*mipmaps=*/false, nullptr);
+    texture_ = color_;
+    glGenFramebuffers(1, &framebuffer_id_);
+    if (settings.depth) glGenRenderbuffers(1, &depth_);
+    EnsureSize(width, height);
+  }
+
+  ~GLRenderTarget() override {
+    if (!platform::HasCurrentGLContext()) return;
+    glDeleteFramebuffers(1, &framebuffer_id_);
+    if (depth_) glDeleteRenderbuffers(1, &depth_);
+  }
+
+  void EnsureSize(int width, int height) override {
+    width = std::max(width, 1);
+    height = std::max(height, 1);
+    if (width == width_ && height == height_) return;
+    width_ = width;
+    height_ = height;
+    color_->Reallocate(width, height);
+    if (depth_) {
+      glBindRenderbuffer(GL_RENDERBUFFER, depth_);
+      glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, width, height);
+      glBindRenderbuffer(GL_RENDERBUFFER, 0);
+    }
+
+    GLint previous_framebuffer = 0;  // not always 0: the platform may draw into its own
+    glGetIntegerv(GL_FRAMEBUFFER_BINDING, &previous_framebuffer);
+    glBindFramebuffer(GL_FRAMEBUFFER, framebuffer_id_);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, color_->GetID(), 0);
+    if (depth_) glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depth_);
+    const GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+    glBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(previous_framebuffer));
+    if (status != GL_FRAMEBUFFER_COMPLETE) {
+      WLW_LOG_ERROR("Render target %d x %d incomplete (status 0x%x): it will stay empty", width, height, status);
+    }
+  }
+
+private:
+  std::shared_ptr<GLTexture2D> color_;
+  GLuint depth_ = 0;
+};
+
 class GLRenderDevice : public RenderDevice {
 public:
   std::unique_ptr<core::WVertexBuffer> CreateVertexBuffer(const std::vector<core::Vertex2D>& vertices) override {
@@ -161,6 +226,41 @@ public:
   std::shared_ptr<WCubemap> CreateCubemap(const std::array<utils::RawImage, 6>& faces) override {
     return std::make_shared<GLCubemap>(faces);
   }
+
+  std::shared_ptr<RenderTarget> CreateRenderTarget(int width, int height,
+                                                   const RenderTargetSettings& settings) override {
+    RenderTargetSettings checked = settings;
+    if (!CanRenderTo(checked.format)) {
+      WLW_LOG_WARN("This GPU can't draw into 16-bit float textures: render target falls back to RGBA8");
+      checked.format = TextureFormat::RGBA8;
+    }
+    return std::make_shared<GLRenderTarget>(width, height, checked);
+  }
+
+  bool CanRenderTo(TextureFormat format) const override {
+    if (format != TextureFormat::R16F && format != TextureFormat::RGBA16F) return true;
+#if defined(WLW_GLES)
+    if (half_float_renderable_ < 0) {  // asked once: the answer doesn't change
+      half_float_renderable_ = 0;
+      GLint count = 0;
+      glGetIntegerv(GL_NUM_EXTENSIONS, &count);
+      for (GLint i = 0; i < count; ++i) {
+        const auto* name = reinterpret_cast<const char*>(glGetStringi(GL_EXTENSIONS, static_cast<GLuint>(i)));
+        if (name && (std::strcmp(name, "GL_EXT_color_buffer_half_float") == 0 ||
+                     std::strcmp(name, "GL_EXT_color_buffer_float") == 0)) {
+          half_float_renderable_ = 1;
+          break;
+        }
+      }
+    }
+    return half_float_renderable_ == 1;
+#else
+    return true;  // desktop GL 3.3: float formats are colour-renderable in core
+#endif
+  }
+
+private:
+  mutable int half_float_renderable_ = -1;  // -1 = not asked yet
 };
 
 std::unique_ptr<RenderDevice> RenderDevice::Create() {

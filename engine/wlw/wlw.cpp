@@ -21,7 +21,7 @@ namespace wlw {
       if (platform::IsAlive()) {
         for (auto& [_, window] : windows_) {
           window->MakeContextCurrent();
-          window->ClearScene();        // frees meshes/textures nobody else holds
+          window->ReleaseScenes();     // frees meshes/textures/viewports nobody else holds
         }
       }
       rendering_driver_.reset();       // frees shaders, then shuts the platform down

@@ -20,6 +20,7 @@
 #include "wlw/rendering/gl_vertex_buffer.h"
 #include "wlw/scene/light.h"
 #include "wlw/scene/shadow_map.h"
+#include "wlw/ui/ui_renderer.h"
 
 namespace wlw::rendering {
 
@@ -168,6 +169,9 @@ public:
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
 
+    // Draws each viewport's 2D canvas (the screen's is the game UI).
+    ui_renderer_ = ui::UIRenderer::Create();
+
     glEnable(GL_DEPTH_TEST);
     return true;
 	}
@@ -188,17 +192,81 @@ public:
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
   }
 
+  // What one viewport draws, gathered from its scene before any drawing starts.
+  struct Frame {
+    std::vector<const scene::LightNode*> lights;  // visible light nodes, at most kMaxLights
+    std::vector<scene::Node3D*> drawables;         // visible nodes with something to draw
+    scene::AABB casters{}, receivers{};            // around every shadow caster / receiver
+    bool has_casters = false, has_receivers = false;
+    int shadow_light = -1;                         // index into lights
+  };
+
+  // One frame of a window: its offscreen viewports into their textures (in the order added, so
+  // one may use the picture of an earlier one), then the screen, the overlays, and present.
   void DrawWindow(std::shared_ptr<scene::Window> window) override {
     window->MakeContextCurrent();
 
-    auto size = window->GetSize();
-    auto camera = window->GetUpdatedCamera();
-    glm::mat4 view = camera->GetViewMatrix();
-    glm::mat4 proj = camera->GetProjectionMatrix();
+    GLint screen_framebuffer = 0;  // not always 0: the platform may draw into its own
+    glGetIntegerv(GL_FRAMEBUFFER_BINDING, &screen_framebuffer);
+    const glm::vec2 screen_pixels{window->GetSize().x, window->GetSize().y};
 
-    // --- 1. GATHER: lights, things to draw, and the bounds of everything shadows involve ---
+    for (const auto& [_, viewport] : window->GetViewports()) {
+      RenderTarget* target = viewport->GetTarget();
+      if (target == nullptr) continue;  // only the window's own GetScreen() draws to the screen
+      const glm::ivec2 pixels = viewport->PixelSize(screen_pixels);
+      if (!viewport->BeginDraw(pixels)) continue;
+      target->EnsureSize(pixels.x, pixels.y);
+      glBindFramebuffer(GL_FRAMEBUFFER, target->FramebufferId());
+      DrawViewport(*viewport, pixels, target->Settings().depth);
+    }
+
+    glBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(screen_framebuffer));
+    DrawViewport(window->GetScreen(), {static_cast<int>(screen_pixels.x), static_cast<int>(screen_pixels.y)},
+                 /*has_depth=*/true);
+    window->DrawOverlays();  // e.g. the debug UI: on top of everything
+
+    // Present the frame we just drew (previously the swap happened before drawing,
+    // so every frame was shown one frame late).
+    window->SwapBuffers();
+  }
+
+  // One viewport into the framebuffer that is bound: its scene through its camera (shadow pass,
+  // then the main pass), then its canvas over it.
+  void DrawViewport(scene::Viewport& viewport, glm::ivec2 pixels, bool has_depth) {
+    const std::shared_ptr<scene::Scene>& scene = viewport.GetScene();
+    const std::shared_ptr<scene::Camera3D>& camera = viewport.GetCamera();
+    const bool draw_scene = scene != nullptr && camera != nullptr;
+
+    // Gather + shadow pass first: the shadow pass draws into its own framebuffer.
     Frame frame;
-    window->IterateOver3DNodes([&frame](const std::shared_ptr<scene::Node3D>& node) {
+    scene::ShadowFrustum shadow_frustum;
+    if (draw_scene) {
+      if (pixels.x > 0 && pixels.y > 0) {  // a minimized window has no size
+        camera->UpdateSize({static_cast<float>(pixels.x), static_cast<float>(pixels.y)});
+      }
+      GatherScene(*scene, frame);
+      DrawShadows(frame, shadow_frustum);
+    }
+
+    SetViewport(0, 0, pixels.x, pixels.y);
+    glDepthMask(GL_TRUE);
+    GLbitfield clear_bits = has_depth ? GL_DEPTH_BUFFER_BIT : 0;
+    if (const auto& color = viewport.GetClearColor()) {
+      glClearColor(color->r, color->g, color->b, color->a);
+      clear_bits |= GL_COLOR_BUFFER_BIT;
+    }
+    if (clear_bits) glClear(clear_bits);
+
+    scene::RenderStats stats;
+    if (draw_scene) DrawMainPass(*scene, *camera, frame, shadow_frustum, stats);
+    viewport.SetRenderStats(stats);
+
+    ui_renderer_->Draw(viewport.GetCanvas(), {static_cast<float>(pixels.x), static_cast<float>(pixels.y)});
+  }
+
+  // --- 1. GATHER: lights, things to draw, and the bounds of everything shadows involve ---
+  void GatherScene(const scene::Scene& scene, Frame& frame) {
+    scene.IterateOverNodes([&frame](const std::shared_ptr<scene::Node3D>& node) {
       if (!node->IsVisibleInHierarchy()) return;
       if (const scene::LightNode* light = node->AsLight()) {
         if (static_cast<int>(frame.lights.size()) < scene::LightNode::kMaxLights) frame.lights.push_back(light);
@@ -223,9 +291,10 @@ public:
       }
       if (frame.shadow_light < 0) frame.shadow_light = i;
     }
+  }
 
-    // --- 2. SHADOW PASS: the depth of every caster, seen from the shadow light ---
-    scene::ShadowFrustum shadow_frustum;
+  // --- 2. SHADOW PASS: the depth of every caster, seen from the shadow light ---
+  void DrawShadows(Frame& frame, scene::ShadowFrustum& shadow_frustum) {
     if (frame.shadow_light >= 0 && frame.has_casters) {
       const scene::LightNode* light = frame.lights[frame.shadow_light];
       shadow_frustum = scene::FitDirectionalShadow(light->GetDirection(), frame.casters,
@@ -234,14 +303,16 @@ public:
     } else {
       frame.shadow_light = -1;
     }
+  }
 
-    // --- 3. MAIN PASS ---
-    SetViewport(0, 0, (int)size.x, (int)size.y);
-    Clear();
+  // --- 3. MAIN PASS: skybox, then every visible drawable, lit (and shadowed) ---
+  void DrawMainPass(const scene::Scene& scene, scene::Camera3D& camera, const Frame& frame,
+                    const scene::ShadowFrustum& shadow_frustum, scene::RenderStats& stats) {
+    glm::mat4 view = camera.GetViewMatrix();
+    glm::mat4 proj = camera.GetProjectionMatrix();
 
     // Skybox first.
-    auto skybox = window->GetSkybox();
-    if (skybox) {
+    if (const auto& skybox = scene.GetSkybox()) {
         glDisable(GL_DEPTH_TEST);
         glDepthMask(GL_FALSE);
         glDisable(GL_CULL_FACE);
@@ -264,7 +335,7 @@ public:
     glUseProgram(m_ShaderID_3D);
     glUniformMatrix4fv(m_Uniforms.view, 1, GL_FALSE, glm::value_ptr(view));
     glUniformMatrix4fv(m_Uniforms.projection, 1, GL_FALSE, glm::value_ptr(proj));
-    core::Vector3 camPos = camera->GetPosition();
+    core::Vector3 camPos = camera.GetPosition();
     frame_view_ = view;  // for custom shaders (UseCustomShader)
     frame_projection_ = proj;
     frame_camera_ = {camPos.x, camPos.y, camPos.z};
@@ -296,7 +367,6 @@ public:
 
     scene::Frustum frustum = scene::Frustum::FromMatrix(proj * view);
 
-    scene::Window::RenderStats stats;
     for (scene::Node3D* node : frame.drawables) {
       if (!frustum.TestAABB(node->GetAABB())) {
           ++stats.culled_nodes;
@@ -306,23 +376,7 @@ public:
       DrawNode(*node, /*shadow_pass=*/false, material_lights, stats);
     }
     glUniform1i(m_Uniforms.instanced, 0);
-    window->SetRenderStats(stats);
-
-    window->DrawOverlays();  // game UI, debug UI: on top of the scene
-
-    // Present the frame we just drew (previously the swap happened before drawing,
-    // so every frame was shown one frame late).
-    window->SwapBuffers();
   }
-
-  // What one frame draws, gathered from the scene before any drawing starts.
-  struct Frame {
-    std::vector<const scene::LightNode*> lights;  // visible light nodes, at most kMaxLights
-    std::vector<scene::Node3D*> drawables;         // visible nodes with something to draw
-    scene::AABB casters{}, receivers{};            // around every shadow caster / receiver
-    bool has_casters = false, has_receivers = false;
-    int shadow_light = -1;                         // index into lights
-  };
 
   static void Grow(scene::AABB& box, bool& has_box, const scene::AABB& add) {
     if (!has_box) {
@@ -336,7 +390,7 @@ public:
 
   // Draws one node's meshes with the program in use. In the shadow pass only geometry matters;
   // in the main pass each mesh's material sets its texture (and its light, when the scene has none).
-  void DrawNode(scene::Node3D& node, bool shadow_pass, bool material_lights, scene::Window::RenderStats& stats) {
+  void DrawNode(scene::Node3D& node, bool shadow_pass, bool material_lights, scene::RenderStats& stats) {
     const GLint model_location = shadow_pass ? shadow_uniforms_.model : m_Uniforms.model;
     const GLint instanced_location = shadow_pass ? shadow_uniforms_.instanced : m_Uniforms.instanced;
     glUniformMatrix4fv(model_location, 1, GL_FALSE, glm::value_ptr(node.GetModelMatrix()));
@@ -438,7 +492,7 @@ public:
     // A depth bias that grows with the surface's slope to the light: against "shadow acne".
     glEnable(GL_POLYGON_OFFSET_FILL);
     glPolygonOffset(1.5f, 3.0f);
-    scene::Window::RenderStats unused;
+    scene::RenderStats unused;
     for (scene::Node3D* node : frame.drawables) {
       if (node->CastsShadow()) DrawNode(*node, /*shadow_pass=*/true, false, unused);
     }
@@ -482,6 +536,7 @@ public:
     if (!complete) {
       WLW_LOG_ERROR("Shadow map framebuffer incomplete: shadows are off");
       DeleteShadowMap();
+      ui_renderer_.reset();
       shadow_failed_ = true;
       return false;
     }
@@ -680,6 +735,7 @@ private:
   glm::mat4 frame_projection_{1.0f};
   glm::vec3 frame_camera_{0.0f};
   std::shared_ptr<scene::Window> main_window_;
+  std::unique_ptr<ui::UIRenderer> ui_renderer_;
   RenderDevice* device_;
 };
 

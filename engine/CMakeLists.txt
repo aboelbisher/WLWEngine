@@ -89,6 +89,7 @@ add_library(wlw STATIC
   wlw/rendering/material_gl.cpp
   wlw/rendering/render_device.h
   wlw/rendering/render_device_gl.cpp
+  wlw/rendering/render_target.h
   wlw/rendering/rendering_driver.h
   wlw/rendering/rendering_driver_gl.cpp
   wlw/rendering/shader.cpp
@@ -107,9 +108,11 @@ add_library(wlw STATIC
   wlw/scene/light.h
   wlw/scene/node.h
   wlw/scene/orthographic_camera.h
+  wlw/scene/scene.h
   wlw/scene/shadow_map.h
   wlw/scene/triangle_2d.cpp
   wlw/scene/triangle_2d.h
+  wlw/scene/viewport.h
   wlw/scene/window.h
 
   wlw/ui/canvas.cpp

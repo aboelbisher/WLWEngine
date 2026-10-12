@@ -5,7 +5,6 @@
 #include "wlw/platform/bridge.h"
 #include "wlw/platform/platform.h"
 #include "wlw/ui/canvas.h"
-#include "wlw/ui/ui_renderer.h"
 #if WLW_DEBUG_UI
 #include "imgui.h"
 #include "wlw/debug/debug_ui.h"
@@ -23,9 +22,7 @@ Application::Application(AppConfig config)
       window_(scene::Window::Create(config_.window_size, config_.title)),
       timestep_(config_.fixed_timestep, config_.max_frame_time) {}
 
-Application::~Application() {
-  if (ui_overlay_id_ >= 0) window_->RemoveOverlay(ui_overlay_id_);
-}
+Application::~Application() = default;
 
 int Application::Run() {
   // Engine start happens here, not in the constructor: virtual hooks can't be called from a
@@ -35,13 +32,6 @@ int Application::Run() {
     return 1;
   }
   audio_ = std::make_unique<audio::Audio>();
-  // The game UI layer, drawn over the 3D scene (and under the debug UI, created next).
-  canvas_ = std::make_unique<ui::Canvas>();
-  ui_renderer_ = ui::UIRenderer::Create();
-  ui_overlay_id_ = window_->AddOverlay([this] {
-    const core::Vector2 framebuffer = window_->GetSize();
-    ui_renderer_->Draw(*canvas_, {framebuffer.x, framebuffer.y});
-  });
 #if WLW_DEBUG_UI
   debug_ui_ = std::make_unique<debug::DebugUI>(*window_);  // needs the GL context Start() made
 #endif
@@ -125,8 +115,16 @@ int Application::Run() {
 
 void Application::BuildUI() {
   const core::Vector2 framebuffer = window_->GetSize();
-  canvas_->BeginFrame({framebuffer.x, framebuffer.y}, platform::GetSafeAreaInsets(),
-                      {config_.ui_reference_size.x, config_.ui_reference_size.y});
+  const glm::vec2 reference{config_.ui_reference_size.x, config_.ui_reference_size.y};
+  // Offscreen viewports' canvases: emptied and sized to their viewport (same units as the UI's
+  // when proportioned like the screen); the game draws into them during OnRenderUI.
+  for (const auto& [_, viewport] : window_->GetViewports()) {
+    const glm::ivec2 pixels = viewport->PixelSize({framebuffer.x, framebuffer.y});
+    viewport->GetCanvas().BeginFrame(glm::vec2(pixels), {}, reference);
+  }
+
+  ui::Canvas& canvas = window_->GetScreen().GetCanvas();  // the game UI, over the screen's scene
+  canvas.BeginFrame({framebuffer.x, framebuffer.y}, platform::GetSafeAreaInsets(), reference);
 
   // The pointer for UI widgets, in Canvas units: pointer units -> framebuffer pixels -> units.
   // Uses the normal (blockable) queries, so the debug UI still takes precedence.
@@ -135,17 +133,17 @@ void Application::BuildUI() {
   ui::PointerState pointer;
   if (surface.x > 0.0f && surface.y > 0.0f) {
     const core::Vector2 p = input.PointerPosition();
-    pointer.position = canvas_->FromPixels({p.x * framebuffer.x / surface.x, p.y * framebuffer.y / surface.y});
+    pointer.position = canvas.FromPixels({p.x * framebuffer.x / surface.x, p.y * framebuffer.y / surface.y});
   }
   pointer.down = input.IsPointerDown();
   pointer.pressed = input.WasPointerPressed();
   pointer.released = input.WasPointerReleased();
-  canvas_->SetPointer(pointer);
+  canvas.SetPointer(pointer);
 
-  OnRenderUI(*canvas_);
-  screens_.RenderUI(*canvas_);
+  OnRenderUI(canvas);
+  screens_.RenderUI(canvas);
   if (const float fade = screens_.FadeAmount(); fade > 0.0f) {  // screen transitions
-    canvas_->FillRect({{0.0f, 0.0f}, canvas_->Size()}, {0.0f, 0.0f, 0.0f, fade});
+    canvas.FillRect({{0.0f, 0.0f}, canvas.Size()}, {0.0f, 0.0f, 0.0f, fade});
   }
 }
 
@@ -177,8 +175,26 @@ void Application::DrawEngineDebugWindow() {
   ImGui::SetNextWindowPos(ImVec2(8.0f, 8.0f), ImGuiCond_FirstUseEver);
   ImGui::Begin("Engine");
   ImGui::Text("%.0f fps, %.2f ms", fps_, frame_ms_);
-  const scene::Window::RenderStats& stats = window_->GetRenderStats();
+  const scene::RenderStats& stats = window_->GetScreen().GetRenderStats();
   ImGui::Text("%d draw calls, %d instances, %d culled", stats.draw_calls, stats.instances, stats.culled_nodes);
+  // Offscreen viewports: size, format, update mode, GPU memory of their texture, last frame's draws.
+  for (const auto& [_, viewport] : window_->GetViewports()) {
+    const rendering::RenderTarget* target = viewport->GetTarget();
+    if (target == nullptr) continue;
+    static constexpr const char* kModes[] = {"always", "once", "disabled"};
+    const bool half_float = target->Settings().format == rendering::TextureFormat::RGBA16F ||
+                            target->Settings().format == rendering::TextureFormat::R16F;
+    const int texel_bytes = target->Settings().format == rendering::TextureFormat::RGBA16F ? 8
+                            : target->Settings().format == rendering::TextureFormat::R16F  ? 2
+                            : target->Settings().format == rendering::TextureFormat::R8    ? 1
+                                                                                            : 4;
+    const float megabytes = static_cast<float>(target->Width()) * target->Height() *
+                            (texel_bytes + (target->Settings().depth ? 4 : 0)) / (1024.0f * 1024.0f);
+    const scene::RenderStats& vs = viewport->GetRenderStats();
+    ImGui::Text("%s: %d x %d %s, %s, %.1f MB, %d draws", viewport->Settings().name.c_str(), target->Width(),
+                target->Height(), half_float ? "16F" : "8-bit", kModes[static_cast<int>(viewport->GetUpdateMode())],
+                megabytes, vs.draw_calls);
+  }
   const core::Vector2 framebuffer = window_->GetSize();
   const core::Vector2 surface = window_->GetInput().SurfaceSize();
   ImGui::Text("Framebuffer %.0f x %.0f px", framebuffer.x, framebuffer.y);

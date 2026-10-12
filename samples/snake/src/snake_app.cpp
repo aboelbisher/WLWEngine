@@ -58,13 +58,13 @@ void SnakeApp::OnStart() {
   food_node_ = std::make_shared<scene::Node3D>();
   food_node_->SetModel(food_model_);
   food_node_->SetMaterial(material_);
-  Window().AddNode(food_node_);
+  Window().GetScreen().GetScene()->AddNode(food_node_);
 
   particle_node_ = std::make_shared<scene::Node3D>();
   particle_node_->SetModel(MakeModel(utils::createCubeWithNormals(1.0f)));  // white: tinted per particle
   particle_node_->SetMaterial(material_);
   particle_node_->SetInstances({});
-  Window().AddNode(particle_node_);
+  Window().GetScreen().GetScene()->AddNode(particle_node_);
 
   SetupCameras();
 
@@ -93,7 +93,7 @@ void SnakeApp::SetupCameras() {
   perspective_camera_ = scene::FollowCamera::Create(center_node);
   FitPerspectiveCameraToScreen();
 
-  Window().SetCamera(ortho_camera_);
+  Window().GetScreen().SetCamera(ortho_camera_);
 }
 
 void SnakeApp::BuildBoard() {
@@ -106,7 +106,7 @@ void SnakeApp::BuildBoard() {
       tile->SetMaterial(material_);
       tile->SetScale({1.0f, 0.1f, 1.0f});
       tile->SetPosition({(float)x, -0.05f, (float)z});
-      Window().AddNode(tile);
+      Window().GetScreen().GetScene()->AddNode(tile);
     }
   }
 }
@@ -180,9 +180,9 @@ void SnakeApp::ReadInput() {
   if (in.WasKeyPressed(Key::P)) {
     orthographic_ = !orthographic_;
     if (orthographic_) {
-      Window().SetCamera(ortho_camera_);
+      Window().GetScreen().SetCamera(ortho_camera_);
     } else {
-      Window().SetCamera(perspective_camera_);
+      Window().GetScreen().SetCamera(perspective_camera_);
     }
     WLW_LOG_INFO("Projection: %s", orthographic_ ? "orthographic (top-down)" : "perspective (tilted)");
   }
@@ -274,7 +274,7 @@ SnakeApp::NodePtr SnakeApp::AcquireSegmentNode(size_t index) {
     auto node = std::make_shared<wlw::scene::Node3D>();
     node->SetModel(body_model_);  // meshes/models are shared by all segments: one GPU copy
     node->SetMaterial(material_);
-    Window().AddNode(node);
+    Window().GetScreen().GetScene()->AddNode(node);
     segment_nodes_.push_back(node);
   }
   return segment_nodes_[index];
@@ -302,9 +302,9 @@ void SnakeApp::OnDebugUI() {
   ImGui::Checkbox("Interpolate", &interpolate_);
   if (ImGui::Checkbox("Orthographic", &orthographic_)) {
     if (orthographic_) {
-      Window().SetCamera(ortho_camera_);
+      Window().GetScreen().SetCamera(ortho_camera_);
     } else {
-      Window().SetCamera(perspective_camera_);
+      Window().GetScreen().SetCamera(perspective_camera_);
     }
   }
   if (ImGui::Button("Restart")) Restart();

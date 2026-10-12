@@ -42,7 +42,15 @@ engine/wlw/
               Custom shaders (shader.h): one text (shader_type canvas|mesh; fragment(), optional vertex()) -> RenderDevice::CreateShader(code) -> ShaderMaterial::Create(shader)
               + SetParam(name, float/vec/mat4/texture); node/mesh SetMaterial or Canvas::ShaderRect. Engine inputs are prepended
               (documented in shader.h). Data textures: CreateTexture2D(w, h, {R8/RGB8/RGBA8/R16F/RGBA16F}) + WTexture2D::Update
-  scene/      Node (scene graph, local transforms, visibility, instancing: SetInstances = one draw call for N copies), Window (surface + scene + input),
+  scene/      Node (scene graph, local transforms, visibility, instancing: SetInstances = one draw call for N copies).
+              Scene (scene.h) = the world: nodes, lights, skybox; owned by nobody who looks at it. Viewport (viewport.h) =
+              "draw this Scene from this camera into this picture" + a 2D Canvas over it (like Godot's SubViewport):
+              Viewport::Create(device, {format, depth, smooth, clear}) draws into a RenderTarget (rendering/render_target.h,
+              an FBO; RGBA16F falls back to RGBA8 if the GPU can't), GetTexture() -> any ShaderMaterial; SetSizeFromScreen /
+              SetSize; UpdateMode Always / Once / Disabled. Several viewports may share a Scene.
+              Window = surface + input + GetScreen() (its root viewport: scene, camera, the game UI canvas) +
+              AddViewport (offscreen, drawn before the screen in the order added) + overlays (debug UI).
+              The driver: DrawWindow -> DrawViewport(each) -> gather, shadow pass, main pass, canvas.
               cameras (FollowCamera = perspective, OrthographicCamera = parallel/top-down;
               Camera3D::ScreenPointToRay for picking, fed with Input::SurfaceSize()).
               Lights are nodes (light.h: DirectionalLight / PointLight / SpotLight, added with AddNode); nodes opt in to
@@ -50,7 +58,8 @@ engine/wlw/
   ui/         2D UI layer: Font (TTF -> SDF atlas, stb_truetype), Canvas (virtual units, safe area, text,
               rounded rects, batched quads, ShaderRect = a rect drawn by a material's shader), UIRenderer (GL).
               Canvas::Button/Toggle/Panel = immediate-mode widgets,
-              layout.h (Centered, Inset, Row, Column). Games draw in Application::OnRenderUI()
+              layout.h (Centered, Inset, Row, Column). Games draw in Application::OnRenderUI() (the canvas is
+              Window::GetScreen().GetCanvas(); an offscreen viewport's canvas is drawn into its texture)
   utils/      image/glTF loaders, texture cache, primitives.h (procedural cube, bevelled cube, sphere, gem meshes)
 kit/wlw/kit/  wlw::kit: game-level building blocks shared by games (separate target on top of the engine; the
               engine never includes it). SaveStore (JSON file, atomic write, .bak fallback, versions + migrations),
@@ -61,7 +70,7 @@ kit/wlw/kit/  wlw::kit: game-level building blocks shared by games (separate tar
               (UMP consent, load/show/retry); games add that dir to their sourceSets and depend on play-services-ads + UMP
 samples/      small games, built only when the engine is the top-level project (desktop):
               snake/ (Snake + its rules tests)
-tests/        engine unit tests (no window/GPU: anim, audio, core (random, atomic files, bridge queue), exact cover, search (bitboards, minimax, expectimax), gf2 (Lights Out), shader text splitting, lighting (light nodes, shadow-box fitting), fx, input, kit, picking, primitives, ui, screens); test data in tests/data/, also top-level only; ctest
+tests/        engine unit tests (no window/GPU: viewports (scenes, sizes, update modes), anim, audio, core (random, atomic files, bridge queue), exact cover, search (bitboards, minimax, expectimax), gf2 (Lights Out), shader text splitting, lighting (light nodes, shadow-box fitting), fx, input, kit, picking, primitives, ui, screens); test data in tests/data/, also top-level only; ctest
 third_party/  glad (desktop only), stb, tinygltf + nlohmann json (also its own target wlw_json), miniaudio 0.11.25, stb_vorbis, Dear ImGui 1.92.9b (vendored)
 cmake/WLWHelpers.cmake  wlw_add_game(), wlw_add_assets(), wlw_set_warnings()
 vcpkg/ + vcpkg.json     desktop deps (glm, glfw3). Android fetches glm via FetchContent instead.
@@ -104,7 +113,7 @@ changes didn't break anything; keep it building when the engine API changes.
 ## Known gaps / tech debt
 - The glTF loader still reads files with `fopen`, so glTF models don't load from APK assets yet.
 - Only one directional light casts shadows (point/spot shadows need cube/perspective maps). A material's own
-  `Lighting` is the old way, used only when the scene has no light nodes (Snake). `Window` owns the scene (a separate
-  `Scene` class is planned).
-- `Window`'s default camera is an `FPSCamera`; games normally replace it with `SetCamera()`.
+  `Lighting` is the old way, used only when the scene has no light nodes (Snake).
+- A viewport's default camera is an `FPSCamera`; games normally replace it with `SetCamera()`.
+- Shadows: one shadow map shared by every viewport (each viewport's shadow pass redraws it).
 - Touch input uses only the first finger (no multi-touch yet).

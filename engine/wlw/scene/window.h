@@ -1,23 +1,19 @@
 #pragma once
 #include <memory>
 #include <string>
-#include <unordered_map>
 #include <functional>
 #include <vector>
 
 #include "wlw/core/color.h"
-#include "wlw/scene/node.h"
 #include "wlw/core/vector2.h"
-#include "wlw/core/vertex_2d.h"
-#include "wlw/core/vertex_3d.h"
-#include "wlw/scene/camera_3d.h"
-#include "wlw/scene/fps_camera.h"
-#include "wlw/rendering/texture.h"
+#include "wlw/scene/viewport.h"
 #include "wlw/input/input.h"
 
 namespace wlw::scene {
 
-// A drawable surface + its scene (nodes, camera, skybox) + its input.
+// A drawable surface (the OS window / the phone's screen) + its input + what it shows: the
+// screen viewport (GetScreen(): a Scene seen through a camera, with the game's UI canvas over
+// it) and any offscreen viewports, drawn into their textures before the screen (AddViewport).
 // The platform layer implements the OS-specific part (platform/<os>/<os>_platform.cpp);
 // nothing in this header depends on GLFW, EGL or any OS API.
 class Window {
@@ -45,7 +41,7 @@ public:
 	input::Input& GetInput() { return input_; }
 	const input::Input& GetInput() const { return input_; }
 
-	// Feeds mouse-look to the current camera (FPS camera); called by platforms that capture the cursor.
+	// Feeds mouse-look to the screen's camera (FPS camera); called by platforms that capture the cursor.
 	void ProcessMouseMovement(double xpos, double ypos) {
 		if (first_mouse_) {
 			last_mouse_ = {static_cast<float>(xpos), static_cast<float>(ypos)};
@@ -54,105 +50,43 @@ public:
 		const float xoffset = static_cast<float>(xpos) - last_mouse_.x;
 		const float yoffset = last_mouse_.y - static_cast<float>(ypos);
 		last_mouse_ = {static_cast<float>(xpos), static_cast<float>(ypos)};
-		if (camera_) camera_->ProcessMouseMovement(xoffset, yoffset);
+		if (const auto& camera = screen_->GetCamera()) camera->ProcessMouseMovement(xoffset, yoffset);
 	}
 
 	void SetIsActive(bool is_active) {
 		is_active_ = is_active;
 	}
 
-	void SetSkybox(std::shared_ptr<rendering::WCubemap> skybox) {
-		skybox_ = skybox;
-	}
-
-	std::shared_ptr<rendering::WCubemap> GetSkybox() const {
-		return skybox_;
-	}
-
-	int AddNode(const std::shared_ptr<Node2D>& node_2d) {
-		nodes_2d_[nodes_2d_next_id_] = node_2d;
-		return nodes_2d_next_id_++;
-	}
-
-	int AddNode(const std::shared_ptr<Node3D>& node_3d)  {
-		nodes_3d_[nodes_3d_next_id_] = node_3d;
-		return nodes_3d_next_id_++;
-	}
-
-	void RemoveNode3D(int id) {
-		nodes_3d_.erase(id);
-	}
-
-	size_t NodeCount3D() const { return nodes_3d_.size(); }
-
-	void ClearScene3D() {
-		nodes_3d_.clear();
-		nodes_3d_next_id_ = 0;
-	}
-
-	// Drops every node and the skybox (frees their GPU resources if nothing else holds them).
-	void ClearScene() {
-		nodes_2d_.clear();
-		nodes_2d_next_id_ = 0;
-		ClearScene3D();
-		skybox_ = nullptr;
-	}
-
-	const Nodes2DMap& GetNodes2D() const  {
-		return nodes_2d_;
-	}
-
-	const Nodes3DMap& GetNodes3D() const  {
-		return nodes_3d_;
-	}
-
-	void SetCamera(std::shared_ptr<Camera3D> camera)  {
-		camera_ = camera;
-	}
-
-	const std::shared_ptr<Camera3D> GetUpdatedCamera() const {
-		if (size_.x > 0 && size_.y > 0) {  // minimized windows report 0x0
-			camera_->UpdateSize(size_);
-		}
-		return camera_;
-	}
-
 	core::Vector2 GetSize() const  {
-		return size_;
+		return size_;  // drawable size in pixels
 	}
 
-	// Visits every 3D node: top-level nodes first, then their children, level by level.
-	void IterateOver3DNodes(const std::function<void(const std::shared_ptr<Node3D>&)>& callback) const {
-		std::vector<std::shared_ptr<Node3D>> current;
-		current.reserve(nodes_3d_.size());
-		for (const auto& [_, node] : nodes_3d_) {
-			current.push_back(node);
-		}
+	// ---- What it shows ----
+	// The screen: its scene (empty at first), camera (an FPSCamera until SetCamera) and the canvas
+	// the game's UI is drawn on (Application::OnRenderUI).
+	Viewport& GetScreen() { return *screen_; }
+	const Viewport& GetScreen() const { return *screen_; }
 
-		std::vector<std::shared_ptr<Node3D>> next;
-		while (!current.empty()) {
-			next.clear();
-			for (const auto& node : current) {
-				callback(node);
-				for (const auto& [_, child] : node->GetChildren()) {
-					next.push_back(child);
-				}
-			}
-			current.swap(next);
-		}
+	// Offscreen viewports, drawn every frame (as their update mode says) before the screen, in the
+	// order added. Returns an id for RemoveViewport.
+	int AddViewport(std::shared_ptr<Viewport> viewport) {
+		viewports_.push_back({next_viewport_id_, std::move(viewport)});
+		return next_viewport_id_++;
+	}
+	void RemoveViewport(int id) {
+		std::erase_if(viewports_, [id](const auto& entry) { return entry.first == id; });
+	}
+	const std::vector<std::pair<int, std::shared_ptr<Viewport>>>& GetViewports() const { return viewports_; }
+
+	// Drops the scenes and viewports (their GPU resources, if nothing else holds them): the engine
+	// calls it at shutdown while the GL context still exists.
+	void ReleaseScenes() {
+		viewports_.clear();
+		screen_->SetScene(nullptr);
 	}
 
-	// What the renderer did for the last frame of this window (shown in the debug UI).
-	struct RenderStats {
-		int draw_calls = 0;      // one per mesh drawn; an instanced node is one call for all its copies
-		int instances = 0;       // copies drawn by instanced calls
-		int culled_nodes = 0;    // skipped by frustum culling
-	};
-	const RenderStats& GetRenderStats() const { return render_stats_; }
-	void SetRenderStats(const RenderStats& stats) { render_stats_ = stats; }
-
-	// Layers drawn on top of the 3D scene, just before the frame is presented, in the order they
-	// were added (the game UI first, the debug UI over it). Returns an id for RemoveOverlay.
+	// Layers drawn on top of the screen (after its UI canvas), just before the frame is presented,
+	// in the order they were added (e.g. the debug UI). Returns an id for RemoveOverlay.
 	int AddOverlay(std::function<void()> draw) {
 		overlays_.push_back({next_overlay_id_, std::move(draw)});
 		return next_overlay_id_++;
@@ -164,9 +98,6 @@ public:
 		for (const auto& [_, draw] : overlays_) draw();
 	}
 
-
-
-
 protected:
 	core::Vector2 size_;  // drawable size in pixels (updated by the platform on resize)
 	input::Input input_;
@@ -175,21 +106,16 @@ protected:
 
 	bool is_active_ = true;
 
-	wlw::scene::Nodes2DMap nodes_2d_{};
-	int nodes_2d_next_id_ = 0;
-
-	wlw::scene::Nodes3DMap nodes_3d_ = {};
-	int nodes_3d_next_id_ = 0;
-
-	std::shared_ptr<scene::Camera3D> camera_ = scene::FPSCamera::Create();
-	std::shared_ptr<rendering::WCubemap> skybox_ = nullptr;
+	std::shared_ptr<Viewport> screen_ = std::make_shared<Viewport>(
+		nullptr, ViewportSettings{.name = "Screen", .clear = core::Color{0.1f, 0.1f, 0.15f, 1.0f}});
+	std::vector<std::pair<int, std::shared_ptr<Viewport>>> viewports_;
+	int next_viewport_id_ = 0;
 	std::vector<std::pair<int, std::function<void()>>> overlays_;
 	int next_overlay_id_ = 0;
-	RenderStats render_stats_;
 
 public:
 
 	static std::unique_ptr<Window> Create(const core::Vector2& size, const std::string& title);
 };
 
-} // namespace wlw::core
+} // namespace wlw::scene
