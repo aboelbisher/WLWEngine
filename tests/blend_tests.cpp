@@ -1,5 +1,5 @@
 // Tests for blend modes (rendering/blend_mode.h): materials' depth-write rule, the render queues and
-// back-to-front sorting (render_queue.h), the Canvas's blend state and Image batching, and the
+// back-to-front sorting (render_queue.h), per-draw blending on the Canvas, ShaderMaterial defaults, Image batching, and the
 // radial falloff texture (utils/textures.h). CPU only.
 #include <memory>
 #include <vector>
@@ -31,6 +31,12 @@ class FakeTexture : public rendering::WTexture2D {
   void Bind(unsigned int) const override {}
   void Unbind() const override {}
   void Update(const void*) override {}
+};
+
+// A shader without a GPU: only its kind matters here.
+class FakeShader : public rendering::Shader {
+ public:
+  explicit FakeShader(Target target) { target_ = target; }
 };
 
 struct Item {
@@ -94,35 +100,38 @@ static void TestBackToFront() {
   CHECK((Ids(ties) == std::vector<int>{1, 2, 3}));
 }
 
-static void TestCanvasBlendBatches() {
+static void TestCanvasBlendPerDraw() {
+  auto dot = std::make_shared<FakeTexture>();
   ui::Canvas canvas;
   canvas.BeginFrame({1000.0f, 1000.0f}, {}, {1000.0f, 1000.0f});
-  CHECK(canvas.GetBlendMode() == BlendMode::Alpha);
 
+  // UI shapes are Alpha; an image says its own mode; no state carries over between calls.
   canvas.FillRect({{0, 0}, {10, 10}}, {1, 1, 1, 1});
-  canvas.FillRect({{20, 0}, {30, 10}}, {1, 1, 1, 1});  // same mode: same batch
-  canvas.SetBlendMode(BlendMode::Additive);
-  canvas.FillRect({{50, 50}, {60, 60}}, {1, 0.5f, 0, 1});
-  canvas.FillRect({{60, 50}, {70, 60}}, {1, 0.5f, 0, 1});  // still additive: same batch
-  canvas.SetBlendMode(BlendMode::Alpha);
-  canvas.FillRect({{0, 80}, {10, 90}}, {1, 1, 1, 1});
-
+  canvas.Image({{0, 0}, {4, 4}}, dot, {.blend = BlendMode::Additive});
+  canvas.Image({{4, 0}, {8, 4}}, dot, {.blend = BlendMode::Additive});  // same texture + mode: same run
+  canvas.FillRect({{0, 80}, {10, 90}}, {1, 1, 1, 1});                     // back to Alpha by itself
   const auto& batches = canvas.Batches();
   CHECK(batches.size() == 3);
-  CHECK(batches[0].blend == BlendMode::Alpha && batches[0].quad_count == 2);
+  CHECK(batches[0].blend == BlendMode::Alpha && batches[0].quad_count == 1);
   CHECK(batches[1].blend == BlendMode::Additive && batches[1].quad_count == 2);
   CHECK(batches[2].blend == BlendMode::Alpha && batches[2].quad_count == 1);
+}
 
-  // The mode doesn't leak into the next frame.
-  canvas.SetBlendMode(BlendMode::Multiply);
+static void TestShaderMaterialBlend() {
+  // Like Godot: canvas shaders start Alpha (they draw over the UI), mesh shaders Opaque.
+  auto canvas_material = rendering::ShaderMaterial::Create(std::make_shared<FakeShader>(rendering::Shader::Target::Canvas));
+  auto mesh_material = rendering::ShaderMaterial::Create(std::make_shared<FakeShader>(rendering::Shader::Target::Mesh));
+  CHECK(canvas_material->blend == BlendMode::Alpha);
+  CHECK(mesh_material->blend == BlendMode::Opaque && mesh_material->DepthWrite());
+
+  // A ShaderRect blends as its material says.
+  ui::Canvas canvas;
   canvas.BeginFrame({1000.0f, 1000.0f}, {}, {1000.0f, 1000.0f});
-  CHECK(canvas.GetBlendMode() == BlendMode::Alpha && canvas.Batches().empty());
-
-  // A ShaderRect takes the current mode too.
-  auto material = rendering::ShaderMaterial::Create(nullptr);
-  canvas.SetBlendMode(BlendMode::Additive);
-  canvas.ShaderRect({{0, 0}, {100, 100}}, material);
-  CHECK(canvas.Batches().size() == 1 && canvas.Batches()[0].blend == BlendMode::Additive);
+  canvas.ShaderRect({{0, 0}, {100, 100}}, canvas_material);
+  canvas_material->blend = BlendMode::Additive;
+  canvas.ShaderRect({{0, 0}, {100, 100}}, canvas_material);
+  CHECK(canvas.Batches().size() == 2);
+  CHECK(canvas.Batches()[0].blend == BlendMode::Alpha && canvas.Batches()[1].blend == BlendMode::Additive);
 }
 
 static void TestImageBatching() {
@@ -133,28 +142,25 @@ static void TestImageBatching() {
 
   // Thousands of sprites with one texture: one draw call, and rectangles join it.
   canvas.FillRect({{0, 0}, {10, 10}}, {1, 1, 1, 1});
-  for (int i = 0; i < 1000; ++i) canvas.Image({{float(i), 0}, {float(i) + 4, 4}}, dot, {1, 0.5f, 0, 0.8f});
+  for (int i = 0; i < 1000; ++i) canvas.Image({{float(i), 0}, {float(i) + 4, 4}}, dot, {.tint = {1, 0.5f, 0, 0.8f}});
   canvas.FillRect({{0, 20}, {10, 30}}, {1, 1, 1, 1});
   CHECK(canvas.Batches().size() == 1);
   CHECK(canvas.Batches()[0].texture == dot && canvas.Batches()[0].quad_count == 1002);
 
   // Another texture, or another blend mode: a new run.
   canvas.Image({{0, 0}, {4, 4}}, other);
-  canvas.SetBlendMode(BlendMode::Additive);
-  canvas.Image({{0, 0}, {4, 4}}, other);
-  canvas.Image({{8, 0}, {12, 4}}, other);
+  canvas.Image({{0, 0}, {4, 4}}, other, {.blend = BlendMode::Additive});
+  canvas.Image({{8, 0}, {12, 4}}, other, {.blend = BlendMode::Additive});
   CHECK(canvas.Batches().size() == 3);
   CHECK(canvas.Batches()[1].texture == other && canvas.Batches()[1].quad_count == 1);
   CHECK(canvas.Batches()[2].blend == BlendMode::Additive && canvas.Batches()[2].quad_count == 2);
 
-  // Text samples the font atlas, an image its texture: they never share a run.
-  canvas.SetBlendMode(BlendMode::Alpha);
   canvas.Image({{0, 0}, {4, 4}}, dot);
   CHECK(canvas.Batches().size() == 4 && canvas.Batches()[3].font == nullptr);
 
   // Vertices: the rect's corners, the uv sub-rectangle, the tint, kind 4 (image).
   canvas.BeginFrame({1000.0f, 1000.0f}, {}, {1000.0f, 1000.0f});
-  canvas.Image({{10, 20}, {30, 60}}, dot, {0.2f, 0.4f, 1.0f, 0.5f}, {{0.5f, 0.0f}, {1.0f, 0.5f}});
+  canvas.Image({{10, 20}, {30, 60}}, dot, {.tint = {0.2f, 0.4f, 1.0f, 0.5f}, .uv = {{0.5f, 0.0f}, {1.0f, 0.5f}}});
   const auto& v = canvas.Vertices();
   CHECK(canvas.QuadCount() == 1);
   CHECK(v[0].position == glm::vec2(10, 20) && v[2].position == glm::vec2(30, 60));
@@ -186,7 +192,8 @@ int main() {
   TestDepthWriteRule();
   TestQueues();
   TestBackToFront();
-  TestCanvasBlendBatches();
+  TestCanvasBlendPerDraw();
+  TestShaderMaterialBlend();
   TestImageBatching();
   TestRadialFalloff();
   return TestResult("blend");

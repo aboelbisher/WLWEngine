@@ -41,6 +41,13 @@ struct PointerState {
   bool released = false;  // went up this frame
 };
 
+// How Canvas::Image draws its texture.
+struct ImageStyle {
+  core::Color tint{1.0f, 1.0f, 1.0f, 1.0f};        // multiplies the texture (white texture + tint = any colour)
+  Rect uv{{0.0f, 0.0f}, {1.0f, 1.0f}};             // the part of the texture (sprite sheets); (0, 0) = first row uploaded
+  rendering::BlendMode blend = rendering::BlendMode::Alpha;  // e.g. Additive for glows (see blend_mode.h)
+};
+
 // How text looks. Outline and shadow come from the same SDF atlas (see Font).
 struct TextStyle {
   core::Color color{1.0f, 1.0f, 1.0f, 1.0f};
@@ -78,7 +85,7 @@ struct UIBatch {
   size_t first_quad = 0;
   size_t quad_count = 0;
   std::shared_ptr<rendering::ShaderMaterial> material;  // a ShaderRect: one quad, drawn with this material's shader
-  rendering::BlendMode blend = rendering::BlendMode::Alpha;  // see Canvas::SetBlendMode
+  rendering::BlendMode blend = rendering::BlendMode::Alpha;  // Image: its style's; ShaderRect: its material's; else Alpha
 };
 
 // The 2D UI layer, drawn over the 3D scene (Application::OnRenderUI). Immediate mode: draw
@@ -107,25 +114,19 @@ class Canvas {
             const TextStyle& style = {});
 
   // A rectangle drawn by a custom shader: the ShaderMaterial's Target::Canvas shader (see
-  // rendering/shader.h) with its params; vUV goes 0..1 across the rect, vColor is `tint`. Drawn in
-  // order with everything else (e.g. first, as a background). Each one is its own draw call.
+  // rendering/shader.h) with its params; vUV goes 0..1 across the rect, vColor is `tint`. It blends
+  // as the material says (material->blend; Alpha by default for canvas shaders). Drawn in order
+  // with everything else (e.g. first, as a background). Each one is its own draw call.
   // Nothing is drawn if the material has no valid canvas shader.
   void ShaderRect(const Rect& rect, std::shared_ptr<rendering::ShaderMaterial> material,
                   const core::Color& tint = {1.0f, 1.0f, 1.0f, 1.0f});
 
-  // A texture over a rectangle (a sprite), multiplied by `tint`; `uv` picks the part of the texture
-  // (sprite sheets), (0, 0) = the first row uploaded. Texture alpha is straight (not premultiplied),
-  // like image files. Consecutive images with the same texture and blend mode are ONE draw call
-  // (rectangles join any run), so thousands of sprites stay cheap. A viewport's texture is
-  // upside down here (GL keeps row 0 at the bottom): pass uv = {{0, 1}, {1, 0}}.
-  void Image(const Rect& rect, const std::shared_ptr<rendering::WTexture2D>& texture,
-             const core::Color& tint = {1.0f, 1.0f, 1.0f, 1.0f}, const Rect& uv = {{0.0f, 0.0f}, {1.0f, 1.0f}});
-
-  // How the quads drawn after this blend with what's under them (see rendering/blend_mode.h),
-  // ShaderRects included. Alpha (normal transparency) at the start of every frame; e.g. Additive
-  // for glows, then back to Alpha. Changing it starts a new draw call.
-  void SetBlendMode(rendering::BlendMode blend) { blend_ = blend; }
-  rendering::BlendMode GetBlendMode() const { return blend_; }
+  // A texture over a rectangle (a sprite), as `style` says (tint, part of the texture, blending).
+  // Texture alpha is straight (not premultiplied), like image files. Consecutive images with the
+  // same texture and blend mode are ONE draw call (rectangles join any Alpha run), so thousands of
+  // sprites stay cheap. A viewport's texture is upside down here (GL keeps row 0 at the bottom):
+  // pass uv = {{0, 1}, {1, 0}}.
+  void Image(const Rect& rect, const std::shared_ptr<rendering::WTexture2D>& texture, const ImageStyle& style = {});
 
   // ---- Widgets ----
   // An immediate-mode button: call it every frame you want it shown; it returns true on the
@@ -153,7 +154,8 @@ class Canvas {
 
  private:
   // The batch for a quad sampling `font`'s atlas, `texture`, or nothing (both null).
-  UIBatch& BatchFor(const Font* font, const std::shared_ptr<rendering::WTexture2D>* texture);
+  UIBatch& BatchFor(const Font* font, const std::shared_ptr<rendering::WTexture2D>* texture,
+                    rendering::BlendMode blend = rendering::BlendMode::Alpha);
   void AddQuad(const Font* font, const glm::vec2& min, const glm::vec2& max, const glm::vec2& uv_min,
                const glm::vec2& uv_max, const core::Color& color, const glm::vec4& params);
   void AddQuad(const Font* font, const glm::vec2 (&corners)[4], const glm::vec2 (&uvs)[4], const core::Color& color,
@@ -168,7 +170,6 @@ class Canvas {
   std::vector<GlyphQuad> glyph_scratch_;  // reused: no allocation per Text() call
   PointerState pointer_;
   bool interactive_ = true;
-  rendering::BlendMode blend_ = rendering::BlendMode::Alpha;
   uint64_t active_button_ = 0;  // the button the pointer went down on (0 = none); kept across frames
 };
 

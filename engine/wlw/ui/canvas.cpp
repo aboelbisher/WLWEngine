@@ -22,7 +22,6 @@ void Canvas::BeginFrame(glm::vec2 framebuffer_pixels, const platform::SafeAreaIn
   safe_area_.max = size_ - glm::vec2(insets.right, insets.bottom) / pixels_per_unit_;
   vertices_.clear();
   batches_.clear();
-  blend_ = rendering::BlendMode::Alpha;
 }
 
 glm::mat4 Canvas::Projection() const {
@@ -42,7 +41,8 @@ void Canvas::AddQuad(const Font* font, const glm::vec2 (&corners)[4], const glm:
   for (int i = 0; i < 4; ++i) vertices_.push_back({corners[i], uvs[i], color, params});
 }
 
-UIBatch& Canvas::BatchFor(const Font* font, const std::shared_ptr<rendering::WTexture2D>* texture) {
+UIBatch& Canvas::BatchFor(const Font* font, const std::shared_ptr<rendering::WTexture2D>* texture,
+                          rendering::BlendMode blend) {
   // Batching: keep adding to the current run unless this quad needs another blend mode or samples
   // a different texture than the run does (a run samples at most one: a font atlas or an image).
   // Rectangles sample nothing, so they fit in any run. A ShaderRect's run is its own: whatever
@@ -53,7 +53,7 @@ UIBatch& Canvas::BatchFor(const Font* font, const std::shared_ptr<rendering::WTe
     UIBatch& last = batches_.back();
     const bool last_samples = last.font != nullptr || last.texture != nullptr;
     const bool same_texture = last.font == font && last.texture.get() == image;
-    if (!last.material && last.blend == blend_ && (!samples || !last_samples || same_texture)) {
+    if (!last.material && last.blend == blend && (!samples || !last_samples || same_texture)) {
       if (font) last.font = font;                         // a run of rectangles becomes a text run...
       if (image && !last.texture) last.texture = *texture;  // ...or an image run
       return last;
@@ -63,7 +63,7 @@ UIBatch& Canvas::BatchFor(const Font* font, const std::shared_ptr<rendering::WTe
   batch.font = font;
   if (image) batch.texture = *texture;
   batch.first_quad = QuadCount();
-  batch.blend = blend_;
+  batch.blend = blend;
   batches_.push_back(std::move(batch));
   return batches_.back();
 }
@@ -81,18 +81,19 @@ void Canvas::ShaderRect(const Rect& rect, std::shared_ptr<rendering::ShaderMater
   UIBatch batch;
   batch.first_quad = QuadCount();
   batch.quad_count = 1;
+  batch.blend = material->blend;
   batch.material = std::move(material);
-  batch.blend = blend_;
   batches_.push_back(std::move(batch));
   const glm::vec2 corners[4] = {rect.min, {rect.max.x, rect.min.y}, rect.max, {rect.min.x, rect.max.y}};
   const glm::vec2 uvs[4] = {{0.0f, 0.0f}, {1.0f, 0.0f}, {1.0f, 1.0f}, {0.0f, 1.0f}};
   for (int i = 0; i < 4; ++i) vertices_.push_back({corners[i], uvs[i], tint, {kKindShader, 0.0f, 0.0f, 0.0f}});
 }
 
-void Canvas::Image(const Rect& rect, const std::shared_ptr<rendering::WTexture2D>& texture, const core::Color& tint,
-                   const Rect& uv) {
+void Canvas::Image(const Rect& rect, const std::shared_ptr<rendering::WTexture2D>& texture, const ImageStyle& style) {
   if (!texture) return;
-  ++BatchFor(nullptr, &texture).quad_count;
+  ++BatchFor(nullptr, &texture, style.blend).quad_count;
+  const Rect& uv = style.uv;
+  const core::Color& tint = style.tint;
   const glm::vec2 corners[4] = {rect.min, {rect.max.x, rect.min.y}, rect.max, {rect.min.x, rect.max.y}};
   const glm::vec2 uvs[4] = {uv.min, {uv.max.x, uv.min.y}, uv.max, {uv.min.x, uv.max.y}};
   for (int i = 0; i < 4; ++i) vertices_.push_back({corners[i], uvs[i], tint, {kKindImage, 0.0f, 0.0f, 0.0f}});

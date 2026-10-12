@@ -25,7 +25,11 @@ class ShaderMaterial : public Material {
  public:
   using Param = std::variant<float, glm::vec2, glm::vec3, glm::vec4, glm::mat4, std::shared_ptr<WTexture>>;
 
-  explicit ShaderMaterial(std::shared_ptr<Shader> shader) : shader_(std::move(shader)) {}
+  // Blending starts as the shader's kind expects (like Godot): canvas shaders Alpha (they draw
+  // over the UI), mesh shaders Opaque. Change `blend` as needed (see blend_mode.h).
+  explicit ShaderMaterial(std::shared_ptr<Shader> shader) : shader_(std::move(shader)) {
+    if (shader_ && shader_->GetTarget() == Shader::Target::Canvas) blend = BlendMode::Alpha;
+  }
   static std::shared_ptr<ShaderMaterial> Create(std::shared_ptr<Shader> shader) {
     return std::make_shared<ShaderMaterial>(std::move(shader));
   }

@@ -62,8 +62,9 @@ engine/wlw/
               SetCastsShadow / SetReceivesShadow; shadow_map.h fits the light's box to the casters (texel-snapped)
   ui/         2D UI layer: Font (TTF -> SDF atlas, stb_truetype), Canvas (virtual units, safe area, text,
               rounded rects, batched quads, ShaderRect = a rect drawn by a material's shader), UIRenderer (GL).
-              Canvas::Image(rect, texture, tint, uv) = sprites (batched by texture + blend mode: 1000s = 1 draw call),
-              Canvas::SetBlendMode (per batch, Alpha again every frame). Canvas = primitives only; shapes come from helpers.
+              Canvas::Image(rect, texture, ImageStyle{tint, uv, blend}) = sprites (batched by texture + blend: 1000s = 1 draw
+              call). Blending belongs to what you draw with: Image's style, ShaderRect's material (canvas shaders default
+              Alpha, mesh shaders Opaque), UI shapes Alpha; no canvas-wide state. Canvas = primitives; shapes come from helpers.
               Canvas::Button/Toggle/Panel = immediate-mode widgets,
               layout.h (Centered, Inset, Row, Column). Games draw in Application::OnRenderUI() (the canvas is
               Window::GetScreen().GetCanvas(); an offscreen viewport's canvas is drawn into its texture)
