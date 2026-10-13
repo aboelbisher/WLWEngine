@@ -13,7 +13,9 @@ Remote: `git@github.com:aboelbisher/WLWEngine.git`, branch `main`.
 ```
 engine/wlw/
   audio/      Audio (miniaudio device: WASAPI / AAudio...) + Mixer (decoded PCM, lock-free command queue,
-              voices with pitch/pan, per-sound caps, buses). App().Audio(); silent in background.
+              voices with pitch/pan, per-sound caps, buses). App().Audio(); silent in background (Suspend), during calls /
+              alarms (SetInterrupted); music steps aside for the player's own (SetOtherMusicPlaying); fed by
+              android/java/com/wlw/AudioWatcher.kt (bridge "audio"; watches playback, never takes audio focus).
               Music: Audio::PlayMusic streams a file (decode thread -> lock-free ring -> Mixer stream slots with crossfades)
   anim/       ease.h (Penner easing curves), tween.h (Tween<T>: value-type tweens the game owns and samples),
               shake.h (trauma-based screen shake: trauma decays, offset = trauma^2 x smooth noise)

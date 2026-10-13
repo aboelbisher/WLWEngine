@@ -43,11 +43,20 @@ class Audio {
   void SetMuted(bool muted) { mixer_->SetMuted(muted); }
   bool Muted() const { return mixer_->Muted(); }
   void SetMasterVolume(float volume) { mixer_->SetMasterVolume(volume); }
-  void SetBusVolume(Bus bus, float volume) { mixer_->SetBusVolume(bus, volume); }
+  void SetBusVolume(Bus bus, float volume);
 
   // Stops the device while the app is in the background (no sound, no CPU) and restarts it.
   void Suspend();
   void Resume();
+  // Something that must be heard alone is going on while we're on screen: a phone call, an alarm,
+  // the voice assistant. Silent until it ends. Independent of Suspend: the device plays only when
+  // it's neither suspended nor interrupted.
+  void SetInterrupted(bool interrupted);
+  bool Interrupted() const { return interrupted_; }
+  // The player's own music (another app) is playing: ours steps aside (Bus::Music silent, its
+  // volume kept for when that music stops); sound effects still mix over it.
+  void SetOtherMusicPlaying(bool playing);
+  bool OtherMusicPlaying() const { return other_music_; }
 
   bool HasDevice() const { return device_ != nullptr; }
   Mixer& GetMixer() { return *mixer_; }
@@ -57,6 +66,11 @@ class Audio {
   struct MusicStream;  // a miniaudio decoder over a file in memory
   std::unique_ptr<Mixer> mixer_;
   std::unique_ptr<Device> device_;
+  bool suspended_ = false;
+  bool interrupted_ = false;
+  void UpdateDevice();  // starts or stops the device from the two flags
+  bool other_music_ = false;
+  float music_volume_ = 1.0f;  // Bus::Music's volume as the game set it
   // Every music file opened so far, by path. Kept until the end (the mixer may still be reading
   // one); ~Audio stops the device before any of them is destroyed.
   std::map<std::string, std::unique_ptr<MusicStream>> music_;  // guarded by music_mutex_

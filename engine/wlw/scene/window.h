@@ -37,6 +37,9 @@ public:
 	// Returns true once after the app was sent to the background (mobile: call, app switch,
 	// screen off), so the game can pause itself.
 	virtual bool ConsumePaused() { return false; }
+	// False while there's nothing to draw into (mobile: the OS took the surface away, e.g. in the
+	// frame that reports the pause). Drawing is skipped then.
+	virtual bool HasSurface() const { return true; }
 
 	input::Input& GetInput() { return input_; }
 	const input::Input& GetInput() const { return input_; }

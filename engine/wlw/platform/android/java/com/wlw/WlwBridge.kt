@@ -50,7 +50,11 @@ object WlwBridge {
 
     // To C++ (any thread).
     fun post(service: String, event: String, json: JSONObject = JSONObject()) {
-        nativePost(service, event, json.toString())
+        try {
+            nativePost(service, event, json.toString())
+        } catch (e: UnsatisfiedLinkError) {  // the native code hasn't started (registered it) yet
+            Log.w(TAG, "Bridge: native side not ready, dropped $service.$event")
+        }
     }
 
     // Registered by the engine (android_platform.cpp, RegisterNatives) when the native code starts.

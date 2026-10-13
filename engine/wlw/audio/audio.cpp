@@ -180,11 +180,42 @@ bool Audio::PlayMusic(const std::string& path, float fade_seconds) {
 }
 
 void Audio::Suspend() {
-  if (device_) ma_device_stop(&device_->device);
+  suspended_ = true;
+  UpdateDevice();
 }
 
 void Audio::Resume() {
-  if (device_) ma_device_start(&device_->device);
+  suspended_ = false;
+  UpdateDevice();
+}
+
+void Audio::SetInterrupted(bool interrupted) {
+  interrupted_ = interrupted;
+  UpdateDevice();
+}
+
+void Audio::SetBusVolume(Bus bus, float volume) {
+  if (bus == Bus::Music) {
+    music_volume_ = volume;
+    if (other_music_) return;  // applied when the other music stops
+  }
+  mixer_->SetBusVolume(bus, volume);
+}
+
+void Audio::SetOtherMusicPlaying(bool playing) {
+  other_music_ = playing;
+  mixer_->SetBusVolume(Bus::Music, playing ? 0.0f : music_volume_);
+}
+
+void Audio::UpdateDevice() {
+  if (!device_) return;
+  const bool play = !suspended_ && !interrupted_;
+  if (play == ma_device_is_started(&device_->device)) return;
+  if (play) {
+    ma_device_start(&device_->device);
+  } else {
+    ma_device_stop(&device_->device);
+  }
 }
 
 }  // namespace wlw::audio

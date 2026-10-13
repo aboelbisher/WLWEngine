@@ -44,7 +44,7 @@ namespace wlw {
     // One frame: draw + present every window, then poll input for the next frame.
     void Iterate() override {
       for (auto& [_, window] : windows_) {
-        rendering_driver_->DrawWindow(window);
+        if (window->HasSurface()) rendering_driver_->DrawWindow(window);
       }
       // Clear last frame's input events on every window first, then poll the OS once:
       // on desktop one poll delivers events for all windows.

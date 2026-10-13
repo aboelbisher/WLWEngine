@@ -39,6 +39,24 @@ int Application::Run() {
     return 1;
   }
   audio_ = std::make_unique<audio::Audio>();
+  // What else is playing on the device (Android: AudioWatcher.kt). A call, an alarm or the
+  // assistant interrupts us: silent until it ends, and the game pauses like when it goes to the
+  // background (the player has stopped playing). The player's own music: ours steps aside.
+  platform::SetBridgeHandler("audio", [this](const std::string& event, const std::string&) {
+    WLW_LOG_INFO("Audio: %s", event.c_str());
+    if (event == "interrupted") {
+      if (!audio_->Interrupted()) screens_.AppPaused();
+      audio_->SetInterrupted(true);
+    } else if (event == "uninterrupted") {
+      audio_->SetInterrupted(false);
+    } else if (event == "other_music_started") {
+      audio_->SetOtherMusicPlaying(true);
+    } else if (event == "other_music_stopped") {
+      audio_->SetOtherMusicPlaying(false);
+    }
+  });
+  // Anything reported before this handler existed was dropped: ask again.
+  if (platform::HasBridge()) platform::BridgeCall("audio", "refresh");
   ui_ = std::make_unique<ui::UIContext>(window_->GetScreen().GetCanvas());
 #if WLW_DEBUG_UI
   debug_ui_ = std::make_unique<debug::DebugUI>(*window_);  // needs the GL context Start() made
@@ -133,6 +151,7 @@ int Application::Run() {
     UpdateQuality(frame_seconds);
   }
 
+  platform::SetBridgeHandler("audio", nullptr);
   screens_.Clear();  // OnExit for every screen while the systems are still fully alive
   systems_.ForEach([](System& system) { system.OnShutdown(); });
   return 0;

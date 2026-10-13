@@ -108,8 +108,10 @@ class AndroidWindow : public scene::Window {
   void ProcessEvents() override {
     PollEvents(0);
     // While in the background (or without a surface) there's nothing to draw: sleep in the
-    // event loop instead of spinning. The game loop simply stops until we're back.
-    while (!CanRender() && !g_app->destroyRequested && !close_requested_) {
+    // event loop instead of spinning. The game loop simply stops until we're back - but only after
+    // it has seen the pause: one more frame runs first, so the game silences its audio and saves
+    // while it still can (Android may end a backgrounded app without another word).
+    while (!CanRender() && !paused_event_ && !g_app->destroyRequested && !close_requested_) {
       was_suspended_ = true;
       PollEvents(-1);
     }
@@ -126,6 +128,7 @@ class AndroidWindow : public scene::Window {
     }
   }
 
+  bool HasSurface() const override { return surface_ != EGL_NO_SURFACE; }
   bool ShouldClose() const override { return close_requested_ || g_app->destroyRequested; }
   void RequestClose() override { close_requested_ = true; }
   void SetTitle(const std::string&) override {}  // no title bar on Android
@@ -137,6 +140,9 @@ class AndroidWindow : public scene::Window {
   }
 
   bool ConsumeResumed() override {
+    // Not in the frame that reports the pause (the app is still going away), but also when the
+    // pause and the resume arrived together (both are reported in that frame, pause first).
+    if (!CanRender()) return false;
     const bool resumed = was_suspended_;
     was_suspended_ = false;
     return resumed;
@@ -154,6 +160,7 @@ class AndroidWindow : public scene::Window {
       case APP_CMD_PAUSE:
         resumed_ = false;
         paused_event_ = true;  // the game should pause itself (phone call, app switch...)
+        was_suspended_ = true;  // and must resume once we're back, even if it never had to sleep
         break;
       case APP_CMD_RESUME:
         resumed_ = true;

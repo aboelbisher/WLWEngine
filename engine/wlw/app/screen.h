@@ -39,7 +39,8 @@ class Screen {
   // panel closes itself); false lets the screen below try, and in the end the app goes to the
   // background.
   virtual bool OnBack() { return false; }
-  // The app went to the background (top screen only). A game screen typically pauses.
+  // The app went to the background, or something interrupted it on screen (a call, an alarm:
+  // the assistant). Top screen only. A game screen typically pauses.
   virtual void OnAppPaused() {}
 
   // An overlay (pause, dialogs) doesn't cover the whole screen, so the screens below it are

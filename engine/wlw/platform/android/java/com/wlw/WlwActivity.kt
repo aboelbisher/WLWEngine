@@ -14,10 +14,24 @@ import android.os.Bundle
 open class WlwActivity : NativeActivity() {
     open fun createServices(): List<WlwService> = emptyList()
 
+    private lateinit var audioWatcher: AudioWatcher  // the engine's own service: calls, the player's music
+
     override fun onCreate(savedInstanceState: Bundle?) {
         // Before super.onCreate: that starts the native thread, which may call a service at once.
-        WlwBridge.attach(this, createServices())
+        audioWatcher = AudioWatcher(this)
+        WlwBridge.attach(this, createServices() + audioWatcher)
         super.onCreate(savedInstanceState)
+    }
+
+    // Other apps' sound only matters while we're on screen.
+    override fun onResume() {
+        super.onResume()
+        audioWatcher.start()
+    }
+
+    override fun onPause() {
+        audioWatcher.stop()
+        super.onPause()
     }
 
     override fun onDestroy() {

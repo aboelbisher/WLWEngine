@@ -56,7 +56,8 @@ struct AppConfig {
 //                       resumed? -> systems.OnAppResumed          (audio resumes, clock restarts)
 //    2. time            measure, clamp, apply the time scale
 //    3. back            screens (top first) -> systems (last added first) -> else leave
-//    4. platform        native-bridge messages (ads...) on the game thread
+//    4. platform        native-bridge messages (ads...) on the game thread; a call / alarm ->
+//                       audio silent + screens' OnAppPaused; the player's own music -> ours mutes
 //    5. OnFixedUpdate   x N, constant dt                <- game logic / physics
 //    6. OnUpdate        per frame, game time            <- input, camera
 //    7. OnRender        alpha in [0, 1)                 <- push the state to the scene, interpolated
