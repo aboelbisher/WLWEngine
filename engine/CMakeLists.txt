@@ -86,7 +86,11 @@ add_library(wlw STATIC
   wlw/rendering/gl_index_buffer.h
   wlw/rendering/gl_program.cpp
   wlw/rendering/gl_program.h
+  wlw/rendering/gl_gpu_queries.cpp
+  wlw/rendering/gl_gpu_queries.h
   wlw/rendering/gl_resources.cpp
+  wlw/rendering/gpu_timer.cpp
+  wlw/rendering/gpu_timer.h
   wlw/rendering/gl_resources.h
   wlw/rendering/gpu_resource.h
   wlw/rendering/gl_shader.cpp

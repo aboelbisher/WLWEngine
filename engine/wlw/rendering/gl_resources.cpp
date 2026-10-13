@@ -218,24 +218,23 @@ GLuint GLFramebuffer(RenderTarget& target) {
   return gl->framebuffer_;
 }
 
+bool HasGLExtension(const char* extension) {
+  GLint count = 0;
+  glGetIntegerv(GL_NUM_EXTENSIONS, &count);
+  for (GLint i = 0; i < count; ++i) {
+    const auto* name = reinterpret_cast<const char*>(glGetStringi(GL_EXTENSIONS, static_cast<GLuint>(i)));
+    if (name && std::strcmp(name, extension) == 0) return true;
+  }
+  return false;
+}
+
 bool CanRenderTo(TextureFormat format) {
   if (format != TextureFormat::R16F && format != TextureFormat::RGBA16F) return true;
 #if defined(WLW_GLES)
-  static int half_float_renderable = -1;  // asked once: the answer doesn't change
-  if (half_float_renderable < 0) {
-    half_float_renderable = 0;
-    GLint count = 0;
-    glGetIntegerv(GL_NUM_EXTENSIONS, &count);
-    for (GLint i = 0; i < count; ++i) {
-      const auto* name = reinterpret_cast<const char*>(glGetStringi(GL_EXTENSIONS, static_cast<GLuint>(i)));
-      if (name && (std::strcmp(name, "GL_EXT_color_buffer_half_float") == 0 ||
-                   std::strcmp(name, "GL_EXT_color_buffer_float") == 0)) {
-        half_float_renderable = 1;
-        break;
-      }
-    }
-  }
-  return half_float_renderable == 1;
+  // Asked once: the answer doesn't change.
+  static const bool half_float_renderable =
+      HasGLExtension("GL_EXT_color_buffer_half_float") || HasGLExtension("GL_EXT_color_buffer_float");
+  return half_float_renderable;
 #else
   return true;  // desktop GL 3.3: float formats are colour-renderable in core
 #endif

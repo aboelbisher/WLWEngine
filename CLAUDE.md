@@ -72,6 +72,11 @@ engine/wlw/
               last pass writes the destination (screen or viewport texture), then the canvas (UI not post-processed).
               Ready-made (scene/post_effects.h, shaders/post/*): AddBlur (separable 9-tap Gaussian in 5 reads), AddBloom
               (bright pass with soft knee -> blur at 1/4 -> combine onto the picture before it).
+              GPU timing (gpu_timer.h): GpuTimer = timer queries in a ring of kLatency+1 frames, read 3 frames late (no
+              stall), disjoint frames dropped (logic tested with a fake GpuQueries); GL: core on desktop, GLES needs
+              EXT_disjoint_timer_query (the Android emulator lacks it; platform::GetGLProcAddress). Sections per viewport:
+              3D, each post pass, canvas -> Viewport::GetGpuStats (smoothed ms), Window::GpuFrameMs / SetGpuTiming (on in
+              debug builds) / GpuTimingSupported. Engine panel shows them.
               Custom shaders (shader.h): one text (shader_type canvas|mesh|post; fragment(), optional vertex()) -> Shader::Create(code) or Shader::FromFile(path) -> ShaderMaterial::Create(shader)
               + SetParam(name, float/vec/mat4/texture); node/mesh SetMaterial or Canvas::ShaderRect. Engine inputs are prepended
               (documented in shader.h; may #include wlw/lighting.glsl and use SceneLighting). Data textures: WTexture2D::Create(w, h, {R8/RGB8/RGBA8/R16F/RGBA16F}) + Update (copied, uploaded before the next draw)
@@ -165,5 +170,5 @@ changes didn't break anything; keep it building when the engine API changes.
 - Shadows: one shadow map shared by every viewport (each viewport's shadow pass redraws it).
 - Touch input uses only the first finger (no multi-touch yet).
 - Post passes: no glInvalidateFramebuffer yet (GLES 3.0 has it, desktop GL 3.3 doesn't), which tiled phone GPUs
-  reward; no GPU timer, so their cost shows only as CPU time in the engine panel. Canvas 2D is never post-processed.
+  reward; GPU time needs EXT_disjoint_timer_query on phones (not on the emulator). Canvas 2D is never post-processed.
 - Textures free their CPU pixels once uploaded, so a lost GL context (if the platform ever loses it) can't re-upload.

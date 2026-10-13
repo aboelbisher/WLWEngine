@@ -15,6 +15,7 @@
 #include "rendering_driver.h"
 #include "wlw/rendering/frame_uniforms.h"
 #include "wlw/rendering/gl_blend.h"
+#include "wlw/rendering/gl_gpu_queries.h"
 #include "wlw/rendering/gl_index_buffer.h"
 #include "wlw/rendering/gl_instance_buffer.h"
 #include "wlw/rendering/gl_program.h"
@@ -113,6 +114,10 @@ public:
     // Draws each viewport's 2D canvas (the screen's is the game UI).
     ui_renderer_ = ui::UIRenderer::Create();
 
+    // GPU timing, if this GPU can (gpu_timer.h).
+    if (auto queries = CreateGLGpuQueries()) gpu_timer_ = std::make_unique<GpuTimer>(std::move(queries));
+    window->SetGpuTimingSupported(gpu_timer_ != nullptr);
+
     glEnable(GL_DEPTH_TEST);
     return true;
   }
@@ -164,6 +169,13 @@ public:
     glGetIntegerv(GL_FRAMEBUFFER_BINDING, &screen_framebuffer);
     const glm::vec2 screen_pixels{window->GetSize().x, window->GetSize().y};
 
+    // GPU timing: this frame's sections are measured; the results of one a few frames ago arrive.
+    timing_ = gpu_timer_ && window->GpuTiming();
+    if (timing_) {
+      gpu_timer_->BeginFrame(gpu_samples_);
+      ApplyGpuSamples(*window);
+    }
+
     for (const auto& [_, viewport] : window->GetViewports()) {
       RenderTarget* target = viewport->GetTarget();
       if (target == nullptr) continue;  // only the window's own GetScreen() draws to the screen
@@ -175,7 +187,8 @@ public:
 
     DrawViewport(window->GetScreen(), {static_cast<int>(screen_pixels.x), static_cast<int>(screen_pixels.y)},
                  static_cast<GLuint>(screen_framebuffer), /*has_depth=*/true);
-    window->DrawOverlays();  // e.g. the debug UI: on top of everything
+    if (timing_) gpu_timer_->End();
+    window->DrawOverlays();  // e.g. the debug UI: on top of everything (not timed)
 
     // Present the frame we just drew (previously the swap happened before drawing,
     // so every frame was shown one frame late).
@@ -265,6 +278,7 @@ public:
     const auto sorted = Clock::now();
     // GPU work from here on: the frame block, instance data, the shadow and main passes.
     glBindFramebuffer(GL_FRAMEBUFFER, scene_framebuffer);  // (the shadow pass returns to it)
+    TimeSection(viewport.Id(), GpuSection::Kind::Scene);
     if (draw_scene) {
       UploadFrame(*camera, frame_);
       for (NodeSlot& slot : node_slots_) slot.instances = PrepareInstances(*slot.node);
@@ -292,18 +306,62 @@ public:
     stats.state_calls_skipped = state_.Skipped();
 
     if (post) {
-      DrawPostPasses(viewport.Post(), *post, destination);
+      DrawPostPasses(viewport.Post(), *post, destination, viewport.Id());
       stats.post_passes = static_cast<int>(post->steps.size());
       stats.post_targets = viewport.Post().TargetCount();
       stats.post_us = micros(Clock::now() - submitted);
     }
     viewport.SetRenderStats(stats);
 
+    TimeSection(viewport.Id(), GpuSection::Kind::Canvas);
     ui_renderer_->Draw(viewport.GetCanvas(), {static_cast<float>(pixels.x), static_cast<float>(pixels.y)});
+    if (timing_) gpu_timer_->End();
+  }
+
+  // --- GPU TIMING (gpu_timer.h): sections measured one after another, results frames later ---
+  void TimeSection(uint32_t viewport, GpuSection::Kind kind, int index = 0) {
+    if (timing_) gpu_timer_->Begin({viewport, kind, index});
+  }
+
+  // A frame's results (from a few frames ago) into each viewport's GpuStats and the window's
+  // frame time. A viewport that wasn't drawn then keeps its numbers; one that's gone is skipped.
+  void ApplyGpuSamples(scene::Window& window) {
+    if (gpu_samples_.empty()) return;
+    float frame_ms = 0.0f;
+    for (const GpuSample& sample : gpu_samples_) frame_ms += sample.ms;
+    window.SetGpuFrameMs(SmoothMs(window.GpuFrameMs(), frame_ms));
+    auto apply = [this](scene::Viewport& viewport) {
+      float scene_ms = -1.0f, post_ms = -1.0f, canvas_ms = -1.0f;
+      raw_pass_ms_.clear();
+      for (const GpuSample& sample : gpu_samples_) {
+        if (sample.section.viewport != viewport.Id()) continue;
+        auto add = [&sample](float& total) { total = std::max(total, 0.0f) + sample.ms; };
+        switch (sample.section.kind) {
+          case GpuSection::Kind::Scene: add(scene_ms); break;
+          case GpuSection::Kind::Canvas: add(canvas_ms); break;
+          case GpuSection::Kind::PostPass: {
+            add(post_ms);
+            const auto index = static_cast<size_t>(sample.section.index);
+            if (raw_pass_ms_.size() <= index) raw_pass_ms_.resize(index + 1, 0.0f);
+            raw_pass_ms_[index] = sample.ms;
+            break;
+          }
+        }
+      }
+      if (scene_ms < 0.0f && canvas_ms < 0.0f) return;  // not drawn that frame
+      scene::GpuStats& stats = viewport.MutableGpuStats();
+      stats.scene_ms = scene_ms < 0.0f ? -1.0f : SmoothMs(stats.scene_ms, scene_ms);
+      stats.canvas_ms = canvas_ms < 0.0f ? -1.0f : SmoothMs(stats.canvas_ms, canvas_ms);
+      stats.post_ms = post_ms < 0.0f ? -1.0f : SmoothMs(stats.post_ms, post_ms);
+      stats.pass_ms.resize(raw_pass_ms_.size(), -1.0f);
+      for (size_t i = 0; i < raw_pass_ms_.size(); ++i) stats.pass_ms[i] = SmoothMs(stats.pass_ms[i], raw_pass_ms_[i]);
+    };
+    for (const auto& [_, viewport] : window.GetViewports()) apply(*viewport);
+    apply(window.GetScreen());
   }
 
   // --- POST PASSES: full-screen shaders from the scene picture to `destination` (post_pass.h) ---
-  void DrawPostPasses(PostChain& chain, const PostPlan& plan, GLuint destination) {
+  void DrawPostPasses(PostChain& chain, const PostPlan& plan, GLuint destination, uint32_t viewport_id) {
     glDisable(GL_DEPTH_TEST);
     glDisable(GL_CULL_FACE);
     state_.SetBlendMode(BlendMode::Opaque);  // each pass replaces its output's pixels
@@ -311,6 +369,7 @@ public:
     const std::vector<PostPass>& passes = chain.Passes();
     for (const PostStep& step : plan.steps) {
       const PostPass& pass = passes[static_cast<size_t>(step.pass)];
+      TimeSection(viewport_id, GpuSection::Kind::PostPass, step.pass);
       const GLuint output = step.output == kDestination ? destination : GLFramebuffer(chain.Target(step.output));
       glBindFramebuffer(GL_FRAMEBUFFER, output);
       glViewport(0, 0, step.size.x, step.size.y);
@@ -798,6 +857,7 @@ public:
       glDeleteBuffers(1, &skybox_vbo_);
       glDeleteVertexArrays(1, &post_vao_);
       copy_shader_.reset();
+      gpu_timer_.reset();
     }
     main_window_.reset();
     // ...then shut the platform down (destroys any windows / contexts still open).
@@ -816,6 +876,10 @@ private:
   GLuint skybox_vbo_ = 0;
   GLuint post_vao_ = 0;                  // empty: post passes draw a triangle made in the shader
   std::shared_ptr<Shader> copy_shader_;  // a post pass without a usable shader
+  std::unique_ptr<GpuTimer> gpu_timer_;  // null: this GPU can't time
+  bool timing_ = false;                  // timing this frame
+  std::vector<GpuSample> gpu_samples_;   // results arriving this frame
+  std::vector<float> raw_pass_ms_;       // scratch for ApplyGpuSamples
   GLuint frame_ubo_ = 0;
   GLStateCache state_;          // program, blend, depth writes, unit-0 texture: skips redundant GL calls
   // Per-viewport lists, reused every frame (cleared, never shrunk: no allocations once warm).

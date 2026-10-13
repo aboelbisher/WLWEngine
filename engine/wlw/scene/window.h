@@ -98,6 +98,21 @@ public:
 		for (const auto& [_, draw] : overlays_) draw();
 	}
 
+	// ---- GPU timing (rendering/gpu_timer.h) ----
+	// Measures the GPU's time per viewport (Viewport::GetGpuStats) and per frame. On in debug
+	// builds (the engine panel shows it), off in release builds unless turned on.
+	void SetGpuTiming(bool on) { gpu_timing_ = on; }
+	bool GpuTiming() const { return gpu_timing_; }
+	// False until the renderer has started, then whether this GPU can measure (desktop GL: yes;
+	// phones: EXT_disjoint_timer_query, which most have, and emulators often don't).
+	bool GpuTimingSupported() const { return gpu_timing_supported_; }
+	// The GPU's time for everything measured in a frame (the viewports' 3D, post passes and
+	// canvases; not the debug UI), smoothed, in ms; -1 until measured.
+	float GpuFrameMs() const { return gpu_frame_ms_; }
+	// For the renderer.
+	void SetGpuTimingSupported(bool supported) { gpu_timing_supported_ = supported; }
+	void SetGpuFrameMs(float ms) { gpu_frame_ms_ = ms; }
+
 protected:
 	core::Vector2 size_;  // drawable size in pixels (updated by the platform on resize)
 	input::Input input_;
@@ -112,6 +127,9 @@ protected:
 	int next_viewport_id_ = 0;
 	std::vector<std::pair<int, std::function<void()>>> overlays_;
 	int next_overlay_id_ = 0;
+	bool gpu_timing_ = WLW_DEBUG_UI != 0;
+	bool gpu_timing_supported_ = false;
+	float gpu_frame_ms_ = -1.0f;
 
 public:
 

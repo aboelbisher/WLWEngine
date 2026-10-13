@@ -311,6 +311,8 @@ bool HasCurrentGLContext() { return g_alive && eglGetCurrentContext() != EGL_NO_
 
 bool LoadGLFunctions() { return true; }  // libGLESv3 is linked directly
 
+void* GetGLProcAddress(const char* name) { return reinterpret_cast<void*>(eglGetProcAddress(name)); }
+
 std::optional<std::vector<uint8_t>> ReadFile(const std::string& path) {
   // Assets live inside the APK (zip), not on the file system: read them via AAssetManager.
   if (!g_app) return std::nullopt;

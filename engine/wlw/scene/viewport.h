@@ -2,9 +2,11 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
+#include <vector>
 
 #include <glm/glm.hpp>
 
@@ -36,6 +38,15 @@ struct RenderStats {
   int post_passes = 0;
   int post_targets = 0;    // textures the passes before the last write into
   float post_us = 0.0f;    // their GL calls
+};
+
+// The GPU's time for a viewport (Window::SetGpuTiming), smoothed, in ms; -1 = not measured
+// (timing off, unsupported, or not drawn yet). Arrives a few frames late (see gpu_timer.h).
+struct GpuStats {
+  float scene_ms = -1.0f;      // 3D: shadow + main pass
+  float post_ms = -1.0f;       // all its post passes
+  float canvas_ms = -1.0f;     // its 2D canvas
+  std::vector<float> pass_ms;  // each post pass
 };
 
 struct ViewportSettings {
@@ -128,8 +139,13 @@ class Viewport {
   const rendering::PostChain& Post() const { return post_; }
 
   const RenderStats& GetRenderStats() const { return render_stats_; }
+  const GpuStats& GetGpuStats() const { return gpu_stats_; }
+
+  // Unique for the program's run (GPU timing results find their viewport by it, frames later).
+  uint32_t Id() const { return id_; }
 
   // ---- For the renderer ----
+  GpuStats& MutableGpuStats() { return gpu_stats_; }
   // Whether to draw it this frame, at `pixel_size`: applies the update mode (Once becomes
   // Disabled), and redraws a kept picture once after a resize threw it away.
   bool BeginDraw(glm::ivec2 pixel_size) {
@@ -156,6 +172,13 @@ class Viewport {
   bool has_picture_ = false;
   rendering::PostChain post_;
   RenderStats render_stats_;
+  GpuStats gpu_stats_;
+  uint32_t id_ = NextId();
+
+  static uint32_t NextId() {
+    static uint32_t next = 1;
+    return next++;
+  }
 };
 
 }  // namespace wlw::scene

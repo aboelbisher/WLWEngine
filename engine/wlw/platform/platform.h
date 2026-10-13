@@ -30,6 +30,8 @@ bool HasCurrentGLContext();
 // Resolves GL function pointers once a context is current (glad on desktop; no-op on GLES,
 // where libGLESv3 is linked directly).
 bool LoadGLFunctions();
+// A GL function by name (e.g. an extension's), or null. Needs a current context.
+void* GetGLProcAddress(const char* name);
 
 // Reads a whole asset file. Desktop: a relative path is looked up in the working directory, then
 // next to the executable (where the build copies the assets). Android: path inside the APK's

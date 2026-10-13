@@ -83,6 +83,8 @@ bool HasCurrentGLContext() { return g_alive && glfwGetCurrentContext() != nullpt
 
 bool LoadGLFunctions() { return gladLoadGLLoader(reinterpret_cast<GLADloadproc>(glfwGetProcAddress)) != 0; }
 
+void* GetGLProcAddress(const char* name) { return reinterpret_cast<void*>(glfwGetProcAddress(name)); }
+
 std::optional<std::vector<uint8_t>> ReadFile(const std::string& path) {
   std::ifstream file(path, std::ios::binary);
   if (!file && std::filesystem::path(path).is_relative()) {

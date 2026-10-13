@@ -1,6 +1,11 @@
 #if WLW_DEBUG_UI
 #include "wlw/debug/engine_panel.h"
 
+#include <algorithm>
+#include <cstdio>
+#include <string>
+#include <vector>
+
 #include "imgui.h"
 #include "wlw/app/application.h"
 
@@ -12,6 +17,24 @@ void EnginePanel::OnDebugUI() {
   ImGui::SetNextWindowPos(ImVec2(8.0f, 8.0f), ImGuiCond_FirstUseEver);
   ImGui::Begin("Engine");
   ImGui::Text("%.0f fps, %.2f ms", App().Time().Fps(), App().Time().FrameMs());
+  // The GPU's own time (it runs behind the CPU: these are a few frames old, smoothed).
+  if (!window.GpuTimingSupported()) {
+    ImGui::TextDisabled("GPU timing: not supported on this GPU");
+  } else {
+    bool timing = window.GpuTiming();
+    if (ImGui::Checkbox("GPU timing", &timing)) window.SetGpuTiming(timing);
+    if (timing && window.GpuFrameMs() >= 0.0f) {
+      ImGui::SameLine();
+      ImGui::Text("GPU %.2f ms / frame", window.GpuFrameMs());
+    }
+  }
+  auto gpu_line = [](const char* name, const scene::Viewport& viewport) {
+    const scene::GpuStats& gpu = viewport.GetGpuStats();
+    if (gpu.scene_ms < 0.0f && gpu.canvas_ms < 0.0f) return;
+    ImGui::Text("%s GPU: 3D %.2f ms, post %.2f ms, canvas %.2f ms", name, std::max(gpu.scene_ms, 0.0f),
+                std::max(gpu.post_ms, 0.0f), std::max(gpu.canvas_ms, 0.0f));
+  };
+  gpu_line("Screen", window.GetScreen());
   const scene::RenderStats& stats = window.GetScreen().GetRenderStats();
   ImGui::Text("%d draw calls (%d transparent), %d instances, %d culled", stats.draw_calls,
               stats.transparent_draw_calls, stats.instances, stats.culled_nodes);
@@ -23,10 +46,15 @@ void EnginePanel::OnDebugUI() {
     if (s.post_passes == 0) return;
     ImGui::Text("%s post: %d passes, %d textures, CPU %.0f us", name, s.post_passes, s.post_targets, s.post_us);
     const rendering::PostChain& chain = viewport.Post();
-    for (const auto& pass : chain.Passes()) {
+    const std::vector<float>& gpu_ms = viewport.GetGpuStats().pass_ms;
+    for (size_t i = 0; i < chain.Passes().size(); ++i) {
+      const auto& pass = chain.Passes()[i];
       const bool has_shader = pass.material && pass.material->GetShader();
       const std::string shader = has_shader ? pass.material->GetShader()->Name() : "copy";
-      ImGui::BulletText("%s x%.2f%s%s", shader.c_str(), pass.scale, pass.name.empty() ? "" : " as ", pass.name.c_str());
+      char gpu[32] = "";
+      if (i < gpu_ms.size() && gpu_ms[i] >= 0.0f) std::snprintf(gpu, sizeof(gpu), ", GPU %.2f ms", gpu_ms[i]);
+      ImGui::BulletText("%s x%.2f%s%s%s", shader.c_str(), pass.scale, pass.name.empty() ? "" : " as ", pass.name.c_str(),
+                        gpu);
     }
   };
   post_line("Screen", window.GetScreen());
@@ -46,6 +74,7 @@ void EnginePanel::OnDebugUI() {
     ImGui::Text("%s: %d x %d %s, %s, %.1f MB, %d draws", viewport->Settings().name.c_str(), target->Width(),
                 target->Height(), half_float ? "16F" : "8-bit", kModes[static_cast<int>(viewport->GetUpdateMode())],
                 megabytes, viewport->GetRenderStats().draw_calls);
+    gpu_line(viewport->Settings().name.c_str(), *viewport);
     post_line(viewport->Settings().name.c_str(), *viewport);
   }
   const core::Vector2 framebuffer = window.GetSize();
