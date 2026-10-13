@@ -5,7 +5,6 @@
 #include <unordered_map>
 #include "image_loader.h"
 #include "wlw/rendering/texture.h"
-#include "wlw/rendering/render_device.h"
 
 namespace wlw::utils {
 
@@ -16,17 +15,17 @@ public:
         return instance;
     }
 
-    std::shared_ptr<rendering::WTexture2D> LoadTexture(const std::string& file_path, rendering::RenderDevice* device) {
+    std::shared_ptr<rendering::WTexture2D> LoadTexture(const std::string& file_path) {
         auto it = texture_cache_.find(file_path);
         if (it != texture_cache_.end()) {
             return std::static_pointer_cast<rendering::WTexture2D>(it->second);
         }
 
         auto raw_image = ImageLoader::LoadImage(file_path);
-        if (raw_image && device) {
-            auto gpu_texture = device->CreateTexture2D(*raw_image);
-            texture_cache_[file_path] = gpu_texture;
-            return gpu_texture;
+        if (raw_image) {
+            auto texture = rendering::WTexture2D::FromImage(*raw_image);
+            texture_cache_[file_path] = texture;
+            return texture;
         }
 
         return nullptr;

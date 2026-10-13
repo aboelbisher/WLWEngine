@@ -10,35 +10,32 @@
 #include "wlw/core/log.h"
 #include "wlw/platform/platform.h"
 #include "wlw/rendering/gl_program.h"
+#include "wlw/rendering/gl_resources.h"
 #include "wlw/rendering/shader_library.h"
 
 namespace wlw::rendering {
 
-GLShader::GLShader(const std::string& code) {
-  const ShaderSource source = SplitShaderSource(code);
-  if (!source.ok) {
-    WLW_LOG_ERROR("Custom shader: %s", source.error.c_str());
-    return;
-  }
-  target_ = source.target;
+GLShader::GLShader(const Shader& shader) {
+  const ShaderSource& source = shader.Source();
+  if (!source.ok) return;  // the text's error was logged when the Shader was made
+  const std::string label = shader.Name();
   // The engine's inputs (shaders/custom/*) go in front of each stage of the game's text, which
   // keeps its own line numbers in errors. The game's text may #include shader files too.
   const std::string* stage_file = nullptr;
-  if (target_ == Target::Canvas) {
+  if (source.target == ShaderTarget::Canvas) {
     stage_file = FindShaderFile("custom/canvas.vert");
     if (!stage_file) return;
-    program_ = BuildProgram("custom canvas shader", {"custom/canvas.vert", *stage_file, {}},
-                            {"shader", source.fragment, {"custom/canvas_fragment.glsl"}});
+    program_ = BuildProgram(label, {"custom/canvas.vert", *stage_file, {}},
+                            {label, source.fragment, {"custom/canvas_fragment.glsl"}});
   } else if (source.vertex.empty()) {
     stage_file = FindShaderFile("custom/mesh_default.vert");
     if (!stage_file) return;
-    program_ = BuildProgram("custom mesh shader", {"custom/mesh_default.vert", *stage_file, {"custom/mesh_vertex.glsl"}},
-                            {"shader", source.fragment, {"custom/mesh_fragment.glsl"}});
+    program_ = BuildProgram(label, {"custom/mesh_default.vert", *stage_file, {"custom/mesh_vertex.glsl"}},
+                            {label, source.fragment, {"custom/mesh_fragment.glsl"}});
   } else {
-    program_ = BuildProgram("custom mesh shader", {"shader", source.vertex, {"custom/mesh_vertex.glsl"}},
-                            {"shader", source.fragment, {"custom/mesh_fragment.glsl"}});
+    program_ = BuildProgram(label, {label, source.vertex, {"custom/mesh_vertex.glsl"}},
+                            {label, source.fragment, {"custom/mesh_fragment.glsl"}});
   }
-  valid_ = program_ != 0;
 }
 
 GLShader::~GLShader() {
@@ -70,7 +67,7 @@ int GLShader::ApplyParams(const ShaderMaterial& material, int first_unit) const 
           } else if constexpr (std::is_same_v<T, glm::mat4>) {
             glUniformMatrix4fv(location, 1, GL_FALSE, glm::value_ptr(value));
           } else if (value) {  // a texture
-            value->Bind(static_cast<unsigned int>(unit));
+            BindGLTexture(*value, static_cast<unsigned int>(unit));
             glUniform1i(location, unit);
             ++unit;
           }

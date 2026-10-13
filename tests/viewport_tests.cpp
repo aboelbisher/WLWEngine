@@ -1,5 +1,5 @@
 // Tests for scenes and viewports (scene/scene.h, scene/viewport.h, Window's viewport list): what is
-// shown where, sizes, update modes. CPU only: no GL context, so render targets are fakes.
+// shown where, sizes, update modes. CPU only: no GL context (viewports and their targets are made without one).
 #include <memory>
 #include <string>
 #include <vector>
@@ -14,19 +14,6 @@ using namespace wlw;
 
 namespace {
 
-// A render target without a GPU: remembers the sizes it was asked for.
-class FakeTarget : public rendering::RenderTarget {
- public:
-  explicit FakeTarget(const rendering::RenderTargetSettings& settings = {}) { settings_ = settings; }
-  void EnsureSize(int width, int height) override {
-    if (width == width_ && height == height_) return;
-    width_ = width;
-    height_ = height;
-    ++reallocations;
-  }
-  int reallocations = 0;
-};
-
 // A window without an OS window: only the shared (platform-free) part is exercised.
 class FakeWindow : public scene::Window {
  public:
@@ -40,7 +27,7 @@ class FakeWindow : public scene::Window {
 };
 
 std::shared_ptr<scene::Viewport> Offscreen(const std::string& name = "Viewport") {
-  return std::make_shared<scene::Viewport>(std::make_shared<FakeTarget>(), scene::ViewportSettings{.name = name});
+  return scene::Viewport::Create({.name = name});  // no GPU needed: the renderer makes the framebuffer
 }
 
 }  // namespace

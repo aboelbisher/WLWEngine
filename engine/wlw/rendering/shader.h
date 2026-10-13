@@ -1,11 +1,14 @@
 #pragma once
 
+#include <memory>
 #include <string>
+
+#include "wlw/rendering/gpu_resource.h"
 
 namespace wlw::rendering {
 
 // A game's own GPU program, used through a ShaderMaterial: on 3D nodes and meshes (mesh shaders)
-// or on Canvas::ShaderRect (canvas shaders). Made from one text by RenderDevice::CreateShader; if
+// or on Canvas::ShaderRect (canvas shaders). Made from one text by Shader::Create (or FromFile); if
 // it doesn't compile, the error is logged and IsValid() is false (a 3D node then draws with the
 // engine's own shader; a ShaderRect draws nothing).
 //
@@ -45,29 +48,45 @@ namespace wlw::rendering {
 //   normalize(vNormal), ViewDirection(vWorldPos), shininess, 1.0): the scene's lights, like the
 //   engine's shader. In the shadow pass the node is drawn as its plain mesh (a vertex() that
 //   moves vertices isn't seen there).
-class Shader {
- public:
-  enum class Target { Mesh, Canvas };
-
-  virtual ~Shader() = default;
-  Target GetTarget() const { return target_; }
-  bool IsValid() const { return valid_; }
-
- protected:
-  Shader() = default;
-  Target target_ = Target::Canvas;
-  bool valid_ = false;
-};
+enum class ShaderTarget { Mesh, Canvas };
 
 // A shader text split for the two GPU stages (no GPU needed; the backends add their inputs).
 struct ShaderSource {
   bool ok = false;
   std::string error;  // why not ok: no/unknown shader_type, no fragment(), unbalanced braces...
-  Shader::Target target = Shader::Target::Canvas;
+  ShaderTarget target = ShaderTarget::Canvas;
   std::string fragment;  // the text without vertex(), + a main() that calls fragment()
   std::string vertex;    // the text without fragment(), + a main() that calls vertex(); empty = no vertex()
 };
 // Removed parts become blank lines, so line numbers stay the game's.
 ShaderSource SplitShaderSource(const std::string& code);
+
+class Shader : public Resource {
+ public:
+  using Target = ShaderTarget;
+
+  // From its text. Checked now (shader_type, fragment(), braces: errors are logged and IsValid()
+  // is false); compiled by the renderer before the first frame (warm-up) or when first drawn.
+  static std::shared_ptr<Shader> Create(const std::string& code, const std::string& name = "custom shader");
+  // From a file (read with platform::ReadFile, so it works inside the APK too). A missing file is
+  // logged and gives an invalid shader.
+  static std::shared_ptr<Shader> FromFile(const std::string& path);
+
+  Target GetTarget() const { return source_.target; }
+  // False if its text is wrong or it didn't compile (both logged).
+  bool IsValid() const { return source_.ok && !failed_; }
+  const std::string& Name() const { return name_; }  // in error messages
+
+  // ---- For the renderer ----
+  const ShaderSource& Source() const { return source_; }
+  void MarkFailed() const { failed_ = true; }  // didn't compile: drawn as invalid from now on
+
+  Shader(ShaderSource source, std::string name);  // use Create
+
+ private:
+  ShaderSource source_;
+  std::string name_;
+  mutable bool failed_ = false;
+};
 
 }  // namespace wlw::rendering

@@ -148,7 +148,7 @@ namespace wlw::utils {
     }
   }
 
-  std::shared_ptr<core::Model<core::Vertex3D>> GLTFLoader::LoadModel(const std::string& filename, rendering::RenderDevice* device, bool normalize) {
+  std::shared_ptr<core::Model<core::Vertex3D>> GLTFLoader::LoadModel(const std::string& filename, bool normalize) {
     tinygltf::Model model;
     tinygltf::TinyGLTF loader;
     std::string err, warn;
@@ -158,7 +158,7 @@ namespace wlw::utils {
     auto raw_images = LoadRawImages(model);
     std::vector<std::shared_ptr<rendering::WTexture>> gpu_textures;
     for (const auto& raw : raw_images) {
-        gpu_textures.push_back(device->CreateTexture2D(raw));
+        gpu_textures.push_back(rendering::WTexture2D::FromImage(raw));
     }
 
     std::vector<std::shared_ptr<rendering::Material>> materials;

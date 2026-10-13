@@ -18,6 +18,7 @@
 #include "wlw/rendering/gl_index_buffer.h"
 #include "wlw/rendering/gl_instance_buffer.h"
 #include "wlw/rendering/gl_program.h"
+#include "wlw/rendering/gl_resources.h"
 #include "wlw/rendering/gl_shader.h"
 #include "wlw/rendering/gl_vertex_buffer.h"
 #include "wlw/rendering/mesh_variant.h"
@@ -162,8 +163,8 @@ public:
       if (target == nullptr) continue;  // only the window's own GetScreen() draws to the screen
       const glm::ivec2 pixels = viewport->PixelSize(screen_pixels);
       if (!viewport->BeginDraw(pixels)) continue;
-      target->EnsureSize(pixels.x, pixels.y);
-      glBindFramebuffer(GL_FRAMEBUFFER, target->FramebufferId());
+      target->SetSize(pixels.x, pixels.y);
+      glBindFramebuffer(GL_FRAMEBUFFER, GLFramebuffer(*target));
       DrawViewport(*viewport, pixels, target->Settings().depth);
     }
 
@@ -210,9 +211,12 @@ public:
     };
     for (const auto& [_, viewport] : window.GetViewports()) warm(*viewport);
     warm(window.GetScreen());
+    // Every game shader and texture alive now (canvas shaders too: no scene says they're needed).
+    const int custom = PrepareAliveResources();
     warmed_up_ = true;
     const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
-    WLW_LOG_INFO("Shader warm-up: %zu mesh variant(s) compiled in %.1f ms", mesh_programs_.size() - before, ms);
+    WLW_LOG_INFO("Shader warm-up: %zu mesh variant(s) + %d game shader(s) compiled in %.1f ms",
+                 mesh_programs_.size() - before, custom, ms);
   }
 
   // One viewport into the framebuffer that is bound: its scene through its camera, then its
@@ -378,14 +382,18 @@ public:
         item.depth_write = item.material ? item.material->DepthWrite() : true;
         item.custom = DrawableShaderMaterial(mesh->GetMaterial());
         if (!item.custom) item.custom = DrawableShaderMaterial(node->GetMaterial());
+        // Compiled the first time (normally at warm-up); one that doesn't compile falls back to the
+        // engine's shader.
+        if (item.custom) item.custom_program = GLShaderFor(*item.custom->GetShader());
+        if (!item.custom_program) item.custom = nullptr;
         GLuint program = 0;
         if (item.custom) {
-          program = static_cast<const GLShader&>(*item.custom->GetShader()).Program();
+          program = item.custom_program->Program();
         } else {
           item.program = &MeshProgramFor(MeshVariantKey(DrawFor(*node, *mesh, frame)));
           program = item.program->id;
           if (program == 0) continue;  // didn't compile (logged)
-          if (const Material* textured = TexturedMaterial(*node, *mesh)) item.texture = textured->GetTexture()->GetID();
+          if (const Material* textured = TexturedMaterial(*node, *mesh)) item.texture = GLTexture(*textured->GetTexture());
         }
         const auto index = static_cast<uint32_t>(draw_items_.size());
         draw_items_.push_back(item);
@@ -431,7 +439,7 @@ public:
       state_.SetBlendMode(BlendMode::Opaque);
       state_.UseProgram(skybox_program_);
       glBindVertexArray(skybox_vao_);
-      skybox->Bind(0);
+      BindGLTexture(*skybox, 0);
       glDrawArrays(GL_TRIANGLES, 0, 36);
       glBindVertexArray(0);
       glEnable(GL_DEPTH_TEST);
@@ -452,7 +460,7 @@ public:
       if (IsTransparentKey(order.key)) ++stats.transparent_draw_calls;
       const glm::mat4& model = slot.model;
       if (item.custom) {
-        UseShaderMaterial(*item.custom, model, item.node->IsInstanced());
+        UseShaderMaterial(*item.custom, *item.custom_program, model, item.node->IsInstanced());
       } else {
         const MeshProgram& program = *item.program;
         state_.UseProgram(program.id);
@@ -553,8 +561,8 @@ public:
   // A ShaderMaterial's shader with its model matrix and params (the camera and lights come from
   // the frame block). Its textures start at unit 2: units 0-1 are the mesh texture and the
   // shadow map, which stay bound for the nodes drawn after.
-  void UseShaderMaterial(const ShaderMaterial& material, const glm::mat4& model, bool instanced) {
-    const auto& shader = static_cast<const GLShader&>(*material.GetShader());
+  void UseShaderMaterial(const ShaderMaterial& material, const GLShader& shader, const glm::mat4& model,
+                         bool instanced) {
     state_.UseProgram(shader.Program());
     glUniformMatrix4fv(shader.Location("uModel"), 1, GL_FALSE, glm::value_ptr(model));
     glUniform1i(shader.Location("uInstanced"), instanced);
@@ -580,6 +588,7 @@ public:
     uint32_t node_slot = 0;                  // its node's per-frame data (node_slots_)
     const Material* material = nullptr;      // the material deciding its look (mesh's, else node's)
     const ShaderMaterial* custom = nullptr;  // drawn with this material's shader...
+    const GLShader* custom_program = nullptr;  // (its program)
     const MeshProgram* program = nullptr;    // ...or with this engine variant
     GLuint texture = 0;                      // engine variant: its texture on unit 0 (0 = none)
     BlendMode blend = BlendMode::Opaque;

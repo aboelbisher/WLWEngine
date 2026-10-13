@@ -9,7 +9,6 @@
 #include <glm/glm.hpp>
 
 #include "wlw/core/color.h"
-#include "wlw/rendering/render_device.h"
 #include "wlw/rendering/render_target.h"
 #include "wlw/scene/camera_3d.h"
 #include "wlw/scene/fps_camera.h"
@@ -49,7 +48,7 @@ struct ViewportSettings {
 // others draw into a texture before the screen, in the order they were added
 // (Window::AddViewport), so a viewport may use the texture of one added before it.
 //
-//   auto view = scene::Viewport::Create(device, {.format = TextureFormat::RGBA16F, .depth = false});
+//   auto view = scene::Viewport::Create({.format = TextureFormat::RGBA16F, .depth = false});
 //   view->SetSizeFromScreen(0.5f);          // half resolution, follows rotation / resizes
 //   view->SetCamera(top_down_camera);
 //   view->GetScene()->AddNode(particles);   // its own scene; or SetScene(shared_world)
@@ -63,10 +62,10 @@ class Viewport {
     Disabled,  // not drawn; the texture keeps its last picture (redrawn once if a resize lost it)
   };
 
-  // An offscreen viewport with its own (empty) scene, drawing into a texture made by `device`.
-  static std::shared_ptr<Viewport> Create(rendering::RenderDevice& device, const ViewportSettings& settings = {}) {
+  // An offscreen viewport with its own (empty) scene, drawing into a texture of its own.
+  static std::shared_ptr<Viewport> Create(const ViewportSettings& settings = {}) {
     rendering::RenderTargetSettings target{settings.format, settings.smooth, settings.depth};
-    return std::make_shared<Viewport>(device.CreateRenderTarget(1, 1, target), settings);
+    return std::make_shared<Viewport>(rendering::RenderTarget::Create(target), settings);
   }
 
   // `target` null = draws to the window (the screen). Games use Create().

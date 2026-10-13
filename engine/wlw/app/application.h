@@ -90,7 +90,6 @@ class Application final {
   scene::Window& Window() { return *window_; }
   input::Input& Input() { return window_->GetInput(); }  // keys, pointer/touch, swipes, taps
   audio::Audio& Audio() { return *audio_; }               // silent, but usable, without an audio device
-  rendering::RenderDevice& Device() { return *engine_->GetRenderDevice(); }  // textures, shaders, targets
   ScreenStack& Screens() { return screens_; }             // game states (menu, play, pause...)
   app::Time& Time() { return time_; }                     // this frame's time; the time scale
   const AppConfig& Config() const { return config_; }

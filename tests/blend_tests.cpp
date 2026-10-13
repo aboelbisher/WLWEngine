@@ -2,12 +2,16 @@
 // the Canvas, ShaderMaterial defaults, Image batching, and the radial falloff texture
 // (utils/textures.h). CPU only. (Draw order: render_list_tests.)
 #include <memory>
+#include <string>
 #include <vector>
 
 #include <glm/glm.hpp>
 
 #include "check.h"
 #include "wlw/rendering/material.h"
+#include "wlw/rendering/shader.h"
+#include "wlw/rendering/shader_material.h"
+#include "wlw/rendering/texture.h"
 #include "wlw/ui/canvas.h"
 #include "wlw/utils/textures.h"
 
@@ -16,31 +20,16 @@ using rendering::BlendMode;
 
 namespace {
 
-// Material is abstract (its texture binding is GL): this one binds nothing.
-class TestMaterial : public rendering::Material {
- public:
-  void BindTexture() const override {}
-  void UnbindTexture() const override {}
-};
-
-// A texture without a GPU (Canvas only compares pointers).
-class FakeTexture : public rendering::WTexture2D {
- public:
-  void Bind(unsigned int) const override {}
-  void Unbind() const override {}
-  void Update(const void*) override {}
-};
-
-// A shader without a GPU: only its kind matters here.
-class FakeShader : public rendering::Shader {
- public:
-  explicit FakeShader(Target target) { target_ = target; }
-};
+// Textures and shaders need no GPU to be made (the renderer uploads / compiles them later).
+std::shared_ptr<rendering::WTexture2D> Texture() { return rendering::WTexture2D::Create(4, 4); }
+std::shared_ptr<rendering::Shader> ShaderOf(const char* type) {
+  return rendering::Shader::Create(std::string("shader_type ") + type + "; void fragment() { FragColor = vec4(1.0); }");
+}
 
 }  // namespace
 
 static void TestDepthWriteRule() {
-  TestMaterial material;
+  rendering::Material material;
   CHECK(material.blend == BlendMode::Opaque && material.DepthWrite());  // solid: writes depth
   for (BlendMode blend : {BlendMode::Alpha, BlendMode::Additive, BlendMode::Multiply}) {
     material.blend = blend;
@@ -54,7 +43,7 @@ static void TestDepthWriteRule() {
 }
 
 static void TestCanvasBlendPerDraw() {
-  auto dot = std::make_shared<FakeTexture>();
+  auto dot = Texture();
   ui::Canvas canvas;
   canvas.BeginFrame({1000.0f, 1000.0f}, {1000.0f, 1000.0f});
 
@@ -72,8 +61,8 @@ static void TestCanvasBlendPerDraw() {
 
 static void TestShaderMaterialBlend() {
   // Like Godot: canvas shaders start Alpha (they draw over the UI), mesh shaders Opaque.
-  auto canvas_material = rendering::ShaderMaterial::Create(std::make_shared<FakeShader>(rendering::Shader::Target::Canvas));
-  auto mesh_material = rendering::ShaderMaterial::Create(std::make_shared<FakeShader>(rendering::Shader::Target::Mesh));
+  auto canvas_material = rendering::ShaderMaterial::Create(ShaderOf("canvas"));
+  auto mesh_material = rendering::ShaderMaterial::Create(ShaderOf("mesh"));
   CHECK(canvas_material->blend == BlendMode::Alpha);
   CHECK(mesh_material->blend == BlendMode::Opaque && mesh_material->DepthWrite());
 
@@ -88,8 +77,8 @@ static void TestShaderMaterialBlend() {
 }
 
 static void TestImageBatching() {
-  auto dot = std::make_shared<FakeTexture>();
-  auto other = std::make_shared<FakeTexture>();
+  auto dot = Texture();
+  auto other = Texture();
   ui::Canvas canvas;
   canvas.BeginFrame({1000.0f, 1000.0f}, {1000.0f, 1000.0f});
 

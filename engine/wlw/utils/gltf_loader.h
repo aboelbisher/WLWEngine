@@ -6,13 +6,11 @@
 #include "wlw/core/mesh.h"
 #include "wlw/core/vertex_3d.h"
 #include "wlw/core/model.h"
-#include "wlw/rendering/render_device.h"
-
 namespace wlw::utils {
 
 class GLTFLoader {
 public:
-  static std::shared_ptr<core::Model<core::Vertex3D>> LoadModel(const std::string& filename, rendering::RenderDevice* device, bool normalize = true);
+  static std::shared_ptr<core::Model<core::Vertex3D>> LoadModel(const std::string& filename, bool normalize = true);
 };
 
 } // namespace wlw::utils

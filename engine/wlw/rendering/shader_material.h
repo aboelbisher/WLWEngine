@@ -57,8 +57,6 @@ class ShaderMaterial : public Material {
   }
   const std::vector<std::pair<std::string, Param>>& Params() const { return params_; }
 
-  void BindTexture() const override {}  // the shader samples its own textures (params)
-  void UnbindTexture() const override {}
   const ShaderMaterial* AsShaderMaterial() const override { return this; }
 
  private:

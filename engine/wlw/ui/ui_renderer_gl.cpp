@@ -13,6 +13,7 @@
 #include "wlw/rendering/gl.h"
 #include "wlw/rendering/gl_blend.h"
 #include "wlw/rendering/gl_program.h"
+#include "wlw/rendering/gl_resources.h"
 #include "wlw/rendering/gl_shader.h"
 #include "wlw/ui/ui_renderer.h"
 
@@ -89,7 +90,7 @@ class GLUIRenderer : public UIRenderer {
       // The run's one texture on unit 0: a font atlas, an image, or (rectangles only) a white texel.
       GLuint texture = white_texture_;
       if (batch.font) texture = AtlasTexture(*batch.font);
-      else if (batch.texture) texture = batch.texture->GetID();
+      else if (batch.texture) texture = rendering::GLTexture(*batch.texture);
       glBindTexture(GL_TEXTURE_2D, texture);
       DrawQuads(batch);
     }
@@ -109,7 +110,9 @@ class GLUIRenderer : public UIRenderer {
   void DrawShaderRect(const Canvas& canvas, const UIBatch& batch) {
     const rendering::ShaderMaterial& material = *batch.material;
     if (!material.IsValid() || material.GetShader()->GetTarget() != rendering::Shader::Target::Canvas) return;
-    const auto& shader = static_cast<const rendering::GLShader&>(*material.GetShader());
+    const rendering::GLShader* program = rendering::GLShaderFor(*material.GetShader());  // compiled once
+    if (!program) return;
+    const rendering::GLShader& shader = *program;
     const UIVertex* corners = &canvas.Vertices()[batch.first_quad * 4];  // top left, ..., bottom right = [2]
     const glm::vec2 size = (corners[2].position - corners[0].position) * canvas.PixelsPerUnit();
     glUseProgram(shader.Program());

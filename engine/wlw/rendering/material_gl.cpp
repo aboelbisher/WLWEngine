@@ -1,28 +1,10 @@
 #include "material.h"
-#include "wlw/core/logger.h"
 
 namespace wlw::rendering {
 
-  class MaterialGl : public Material {
-  public:
-    void BindTexture() const override {
-      if (texture_) {
-        texture_->Bind();
-      }
-    }
-
-    void UnbindTexture() const override {
-      if (texture_) {
-        texture_->Unbind();
-      }
-    }
-
-    ~MaterialGl() override {
-    }
-  };
-
+  // Plain data: the renderer binds its texture (gl_resources.h).
   std::unique_ptr<Material> Material::Create() {
-    return std::make_unique<MaterialGl>();
+    return std::make_unique<Material>();
   }
 
 } // namespace wlw::rendering

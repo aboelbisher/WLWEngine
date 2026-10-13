@@ -5,16 +5,18 @@
 #include <unordered_map>
 
 #include "wlw/rendering/gl.h"
+#include "wlw/rendering/gpu_resource.h"
 #include "wlw/rendering/shader_material.h"
 #include "wlw/rendering/shader.h"
 
 namespace wlw::rendering {
 
-// A game's Shader on GL: the engine's inputs (see shader.h) + each stage of the game's text,
-// compiled and linked into one program. Used by the 3D renderer and the UI renderer.
-class GLShader : public Shader {
+// A game's Shader on GL (its GpuResource, made by GLShaderFor in gl_resources.h): the engine's
+// inputs (see shader.h) + each stage of the game's text, compiled and linked into one program.
+// Used by the 3D renderer and the UI renderer.
+class GLShader : public GpuResource {
  public:
-  explicit GLShader(const std::string& code);  // see shader.h
+  explicit GLShader(const Shader& shader);  // compiles it; Program() is 0 if that failed (logged)
   ~GLShader() override;
 
   GLuint Program() const { return program_; }

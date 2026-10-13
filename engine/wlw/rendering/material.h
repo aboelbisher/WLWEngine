@@ -20,9 +20,6 @@ namespace wlw::rendering {
 
 		virtual ~Material() = default;
 
-		virtual void BindTexture() const = 0;
-		virtual void UnbindTexture() const = 0;
-
 		void SetTexture(std::shared_ptr<rendering::WTexture> texture) {
 			texture_ = texture;
 		}
