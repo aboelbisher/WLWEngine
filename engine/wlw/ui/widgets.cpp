@@ -274,14 +274,14 @@ CardResult Card(UIContext& ui, std::string_view title, std::string_view subtitle
     const float below = face.max.y - result.art.max.y;
     const float width = face.Size().x - 2.0f * pad;
     const float title_size = FitTextSize(*theme.font, title, h * 0.15f, width);
-    const float sub_size = FitTextSize(*theme.font, subtitle, h * 0.1f, width);
+    const float sub_size = FitTextSize(*theme.font, subtitle, std::max(h * 0.12f, 18.0f), width);
     canvas.Text(*theme.font, title, {face.Center().x, result.art.max.y + below * 0.36f}, title_size, Align::Center,
                 ThemedText(theme, theme.text));
     canvas.Text(*theme.font, subtitle, {face.Center().x, result.art.max.y + below * 0.74f}, sub_size, Align::Center,
                 ThemedText(theme, theme.text, 0.85f));
     if (!badge.empty()) {
-      const float size = 13.0f;
-      const glm::vec2 pill(theme.font->Measure(badge, size) + 16.0f, 22.0f);
+      const float size = 16.0f;
+      const glm::vec2 pill(theme.font->Measure(badge, size) + 18.0f, 26.0f);
       const Rect at = Centered({face.max.x - pill.x * 0.5f + 6.0f, face.min.y + 2.0f}, pill);
       canvas.FillRect({at.min + glm::vec2(0.0f, 2.0f), at.max + glm::vec2(0.0f, 2.0f)}, Shade(theme.danger, 0.6f),
                       pill.y * 0.5f);

@@ -98,9 +98,9 @@ bool Segmented(UIContext& ui, std::span<const std::string_view> labels, int& sel
 
 // A small pill with an optional icon and a short text (a stat: "BEST 14,303"), centred on `center`.
 // Returns where it was drawn.
-Rect Chip(UIContext& ui, std::string_view text, glm::vec2 center, Icon icon = Icon::None, float height = 34.0f);
+Rect Chip(UIContext& ui, std::string_view text, glm::vec2 center, Icon icon = Icon::None, float height = 38.0f);
 // The size Chip will have (to lay several out in a row).
-glm::vec2 ChipSize(const UIContext& ui, std::string_view text, Icon icon = Icon::None, float height = 34.0f);
+glm::vec2 ChipSize(const UIContext& ui, std::string_view text, Icon icon = Icon::None, float height = 38.0f);
 
 // `count` stars side by side centred on `center`, the first `filled` in the primary colour.
 void Stars(UIContext& ui, glm::vec2 center, float size, int filled, int count = 3);
