@@ -84,6 +84,7 @@ void FlowParticles::SetStop(int path, float distance) {
   if (p.queued == 0) return;
   // Release the line: everyone waiting here moves again (and re-queues if there's still a stop).
   p.queued = 0;
+  p.line = 0.0f;
   for (size_t i = 0; i < path_.size(); ++i) {
     if (path_[i] == path) place_[i] = -1;
   }
@@ -146,6 +147,7 @@ void FlowParticles::Clear() {
   place_.clear();
   for (Path& p : paths_) {
     p.queued = 0;
+    p.line = 0.0f;
     p.emit_debt = 0.0f;
   }
 }
@@ -169,9 +171,11 @@ void FlowParticles::Update(float dt) {
     Path& p = paths_[Index(path_[i])];
     float d = dist_[i] + p.settings.speed * speed_[i] * dt;
     if (p.stop <= p.length) {
-      const float back = p.stop - static_cast<float>(p.queued) / p.settings.packed_per_unit;
+      // The line's length, not its count: dots that joined at another density keep their places.
+      const float back = p.stop - p.line;
       if (d >= back) {
         place_[i] = p.queued++;
+        p.line += 1.0f / (p.settings.packed_per_unit * density_);
         dist_[i] = std::max(back, 0.0f);  // a line longer than the path piles up at its start
         ++i;
         continue;
@@ -194,7 +198,7 @@ void FlowParticles::Update(float dt) {
   for (size_t pi = 0; pi < paths_.size(); ++pi) {
     Path& p = paths_[pi];
     if (p.emit_rate <= 0.0f) continue;
-    p.emit_debt += p.emit_rate * dt;
+    p.emit_debt += p.emit_rate * density_ * dt;
     while (p.emit_debt >= 1.0f) {
       p.emit_debt -= 1.0f;
       if (dist_.size() >= capacity_) {

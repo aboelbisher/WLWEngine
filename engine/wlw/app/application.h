@@ -4,6 +4,7 @@
 #include <string>
 #include <utility>
 
+#include "wlw/app/quality.h"
 #include "wlw/app/screen.h"
 #include "wlw/app/system.h"
 #include "wlw/app/time.h"
@@ -61,7 +62,8 @@ struct AppConfig {
 //    7. OnRender        alpha in [0, 1)                 <- push the state to the scene, interpolated
 //    8. OnRenderUI      canvases begun by the engine    <- 2D UI over the scene, then screen fades
 //    9. OnDebugUI       WLW_DEBUG_UI builds, while open <- ImGui panels (the engine's first)
-//   10. draw + present, then poll input; apply queued screen changes
+//   10. draw + present, then poll input; apply queued screen changes; Quality() reads the frame's
+//       times (its OnChange runs here, so a new level shows from the next frame)
 class Application final {
  public:
   explicit Application(AppConfig config = {});
@@ -92,6 +94,7 @@ class Application final {
   audio::Audio& Audio() { return *audio_; }               // silent, but usable, without an audio device
   ScreenStack& Screens() { return screens_; }             // game states (menu, play, pause...)
   app::Time& Time() { return time_; }                     // this frame's time; the time scale
+  app::Quality& Quality() { return quality_; }            // quality levels from the device's speed
   const AppConfig& Config() const { return config_; }
 #if WLW_DEBUG_UI
   debug::DebugUI& DebugUi() { return *debug_ui_; }  // e.g. HideFor() before a screenshot
@@ -100,6 +103,7 @@ class Application final {
  private:
   void BuildUI();  // phase 8: canvases, pointer, safe area, OnRenderUI, screens, fades
   void UpdateStats(double frame_seconds);
+  void UpdateQuality(double frame_seconds);
 
   AppConfig config_;
   // Destroyed in reverse order: screens and systems first (they may hold GPU resources and
@@ -116,6 +120,8 @@ class Application final {
   ScreenStack screens_;  // emptied at the end of Run(), while the systems are still alive
   core::FixedTimestep timestep_;
   app::Time time_;
+  app::Quality quality_;
+  bool quality_timing_ = false;  // GPU timing turned on for it (once: the debug panel may turn it off)
   bool quit_requested_ = false;
 
   // Stats accumulators, folded into time_ twice a second.

@@ -28,6 +28,24 @@ void EnginePanel::OnDebugUI() {
       ImGui::Text("GPU %.2f ms / frame", window.GpuFrameMs());
     }
   }
+  bool invalidate = window.InvalidateFramebuffers();  // phones: compare the GPU time with it off
+  if (ImGui::Checkbox("Invalidate framebuffers", &invalidate)) window.SetInvalidateFramebuffers(invalidate);
+  // Quality levels (app/quality.h): which one runs, what it reads, and a lock to try each.
+  if (app::Quality& quality = App().Quality(); quality.Configured()) {
+    ImGui::Text("Quality %d of 0..%d%s", quality.Level(), quality.Settings().levels - 1,
+                quality.Locked() ? " (locked)" : "");
+    ImGui::SameLine();
+    if (ImGui::SmallButton("-")) quality.Lock(std::max(quality.Level() - 1, 0));
+    ImGui::SameLine();
+    if (ImGui::SmallButton("+")) quality.Lock(quality.Level() + 1);
+    if (quality.Locked()) {
+      ImGui::SameLine();
+      if (ImGui::SmallButton("Auto")) quality.Unlock();
+    }
+    ImGui::Text("  reads GPU %.1f ms, frame %.1f ms; over %.1f s, under %.1f s (up after %.0f s)",
+                quality.SmoothedGpuMs(), quality.SmoothedFrameMs(), quality.SecondsOver(), quality.SecondsUnder(),
+                quality.UpWait(quality.Level() + 1));
+  }
   auto gpu_line = [](const char* name, const scene::Viewport& viewport) {
     const scene::GpuStats& gpu = viewport.GetGpuStats();
     if (gpu.scene_ms < 0.0f && gpu.canvas_ms < 0.0f) return;
@@ -44,7 +62,8 @@ void EnginePanel::OnDebugUI() {
   auto post_line = [](const char* name, const scene::Viewport& viewport) {
     const scene::RenderStats& s = viewport.GetRenderStats();
     if (s.post_passes == 0) return;
-    ImGui::Text("%s post: %d passes, %d textures, CPU %.0f us", name, s.post_passes, s.post_targets, s.post_us);
+    ImGui::Text("%s post: %d passes, %d textures, %d invalidated, CPU %.0f us", name, s.post_passes, s.post_targets,
+                s.invalidations, s.post_us);
     const rendering::PostChain& chain = viewport.Post();
     const std::vector<float>& gpu_ms = viewport.GetGpuStats().pass_ms;
     for (size_t i = 0; i < chain.Passes().size(); ++i) {

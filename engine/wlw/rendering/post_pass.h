@@ -92,6 +92,14 @@ class PostChain {
     planned_ = false;
   }
 
+  // Changes a pass's output size (e.g. for a quality level): re-planned before the next draw,
+  // the textures keep their formats and are only resized.
+  void SetScale(size_t index, float scale) {
+    if (index >= passes_.size() || passes_[index].scale == scale) return;
+    passes_[index].scale = scale;
+    planned_ = false;
+  }
+
   // ---- For the renderer ----
   // The plan for a viewport of `pixels`, and the textures it needs at their sizes (re-planned only
   // when the passes or the size changed; errors are logged then). The scene picture's target gets

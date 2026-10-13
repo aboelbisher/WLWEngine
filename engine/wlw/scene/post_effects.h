@@ -24,6 +24,9 @@ struct BlurSettings {
 // The blur's shader materials (one per pass, all the same shader): SetParam("uSpread", s).
 struct Blur {
   std::vector<std::shared_ptr<rendering::ShaderMaterial>> passes;
+
+  // Its resolution while the game runs (a quality level), on the viewport it was added to.
+  void SetScale(Viewport& viewport, float scale) const;
 };
 
 // A separable Gaussian blur (9 taps in 5 reads per direction). E.g. to melt soft dots into one
@@ -45,6 +48,10 @@ struct BloomSettings {
 struct Bloom {
   std::shared_ptr<rendering::ShaderMaterial> bright;
   std::shared_ptr<rendering::ShaderMaterial> combine;
+  Blur blur;  // the glow's blur passes
+
+  // The glow's resolution while the game runs (a quality level), on the viewport it was added to.
+  void SetScale(Viewport& viewport, float scale) const;
 };
 
 // Bloom (glow): the bright parts, blurred at low resolution and added back onto the picture. Adds

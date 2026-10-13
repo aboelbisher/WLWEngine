@@ -179,6 +179,7 @@ public:
 
     // GPU timing: this frame's sections are measured; the results of one a few frames ago arrive.
     timing_ = gpu_timer_ && window->GpuTiming();
+    invalidate_ = window->InvalidateFramebuffers();
     if (timing_) {
       gpu_timer_->BeginFrame(gpu_samples_);
       ApplyGpuSamples(*window);
@@ -197,6 +198,9 @@ public:
                  static_cast<GLuint>(screen_framebuffer), /*has_depth=*/true);
     if (timing_) gpu_timer_->End();
     window->DrawOverlays();  // e.g. the debug UI: on top of everything (not timed)
+    // The screen's depth (and stencil) end with the frame: not written back to memory.
+    glBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(screen_framebuffer));
+    Invalidate(static_cast<GLuint>(screen_framebuffer), /*color=*/false, /*depth=*/true);
 
     // Present the frame we just drew (previously the swap happened before drawing,
     // so every frame was shown one frame late).
@@ -333,15 +337,47 @@ public:
     state_.Reset();  // the UI renderer changed program, blend and textures behind the cache's back
 
     if (post) {
+      // Nothing reads the scene picture's depth after its 3D: not written back to memory.
+      if (has_depth) stats.invalidations += Invalidate(scene_framebuffer, /*color=*/false, /*depth=*/true);
       const auto post_start = Clock::now();
-      DrawPostPasses(viewport.Post(), *post, destination, viewport.Id());
+      stats.invalidations += DrawPostPasses(viewport.Post(), *post, destination, viewport.Id());
       stats.post_passes = static_cast<int>(post->steps.size());
       stats.post_targets = viewport.Post().TargetCount();
       stats.post_us = micros(Clock::now() - post_start);
     }
-    viewport.SetRenderStats(stats);
-
     draw_layers(scene::CanvasMode::Overlay);
+    // An offscreen viewport's depth isn't needed after it's drawn (the screen's: after the frame).
+    if (!post && has_depth && !viewport.IsScreen()) {
+      glBindFramebuffer(GL_FRAMEBUFFER, destination);
+      stats.invalidations += Invalidate(destination, /*color=*/false, /*depth=*/true);
+    }
+    viewport.SetRenderStats(stats);
+  }
+
+  // --- FRAMEBUFFER INVALIDATION: what a tiled GPU needn't load or store ---
+  // Phone GPUs (Mali, Adreno, PowerVR, Apple) draw a framebuffer in small tiles in on-chip memory:
+  // a tile's old contents are loaded from memory before drawing and stored back after, unless told
+  // they aren't needed (glInvalidateFramebuffer; Vulkan / Metal: loadOp / storeOp DONT_CARE). For
+  // the BOUND framebuffer ramebuffer (0 = the window's own). Returns 1 if it called GL. Desktop
+  // GL 3.3 has no such call and desktop GPUs aren't tiled: nothing there.
+  int Invalidate(GLuint framebuffer, bool color, bool depth) {
+    if (!invalidate_) return 0;
+#if defined(WLW_GLES)
+    GLenum attachments[3];
+    GLsizei count = 0;
+    const bool window = framebuffer == 0;  // the window's attachments have their own names
+    if (color) attachments[count++] = window ? GL_COLOR : GL_COLOR_ATTACHMENT0;
+    if (depth) {
+      attachments[count++] = window ? GL_DEPTH : GL_DEPTH_ATTACHMENT;
+      attachments[count++] = window ? GL_STENCIL : GL_STENCIL_ATTACHMENT;
+    }
+    if (count == 0) return 0;
+    glInvalidateFramebuffer(GL_FRAMEBUFFER, count, attachments);
+    return 1;
+#else
+    (void)framebuffer, (void)color, (void)depth;
+    return 0;
+#endif
   }
 
   // --- GPU TIMING (gpu_timer.h): sections measured one after another, results frames later ---
@@ -387,7 +423,9 @@ public:
   }
 
   // --- POST PASSES: full-screen shaders from the scene picture to `destination` (post_pass.h) ---
-  void DrawPostPasses(PostChain& chain, const PostPlan& plan, GLuint destination, uint32_t viewport_id) {
+  // Returns the framebuffer invalidations it made.
+  int DrawPostPasses(PostChain& chain, const PostPlan& plan, GLuint destination, uint32_t viewport_id) {
+    int invalidations = 0;
     glDisable(GL_DEPTH_TEST);
     glDisable(GL_CULL_FACE);
     state_.SetBlendMode(BlendMode::Opaque);  // each pass replaces its output's pixels
@@ -399,6 +437,8 @@ public:
       const GLuint output = step.output == kDestination ? destination : GLFramebuffer(chain.Target(step.output));
       glBindFramebuffer(GL_FRAMEBUFFER, output);
       glViewport(0, 0, step.size.x, step.size.y);
+      // The pass overwrites every pixel: the old picture needn't be loaded first.
+      invalidations += Invalidate(output, /*color=*/true, /*depth=*/false);
 
       // The pass's shader; one that's missing, of another kind or not compiling copies instead.
       const ShaderMaterial* material = pass.material.get();
@@ -435,6 +475,7 @@ public:
     state_.ForgetTexture0();
     glEnable(GL_DEPTH_TEST);
     glBindFramebuffer(GL_FRAMEBUFFER, destination);  // the canvas draws there next
+    return invalidations;
   }
 
   // What a pass without a usable shader does: copies uSource.
@@ -997,6 +1038,7 @@ private:
   GLuint post_vao_ = 0;                  // empty: post passes draw a triangle made in the shader
   std::shared_ptr<Shader> copy_shader_;  // a post pass without a usable shader
   std::unique_ptr<GpuTimer> gpu_timer_;  // null: this GPU can't time
+  bool invalidate_ = true;  // Window::InvalidateFramebuffers, for this frame
   bool timing_ = false;                  // timing this frame
   std::vector<GpuSample> gpu_samples_;   // results arriving this frame
   std::vector<float> raw_pass_ms_;       // scratch for ApplyGpuSamples

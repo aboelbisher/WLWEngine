@@ -113,6 +113,13 @@ public:
 	void SetGpuTimingSupported(bool supported) { gpu_timing_supported_ = supported; }
 	void SetGpuFrameMs(float ms) { gpu_frame_ms_ = ms; }
 
+	// ---- Framebuffer invalidation (GLES: glInvalidateFramebuffer) ----
+	// Tells phone GPUs which pictures they needn't load before drawing or store after (depth after
+	// the 3D, post textures about to be overwritten): memory bandwidth saved. On by default; the
+	// switch is for measuring it (engine panel). Nothing on desktop GL (no such call in GL 3.3).
+	void SetInvalidateFramebuffers(bool on) { invalidate_framebuffers_ = on; }
+	bool InvalidateFramebuffers() const { return invalidate_framebuffers_; }
+
 protected:
 	core::Vector2 size_;  // drawable size in pixels (updated by the platform on resize)
 	input::Input input_;
@@ -130,6 +137,7 @@ protected:
 	bool gpu_timing_ = WLW_DEBUG_UI != 0;
 	bool gpu_timing_supported_ = false;
 	float gpu_frame_ms_ = -1.0f;
+	bool invalidate_framebuffers_ = true;
 
 public:
 

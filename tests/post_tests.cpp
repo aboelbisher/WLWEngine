@@ -243,6 +243,40 @@ static void TestEffects() {
   CHECK(rendering::PlanPostChain(liquid_passes, kPhone).errors.empty());
 }
 
+static void TestScaleWhileRunning() {
+  // A quality level changes an effect's resolution: its passes only (found by their materials,
+  // whatever was added around them), and the targets follow at the next Prepare.
+  auto view = scene::Viewport::Create();
+  view->AddPostPass(Pass(1.0f, "first"));
+  const scene::Bloom bloom = scene::AddBloom(*view, {.scale = 0.25f, .iterations = 1});
+  const rendering::RenderTargetSettings scene{};
+  rendering::PostChain& chain = view->Post();
+  chain.Prepare({400, 200}, scene);
+  const int targets = chain.TargetCount();
+  auto has_width = [&chain](int width) {
+    for (int i = 0; i < chain.TargetCount(); ++i) {
+      if (chain.Target(i).Width() == width) return true;
+    }
+    return false;
+  };
+  CHECK(has_width(100));  // a quarter of 400
+
+  bloom.SetScale(*view, 0.125f);
+  const auto& passes = chain.Passes();
+  CHECK(passes[0].scale == 1.0f);                           // not the bloom's
+  CHECK(passes[1].scale == 0.125f && passes[2].scale == 0.125f && passes[3].scale == 0.125f);
+  CHECK(passes[4].material == bloom.combine && passes[4].scale == 1.0f);  // writes the picture
+  const PostPlan& plan = chain.Prepare({400, 200}, scene);
+  CHECK(plan.steps[1].size == glm::ivec2(50, 25));
+  CHECK(chain.TargetCount() == targets);
+  CHECK(has_width(50) && !has_width(100));
+
+  auto liquid = scene::Viewport::Create();
+  const scene::Blur blur = scene::AddBlur(*liquid, {.scale = 1.0f});
+  blur.SetScale(*liquid, 0.5f);
+  for (const auto& pass : liquid->Post().Passes()) CHECK(pass.scale == 0.5f);
+}
+
 int main() {
   TestEmptyAndSingle();
   TestPingPong();
@@ -252,5 +286,6 @@ int main() {
   TestChainTargets();
   TestPostShaders();
   TestEffects();
+  TestScaleWhileRunning();
   return TestResult("post");
 }

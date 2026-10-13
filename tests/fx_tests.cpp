@@ -331,6 +331,42 @@ static void TestFlowWritesSprites() {
   CHECK(small.Count() == 2);  // cut at the batch's capacity
   CHECK(Near(small.Sprites()[0].size, 0.0f) && Near(small.Sprites()[1].size, ends.dot_size));
 }
+static void TestFlowDensity() {
+  // Emitters spawn the density's share of their rate.
+  FlowParticles flow = Exact();
+  const int pipe = Line(flow, 1000.0f, 1.0f);
+  flow.SetDensity(0.5f);
+  flow.SetEmitter(pipe, 60.0f, {1, 1, 1, 1});
+  for (int i = 0; i < 60; ++i) flow.Update(1.0f / 60.0f);
+  CHECK(flow.Count() >= 29 && flow.Count() <= 31);
+  flow.SetDensity(5.0f);
+  CHECK(flow.Density() == 1.0f);  // clamped to 0.01..1
+
+  // Queues pack the density's share per unit, so a blocked pipe fills at the same speed; dots that
+  // queued at another density keep their places (no gap in the line).
+  FlowParticles queue = Exact();
+  const int path = Line(queue, 10.0f, 5.0f, /*packed=*/10.0f);
+  queue.SetStop(path, 5.0f);
+  queue.Emit(path, 0.0f, {1, 1, 1, 1});
+  queue.Emit(path, 0.0f, {1, 1, 1, 1});
+  queue.Update(2.0f);
+  CHECK(Near(queue.GetDot(1).distance, 4.9f));
+  queue.SetDensity(0.5f);
+  queue.Emit(path, 0.0f, {1, 1, 1, 1});
+  queue.Emit(path, 0.0f, {1, 1, 1, 1});
+  queue.Update(2.0f);
+  CHECK(queue.Queued(path) == 4);
+  CHECK(Near(queue.GetDot(2).distance, 4.8f) && Near(queue.GetDot(3).distance, 4.6f));  // 0.2 apart now
+  queue.SetStop(path, FlowParticles::kOpen);  // the line's length goes with it
+  queue.SetStop(path, 9.0f);
+  queue.Update(2.0f);
+  float front = 0.0f, back = 100.0f;
+  for (size_t i = 0; i < 4; ++i) {
+    front = std::max(front, queue.GetDot(i).distance);
+    back = std::min(back, queue.GetDot(i).distance);
+  }
+  CHECK(queue.Queued(path) == 4 && Near(front, 9.0f) && Near(back, 8.4f));  // 4 dots at 0.2 apart
+}
 
 int main() {
   TestBurstCountAndCapacity();
@@ -348,5 +384,6 @@ int main() {
   TestFlowQueuesAtAStop();
   TestFlowEmittersAndCapacity();
   TestFlowWritesSprites();
+  TestFlowDensity();
   return TestResult("fx");
 }

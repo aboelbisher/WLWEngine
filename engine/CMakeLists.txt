@@ -36,6 +36,8 @@ add_library(wlw STATIC
   wlw/app/application.cpp
   wlw/app/application.h
   wlw/app/entry_point.h
+  wlw/app/quality.cpp
+  wlw/app/quality.h
 
   wlw/audio/audio.cpp
   wlw/audio/audio.h

@@ -23,6 +23,9 @@ Application::Application(AppConfig config)
       window_(scene::Window::Create(config_.window_size, config_.title)),
       timestep_(config_.fixed_timestep, config_.max_frame_time) {
   time_.fixed_step_ = config_.fixed_timestep;
+  if (const std::string folder = platform::GetSaveDirectory(config_.title); !folder.empty()) {
+    quality_.SetSaveFile(folder + "/quality.txt");
+  }
 #if WLW_DEBUG_UI
   AddSystem<debug::EnginePanel>();  // the engine's own debug window, first of the debug panels
 #endif
@@ -64,6 +67,7 @@ int Application::Run() {
       // Back from the background (mobile): don't count the time we were away as one huge frame.
       previous = Clock::now();
       timestep_.Reset();
+      quality_.Settle();  // the first frames back are slow for reasons that pass
       audio_->Resume();
       systems_.ForEach([](System& system) { system.OnAppResumed(); });
     }
@@ -126,6 +130,7 @@ int Application::Run() {
     engine_->Iterate();
     screens_.EndFrame(time_.real_delta_);
     UpdateStats(frame_seconds);
+    UpdateQuality(frame_seconds);
   }
 
   screens_.Clear();  // OnExit for every screen while the systems are still fully alive
@@ -168,6 +173,16 @@ void Application::BuildUI() {
   if (const float fade = screens_.FadeAmount(); fade > 0.0f) {  // screen transitions
     canvas.FillRect({{0.0f, 0.0f}, canvas.Size()}, {0.0f, 0.0f, 0.0f, fade});
   }
+}
+
+void Application::UpdateQuality(double frame_seconds) {
+  if (!quality_.Configured()) return;
+  if (!quality_timing_) {  // it decides from the GPU's time where the GPU can measure it
+    quality_timing_ = true;
+    if (window_->GpuTimingSupported()) window_->SetGpuTiming(true);
+  }
+  const float gpu_ms = window_->GpuTiming() ? window_->GpuFrameMs() : -1.0f;
+  quality_.Update(static_cast<float>(frame_seconds), gpu_ms, static_cast<float>(frame_seconds * 1000.0));
 }
 
 void Application::UpdateStats(double frame_seconds) {

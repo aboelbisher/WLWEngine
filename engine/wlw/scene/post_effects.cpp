@@ -29,6 +29,15 @@ std::shared_ptr<ShaderMaterial> Material(const std::string& file) {
   return ShaderMaterial::Create(EngineShader(file));
 }
 
+// The passes of `viewport` drawn with `material` (an effect's passes are found by their materials,
+// so passes added or removed around them don't matter).
+void SetScaleOf(Viewport& viewport, const ShaderMaterial* material, float scale) {
+  rendering::PostChain& chain = viewport.Post();
+  for (size_t i = 0; i < chain.Passes().size(); ++i) {
+    if (chain.Passes()[i].material.get() == material) chain.SetScale(i, scale);
+  }
+}
+
 // The blur's passes, appended to `viewport`.
 void AppendBlur(Viewport& viewport, float scale, float spread, int iterations, rendering::TextureFormat format,
                 std::vector<std::shared_ptr<ShaderMaterial>>& materials) {
@@ -51,6 +60,15 @@ Blur AddBlur(Viewport& viewport, const BlurSettings& settings) {
   return blur;
 }
 
+void Blur::SetScale(Viewport& viewport, float scale) const {
+  for (const auto& material : passes) SetScaleOf(viewport, material.get(), scale);
+}
+
+void Bloom::SetScale(Viewport& viewport, float scale) const {
+  SetScaleOf(viewport, bright.get(), scale);
+  blur.SetScale(viewport, scale);  // the combine pass stays full size (it writes the picture)
+}
+
 Bloom AddBloom(Viewport& viewport, const BloomSettings& settings) {
   rendering::PostChain& chain = viewport.Post();
   // The picture the glow is added onto: the scene, or the output of the pass before the bloom
@@ -68,8 +86,7 @@ Bloom AddBloom(Viewport& viewport, const BloomSettings& settings) {
   bloom.bright->SetParam("uKnee", std::max(settings.knee, 0.0f));
   viewport.AddPostPass({.material = bloom.bright, .scale = settings.scale, .format = settings.format});
 
-  std::vector<std::shared_ptr<ShaderMaterial>> blur;
-  AppendBlur(viewport, settings.scale, settings.spread, settings.iterations, settings.format, blur);
+  AppendBlur(viewport, settings.scale, settings.spread, settings.iterations, settings.format, bloom.blur.passes);
 
   bloom.combine = Material("post/bloom_combine.glsl");
   bloom.combine->SetParam("uStrength", settings.strength);

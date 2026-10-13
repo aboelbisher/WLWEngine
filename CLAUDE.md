@@ -21,8 +21,9 @@ engine/wlw/
               optional Floor rectangle they bounce on and fall past) -> instances. FlowParticles (flow_particles.h):
               10-20k dots along paths (liquid in pipes; not a fluid sim), SoA arrays, paths resampled evenly (O(1)
               lookup), SetNext routing (round robin; none = fade out), SetStop = a gate dots queue behind (the line
-              grows back up the path), emitters; WriteTo(SpriteBatch) packs 16 B/dot + bounds. Emulator, -O2, 20k dots:
-              Update ~30 us, WriteTo ~95 us
+              grows back up the path), emitters; WriteTo(SpriteBatch) packs 16 B/dot + bounds. SetDensity(0..1) scales emitters + queue packing (count only;
+              the game sets dot_size, e.g. x 1/density^0.25; queues track their length, no gap on a change). Emulator, -O2, 20k dots:
+              Update ~30 us, WriteTo ~95 us; Pixel 4 (-O2): Update ~195 us, WriteTo ~950 us (the phone's real cost)
   debug/      DebugUI: Dear ImGui (third_party/imgui) fed from Input, drawn via Window::SetOverlay; games add
               panels in System::OnDebugUI() (#if WLW_DEBUG_UI); the engine's own window is debug::EnginePanel (a
               System the Application adds first). F1 / "Debug" button. Off in release builds
@@ -34,6 +35,12 @@ engine/wlw/
               FixedStep, Alpha, SinceStart, SetScale (hit-stop / slow motion via core/time_scale.h), Fps.
               entry_point.h: WLW_MAIN(make_app) with the game's MakeApp() (builds the Application, adds its systems),
               Screen + ScreenStack (game states: deferred push/pop/replace, overlays, fades, Back routing)
+              Quality (quality.h, App().Quality(); like Unity QualitySettings + Adaptive Performance): the game defines
+              N levels (Configure, OnChange = apply a tier; Lock/Unlock for menus/tests), the engine picks one: GPU ms
+              (timer queries, turned on by Configure) or late frames > budget x down_at / slow_frame_at for 2 s = down,
+              GPU < budget x up_at for 10 s = up (wait doubles per failure of that level, max 8x), 3 s settle after a
+              change/resume, readings smoothed ~0.5 s and clamped at 2 budgets; no GPU timer = down only; level saved
+              in <save dir>/quality.txt. Fed by Application after each frame (UpdateQuality). Engine panel: level, -/+/Auto
   core/       math types, FixedTimestep, Random (SplitMix64: deterministic everywhere, state saveable), log.h (WLW_LOG_*), logger.h (FAIL_IF), mesh/model, collision.h (AABB, Ray, Plane, IntersectPlane)
   input/      Input: keys (pressed vs held), pointer (mouse/first finger), swipes, taps
   math/       ExactCover: Knuth's Algorithm X with Dancing Links (exact cover search, counting, hints);
@@ -77,7 +84,12 @@ engine/wlw/
               Ready-made (scene/post_effects.h, shaders/post/*): AddBlur (separable 9-tap Gaussian in 5 reads), AddBloom
               (bright pass with soft knee -> blur at 1/4 -> combine onto the picture before it), AddThreshold (density ->
               solid shapes coloured rgb/a: soft additive dots -> AddBlur -> AddThreshold = metaballs/liquid; keep the
-              viewport AND the blur RGBA16F, RGBA8 clips colour x density and the middles go white).
+              viewport AND the blur RGBA16F, RGBA8 clips colour x density and the middles go white). Bloom/Blur::SetScale +
+              PostChain::SetScale change resolution at runtime (passes found by material; re-planned, targets resized).
+              Framebuffer invalidation (GLES glInvalidateFramebuffer, nothing on desktop GL 3.3): depth after the 3D,
+              each post output before it's drawn (DONT_CARE load), the screen's depth/stencil before swap;
+              Window::SetInvalidateFramebuffers (panel checkbox), RenderStats::invalidations. Pixel 4: no measurable GPU ms
+              change (Adreno; saves bandwidth timers don't show).
               GPU timing (gpu_timer.h): GpuTimer = timer queries in a ring of kLatency+1 frames, read 3 frames late (no
               stall), disjoint frames dropped (logic tested with a fake GpuQueries); GL: core on desktop, GLES needs
               EXT_disjoint_timer_query (the Android emulator lacks it; platform::GetGLProcAddress). Sections per viewport:
@@ -133,7 +145,7 @@ kit/wlw/kit/  wlw::kit: game-level building blocks shared by games (separate tar
               (UMP consent, load/show/retry); games add that dir to their sourceSets and depend on play-services-ads + UMP
 samples/      small games, built only when the engine is the top-level project (desktop):
               snake/ (Snake + its rules tests)
-tests/        engine unit tests (no window/GPU: draw order (sort keys), shader system (preprocessor, embedded files in every variant, std140 layout, lights, variants, UI kinds), systems (order, starting, Back), blending (depth-write rule, canvas batches, images, falloff texture), resources (made without a GPU, updates, alive list), post passes (planning, ping-pong, named inputs, chain targets, effects), viewports (scenes, sizes, update modes), anim, audio, core (random, atomic files, bridge queue), exact cover, search (bitboards, minimax, expectimax), gf2 (Lights Out), shader text splitting, lighting (light nodes, shadow-box fitting), fx, input, kit, picking, primitives, ui (canvas, safe area, widgets), screens); test data in tests/data/, also top-level only; ctest
+tests/        engine unit tests (no window/GPU: quality levels (down/up, back-off, settle, frame-time-only, lock, saved), draw order (sort keys), shader system (preprocessor, embedded files in every variant, std140 layout, lights, variants, UI kinds), systems (order, starting, Back), blending (depth-write rule, canvas batches, images, falloff texture), resources (made without a GPU, updates, alive list), post passes (planning, ping-pong, named inputs, chain targets, effects), viewports (scenes, sizes, update modes), anim, audio, core (random, atomic files, bridge queue), exact cover, search (bitboards, minimax, expectimax), gf2 (Lights Out), shader text splitting, lighting (light nodes, shadow-box fitting), fx, input, kit, picking, primitives, ui (canvas, safe area, widgets), screens); test data in tests/data/, also top-level only; ctest
 third_party/  glad (desktop only), stb, tinygltf + nlohmann json (also its own target wlw_json), miniaudio 0.11.25, stb_vorbis, Dear ImGui 1.92.9b (vendored)
 cmake/WLWHelpers.cmake  wlw_add_game(), wlw_add_assets(), wlw_set_warnings()
 vcpkg/ + vcpkg.json     desktop deps (glm, glfw3). Android fetches glm via FetchContent instead.
@@ -183,6 +195,9 @@ changes didn't break anything; keep it building when the engine API changes.
 - A viewport's default camera is an `FPSCamera`; games normally replace it with `SetCamera()`.
 - Shadows: one shadow map shared by every viewport (each viewport's shadow pass redraws it).
 - Touch input uses only the first finger (no multi-touch yet).
-- Post passes: no glInvalidateFramebuffer yet (GLES 3.0 has it, desktop GL 3.3 doesn't), which tiled phone GPUs
-  reward; GPU time needs EXT_disjoint_timer_query on phones (not on the emulator). 2D is post-processed only in Picture canvas layers.
+- GPU time needs EXT_disjoint_timer_query on phones (Pixel 4 / Adreno 640 has it; the emulator doesn't). Phone
+  clocks scale with load (DVFS): light frames read slower, so compare GPU ms between levels only roughly.
+  2D is post-processed only in Picture canvas layers.
+- Quality: no thermal input yet (AThermal_getThermalHeadroom, API 31+). Without a GPU timer it only steps down
+  (vsync hides headroom), and that saved level never goes back up. Default budget is 60 fps (90/120 Hz games set budget_ms).
 - Textures free their CPU pixels once uploaded, so a lost GL context (if the platform ever loses it) can't re-upload.

@@ -39,6 +39,7 @@ struct RenderStats {
   int post_passes = 0;
   int post_targets = 0;    // textures the passes before the last write into
   float post_us = 0.0f;    // their GL calls
+  int invalidations = 0;   // glInvalidateFramebuffer calls (phones: pictures not loaded / stored)
 };
 
 // The GPU's time for a viewport (Window::SetGpuTiming), smoothed, in ms; -1 = not measured

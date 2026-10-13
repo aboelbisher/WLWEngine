@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
@@ -64,6 +65,13 @@ class FlowParticles {
   // Spawns `per_second` dots of `color` at the path's start (0 = none). Fractions carry over.
   void SetEmitter(int path, float per_second, core::Color color);
 
+  // How many dots, as a share of what the paths ask for (0..1; a quality level): emitters spawn
+  // this share of their rate and queues pack this share per unit, so a blocked pipe still fills
+  // at the same speed. Dots already out finish their way (no pop); the look is the game's, e.g.
+  // fewer dots drawn bigger (dot_size). Emit() isn't scaled.
+  void SetDensity(float density) { density_ = std::clamp(density, 0.01f, 1.0f); }
+  float Density() const { return density_; }
+
   // ---- Dots ----
   // One dot at `distance` along `path` (a random side offset). False when full.
   bool Emit(int path, float distance, core::Color color);
@@ -98,6 +106,7 @@ class FlowParticles {
     FlowPathSettings settings;
     float stop = kOpen;
     int queued = 0;
+    float line = 0.0f;  // the queue's length along the path
     std::vector<int> next;
     uint32_t next_turn = 0;
     bool fed = false;  // some path's next is this one (dots arrive: no fade-in at the start)
@@ -115,6 +124,7 @@ class FlowParticles {
   size_t capacity_;
   core::Random rng_;
   float time_ = 0.0f;  // drives the wobble
+  float density_ = 1.0f;
 
   // One entry per dot in each (SoA).
   std::vector<int> path_;
