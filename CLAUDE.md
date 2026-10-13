@@ -69,7 +69,7 @@ engine/wlw/
               and WarmUp prepares every alive one (Resource::ForEachAlive). RenderDevice = mesh buffers, engine-internal.
               Post passes (post_pass.h): Viewport::AddPostPass({material (shader_type post), scale, format, name, inputs});
               with passes the 3D draws into the scene picture, PlanPostChain (CPU, tested) ping-pongs pooled targets, the
-              last pass writes the destination (screen or viewport texture), then the canvas (UI not post-processed).
+              last pass writes the destination (screen or viewport texture), then the Overlay canvas layers (UI not post-processed).
               Ready-made (scene/post_effects.h, shaders/post/*): AddBlur (separable 9-tap Gaussian in 5 reads), AddBloom
               (bright pass with soft knee -> blur at 1/4 -> combine onto the picture before it).
               GPU timing (gpu_timer.h): GpuTimer = timer queries in a ring of kLatency+1 frames, read 3 frames late (no
@@ -108,6 +108,8 @@ engine/wlw/
                  owns one and passes it to OnRenderUI(ui) / Screen::RenderUI(ui)), widgets.h (Button, Toggle: immediate mode,
                  take the UIContext; Panel: drawing only), layout.h (Centered, Inset, Row, Column).
               The UI canvas is Window::GetScreen().GetCanvas(); an offscreen viewport's canvas is drawn into its texture.
+              Canvas layers (viewport.h, like Unity Canvas render modes + sort order): AddCanvasLayer({mode, order}); Picture
+              = part of the picture (after 3D, before post passes), Overlay = on top after them; GetCanvas() = Overlay 0.
   utils/      image/glTF loaders, texture cache, primitives.h (procedural cube, bevelled cube, sphere, gem meshes),
               textures.h (procedural textures: RadialFalloffTexture = a soft (1-d²)² dot for glows, particles, metaballs)
 kit/wlw/kit/  wlw::kit: game-level building blocks shared by games (separate target on top of the engine; the
@@ -170,5 +172,5 @@ changes didn't break anything; keep it building when the engine API changes.
 - Shadows: one shadow map shared by every viewport (each viewport's shadow pass redraws it).
 - Touch input uses only the first finger (no multi-touch yet).
 - Post passes: no glInvalidateFramebuffer yet (GLES 3.0 has it, desktop GL 3.3 doesn't), which tiled phone GPUs
-  reward; GPU time needs EXT_disjoint_timer_query on phones (not on the emulator). Canvas 2D is never post-processed.
+  reward; GPU time needs EXT_disjoint_timer_query on phones (not on the emulator). 2D is post-processed only in Picture canvas layers.
 - Textures free their CPU pixels once uploaded, so a lost GL context (if the platform ever loses it) can't re-upload.

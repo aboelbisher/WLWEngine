@@ -136,15 +136,16 @@ int Application::Run() {
 void Application::BuildUI() {
   const core::Vector2 framebuffer = window_->GetSize();
   const glm::vec2 reference{config_.ui_reference_size.x, config_.ui_reference_size.y};
-  // Offscreen viewports' canvases: emptied and sized to their viewport (same units as the UI's
-  // when proportioned like the screen); the game draws into them during OnRenderUI.
+  // Offscreen viewports' canvas layers: emptied and sized to their viewport (same units as the
+  // UI's when proportioned like the screen); the game draws into them during OnRenderUI.
   for (const auto& [_, viewport] : window_->GetViewports()) {
     const glm::ivec2 pixels = viewport->PixelSize({framebuffer.x, framebuffer.y});
-    viewport->GetCanvas().BeginFrame(glm::vec2(pixels), reference);
+    viewport->BeginCanvases(glm::vec2(pixels), reference);
   }
 
-  ui::Canvas& canvas = ui_->canvas;  // the game UI: the screen's canvas, over its scene
-  canvas.BeginFrame({framebuffer.x, framebuffer.y}, reference);
+  // The screen's layers; its default one is the game UI's canvas.
+  window_->GetScreen().BeginCanvases({framebuffer.x, framebuffer.y}, reference);
+  ui::Canvas& canvas = ui_->canvas;
   ui_->safe_area = ui::SafeAreaFor(canvas, platform::GetSafeAreaInsets());
 
   // The pointer for UI widgets, in Canvas units: pointer units -> framebuffer pixels -> units.

@@ -162,7 +162,47 @@ static void TestCanvasMatchesScreenUnits() {
   CHECK(Near(view->GetCanvas().PixelsPerUnit() * 2.0f, screen_canvas.PixelsPerUnit(), 0.01f));
 }
 
+static void TestCanvasLayers() {
+  using scene::CanvasMode;
+  auto view = Offscreen();
+  ui::Canvas& ui = view->GetCanvas();  // the default layer: Overlay, order 0
+  CHECK(view->CanvasLayerCount() == 1);
+
+  ui::Canvas& popup = view->AddCanvasLayer({.mode = CanvasMode::Overlay, .order = 10});
+  ui::Canvas& glow = view->AddCanvasLayer({.mode = CanvasMode::Picture});
+  ui::Canvas& backdrop = view->AddCanvasLayer({.mode = CanvasMode::Overlay, .order = -5});
+  ui::Canvas& hud = view->AddCanvasLayer({.mode = CanvasMode::Overlay});  // ties: after the default one
+  ui::Canvas& background = view->AddCanvasLayer({.mode = CanvasMode::Picture, .order = -1});
+  CHECK(view->CanvasLayerCount() == 6);
+
+  auto order_of = [&](CanvasMode mode) {
+    std::vector<const ui::Canvas*> drawn;
+    view->ForEachCanvasLayer(mode, [&](const ui::Canvas& canvas) { drawn.push_back(&canvas); });
+    return drawn;
+  };
+  // Picture layers by order (they go into the picture, before the post passes)...
+  CHECK(order_of(CanvasMode::Picture) == std::vector<const ui::Canvas*>({&background, &glow}));
+  // ...Overlay layers by order, equal orders in the order added (the default one first).
+  CHECK(order_of(CanvasMode::Overlay) == std::vector<const ui::Canvas*>({&backdrop, &ui, &hud, &popup}));
+
+  // Every layer is started each frame at the viewport's size, in the same units.
+  view->BeginCanvases({540.0f, 1200.0f}, {360.0f, 640.0f});
+  CHECK(Near(glow.Size().x, ui.Size().x) && Near(popup.Size().y, ui.Size().y));
+  glow.FillRect({{0, 0}, {10, 10}}, {1, 1, 1, 1});
+  CHECK(glow.QuadCount() == 1 && ui.QuadCount() == 0);  // separate draw lists
+  view->BeginCanvases({540.0f, 1200.0f}, {360.0f, 640.0f});
+  CHECK(glow.QuadCount() == 0);
+
+  // References stay valid as layers come and go; the default layer can't be removed.
+  view->RemoveCanvasLayer(hud);
+  view->RemoveCanvasLayer(ui);
+  CHECK(view->CanvasLayerCount() == 5);
+  CHECK(order_of(CanvasMode::Overlay) == std::vector<const ui::Canvas*>({&backdrop, &ui, &popup}));
+  CHECK(&view->GetCanvas() == &ui);
+}
+
 int main() {
+  TestCanvasLayers();
   TestScene();
   TestViewportShowsASharedScene();
   TestViewportSize();

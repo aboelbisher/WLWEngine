@@ -49,6 +49,17 @@ struct GpuStats {
   std::vector<float> pass_ms;  // each post pass
 };
 
+// Where a canvas layer's 2D goes (like a Unity Canvas's render mode).
+enum class CanvasMode {
+  Overlay,  // after the post passes: never blurred or bloomed (HUD, buttons, text)
+  Picture,  // part of the viewport's picture: after its 3D, before its post passes
+};
+
+struct CanvasLayerSettings {
+  CanvasMode mode = CanvasMode::Overlay;
+  int order = 0;  // lower draws first, within its mode; equal orders draw in the order added
+};
+
 struct ViewportSettings {
   std::string name = "Viewport";                              // shown in the debug UI
   rendering::TextureFormat format = rendering::TextureFormat::RGBA8;  // RGBA16F: glow, values above 1
@@ -93,11 +104,42 @@ class Viewport {
   const std::shared_ptr<Scene>& GetScene() const { return scene_; }
   void SetCamera(std::shared_ptr<Camera3D> camera) { camera_ = std::move(camera); }
   const std::shared_ptr<Camera3D>& GetCamera() const { return camera_; }
-  // 2D drawn over its 3D: emptied and sized to the viewport every frame (in the app's UI units,
-  // so a screen-proportioned viewport has the same Size() as the screen's canvas); draw into it
-  // during OnRenderUI.
+  // Its default 2D layer (Overlay, order 0: drawn after the post passes, never post-processed):
+  // emptied and sized to the viewport every frame (in the app's UI units, so a
+  // screen-proportioned viewport has the same Size() as the screen's canvas); draw into it during
+  // OnRenderUI. The screen's is the game UI's (UIContext, widgets).
   ui::Canvas& GetCanvas() { return canvas_; }
   const ui::Canvas& GetCanvas() const { return canvas_; }
+
+  // ---- Canvas layers (like Unity's Canvases with a render mode and sort order) ----
+  // Another 2D layer, filled each frame like GetCanvas(). Picture layers are part of the
+  // viewport's picture (drawn after its 3D, before its post passes: blurred, bloomed...); Overlay
+  // layers go on top after the passes. The frame:
+  //   3D -> Picture layers (by order) -> post passes -> Overlay layers (by order, GetCanvas() at 0)
+  // The reference stays valid until the layer is removed.
+  ui::Canvas& AddCanvasLayer(const CanvasLayerSettings& settings = {}) {
+    CanvasLayer layer{settings, std::make_unique<ui::Canvas>()};
+    // After every layer that draws before or with it: equal orders keep the order added.
+    const auto at = std::upper_bound(layers_.begin(), layers_.end(), layer,
+                                     [](const CanvasLayer& a, const CanvasLayer& b) { return DrawsBefore(a, b); });
+    return *layers_.insert(at, std::move(layer))->owned;
+  }
+  // Removes a layer added with AddCanvasLayer (not the default one).
+  void RemoveCanvasLayer(const ui::Canvas& layer) {
+    std::erase_if(layers_, [&layer](const CanvasLayer& entry) { return entry.owned.get() == &layer; });
+  }
+  int CanvasLayerCount() const { return static_cast<int>(layers_.size()); }  // the default one included
+  // Calls visit(canvas) for each layer of `mode`, in drawing order.
+  template <typename Visit>
+  void ForEachCanvasLayer(CanvasMode mode, Visit&& visit) {
+    for (CanvasLayer& layer : layers_) {
+      if (layer.settings.mode == mode) visit(layer.owned ? *layer.owned : canvas_);
+    }
+  }
+  // Empties every layer and sizes it for `pixels` (the Application does it each frame).
+  void BeginCanvases(glm::vec2 pixels, glm::vec2 reference) {
+    for (CanvasLayer& layer : layers_) (layer.owned ? *layer.owned : canvas_).BeginFrame(pixels, reference);
+  }
 
   // ---- Its picture ----
   // The texture it draws into (null for the screen). The same object for the viewport's life.
@@ -165,6 +207,24 @@ class Viewport {
   std::shared_ptr<Scene> scene_ = Scene::Create();
   std::shared_ptr<Camera3D> camera_ = FPSCamera::Create();
   ui::Canvas canvas_;
+  // Every 2D layer in drawing order: Picture ones, then Overlay ones, each by order. The default
+  // one (canvas_) has no `owned` canvas.
+  struct CanvasLayer {
+    CanvasLayerSettings settings;
+    std::unique_ptr<ui::Canvas> owned;
+  };
+  static bool DrawsBefore(const CanvasLayer& a, const CanvasLayer& b) {
+    const bool a_picture = a.settings.mode == CanvasMode::Picture;
+    const bool b_picture = b.settings.mode == CanvasMode::Picture;
+    if (a_picture != b_picture) return a_picture;
+    return a.settings.order < b.settings.order;
+  }
+  std::vector<CanvasLayer> layers_ = DefaultLayers();
+  static std::vector<CanvasLayer> DefaultLayers() {
+    std::vector<CanvasLayer> layers;
+    layers.push_back({{CanvasMode::Overlay, 0}, nullptr});
+    return layers;
+  }
   std::optional<glm::ivec2> fixed_size_;
   std::optional<float> screen_scale_;
   UpdateMode update_mode_ = UpdateMode::Always;

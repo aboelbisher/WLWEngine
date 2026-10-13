@@ -41,9 +41,10 @@ namespace wlw::rendering {
 //   3. shadows  casters' depth from the shadow light into the shadow map
 //   4. main     skybox, opaque meshes, then transparent ones back to front; each mesh with the
 //               shader variant its features need (mesh_variant.h), or its ShaderMaterial's shader
-//   5. post     its post passes, if any (steps 3-4 then drew into the scene picture): full-screen
-//               shaders, the last one writing the viewport's picture (post_pass.h)
-//   6. canvas   the viewport's 2D canvas on top
+//   5. 2D        its Picture canvas layers (part of the picture)
+//   6. post      its post passes, if any (steps 3-5 then drew into the scene picture): full-screen
+//                shaders, the last one writing the viewport's picture (post_pass.h)
+//   7. 2D        its Overlay canvas layers on top (its default canvas = the game UI on the screen)
 class GLRenderingDriver : public RenderingDriver {
 public:
   explicit GLRenderingDriver(RenderDevice* device) : device_(device) {}
@@ -305,17 +306,31 @@ public:
     stats.texture_binds = state_.TextureBinds();
     stats.state_calls_skipped = state_.Skipped();
 
+    // 2D: Picture layers into the picture (before the passes), Overlay layers on top after them.
+    const glm::vec2 canvas_pixels{static_cast<float>(pixels.x), static_cast<float>(pixels.y)};
+    auto draw_layers = [&](scene::CanvasMode mode) {
+      bool timed = false;
+      viewport.ForEachCanvasLayer(mode, [&](const ui::Canvas& canvas) {
+        if (canvas.QuadCount() == 0) return;
+        if (!timed) TimeSection(viewport.Id(), GpuSection::Kind::Canvas);
+        timed = true;
+        ui_renderer_->Draw(canvas, canvas_pixels);
+      });
+      if (timed && timing_) gpu_timer_->End();
+    };
+    draw_layers(scene::CanvasMode::Picture);
+    state_.Reset();  // the UI renderer changed program, blend and textures behind the cache's back
+
     if (post) {
+      const auto post_start = Clock::now();
       DrawPostPasses(viewport.Post(), *post, destination, viewport.Id());
       stats.post_passes = static_cast<int>(post->steps.size());
       stats.post_targets = viewport.Post().TargetCount();
-      stats.post_us = micros(Clock::now() - submitted);
+      stats.post_us = micros(Clock::now() - post_start);
     }
     viewport.SetRenderStats(stats);
 
-    TimeSection(viewport.Id(), GpuSection::Kind::Canvas);
-    ui_renderer_->Draw(viewport.GetCanvas(), {static_cast<float>(pixels.x), static_cast<float>(pixels.y)});
-    if (timing_) gpu_timer_->End();
+    draw_layers(scene::CanvasMode::Overlay);
   }
 
   // --- GPU TIMING (gpu_timer.h): sections measured one after another, results frames later ---
