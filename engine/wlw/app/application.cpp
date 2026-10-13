@@ -170,7 +170,8 @@ void Application::BuildUI() {
   // The screen's layers; its default one is the game UI's canvas.
   window_->GetScreen().BeginCanvases({framebuffer.x, framebuffer.y}, reference);
   ui::Canvas& canvas = ui_->canvas;
-  ui_->safe_area = ui::SafeAreaFor(canvas, platform::GetSafeAreaInsets());
+  ui_->NewFrame(time_.RealDelta());
+  ui_->safe_area =ui::SafeAreaFor(canvas, platform::GetSafeAreaInsets());
 
   // The pointer for UI widgets, in Canvas units: pointer units -> framebuffer pixels -> units.
   // Uses the normal (blockable) queries, so the debug UI still takes precedence.

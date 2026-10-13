@@ -53,14 +53,15 @@ struct TextStyle {
 
 // What the UI shader (shaders/ui.frag) draws for a quad: UIVertex::params.x. The values are ui.frag's
 // KIND_* defines (a test checks they agree); Shader quads are drawn by their material instead.
-enum class QuadKind : int { Text = 1, Rect = 2, Shader = 3, Image = 4 };
+enum class QuadKind : int { Text = 1, Rect = 2, Shader = 3, Image = 4, Triangle = 5, Arc = 6 };
 
 // What the GPU gets per corner of a quad (see the UI shader in ui_renderer_gl.cpp).
 struct UIVertex {
   glm::vec2 position{0.0f};  // Canvas units
   glm::vec2 uv{0.0f};        // text: atlas coordinate; rect: position relative to the rect centre
   core::Color color{1.0f, 1.0f, 1.0f, 1.0f};
-  glm::vec4 params{0.0f};  // x = kind (1 text, 2 rect, 3 shader, 4 image); text: y = SDF edge; rect: y,z = half size, w = radius
+  glm::vec4 params{0.0f};  // x = kind (QuadKind); text: y = SDF edge; rect: y,z = half size, w = radius;
+                           // triangle: uv.x, uv.y, y = distances to its 3 edges; arc: y = radius, z = half thickness, w = half sweep
 };
 
 // A run of consecutive quads that can be drawn in one call: same blend mode, and at most one
@@ -97,6 +98,16 @@ class Canvas {
   void FillRect(const Rect& rect, const core::Color& color, float corner_radius = 0.0f);
   // A straight line with round ends, at any angle (e.g. over the 3D scene, between projected points).
   void Line(glm::vec2 from, glm::vec2 to, float thickness, const core::Color& color);
+  // A filled circle.
+  void Circle(glm::vec2 center, float radius, const core::Color& color);
+  // A filled triangle (any winding), anti-aliased like the rest.
+  void Triangle(glm::vec2 a, glm::vec2 b, glm::vec2 c, const core::Color& color);
+  // Part of a ring with round ends: `radius` to the middle of the stroke; angles in radians,
+  // 0 = up (12 o'clock), growing clockwise; `sweep` 2*pi (or more) = a whole ring.
+  void Arc(glm::vec2 center, float radius, float thickness, float start, float sweep, const core::Color& color);
+  void Ring(glm::vec2 center, float radius, float thickness, const core::Color& color) {
+    Arc(center, radius, thickness, 0.0f, 7.0f, color);
+  }
   // A single line of text. `position` is where the alignment edge (left / centre / right)
   // meets the vertical middle of the line, so centring text on a point is just Align::Center.
   void Text(const Font& font, std::string_view text, glm::vec2 position, float size, Align align = Align::Left,

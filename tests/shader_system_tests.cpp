@@ -216,6 +216,8 @@ static void TestUiKindsMatchTheShader() {
   CHECK(Contains(ui, "#define KIND_TEXT " + std::to_string(static_cast<int>(wlw::ui::QuadKind::Text)) + "\n"));
   CHECK(Contains(ui, "#define KIND_RECT " + std::to_string(static_cast<int>(wlw::ui::QuadKind::Rect)) + "\n"));
   CHECK(Contains(ui, "#define KIND_IMAGE " + std::to_string(static_cast<int>(wlw::ui::QuadKind::Image)) + "\n"));
+  CHECK(Contains(ui, "#define KIND_TRIANGLE " + std::to_string(static_cast<int>(wlw::ui::QuadKind::Triangle)) + "\n"));
+  CHECK(Contains(ui, "#define KIND_ARC " + std::to_string(static_cast<int>(wlw::ui::QuadKind::Arc)) + "\n"));
 }
 
 int main() {

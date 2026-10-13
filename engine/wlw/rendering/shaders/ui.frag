@@ -6,6 +6,8 @@
 #define KIND_TEXT 1
 #define KIND_RECT 2
 #define KIND_IMAGE 4
+#define KIND_TRIANGLE 5
+#define KIND_ARC 6
 
 in vec2 vUV;
 in vec4 vColor;
@@ -32,6 +34,24 @@ float RoundedRectCoverage() {
   return clamp(0.5 - d / max(fwidth(d), 1e-4), 0.0, 1.0);
 }
 
+// A triangle: vUV.x, vUV.y and vParams.y = the distances to its three edges (positive inside),
+// interpolated exactly because they're linear; the nearest edge decides.
+float TriangleCoverage() {
+  float d = min(min(vUV.x, vUV.y), vParams.y);
+  return clamp(0.5 + d / max(fwidth(d), 1e-4), 0.0, 1.0);
+}
+
+// Part of a ring with round ends (Inigo Quilez's sdArc): vUV = the position from the centre in a
+// frame whose +y points at the middle of the arc; vParams.y = radius, z = half thickness, w = half
+// the sweep (pi = a whole ring).
+float ArcCoverage() {
+  vec2 p = vec2(abs(vUV.x), vUV.y);
+  vec2 sc = vec2(sin(vParams.w), cos(vParams.w));
+  float d = (sc.y * p.x > sc.x * p.y) ? length(p - sc * vParams.y) : abs(length(p) - vParams.y);
+  d -= vParams.z;
+  return clamp(0.5 - d / max(fwidth(d), 1e-4), 0.0, 1.0);
+}
+
 // An image: the texel (straight alpha, like image files) times the tint.
 vec4 ImageColor() {
   return texture(uTexture, vUV) * vColor;
@@ -42,11 +62,13 @@ void main() {
   // it, and neighbouring pixels can belong to different quads.
   float text = TextCoverage();
   float rect = RoundedRectCoverage();
+  float triangle = TriangleCoverage();
+  float arc = ArcCoverage();
   int kind = int(vParams.x + 0.5);
   if (kind == KIND_IMAGE) {
     FragColor = Premultiply(ImageColor());
   } else {
-    float coverage = kind == KIND_TEXT ? text : rect;
+    float coverage = kind == KIND_TEXT ? text : kind == KIND_TRIANGLE ? triangle : kind == KIND_ARC ? arc : rect;
     FragColor = Premultiply(vec4(vColor.rgb, vColor.a * coverage));
   }
 }

@@ -1,6 +1,7 @@
 #include "wlw/ui/canvas.h"
 
 #include <algorithm>
+#include <cmath>
 #include <string>
 
 #include <glm/gtc/matrix_transform.hpp>
@@ -12,6 +13,8 @@ constexpr float kKindText = static_cast<float>(QuadKind::Text);
 constexpr float kKindRect = static_cast<float>(QuadKind::Rect);
 constexpr float kKindShader = static_cast<float>(QuadKind::Shader);  // drawn by a material's shader, not the UI's
 constexpr float kKindImage = static_cast<float>(QuadKind::Image);
+constexpr float kKindTriangle = static_cast<float>(QuadKind::Triangle);
+constexpr float kKindArc = static_cast<float>(QuadKind::Arc);
 }  // namespace
 
 void Canvas::BeginFrame(glm::vec2 framebuffer_pixels, glm::vec2 reference) {
@@ -112,6 +115,52 @@ void Canvas::Line(glm::vec2 from, glm::vec2 to, float thickness, const core::Col
                                 center + along * half.x + across * half.y, center - along * half.x + across * half.y};
   const glm::vec2 uvs[4] = {{-half.x, -half.y}, {half.x, -half.y}, {half.x, half.y}, {-half.x, half.y}};
   AddQuad(nullptr, corners, uvs, color, {kKindRect, half.x, half.y, half.y});
+}
+
+void Canvas::Circle(glm::vec2 center, float radius, const core::Color& color) {
+  FillRect({center - glm::vec2(radius), center + glm::vec2(radius)}, color, radius);
+}
+
+void Canvas::Triangle(glm::vec2 a, glm::vec2 b, glm::vec2 c, const core::Color& color) {
+  const auto cross = [](glm::vec2 u, glm::vec2 v) { return u.x * v.y - u.y * v.x; };
+  const float area2 = cross(b - a, c - a);
+  if (std::fabs(area2) < 1e-6f) return;
+  // The distance to each edge's line is linear across the triangle, so the GPU can interpolate it
+  // exactly: each corner carries its distance to the three edges (positive inside), and the shader
+  // fades out where the smallest one reaches zero. For room to fade, the triangle grows by about a
+  // pixel: each corner moves out along both its edges' normals (a miter).
+  const float side = area2 > 0.0f ? 1.0f : -1.0f;
+  const auto inward = [&](glm::vec2 from, glm::vec2 to) {
+    const glm::vec2 d = glm::normalize(to - from);
+    return glm::vec2(-d.y, d.x) * side;
+  };
+  const glm::vec2 n_ab = inward(a, b), n_bc = inward(b, c), n_ca = inward(c, a);
+  const float grow = 1.5f / pixels_per_unit_;
+  const auto out = [grow](glm::vec2 p, glm::vec2 n1, glm::vec2 n2) {
+    return p - grow * (n1 + n2) / std::max(1.0f + glm::dot(n1, n2), 0.05f);
+  };
+  const glm::vec2 corners[4] = {out(a, n_ab, n_ca), out(b, n_ab, n_bc), out(c, n_bc, n_ca), out(c, n_bc, n_ca)};
+  // One quad whose 4th corner repeats the 3rd: its second half (0-2-3) is empty.
+  ++BatchFor(nullptr, nullptr).quad_count;
+  for (const glm::vec2& p : corners) {
+    const glm::vec2 uv(glm::dot(p - b, n_bc), glm::dot(p - c, n_ca));
+    vertices_.push_back({p, uv, color, {kKindTriangle, glm::dot(p - a, n_ab), 0.0f, 0.0f}});
+  }
+}
+
+void Canvas::Arc(glm::vec2 center, float radius, float thickness, float start, float sweep, const core::Color& color) {
+  if (radius <= 0.0f || thickness <= 0.0f || sweep <= 0.0f) return;
+  // A square around the circle, turned so its own "down" (+y in uv) points at the middle of the
+  // arc: the shader then only needs the half sweep, measured both ways from that axis.
+  const float half_sweep = std::min(sweep * 0.5f, 3.14159265f);
+  const float middle = start + sweep * 0.5f;
+  const glm::vec2 axis(std::sin(middle), -std::cos(middle));  // 0 = up, clockwise (y is down)
+  const glm::vec2 across(-axis.y, axis.x);
+  const float h = radius + thickness * 0.5f + 1.5f / pixels_per_unit_;
+  const glm::vec2 local[4] = {{-h, -h}, {h, -h}, {h, h}, {-h, h}};
+  glm::vec2 corners[4];
+  for (int i = 0; i < 4; ++i) corners[i] = center + across * local[i].x + axis * local[i].y;
+  AddQuad(nullptr, corners, local, color, {kKindArc, radius, thickness * 0.5f, half_sweep});
 }
 
 void Canvas::AddText(const Font& font, std::string_view text, glm::vec2 pen, float size, const core::Color& color,

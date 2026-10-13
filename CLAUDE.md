@@ -130,9 +130,15 @@ engine/wlw/
                  rect drawn by a material's shader). Batched by texture + blend (1000s of sprites = 1 draw call); UIRenderer
                  (GL) draws it. Blending belongs to what you draw with: Image's style, ShaderRect's material (canvas shaders
                  default Alpha, mesh shaders Opaque), UI shapes Alpha. No widgets, input or screen geometry in it.
-              C. The UI layer: UIContext (ui_context.h: canvas + pointer + safe_area + interactive + widget memory; Application
-                 owns one and passes it to OnRenderUI(ui) / Screen::RenderUI(ui)), widgets.h (Button, Toggle: immediate mode,
-                 take the UIContext; Panel: drawing only), layout.h (Centered, Inset, Row, Column).
+                 Shapes: Circle, Triangle (edge distances interpolated, AA), Arc/Ring (sdArc), all in the one UI shader.
+              C. The UI layer: UIContext (ui_context.h: canvas + pointer + safe_area + interactive + active widget + theme +
+                 dt + Memory(id) = per-widget floats kept while asked for each frame (NewFrame drops the rest); Application
+                 owns one and passes it to OnRenderUI(ui) / Screen::RenderUI(ui)), theme.h (Theme: font + colour roles +
+                 radii/depth; the game sets ui.theme), icons.h (Icon enum + DrawIcon: vector icons from Canvas shapes),
+                 widgets.h (immediate mode: Pressable/WidgetId/RaisedRect building blocks; Button(variant, icon), IconButton,
+                 IconToggle, Switch, SettingRow, LinkRow, Card (mode tiles: caller draws the art), Dialog (scrim, slide-in,
+                 close X / tap outside), Segmented, Chip, Stars; the older font+ButtonStyle Button/Toggle/Panel still work),
+                 layout.h (Centered, Inset, Row, Column).
               The UI canvas is Window::GetScreen().GetCanvas(); an offscreen viewport's canvas is drawn into its texture.
               Canvas layers (viewport.h, like Unity Canvas render modes + sort order): AddCanvasLayer({mode, order}); Picture
               = part of the picture (after 3D, before post passes), Overlay = on top after them; GetCanvas() = Overlay 0.

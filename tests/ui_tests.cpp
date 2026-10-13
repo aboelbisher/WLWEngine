@@ -160,6 +160,146 @@ static void TestLayoutAndToggle(const Font& font) {
   CHECK(!Toggle(ui, font, "SOUND", sound, area) && !sound);  // not clicked: unchanged
 }
 
+// Triangles and arcs: what the shader gets to compute their coverage.
+static void TestCanvasShapes() {
+  Canvas canvas;
+  canvas.BeginFrame({400.0f, 800.0f}, {400.0f, 800.0f});  // 1 pixel per unit
+  canvas.Triangle({0.0f, 0.0f}, {30.0f, 0.0f}, {0.0f, 40.0f}, {1, 1, 1, 1});
+  CHECK(canvas.QuadCount() == 1);
+  const auto& v = canvas.Vertices();
+  CHECK(v[0].params.x == static_cast<float>(QuadKind::Triangle));
+  CHECK(v[2].position == v[3].position);  // the quad's 2nd half is empty
+  // Grown by 1.5 pixels: each corner is 1.5 outside both its edges (distance -1.5), and the
+  // distance to the opposite edge is positive.
+  CHECK(Near(v[0].uv.y, -1.5f, 1e-3f) && Near(v[0].params.y, -1.5f, 1e-3f) && v[0].uv.x > 20.0f);
+  CHECK(Near(v[1].uv.x, -1.5f, 1e-3f) && Near(v[1].params.y, -1.5f, 1e-3f) && v[1].uv.y > 20.0f);
+  CHECK(v[0].position.x < 0.0f && v[0].position.y < 0.0f);
+  // Same triangle the other way round: the same distances (winding doesn't matter).
+  canvas.Triangle({0.0f, 0.0f}, {0.0f, 40.0f}, {30.0f, 0.0f}, {1, 1, 1, 1});
+  CHECK(Near(v[4].uv.x, v[0].uv.x, 1e-3f) || Near(v[4].uv.y, v[0].uv.x, 1e-3f) || Near(v[4].params.y, v[0].uv.x, 1e-3f));
+  canvas.Triangle({0.0f, 0.0f}, {10.0f, 10.0f}, {20.0f, 20.0f}, {1, 1, 1, 1});  // flat: nothing
+  CHECK(canvas.QuadCount() == 2);
+
+  // An arc: radius, half thickness, half sweep; the square turned so +y in uv is its middle.
+  canvas.Arc({100.0f, 100.0f}, 20.0f, 4.0f, 0.0f, 3.14159265f, {1, 1, 1, 1});  // the right half
+  const auto& a = v[8];
+  CHECK(a.params.x == static_cast<float>(QuadKind::Arc));
+  CHECK(Near(a.params.y, 20.0f) && Near(a.params.z, 2.0f) && Near(a.params.w, 3.14159265f / 2.0f));
+  // The middle of this arc points at 3 o'clock: uv (0, r) is at (100 + r, 100).
+  glm::vec2 center(0.0f), axis(0.0f);
+  for (int i = 8; i < 12; ++i) center += v[i].position * 0.25f;
+  CHECK(Near(center.x, 100.0f, 1e-3f) && Near(center.y, 100.0f, 1e-3f));
+  axis = (v[10].position - v[9].position) / (v[10].uv.y - v[9].uv.y);  // corner 1 -> 2 moves along uv y
+  CHECK(Near(axis.x, 1.0f, 1e-3f) && Near(axis.y, 0.0f, 1e-3f));
+  canvas.Ring({0.0f, 0.0f}, 10.0f, 2.0f, {1, 1, 1, 1});
+  CHECK(Near(v[12].params.w, 3.14159265f));  // a whole ring: half sweep = pi
+  canvas.Circle({50.0f, 50.0f}, 8.0f, {1, 1, 1, 1});
+  CHECK(v[16].params.x == static_cast<float>(QuadKind::Rect) && Near(v[16].params.w, 8.0f));
+}
+
+// What widgets remember: kept while asked for every frame, dropped a frame after they stop.
+static void TestWidgetMemory() {
+  Canvas canvas;
+  canvas.BeginFrame({400.0f, 800.0f}, {400.0f, 800.0f});
+  UIContext ui(canvas);
+  ui.NewFrame(0.016f);
+  ui.Memory(7, 1.0f) += 1.0f;
+  CHECK(Near(ui.Memory(7), 2.0f) && ui.MemorySize() == 1);
+  ui.NewFrame(0.016f);
+  CHECK(Near(ui.Memory(7, 5.0f), 2.0f));  // still there: asked for last frame
+  ui.NewFrame(0.016f);                    // not asked for this time...
+  ui.NewFrame(0.016f);                    // ...so it's gone
+  CHECK(ui.MemorySize() == 0 && Near(ui.Memory(7, 5.0f), 5.0f));
+}
+
+// A click is a press and a release on the same widget; sliding off cancels.
+static void TestPressable() {
+  Canvas canvas;
+  canvas.BeginFrame({400.0f, 800.0f}, {400.0f, 800.0f});
+  UIContext ui(canvas);
+  const Rect rect{{0.0f, 0.0f}, {100.0f, 50.0f}};
+  ui.pointer.position = {50.0f, 25.0f};
+  ui.pointer.pressed = ui.pointer.down = true;
+  Press p = Pressable(ui, 42, rect);
+  CHECK(!p.clicked && p.held && p.amount >= 0.5f);
+  ui.pointer = {};
+  ui.pointer.position = {300.0f, 25.0f};  // slid off and let go
+  ui.pointer.released = true;
+  CHECK(!Pressable(ui, 42, rect).clicked);
+  ui.pointer = {{50.0f, 25.0f}, true, true, false};
+  Pressable(ui, 42, rect);
+  ui.pointer = {{50.0f, 25.0f}, false, false, true};
+  CHECK(Pressable(ui, 42, rect).clicked);
+  ui.interactive = false;  // screens not on top don't respond
+  ui.pointer = {{50.0f, 25.0f}, true, true, true};
+  CHECK(!Pressable(ui, 42, rect).clicked);
+}
+
+static void TestThemedWidgets(const Font& font) {
+  Canvas canvas;
+  canvas.BeginFrame({400.0f, 800.0f}, {400.0f, 800.0f});
+  UIContext ui(canvas);
+  ui.theme.font = &font;
+  ui.safe_area = {{0.0f, 0.0f}, canvas.Size()};
+  const auto tap = [&ui](glm::vec2 at) { ui.pointer = {at, false, true, true}; };
+
+  // A switch flips on a tap; its knob slides over a few frames.
+  const Rect sw{{10.0f, 10.0f}, {70.0f, 40.0f}};
+  bool music = false;
+  ui.NewFrame(0.0f);
+  tap(sw.Center());
+  CHECK(Switch(ui, music, sw) && music);
+  ui.pointer = {};
+  ui.NewFrame(0.05f);
+  CHECK(!Switch(ui, music, sw) && music);
+
+  // A setting row is tappable anywhere on it.
+  const Rect row{{10.0f, 100.0f}, {300.0f, 156.0f}};
+  bool sound = true;
+  tap({30.0f, 120.0f});
+  CHECK(SettingRow(ui, Icon::Sound, "SOUND", sound, row) && !sound);
+
+  // Tabs: tapping the second one selects it; tapping the selected one changes nothing.
+  const std::string_view labels[] = {"RUN", "RUSH"};
+  const Rect tabs{{0.0f, 200.0f}, {200.0f, 240.0f}};
+  int selected = 0;
+  tap({150.0f, 220.0f});
+  CHECK(Segmented(ui, labels, selected, tabs) && selected == 1);
+  tap({150.0f, 220.0f});
+  CHECK(!Segmented(ui, labels, selected, tabs) && selected == 1);
+
+  // A card reports its click and where its picture goes (inside the card, in its top part).
+  const Rect card{{0.0f, 300.0f}, {120.0f, 450.0f}};
+  tap(card.Center());
+  const CardResult result = Card(ui, "PUZZLES", "LEVEL 3", card, {0.2f, 0.6f, 0.6f, 1.0f}, "NEW");
+  CHECK(result.clicked && result.art.min.y > card.min.y && result.art.max.y < card.Center().y + 20.0f);
+
+  // A dialog: content under its title; a tap outside closes it once it's in, the button anytime.
+  ui.pointer = {};
+  ui.NewFrame(0.0f);
+  DialogResult dialog = Dialog(ui, "SETTINGS", {300.0f, 400.0f});
+  CHECK(dialog.content.min.y > ui.safe_area.Center().y - 200.0f && !dialog.close);
+  ui.NewFrame(1.0f);  // fully in
+  Dialog(ui, "SETTINGS", {300.0f, 400.0f});
+  ui.NewFrame(0.016f);
+  tap({5.0f, 5.0f});
+  CHECK(Dialog(ui, "SETTINGS", {300.0f, 400.0f}).close);
+  tap({200.0f, 400.0f});  // inside the panel
+  CHECK(!Dialog(ui, "SETTINGS", {300.0f, 400.0f}).close);
+  tap({200.0f + 150.0f - 14.0f, 400.0f - 200.0f + 14.0f});  // the close button on its corner
+  CHECK(Dialog(ui, "SETTINGS", {300.0f, 400.0f}, true).close);
+
+  // Everything drew something; icons are only shapes (no text), every one of them.
+  const size_t before = canvas.QuadCount();
+  for (int i = 1; i <= static_cast<int>(Icon::Grid); ++i) {
+    const size_t at = canvas.QuadCount();
+    DrawIcon(canvas, static_cast<Icon>(i), {{0.0f, 0.0f}, {48.0f, 48.0f}}, {1, 1, 1, 1});
+    CHECK(canvas.QuadCount() > at);
+  }
+  CHECK(canvas.QuadCount() > before && canvas.Batches().size() >= 1);
+  CHECK(Chip(ui, "BEST 100", {200.0f, 600.0f}, Icon::Trophy).Size().x > font.Measure("BEST 100", 17.0f));
+}
+
 // A ShaderMaterial's params: stored by name, set again = replaced (no GPU needed).
 static void TestMaterialParams() {
   auto material = wlw::rendering::ShaderMaterial::Create(nullptr);  // no shader: no GPU needed
@@ -204,9 +344,13 @@ int main() {
     TestOutlineEdge(*font);
     TestCanvasTextAndBatches(*font);
     TestLayoutAndToggle(*font);
+    TestThemedWidgets(*font);
   }
   TestCanvasUnits();
   TestCanvasLine();
+  TestCanvasShapes();
+  TestWidgetMemory();
+  TestPressable();
   TestMaterialParams();
   TestCanvasShaderRect();
   return TestResult("ui");

@@ -146,7 +146,10 @@ add_library(wlw STATIC
   wlw/ui/canvas.h
   wlw/ui/font.cpp
   wlw/ui/font.h
+  wlw/ui/icons.cpp
+  wlw/ui/icons.h
   wlw/ui/layout.h
+  wlw/ui/theme.h
   wlw/ui/ui_context.h
   wlw/ui/ui_renderer.h
   wlw/ui/ui_renderer_gl.cpp
