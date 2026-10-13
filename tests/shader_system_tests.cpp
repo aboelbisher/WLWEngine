@@ -93,7 +93,7 @@ static void TestEngineShaderFiles() {
   for (const char* name : {"mesh.vert", "mesh.frag", "shadow.vert", "shadow.frag", "skybox.vert", "skybox.frag", "ui.vert",
                            "ui.frag", "wlw/frame.glsl", "wlw/lighting.glsl", "wlw/shadows.glsl", "wlw/common.glsl",
                            "wlw/color.glsl", "custom/canvas.vert", "custom/canvas_fragment.glsl", "custom/mesh_vertex.glsl",
-                           "custom/mesh_default.vert", "custom/mesh_fragment.glsl"}) {
+                           "custom/mesh_default.vert", "custom/mesh_fragment.glsl", "sprite.vert", "sprite.frag"}) {
     if (!FindShaderFile(name)) std::printf("  missing engine shader file %s\n", name);
     CHECK(FindShaderFile(name) != nullptr);
   }
@@ -112,6 +112,13 @@ static void TestEngineShaderFiles() {
     check_stage("mesh.vert", defines);
     defines.back() = "WLW_FRAGMENT";
     check_stage("mesh.frag", defines);
+  }
+  for (const std::vector<std::string>& variant : {std::vector<std::string>{}, std::vector<std::string>{"TEXTURED"}}) {
+    std::vector<std::string> defines = variant;  // the sprite batches' program, plain and textured
+    defines.emplace_back("WLW_VERTEX");
+    check_stage("sprite.vert", defines);
+    defines.back() = "WLW_FRAGMENT";
+    check_stage("sprite.frag", defines);
   }
   for (const char* file : {"shadow.vert", "skybox.vert", "ui.vert", "custom/canvas.vert"}) check_stage(file, {"WLW_VERTEX"});
   for (const char* file : {"shadow.frag", "skybox.frag", "ui.frag"}) check_stage(file, {"WLW_FRAGMENT"});

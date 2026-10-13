@@ -36,8 +36,8 @@ void EnginePanel::OnDebugUI() {
   };
   gpu_line("Screen", window.GetScreen());
   const scene::RenderStats& stats = window.GetScreen().GetRenderStats();
-  ImGui::Text("%d draw calls (%d transparent), %d instances, %d culled", stats.draw_calls,
-              stats.transparent_draw_calls, stats.instances, stats.culled_nodes);
+  ImGui::Text("%d draw calls (%d transparent), %d instances (%.0f KB up), %d culled", stats.draw_calls,
+              stats.transparent_draw_calls, stats.instances, stats.instance_bytes / 1024.0f, stats.culled_nodes);
   ImGui::Text("%d program changes, %d texture binds, %d state calls skipped", stats.program_changes,
               stats.texture_binds, stats.state_calls_skipped);
   ImGui::Text("CPU: gather %.0f us, sort %.0f us, submit %.0f us", stats.gather_us, stats.sort_us, stats.submit_us);

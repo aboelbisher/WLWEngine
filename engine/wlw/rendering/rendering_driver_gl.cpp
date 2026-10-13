@@ -30,6 +30,7 @@
 #include "wlw/rendering/gl_state_cache.h"
 #include "wlw/scene/light.h"
 #include "wlw/scene/shadow_map.h"
+#include "wlw/scene/sprite_batch.h"
 #include "wlw/scene/window.h"
 #include "wlw/ui/ui_renderer.h"
 
@@ -145,6 +146,11 @@ public:
       scene::AABB box;  // world bounds, computed once per frame (GetAABB walks every mesh / copy)
     };
     std::vector<Drawable> drawables;               // visible nodes with something to draw
+    struct Sprites {
+      scene::SpriteBatch* batch;
+      scene::AABB box;  // world bounds (its SetBounds box through its transform)
+    };
+    std::vector<Sprites> sprites;                  // visible sprite batches with dots (no shadows)
     scene::AABB casters{}, receivers{};            // around every shadow caster / receiver
     bool has_casters = false, has_receivers = false;
     const scene::LightNode* shadow_light = nullptr;  // the directional light that casts shadows, if any
@@ -155,6 +161,7 @@ public:
     void Clear() {
       lights.clear();
       drawables.clear();
+      sprites.clear();
       has_casters = has_receivers = false;
       shadow_light = nullptr;
       shadow_active = false;
@@ -207,6 +214,10 @@ public:
       Frame frame;
       bool any_caster = false;
       viewport.GetScene()->IterateOverNodes([&](const std::shared_ptr<scene::Node3D>& node) {
+        if (const scene::SpriteBatch* sprites = node->AsSpriteBatch()) {
+          SpriteProgramFor(SpriteTexture(*sprites) != nullptr);
+          return;
+        }
         if (const scene::LightNode* light = node->AsLight()) {
           frame.lights.push_back(light);
           const bool shadows = light->CastsShadows() && light->GetType() == scene::LightNode::Type::Directional;
@@ -282,7 +293,7 @@ public:
     TimeSection(viewport.Id(), GpuSection::Kind::Scene);
     if (draw_scene) {
       UploadFrame(*camera, frame_);
-      for (NodeSlot& slot : node_slots_) slot.instances = PrepareInstances(*slot.node);
+      for (NodeSlot& slot : node_slots_) slot.instances = PrepareInstances(*slot.node, &stats);
       if (frame_.shadow_active) DrawShadowMap(frame_);
     }
 
@@ -439,6 +450,10 @@ public:
   void GatherScene(const scene::Scene& scene, Frame& frame) {
     scene.IterateOverNodes([&frame](const std::shared_ptr<scene::Node3D>& node) {
       if (!node->IsVisibleInHierarchy()) return;
+      if (scene::SpriteBatch* sprites = node->AsSpriteBatch()) {
+        if (!sprites->Empty()) frame.sprites.push_back({sprites, sprites->WorldBounds()});
+        return;
+      }
       if (const scene::LightNode* light = node->AsLight()) {
         frame.lights.push_back(light);
         return;
@@ -557,6 +572,38 @@ public:
         draw_order_.push_back({key, index});
       }
     }
+
+    // Sprite batches: one item each (one instanced call for all its dots), the engine's sprite program.
+    for (const Frame::Sprites& sprites : frame.sprites) {
+      scene::SpriteBatch* batch = sprites.batch;
+      if (!frustum.TestAABB(sprites.box)) {
+        ++stats.culled_nodes;
+        continue;
+      }
+      const scene::AABB& box = sprites.box;
+      const glm::vec3 center((box.min.x + box.max.x) * 0.5f, (box.min.y + box.max.y) * 0.5f,
+                             (box.min.z + box.max.z) * 0.5f);
+      const float depth = -(scene_view_ * glm::vec4(center, 1.0f)).z;
+      const WTexture* texture = SpriteTexture(*batch);
+      const SpriteProgram& program = SpriteProgramFor(texture != nullptr);
+      if (program.id == 0) continue;  // didn't compile (logged)
+
+      DrawItem item;
+      item.node = batch;
+      item.sprites = batch;
+      item.sprite_program = &program;
+      item.node_slot = static_cast<uint32_t>(node_slots_.size());
+      node_slots_.push_back({batch, batch->GetModelMatrix(), glm::mat3(1.0f), nullptr});
+      item.material = batch->GetMaterial().get();
+      item.blend = item.material ? item.material->blend : BlendMode::Additive;
+      item.depth_write = item.material ? item.material->DepthWrite() : false;
+      if (texture) item.texture = GLTexture(*texture);
+      const auto index = static_cast<uint32_t>(draw_items_.size());
+      draw_items_.push_back(item);
+      const uint64_t key = item.blend == BlendMode::Opaque ? OpaqueSortKey(program.id, item.texture, depth)
+                                                           : TransparentSortKey(depth, program.id);
+      draw_order_.push_back({key, index});
+    }
   }
 
   // --- 4. SHADOWS: every caster's depth, seen from the shadow light ---
@@ -614,6 +661,10 @@ public:
       state_.SetDepthWrite(item.depth_write);
       if (IsTransparentKey(order.key)) ++stats.transparent_draw_calls;
       const glm::mat4& model = slot.model;
+      if (item.sprites) {
+        DrawSprites(item, model, stats);
+        continue;
+      }
       if (item.custom) {
         UseShaderMaterial(*item.custom, *item.custom_program, model, item.node->IsInstanced());
       } else {
@@ -672,12 +723,35 @@ public:
 
   // An instanced node's per-copy data on the GPU (uploaded only when it changed: Upload compares
   // versions); null for a plain node.
-  static GLInstanceBuffer* PrepareInstances(scene::Node3D& node) {
+  static GLInstanceBuffer* PrepareInstances(scene::Node3D& node, scene::RenderStats* stats = nullptr) {
     if (!node.IsInstanced()) return nullptr;
     if (!node.GetInstanceBuffer()) node.SetInstanceBuffer(std::make_unique<GLInstanceBuffer>());
     auto* buffer = static_cast<GLInstanceBuffer*>(node.GetInstanceBuffer());
-    buffer->Upload(node.GetInstances(), node.GetInstancesVersion());
+    const size_t bytes = buffer->Upload(node.GetInstances(), node.GetInstancesVersion());
+    if (stats) stats->instance_bytes += static_cast<int>(bytes);
     return buffer;
+  }
+
+  struct DrawItem;  // (below)
+  // A sprite batch: its dots to the GPU if they changed (16 bytes each), then one instanced call.
+  void DrawSprites(const DrawItem& item, const glm::mat4& model, scene::RenderStats& stats) {
+    scene::SpriteBatch& batch = *item.sprites;
+    if (!batch.GetSpriteBuffer()) batch.SetSpriteBuffer(std::make_unique<GLSpriteBuffer>(batch.Capacity()));
+    auto* buffer = static_cast<GLSpriteBuffer*>(batch.GetSpriteBuffer());
+    stats.instance_bytes += static_cast<int>(buffer->Upload(batch.Sprites(), batch.Version()));
+    state_.UseProgram(item.sprite_program->id);
+    glUniformMatrix4fv(item.sprite_program->model, 1, GL_FALSE, glm::value_ptr(model));
+    if (item.texture) state_.BindTexture0(item.texture);
+    const auto count = static_cast<GLsizei>(batch.Count());
+    buffer->Draw(count);
+    stats.instances += count;
+    ++stats.draw_calls;
+  }
+
+  // The texture shaping a batch's dots (its material's), else null: the shader's own falloff.
+  static const WTexture* SpriteTexture(const scene::SpriteBatch& batch) {
+    const auto& material = batch.GetMaterial();
+    return material && material->HasTexture() ? material->GetTexture() : nullptr;
   }
 
   // Draws one mesh with whatever program is in use: once, or once per copy (one call either way).
@@ -735,6 +809,7 @@ public:
     GLuint id = 0;
     GLint model = -1;
   };
+  using SpriteProgram = ShadowProgram;  // also just a program and its uModel
 
   // One mesh to draw this frame (main pass), made by BuildDrawList; drawn in the order of its key.
   struct DrawItem {
@@ -745,7 +820,9 @@ public:
     const ShaderMaterial* custom = nullptr;  // drawn with this material's shader...
     const GLShader* custom_program = nullptr;  // (its program)
     const MeshProgram* program = nullptr;    // ...or with this engine variant
-    GLuint texture = 0;                      // engine variant: its texture on unit 0 (0 = none)
+    scene::SpriteBatch* sprites = nullptr;   // a sprite batch instead of a mesh (mesh is null)...
+    const SpriteProgram* sprite_program = nullptr;  // ...with the sprite program
+    GLuint texture = 0;                      // engine variant / sprites: its texture on unit 0 (0 = none)
     BlendMode blend = BlendMode::Opaque;
     bool depth_write = true;
   };
@@ -784,6 +861,29 @@ public:
     if (program.id != 0) return program;
     program.id = BuildEngineProgram("shadow.vert", "shadow.frag", MeshVariantDefines(instanced ? kMeshInstanced : 0));
     if (program.id != 0) program.model = glGetUniformLocation(program.id, "uModel");
+    return program;
+  }
+
+  // The sprite batches' program: plain (the dot computed) or TEXTURED (the dot from its texture).
+  const SpriteProgram& SpriteProgramFor(bool textured) {
+    SpriteProgram& program = sprite_programs_[textured ? 1 : 0];
+    if (program.id != 0 || sprite_failed_[textured ? 1 : 0]) return program;
+    const auto start = std::chrono::steady_clock::now();
+    program.id = BuildEngineProgram("sprite.vert", "sprite.frag",
+                                    textured ? std::vector<std::string>{"TEXTURED"} : std::vector<std::string>{});
+    if (program.id == 0) {
+      sprite_failed_[textured ? 1 : 0] = true;  // logged once, not retried every frame
+      return program;
+    }
+    program.model = glGetUniformLocation(program.id, "uModel");
+    if (textured) {
+      state_.UseProgram(program.id);
+      glUniform1i(glGetUniformLocation(program.id, "uTexture"), 0);
+    }
+    if (warmed_up_) {
+      const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+      WLW_LOG_INFO("Sprite shader compiled during play (%.1f ms)%s", ms, textured ? ": TEXTURED" : "");
+    }
     return program;
   }
 
@@ -865,6 +965,9 @@ public:
       for (const ShadowProgram& program : shadow_programs_) {
         if (program.id) glDeleteProgram(program.id);
       }
+      for (const SpriteProgram& program : sprite_programs_) {
+        if (program.id) glDeleteProgram(program.id);
+      }
       if (skybox_program_) glDeleteProgram(skybox_program_);
       if (frame_ubo_) glDeleteBuffers(1, &frame_ubo_);
       DeleteShadowMap();
@@ -886,6 +989,8 @@ private:
 
   std::unordered_map<uint32_t, MeshProgram> mesh_programs_;  // by variant key
   ShadowProgram shadow_programs_[2];                          // plain, instanced
+  SpriteProgram sprite_programs_[2];                          // computed dot, textured dot
+  bool sprite_failed_[2] = {false, false};
   GLuint skybox_program_ = 0;
   GLuint skybox_vao_ = 0;
   GLuint skybox_vbo_ = 0;

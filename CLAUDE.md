@@ -18,7 +18,11 @@ engine/wlw/
   anim/       ease.h (Penner easing curves), tween.h (Tween<T>: value-type tweens the game owns and samples),
               shake.h (trauma-based screen shake: trauma decays, offset = trauma^2 x smooth noise)
   fx/         ParticleSystem: CPU simulation (fixed capacity, swap-remove, bursts, Emit = one exact particle,
-              optional Floor rectangle they bounce on and fall past) -> instances
+              optional Floor rectangle they bounce on and fall past) -> instances. FlowParticles (flow_particles.h):
+              10-20k dots along paths (liquid in pipes; not a fluid sim), SoA arrays, paths resampled evenly (O(1)
+              lookup), SetNext routing (round robin; none = fade out), SetStop = a gate dots queue behind (the line
+              grows back up the path), emitters; WriteTo(SpriteBatch) packs 16 B/dot + bounds. Emulator, -O2, 20k dots:
+              Update ~30 us, WriteTo ~95 us
   debug/      DebugUI: Dear ImGui (third_party/imgui) fed from Input, drawn via Window::SetOverlay; games add
               panels in System::OnDebugUI() (#if WLW_DEBUG_UI); the engine's own window is debug::EnginePanel (a
               System the Application adds first). F1 / "Debug" button. Off in release builds
@@ -71,7 +75,9 @@ engine/wlw/
               with passes the 3D draws into the scene picture, PlanPostChain (CPU, tested) ping-pongs pooled targets, the
               last pass writes the destination (screen or viewport texture), then the Overlay canvas layers (UI not post-processed).
               Ready-made (scene/post_effects.h, shaders/post/*): AddBlur (separable 9-tap Gaussian in 5 reads), AddBloom
-              (bright pass with soft knee -> blur at 1/4 -> combine onto the picture before it).
+              (bright pass with soft knee -> blur at 1/4 -> combine onto the picture before it), AddThreshold (density ->
+              solid shapes coloured rgb/a: soft additive dots -> AddBlur -> AddThreshold = metaballs/liquid; keep the
+              viewport AND the blur RGBA16F, RGBA8 clips colour x density and the middles go white).
               GPU timing (gpu_timer.h): GpuTimer = timer queries in a ring of kLatency+1 frames, read 3 frames late (no
               stall), disjoint frames dropped (logic tested with a fake GpuQueries); GL: core on desktop, GLES needs
               EXT_disjoint_timer_query (the Android emulator lacks it; platform::GetGLProcAddress). Sections per viewport:
@@ -86,6 +92,12 @@ engine/wlw/
               centre along the view direction): both come from the draw list's sort keys (render_list.h); transparent ones
               are depth-tested but not written. An opaque material writes alpha 1 (no BLEND variant).
   scene/      Node (scene graph, local transforms, visibility, instancing: SetInstances = one draw call for N copies).
+              SpriteBatch (sprite_batch.h, a Node3D like LightNode; AsSpriteBatch): N soft dots in one draw call, 16-byte
+              SpriteInstance (xy on the node's z=0 plane, size, RGBA8; was 80 B per InstanceData), Write(count) fills in
+              place, SetBounds/FitBounds = culling box (no per-dot bounds), Additive by default (never sorted). GL:
+              GLSpriteBuffer (own VAO, no vertex buffer: corners from gl_VertexID, strip of 4 x instances),
+              shaders/sprite.vert/.frag (TEXTURED = the material's texture, else a computed (1-d²)² dot). No shadows/lights.
+              RenderStats::instance_bytes = per-copy data uploaded this frame.
               Scene (scene.h) = the world: nodes, lights, skybox; owned by nobody who looks at it. Viewport (viewport.h) =
               "draw this Scene from this camera into this picture" + a 2D Canvas over it (like Godot's SubViewport):
               Viewport::Create({format, depth, smooth, clear}) draws into a RenderTarget (rendering/render_target.h,

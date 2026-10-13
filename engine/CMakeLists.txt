@@ -62,6 +62,8 @@ add_library(wlw STATIC
   wlw/core/vertex_2d.h
   wlw/core/vertex_3d.h
 
+  wlw/fx/flow_particles.cpp
+  wlw/fx/flow_particles.h
   wlw/fx/particle_system.cpp
   wlw/fx/particle_system.h
 
@@ -132,6 +134,7 @@ add_library(wlw STATIC
   wlw/scene/post_effects.h
   wlw/scene/scene.h
   wlw/scene/shadow_map.h
+  wlw/scene/sprite_batch.h
   wlw/scene/triangle_2d.cpp
   wlw/scene/triangle_2d.h
   wlw/scene/viewport.h

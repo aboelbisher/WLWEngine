@@ -77,4 +77,12 @@ Bloom AddBloom(Viewport& viewport, const BloomSettings& settings) {
   return bloom;
 }
 
+std::shared_ptr<ShaderMaterial> AddThreshold(Viewport& viewport, const ThresholdSettings& settings) {
+  auto material = Material("post/threshold.glsl");
+  material->SetParam("uThreshold", settings.threshold);
+  material->SetParam("uSoftness", std::max(settings.softness, 1e-4f));
+  viewport.AddPostPass({.material = material});
+  return material;
+}
+
 }  // namespace wlw::scene

@@ -20,7 +20,8 @@
 
 namespace wlw::scene {
 
-class LightNode;  // light.h: a node that is a light source
+class LightNode;    // light.h: a node that is a light source
+class SpriteBatch;  // sprite_batch.h: a node that draws many soft dots in one call
 
 // A scene-graph node. Position / rotation / scale are LOCAL (relative to the parent);
 // GetModelMatrix() returns the WORLD matrix = parent's world matrix * local matrix.
@@ -105,6 +106,8 @@ public:
 
 	// Light sources are nodes too (LightNode); the renderer asks every node whether it is one.
 	virtual const LightNode* AsLight() const { return nullptr; }
+	// Sprite batches are nodes too (SpriteBatch); the renderer draws them its own way.
+	virtual SpriteBatch* AsSpriteBatch() { return nullptr; }
 
 	// ---- Visibility ----
 	// Hidden nodes (and everything under them) are skipped by the renderer but stay in the scene.

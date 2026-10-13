@@ -173,7 +173,8 @@ static void TestPostShaders() {
   CHECK(rendering::SplitShaderSource("shader_type post; void fragment() { FragColor = vec4(1.0); }").target ==
         rendering::Shader::Target::Post);
   CHECK(!rendering::SplitShaderSource("shader_type post; void vertex() {} void fragment() {}").ok);
-  for (const char* file : {"post/copy.glsl", "post/blur.glsl", "post/bright.glsl", "post/bloom_combine.glsl"}) {
+  for (const char* file :
+       {"post/copy.glsl", "post/blur.glsl", "post/bright.glsl", "post/bloom_combine.glsl", "post/threshold.glsl"}) {
     const std::string* text = rendering::FindShaderFile(file);
     CHECK(text != nullptr);
     if (!text) continue;
@@ -228,6 +229,18 @@ static void TestEffects() {
   CHECK(plan.errors.empty());
   CheckPlanIsSafe(all, plan);
   CHECK(after.combine && after.bright);
+
+  // Liquid: blur then threshold, the threshold pass last (it writes the viewport's picture).
+  auto liquid = scene::Viewport::Create({.format = TextureFormat::RGBA16F, .depth = false});
+  scene::AddBlur(*liquid, {.scale = 1.0f});
+  const auto threshold_material = scene::AddThreshold(*liquid, {.threshold = 0.4f, .softness = 0.0f});
+  const auto& liquid_passes = liquid->Post().Passes();
+  CHECK(liquid_passes.size() == 3 && liquid_passes.back().material == threshold_material);
+  CHECK(threshold_material->IsValid());
+  const auto* level = std::get_if<float>(threshold_material->GetParam("uThreshold"));
+  const auto* softness = std::get_if<float>(threshold_material->GetParam("uSoftness"));
+  CHECK(level && *level == 0.4f && softness && *softness > 0.0f);  // never 0: smoothstep needs an edge
+  CHECK(rendering::PlanPostChain(liquid_passes, kPhone).errors.empty());
 }
 
 int main() {
