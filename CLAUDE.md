@@ -23,7 +23,7 @@ engine/wlw/
               panels in System::OnDebugUI() (#if WLW_DEBUG_UI); the engine's own window is debug::EnginePanel (a
               System the Application adds first). F1 / "Debug" button. Off in release builds
   app/        Application (final: owns the services and runs the loop; see the frame in application.h): Window(),
-              Input(), Audio(), Device(), Screens(), Time(), Config(). Games add Systems (system.h: always running,
+              Input(), Audio(), Screens(), Time(), Config(). Games add Systems (system.h: always running,
               like Unreal subsystems / Godot autoloads; hooks OnStart/OnFixedUpdate/OnUpdate/OnRender/OnRenderUI/
               OnDebugUI/OnBack/OnAppPaused/OnAppResumed/OnShutdown, run in the order added, then the screens'; App()
               = the services) and push Screens. SystemList = the testable dispatch. Time (time.h): Delta, RealDelta,
@@ -63,9 +63,18 @@ engine/wlw/
               key; RenderingDriver::WarmUp (called by Application after OnStart) compiles what the scenes need, hidden and
               empty-instanced nodes included; later compiles are logged ("compiled during play"). Normal matrix on the CPU
               for plain nodes (instanced: per vertex, copies may be squashed).
-              Custom shaders (shader.h): one text (shader_type canvas|mesh; fragment(), optional vertex()) -> RenderDevice::CreateShader(code) -> ShaderMaterial::Create(shader)
+              NO DEVICE IN GAME CODE (gpu_resource.h): textures (WTexture2D::Create / FromImage, WCubemap::Create), shaders
+              and render targets are plain CPU objects made with their own Create (no GL context: usable in tests), like
+              Mesh; the renderer makes their GPU side on first use (gl_resources.h: GLTexture, GLShaderFor, GLFramebuffer)
+              and WarmUp prepares every alive one (Resource::ForEachAlive). RenderDevice = mesh buffers, engine-internal.
+              Post passes (post_pass.h): Viewport::AddPostPass({material (shader_type post), scale, format, name, inputs});
+              with passes the 3D draws into the scene picture, PlanPostChain (CPU, tested) ping-pongs pooled targets, the
+              last pass writes the destination (screen or viewport texture), then the canvas (UI not post-processed).
+              Ready-made (scene/post_effects.h, shaders/post/*): AddBlur (separable 9-tap Gaussian in 5 reads), AddBloom
+              (bright pass with soft knee -> blur at 1/4 -> combine onto the picture before it).
+              Custom shaders (shader.h): one text (shader_type canvas|mesh|post; fragment(), optional vertex()) -> Shader::Create(code) or Shader::FromFile(path) -> ShaderMaterial::Create(shader)
               + SetParam(name, float/vec/mat4/texture); node/mesh SetMaterial or Canvas::ShaderRect. Engine inputs are prepended
-              (documented in shader.h; may #include wlw/lighting.glsl and use SceneLighting). Data textures: CreateTexture2D(w, h, {R8/RGB8/RGBA8/R16F/RGBA16F}) + WTexture2D::Update
+              (documented in shader.h; may #include wlw/lighting.glsl and use SceneLighting). Data textures: WTexture2D::Create(w, h, {R8/RGB8/RGBA8/R16F/RGBA16F}) + Update (copied, uploaded before the next draw)
               Blending (blend_mode.h): Material::blend = Opaque / Alpha / Additive / Multiply (ShaderMaterial too), depth_write
               (default: only Opaque writes depth). Every shader outputs PREMULTIPLIED alpha, so gl_blend.h has one table for
               3D, canvas and custom shaders. Opaque meshes draw first, then transparent ones back to front (by bounding-box
@@ -74,12 +83,12 @@ engine/wlw/
   scene/      Node (scene graph, local transforms, visibility, instancing: SetInstances = one draw call for N copies).
               Scene (scene.h) = the world: nodes, lights, skybox; owned by nobody who looks at it. Viewport (viewport.h) =
               "draw this Scene from this camera into this picture" + a 2D Canvas over it (like Godot's SubViewport):
-              Viewport::Create(device, {format, depth, smooth, clear}) draws into a RenderTarget (rendering/render_target.h,
+              Viewport::Create({format, depth, smooth, clear}) draws into a RenderTarget (rendering/render_target.h,
               an FBO; RGBA16F falls back to RGBA8 if the GPU can't), GetTexture() -> any ShaderMaterial; SetSizeFromScreen /
               SetSize; UpdateMode Always / Once / Disabled. Several viewports may share a Scene.
               Window = surface + input + GetScreen() (its root viewport: scene, camera, the game UI canvas) +
               AddViewport (offscreen, drawn before the screen in the order added) + overlays (debug UI).
-              The driver: DrawWindow -> DrawViewport(each) -> gather, shadow pass, main pass, canvas.
+              The driver: DrawWindow -> DrawViewport(each) -> gather, shadow pass, main pass, post passes, canvas.
               cameras (FollowCamera = perspective, OrthographicCamera = parallel/top-down;
               Camera3D::ScreenPointToRay for picking, fed with Input::SurfaceSize()).
               Lights are nodes (light.h: DirectionalLight / PointLight / SpotLight, added with AddNode); nodes opt in to
@@ -105,7 +114,7 @@ kit/wlw/kit/  wlw::kit: game-level building blocks shared by games (separate tar
               (UMP consent, load/show/retry); games add that dir to their sourceSets and depend on play-services-ads + UMP
 samples/      small games, built only when the engine is the top-level project (desktop):
               snake/ (Snake + its rules tests)
-tests/        engine unit tests (no window/GPU: draw order (sort keys), shader system (preprocessor, embedded files in every variant, std140 layout, lights, variants, UI kinds), systems (order, starting, Back), blending (depth-write rule, canvas batches, images, falloff texture), viewports (scenes, sizes, update modes), anim, audio, core (random, atomic files, bridge queue), exact cover, search (bitboards, minimax, expectimax), gf2 (Lights Out), shader text splitting, lighting (light nodes, shadow-box fitting), fx, input, kit, picking, primitives, ui (canvas, safe area, widgets), screens); test data in tests/data/, also top-level only; ctest
+tests/        engine unit tests (no window/GPU: draw order (sort keys), shader system (preprocessor, embedded files in every variant, std140 layout, lights, variants, UI kinds), systems (order, starting, Back), blending (depth-write rule, canvas batches, images, falloff texture), resources (made without a GPU, updates, alive list), post passes (planning, ping-pong, named inputs, chain targets, effects), viewports (scenes, sizes, update modes), anim, audio, core (random, atomic files, bridge queue), exact cover, search (bitboards, minimax, expectimax), gf2 (Lights Out), shader text splitting, lighting (light nodes, shadow-box fitting), fx, input, kit, picking, primitives, ui (canvas, safe area, widgets), screens); test data in tests/data/, also top-level only; ctest
 third_party/  glad (desktop only), stb, tinygltf + nlohmann json (also its own target wlw_json), miniaudio 0.11.25, stb_vorbis, Dear ImGui 1.92.9b (vendored)
 cmake/WLWHelpers.cmake  wlw_add_game(), wlw_add_assets(), wlw_set_warnings()
 vcpkg/ + vcpkg.json     desktop deps (glm, glfw3). Android fetches glm via FetchContent instead.
@@ -155,3 +164,6 @@ changes didn't break anything; keep it building when the engine API changes.
 - A viewport's default camera is an `FPSCamera`; games normally replace it with `SetCamera()`.
 - Shadows: one shadow map shared by every viewport (each viewport's shadow pass redraws it).
 - Touch input uses only the first finger (no multi-touch yet).
+- Post passes: no glInvalidateFramebuffer yet (GLES 3.0 has it, desktop GL 3.3 doesn't), which tiled phone GPUs
+  reward; no GPU timer, so their cost shows only as CPU time in the engine panel. Canvas 2D is never post-processed.
+- Textures free their CPU pixels once uploaded, so a lost GL context (if the platform ever loses it) can't re-upload.

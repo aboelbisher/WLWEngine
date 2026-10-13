@@ -18,6 +18,18 @@ void EnginePanel::OnDebugUI() {
   ImGui::Text("%d program changes, %d texture binds, %d state calls skipped", stats.program_changes,
               stats.texture_binds, stats.state_calls_skipped);
   ImGui::Text("CPU: gather %.0f us, sort %.0f us, submit %.0f us", stats.gather_us, stats.sort_us, stats.submit_us);
+  auto post_line = [](const char* name, const scene::Viewport& viewport) {
+    const scene::RenderStats& s = viewport.GetRenderStats();
+    if (s.post_passes == 0) return;
+    ImGui::Text("%s post: %d passes, %d textures, CPU %.0f us", name, s.post_passes, s.post_targets, s.post_us);
+    const rendering::PostChain& chain = viewport.Post();
+    for (const auto& pass : chain.Passes()) {
+      const bool has_shader = pass.material && pass.material->GetShader();
+      const std::string shader = has_shader ? pass.material->GetShader()->Name() : "copy";
+      ImGui::BulletText("%s x%.2f%s%s", shader.c_str(), pass.scale, pass.name.empty() ? "" : " as ", pass.name.c_str());
+    }
+  };
+  post_line("Screen", window.GetScreen());
   // Offscreen viewports: size, format, update mode, GPU memory of their texture, last frame's draws.
   for (const auto& [_, viewport] : window.GetViewports()) {
     const rendering::RenderTarget* target = viewport->GetTarget();
@@ -34,6 +46,7 @@ void EnginePanel::OnDebugUI() {
     ImGui::Text("%s: %d x %d %s, %s, %.1f MB, %d draws", viewport->Settings().name.c_str(), target->Width(),
                 target->Height(), half_float ? "16F" : "8-bit", kModes[static_cast<int>(viewport->GetUpdateMode())],
                 megabytes, viewport->GetRenderStats().draw_calls);
+    post_line(viewport->Settings().name.c_str(), *viewport);
   }
   const core::Vector2 framebuffer = window.GetSize();
   const core::Vector2 surface = window.GetInput().SurfaceSize();

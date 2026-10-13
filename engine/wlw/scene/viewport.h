@@ -9,6 +9,7 @@
 #include <glm/glm.hpp>
 
 #include "wlw/core/color.h"
+#include "wlw/rendering/post_pass.h"
 #include "wlw/rendering/render_target.h"
 #include "wlw/scene/camera_3d.h"
 #include "wlw/scene/fps_camera.h"
@@ -31,6 +32,10 @@ struct RenderStats {
   float gather_us = 0.0f;  // walking the scene, culling, building the draw list
   float sort_us = 0.0f;    // sorting the draw list
   float submit_us = 0.0f;  // shadow + main pass: GL calls
+  // Post passes (the 3D went into the scene picture first; see post_pass.h).
+  int post_passes = 0;
+  int post_targets = 0;    // textures the passes before the last write into
+  float post_us = 0.0f;    // their GL calls
 };
 
 struct ViewportSettings {
@@ -114,6 +119,14 @@ class Viewport {
   const std::optional<core::Color>& GetClearColor() const { return settings_.clear; }
   const ViewportSettings& Settings() const { return settings_; }
 
+  // ---- Post passes (rendering/post_pass.h; ready-made: scene/post_effects.h) ----
+  // Full-screen shaders on its 3D picture, in the order added; the last one writes the viewport's
+  // picture (the screen or its texture). Its canvas is drawn after them, unaffected.
+  void AddPostPass(rendering::PostPass pass) { post_.Add(std::move(pass)); }
+  void ClearPostPasses() { post_.Clear(); }
+  rendering::PostChain& Post() { return post_; }
+  const rendering::PostChain& Post() const { return post_; }
+
   const RenderStats& GetRenderStats() const { return render_stats_; }
 
   // ---- For the renderer ----
@@ -141,6 +154,7 @@ class Viewport {
   UpdateMode update_mode_ = UpdateMode::Always;
   glm::ivec2 last_size_{0, 0};
   bool has_picture_ = false;
+  rendering::PostChain post_;
   RenderStats render_stats_;
 };
 

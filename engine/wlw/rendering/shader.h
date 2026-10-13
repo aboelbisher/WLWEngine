@@ -7,14 +7,14 @@
 
 namespace wlw::rendering {
 
-// A game's own GPU program, used through a ShaderMaterial: on 3D nodes and meshes (mesh shaders)
-// or on Canvas::ShaderRect (canvas shaders). Made from one text by Shader::Create (or FromFile); if
+// A game's own GPU program, used through a ShaderMaterial: on 3D nodes and meshes (mesh shaders),
+// on Canvas::ShaderRect (canvas shaders) or as a viewport's post pass (post shaders). Made from one text by Shader::Create (or FromFile); if
 // it doesn't compile, the error is logged and IsValid() is false (a 3D node then draws with the
 // engine's own shader; a ShaderRect draws nothing).
 //
 // The text (GLSL, no #version line: see rendering/gl.h), like a Godot shader:
 //
-//   shader_type canvas;            // or: shader_type mesh;   (required, first)
+//   shader_type canvas;            // or mesh, or post   (required, first)
 //   uniform float uTime;           // the game's uniforms (ShaderMaterial::SetParam) and helpers
 //   void fragment() {              // required: sets FragColor
 //     FragColor = vec4(vUV, 0.0, 1.0);
@@ -48,7 +48,18 @@ namespace wlw::rendering {
 //   normalize(vNormal), ViewDirection(vWorldPos), shininess, 1.0): the scene's lights, like the
 //   engine's shader. In the shadow pass the node is drawn as its plain mesh (a vertex() that
 //   moves vertices isn't seen there).
-enum class ShaderTarget { Mesh, Canvas };
+//
+// Post shaders (a viewport's post passes, see rendering/post_pass.h; no vertex()). fragment() runs
+// once per pixel of the pass's output and gets:
+//   in vec2 vUV;              // 0..1 across the picture, (0, 0) = BOTTOM left, like the textures:
+//                             // texture(uSource, vUV) is the same pixel
+//   uniform sampler2D uSource;  // the previous pass's output (the first pass: the viewport's picture)
+//   uniform sampler2D uScene;   // the viewport's picture before any pass
+//   uniform vec2 uTexel;        // 1 / uSource's size in pixels: the step to a neighbouring texel
+//   uniform vec2 uOutputSize;   // this pass's output size in pixels
+//   out vec4 FragColor;         // replaces the output pixel (no blending), premultiplied alpha
+// plus a sampler2D uniform for each of the pass's `inputs` (other passes' outputs, by name).
+enum class ShaderTarget { Mesh, Canvas, Post };
 
 // A shader text split for the two GPU stages (no GPU needed; the backends add their inputs).
 struct ShaderSource {

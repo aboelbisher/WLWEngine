@@ -73,7 +73,7 @@ ShaderSource SplitShaderSource(const std::string& code) {
 
   std::smatch match;
   if (!std::regex_search(masked, match, std::regex("\\bshader_type\\s+(\\w+)\\s*;"))) {
-    result.error = "missing 'shader_type canvas;' or 'shader_type mesh;'";
+    result.error = "missing 'shader_type canvas;', 'shader_type mesh;' or 'shader_type post;'";
     return result;
   }
   const std::string type = match[1].str();
@@ -81,8 +81,10 @@ ShaderSource SplitShaderSource(const std::string& code) {
     result.target = Shader::Target::Canvas;
   } else if (type == "mesh") {
     result.target = Shader::Target::Mesh;
+  } else if (type == "post") {
+    result.target = Shader::Target::Post;
   } else {
-    result.error = "unknown shader_type '" + type + "' (canvas or mesh)";
+    result.error = "unknown shader_type '" + type + "' (canvas, mesh or post)";
     return result;
   }
   std::string text = code;
@@ -100,6 +102,10 @@ ShaderSource SplitShaderSource(const std::string& code) {
   }
   if (vertex.begin != kNone && result.target == Shader::Target::Canvas) {
     result.error = "canvas shaders have no vertex() (the engine's draws the rectangle)";
+    return result;
+  }
+  if (vertex.begin != kNone && result.target == Shader::Target::Post) {
+    result.error = "post shaders have no vertex() (the engine's covers the picture)";
     return result;
   }
 

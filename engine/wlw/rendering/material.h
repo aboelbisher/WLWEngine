@@ -32,7 +32,7 @@ namespace wlw::rendering {
 		// Non-null for a ShaderMaterial: the renderers draw it with its shader instead.
 		virtual const ShaderMaterial* AsShaderMaterial() const { return nullptr; }
 
-		static std::unique_ptr<Material> Create();
+		static std::unique_ptr<Material> Create() { return std::make_unique<Material>(); }
 
 		// Writes depth? Opaque materials do, the others don't, unless depth_write says otherwise.
 		bool DepthWrite() const { return depth_write.value_or(blend == BlendMode::Opaque); }

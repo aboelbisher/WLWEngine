@@ -97,8 +97,9 @@ add_library(wlw STATIC
   wlw/rendering/index_buffer.h
   wlw/rendering/instance_buffer.h
   wlw/rendering/material.h
-  wlw/rendering/material_gl.cpp
   wlw/rendering/mesh_variant.h
+  wlw/rendering/post_pass.cpp
+  wlw/rendering/post_pass.h
   wlw/rendering/render_device.h
   wlw/rendering/render_device_gl.cpp
   wlw/rendering/render_list.h
@@ -123,6 +124,8 @@ add_library(wlw STATIC
   wlw/scene/light.h
   wlw/scene/node.h
   wlw/scene/orthographic_camera.h
+  wlw/scene/post_effects.cpp
+  wlw/scene/post_effects.h
   wlw/scene/scene.h
   wlw/scene/shadow_map.h
   wlw/scene/triangle_2d.cpp

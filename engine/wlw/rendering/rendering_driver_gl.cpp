@@ -22,6 +22,8 @@
 #include "wlw/rendering/gl_shader.h"
 #include "wlw/rendering/gl_vertex_buffer.h"
 #include "wlw/rendering/mesh_variant.h"
+#include "wlw/rendering/post_pass.h"
+#include "wlw/rendering/shader_library.h"
 #include "wlw/rendering/render_device.h"
 #include "wlw/rendering/render_list.h"
 #include "wlw/rendering/gl_state_cache.h"
@@ -38,7 +40,9 @@ namespace wlw::rendering {
 //   3. shadows  casters' depth from the shadow light into the shadow map
 //   4. main     skybox, opaque meshes, then transparent ones back to front; each mesh with the
 //               shader variant its features need (mesh_variant.h), or its ShaderMaterial's shader
-//   5. canvas   the viewport's 2D canvas on top
+//   5. post     its post passes, if any (steps 3-4 then drew into the scene picture): full-screen
+//               shaders, the last one writing the viewport's picture (post_pass.h)
+//   6. canvas   the viewport's 2D canvas on top
 class GLRenderingDriver : public RenderingDriver {
 public:
   explicit GLRenderingDriver(RenderDevice* device) : device_(device) {}
@@ -97,6 +101,8 @@ public:
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), nullptr);
     glBindVertexArray(0);
+    glGenVertexArrays(1, &post_vao_);  // GL 3.3 core draws need a vertex array, even an empty one
+    CopyShader();                      // made now, so the warm-up compiles it
 
     // The per-frame uniform block's buffer: every program reads it at kFrameBlockBinding.
     glGenBuffers(1, &frame_ubo_);
@@ -164,13 +170,11 @@ public:
       const glm::ivec2 pixels = viewport->PixelSize(screen_pixels);
       if (!viewport->BeginDraw(pixels)) continue;
       target->SetSize(pixels.x, pixels.y);
-      glBindFramebuffer(GL_FRAMEBUFFER, GLFramebuffer(*target));
-      DrawViewport(*viewport, pixels, target->Settings().depth);
+      DrawViewport(*viewport, pixels, GLFramebuffer(*target), target->Settings().depth);
     }
 
-    glBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(screen_framebuffer));
     DrawViewport(window->GetScreen(), {static_cast<int>(screen_pixels.x), static_cast<int>(screen_pixels.y)},
-                 /*has_depth=*/true);
+                 static_cast<GLuint>(screen_framebuffer), /*has_depth=*/true);
     window->DrawOverlays();  // e.g. the debug UI: on top of everything
 
     // Present the frame we just drew (previously the swap happened before drawing,
@@ -219,10 +223,20 @@ public:
                  mesh_programs_.size() - before, custom, ms);
   }
 
-  // One viewport into the framebuffer that is bound: its scene through its camera, then its
-  // canvas over it.
-  void DrawViewport(scene::Viewport& viewport, glm::ivec2 pixels, bool has_depth) {
+  // One viewport into `destination` (the screen's framebuffer or its target's): its scene through
+  // its camera, its post passes if it has any (the scene then goes into the scene picture first,
+  // and the last pass writes `destination`), then its canvas over it.
+  void DrawViewport(scene::Viewport& viewport, glm::ivec2 pixels, GLuint destination, bool has_depth) {
     using Clock = std::chrono::steady_clock;
+    // With post passes the 3D goes into the scene picture, a target of the viewport's own format.
+    const PostPlan* post = nullptr;
+    GLuint scene_framebuffer = destination;
+    if (!viewport.Post().Empty() && pixels.x > 0 && pixels.y > 0) {
+      const scene::ViewportSettings& settings = viewport.Settings();
+      post = &viewport.Post().Prepare(pixels, {settings.format, settings.smooth, settings.depth});
+      scene_framebuffer = GLFramebuffer(viewport.Post().SceneTarget());
+      has_depth = settings.depth;
+    }
     const std::shared_ptr<scene::Scene>& scene = viewport.GetScene();
     const std::shared_ptr<scene::Camera3D>& camera = viewport.GetCamera();
     const bool draw_scene = scene != nullptr && camera != nullptr;
@@ -250,6 +264,7 @@ public:
     SortDrawOrder(draw_order_);
     const auto sorted = Clock::now();
     // GPU work from here on: the frame block, instance data, the shadow and main passes.
+    glBindFramebuffer(GL_FRAMEBUFFER, scene_framebuffer);  // (the shadow pass returns to it)
     if (draw_scene) {
       UploadFrame(*camera, frame_);
       for (NodeSlot& slot : node_slots_) slot.instances = PrepareInstances(*slot.node);
@@ -275,9 +290,75 @@ public:
     stats.program_changes = state_.ProgramChanges();
     stats.texture_binds = state_.TextureBinds();
     stats.state_calls_skipped = state_.Skipped();
+
+    if (post) {
+      DrawPostPasses(viewport.Post(), *post, destination);
+      stats.post_passes = static_cast<int>(post->steps.size());
+      stats.post_targets = viewport.Post().TargetCount();
+      stats.post_us = micros(Clock::now() - submitted);
+    }
     viewport.SetRenderStats(stats);
 
     ui_renderer_->Draw(viewport.GetCanvas(), {static_cast<float>(pixels.x), static_cast<float>(pixels.y)});
+  }
+
+  // --- POST PASSES: full-screen shaders from the scene picture to `destination` (post_pass.h) ---
+  void DrawPostPasses(PostChain& chain, const PostPlan& plan, GLuint destination) {
+    glDisable(GL_DEPTH_TEST);
+    glDisable(GL_CULL_FACE);
+    state_.SetBlendMode(BlendMode::Opaque);  // each pass replaces its output's pixels
+    glBindVertexArray(post_vao_);            // no attributes: post.vert makes the triangle from gl_VertexID
+    const std::vector<PostPass>& passes = chain.Passes();
+    for (const PostStep& step : plan.steps) {
+      const PostPass& pass = passes[static_cast<size_t>(step.pass)];
+      const GLuint output = step.output == kDestination ? destination : GLFramebuffer(chain.Target(step.output));
+      glBindFramebuffer(GL_FRAMEBUFFER, output);
+      glViewport(0, 0, step.size.x, step.size.y);
+
+      // The pass's shader; one that's missing, of another kind or not compiling copies instead.
+      const ShaderMaterial* material = pass.material.get();
+      const GLShader* shader = nullptr;
+      if (material && material->IsValid() && material->GetShader()->GetTarget() == Shader::Target::Post) {
+        shader = GLShaderFor(*material->GetShader());
+      }
+      if (!shader) {
+        material = nullptr;
+        shader = GLShaderFor(*CopyShader());
+        if (!shader) continue;
+      }
+      state_.UseProgram(shader->Program());
+
+      const WTexture2D& source = *chain.TextureOf(step.source);
+      BindGLTexture(source, 0);
+      glUniform1i(shader->Location("uSource"), 0);
+      BindGLTexture(*chain.TextureOf(kSceneTarget), 1);
+      glUniform1i(shader->Location("uScene"), 1);
+      glUniform2f(shader->Location("uTexel"), 1.0f / static_cast<float>(source.Width()),
+                  1.0f / static_cast<float>(source.Height()));
+      glUniform2f(shader->Location("uOutputSize"), static_cast<float>(step.size.x), static_cast<float>(step.size.y));
+      int unit = 2;
+      for (const auto& [uniform, texture] : step.inputs) {
+        BindGLTexture(*chain.TextureOf(texture), static_cast<unsigned int>(unit));
+        glUniform1i(shader->Location(uniform), unit);
+        ++unit;
+      }
+      if (material) shader->ApplyParams(*material, unit);
+      glDrawArrays(GL_TRIANGLES, 0, 3);
+    }
+    glBindVertexArray(0);
+    glActiveTexture(GL_TEXTURE0);
+    state_.ForgetTexture0();
+    glEnable(GL_DEPTH_TEST);
+    glBindFramebuffer(GL_FRAMEBUFFER, destination);  // the canvas draws there next
+  }
+
+  // What a pass without a usable shader does: copies uSource.
+  const std::shared_ptr<Shader>& CopyShader() {
+    if (!copy_shader_) {
+      const std::string* text = FindShaderFile("post/copy.glsl");
+      copy_shader_ = Shader::Create(text ? *text : std::string(), "post/copy.glsl");
+    }
+    return copy_shader_;
   }
 
   // --- 1. GATHER: lights, things to draw, and the bounds of everything shadows involve ---
@@ -715,6 +796,8 @@ public:
       DeleteShadowMap();
       glDeleteVertexArrays(1, &skybox_vao_);
       glDeleteBuffers(1, &skybox_vbo_);
+      glDeleteVertexArrays(1, &post_vao_);
+      copy_shader_.reset();
     }
     main_window_.reset();
     // ...then shut the platform down (destroys any windows / contexts still open).
@@ -731,6 +814,8 @@ private:
   GLuint skybox_program_ = 0;
   GLuint skybox_vao_ = 0;
   GLuint skybox_vbo_ = 0;
+  GLuint post_vao_ = 0;                  // empty: post passes draw a triangle made in the shader
+  std::shared_ptr<Shader> copy_shader_;  // a post pass without a usable shader
   GLuint frame_ubo_ = 0;
   GLStateCache state_;          // program, blend, depth writes, unit-0 texture: skips redundant GL calls
   // Per-viewport lists, reused every frame (cleared, never shrunk: no allocations once warm).

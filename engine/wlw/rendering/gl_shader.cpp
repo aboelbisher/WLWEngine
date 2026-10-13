@@ -27,6 +27,11 @@ GLShader::GLShader(const Shader& shader) {
     if (!stage_file) return;
     program_ = BuildProgram(label, {"custom/canvas.vert", *stage_file, {}},
                             {label, source.fragment, {"custom/canvas_fragment.glsl"}});
+  } else if (source.target == ShaderTarget::Post) {
+    stage_file = FindShaderFile("custom/post.vert");
+    if (!stage_file) return;
+    program_ = BuildProgram(label, {"custom/post.vert", *stage_file, {}},
+                            {label, source.fragment, {"custom/post_fragment.glsl"}});
   } else if (source.vertex.empty()) {
     stage_file = FindShaderFile("custom/mesh_default.vert");
     if (!stage_file) return;
