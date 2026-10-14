@@ -37,7 +37,7 @@ Where things stand (2026-10-15):
   main, manual runs and `bench/**` branches (name a perf work branch `bench/...` to get CI numbers). Known hot
   spots: render/gather 10k = 1.86 ms on the Pixel 4 (GetAABB + world matrices recomputed per node: Phases 2.2,
   4.5), fx/particles instances 5k = 440 us (1.6), transform/move flat 10k = 1.3 ms (2.2).
-- Games: Bluzzle and Threadlock are on engine v0.1.0 (2026-10-15; glm dropped from their vcpkg.json). Both
+- Games: Bluzzle and Threadlock are on engine v0.1.0 (2026-10-15; glm dropped from their vcpkg.json). Bluzzle
   (desktop + Android) and Threadlock (Android) build with zero warnings, their tests pass, Threadlock runs on the Pixel 4. They get
   `WLW_OPTIMIZE_ENGINE_IN_DEBUG` (engine -O2 in their Debug builds) and the `/W4` warnings from 0.8. Header-only engine code (node.h transforms, templates) stays -O0 in a game's Debug
   build: moving hot code into .cpp files (Phase 2.2) is what makes it fast there.
