@@ -1,5 +1,7 @@
 # WLWengine
 
+[![CI](https://github.com/aboelbisher/WLWEngine/actions/workflows/ci.yml/badge.svg)](https://github.com/aboelbisher/WLWEngine/actions/workflows/ci.yml)
+
 A small C++20 / OpenGL graphics engine for simple games: Windows, macOS, Linux and Android (iOS next).
 It's a plain CMake library with no IDE-specific project files, so Visual Studio, Xcode, CLion, VS Code and (later) Android Studio all work from the same `CMakeLists.txt`.
 
