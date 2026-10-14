@@ -4,6 +4,37 @@ Steps refer to ROADMAP.md. Breaking changes come with migration notes.
 
 ## Unreleased
 
+### Build hygiene (Roadmap 0.8)
+- Warnings: `wlw_set_warnings` (engine, kit, tests, benchmarks, and games through `wlw_add_game`) is now MSVC
+  `/W4 /permissive-`, clang/gcc `-Wall -Wextra -Wshadow`. Two warnings stay off: unused parameters (virtual hooks)
+  and missing field initializers (configs filled with designated initializers that leave defaults out on purpose).
+  The warnings this found are fixed (`primitives.h` double->float, `ShaderMaterial::SetParam` parameter hiding
+  `Material::name`, `audio.cpp` bool vs `ma_bool32`, an unused variable in non-profile builds).
+- `WLW_WARNINGS_AS_ERRORS` (`/WX`, `-Werror`): off by default, on in every engine preset (so in CI). Files that
+  only compile third-party implementations (`miniaudio_impl.cpp`, `libs_impl.cpp`) build without warnings.
+- `WLW_OPTIMIZE_ENGINE_IN_DEBUG`: in Debug builds, the engine, kit and third_party compile at `-O2 -g` (MSVC
+  `/O2 /Ob2`, no `/RTC1`), while the game, tests, samples and benchmarks stay at -O0 (like Unreal's DebugGame). The
+  Debug runtime and `WLW_ASSERT` stay on. On by default when the engine is a submodule; off when it's the
+  top-level project. Debug-build benchmarks on the owner's PC: `render/gather 10k` 16.2 ms -> 0.81 ms,
+  `fx/particles instances 5k` 8.7 ms -> 0.62 ms, `ui/text 1k glyphs` 0.57 ms -> 0.18 ms. Header-only code (`node.h`
+  transforms, templates) compiles inside the caller and keeps the caller's flags.
+- `WLW_PCH` (on): the engine precompiles the standard library and glm headers it uses most. Clean `wlw` Debug
+  build 6.8 s -> 4.6 s on the owner's PC (one job: 41 s -> 22 s). The Android CI job builds with it off, so a
+  missing `#include` still fails there. ccache in CI gets the sloppiness settings PCH needs.
+- glm 1.0.1 is vendored in `third_party/glm` (target `wlw_glm`, public through `wlw::wlw`), per D13. vcpkg now
+  provides only GLFW; Android no longer downloads glm with FetchContent.
+- clang-format: `cmake -P cmake/ClangFormat.cmake` formats `engine/`, `kit/`, `tests/`, `benchmarks/` and
+  `samples/` with a pinned clang-format 23.1.3 (downloaded once into `build/tools/`, nothing to install);
+  `-DCHECK=ON` only checks. A new CI job `clang-format` runs the check. `.clang-format` now describes the style
+  the code was written in (Google-based, 120 columns, `T& x`, short `if`/`case`/functions on one line, includes
+  not reordered). Every file was reformatted once, in its own commit, listed in `.git-blame-ignore-revs`.
+- CI: actions moved to their Node 24 versions (checkout v7, cache v6, upload-artifact v7, ccache-action 1.2.24);
+  `ilammy/msvc-dev-cmd` (still Node 20) replaced by a step that runs VS's `vcvars64.bat`.
+
+Migration: none needed. Games get the stricter warnings as warnings (not errors) and the optimized engine in
+Debug builds; `-DWLW_OPTIMIZE_ENGINE_IN_DEBUG=OFF` steps through engine code at -O0. Games can drop `glm`
+from their `vcpkg.json`.
+
 ### Benchmarks (Roadmap 0.7)
 - `benchmarks/`: `wlw_benchmarks`, engine microbenchmarks on nanobench 4.3.11 (vendored in `third_party/nanobench`,
   MIT). No window, no GPU, fixed seeds; one op = one frame's worth of the work. Covered so far: `render/gather`,

@@ -6,7 +6,8 @@
       "name": "base",
       "hidden": true,
       "binaryDir": "${sourceDir}/build/${presetName}",
-      "toolchainFile": "${sourceDir}/vcpkg/scripts/buildsystems/vcpkg.cmake"
+      "toolchainFile": "${sourceDir}/vcpkg/scripts/buildsystems/vcpkg.cmake",
+      "cacheVariables": { "WLW_WARNINGS_AS_ERRORS": "ON" }
     },
     {
       "name": "windows-base",
@@ -55,6 +56,7 @@
         "CMAKE_BUILD_TYPE": "Debug",
         "ANDROID_ABI": "arm64-v8a",
         "ANDROID_PLATFORM": "android-24",
+        "WLW_WARNINGS_AS_ERRORS": "ON",
         "WLW_BUILD_SAMPLES": "ON"
       }
     },

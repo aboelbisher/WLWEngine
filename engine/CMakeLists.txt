@@ -10,21 +10,6 @@ else()
 endif()
 message(STATUS "WLWengine platform: ${WLW_PLATFORM}")
 
-# ---- glm (math, header-only) ----
-# Desktop gets it from vcpkg (vcpkg.json). Builds without vcpkg (Android via Gradle) fetch it.
-find_package(glm CONFIG QUIET)
-if(NOT TARGET glm::glm)
-  include(FetchContent)
-  set(GLM_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-  set(GLM_BUILD_LIBRARY OFF CACHE BOOL "" FORCE)
-  set(GLM_BUILD_INSTALL OFF CACHE BOOL "" FORCE)
-  FetchContent_Declare(glm
-    GIT_REPOSITORY https://github.com/g-truc/glm.git
-    GIT_TAG 1.0.1
-    GIT_SHALLOW TRUE)
-  FetchContent_MakeAvailable(glm)
-endif()
-
 add_library(wlw STATIC
   wlw/wlw.h
   wlw/wlw.cpp
@@ -206,7 +191,7 @@ target_compile_features(wlw PUBLIC cxx_std_20)
 set_target_properties(wlw PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_compile_definitions(wlw PUBLIC WLW_RENDERER_GL)  # the OpenGL / OpenGL ES backend
 target_link_libraries(wlw
-  PUBLIC  glm::glm
+  PUBLIC  wlw_glm
   PRIVATE wlw_tinygltf wlw_stb wlw_miniaudio)
 
 if(WLW_PLATFORM STREQUAL "glfw")
@@ -281,6 +266,19 @@ endif()
 message(STATUS "WLWengine profiling (Tracy): ${WLW_PROFILE}")
 
 wlw_set_warnings(wlw)
+# These files only compile third-party implementations (miniaudio + stb_vorbis, stb_image, tinygltf): their
+# warnings aren't ours, and MSVC reports some (C4701) while generating code, past /external:W0.
+set_source_files_properties(wlw/audio/miniaudio_impl.cpp wlw/utils/libs_impl.cpp
+  PROPERTIES COMPILE_OPTIONS "$<IF:$<CXX_COMPILER_ID:MSVC>,/W0,-w>" SKIP_PRECOMPILE_HEADERS ON)
+
+# ---- Precompiled headers: the standard library and glm headers most engine files include ----
+option(WLW_PCH "Precompile the engine's common headers" ON)
+if(WLW_PCH)
+  target_precompile_headers(wlw PRIVATE
+    <algorithm> <array> <cmath> <cstddef> <cstdint> <cstdio> <functional> <memory> <optional> <span> <string>
+    <string_view> <unordered_map> <utility> <vector>
+    <glm/glm.hpp> <glm/gtc/matrix_transform.hpp> <glm/gtc/type_ptr.hpp>)
+endif()
 
 # Keep the folder structure in IDEs (VS / Xcode / Android Studio)
 get_target_property(_wlw_sources wlw SOURCES)

@@ -5,6 +5,10 @@ if(NOT ANDROID AND NOT IOS)
   set_target_properties(wlw_glad PROPERTIES FOLDER "third_party")
 endif()
 
+# ---- glm 1.0.1 (MIT / Happy Bunny; headers only): maths. Public through wlw::wlw, so games get it too ----
+add_library(wlw_glm INTERFACE)
+target_include_directories(wlw_glm SYSTEM INTERFACE glm)
+
 # ---- header-only: stb, tinygltf (+ nlohmann json) ----
 add_library(wlw_stb INTERFACE)
 target_include_directories(wlw_stb SYSTEM INTERFACE stb)

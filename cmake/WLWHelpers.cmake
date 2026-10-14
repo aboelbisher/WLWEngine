@@ -19,6 +19,23 @@ function(wlw_add_assets target assets_dir)
     XCODE_SCHEME_WORKING_DIRECTORY "$<TARGET_FILE_DIR:${target}>")
 endfunction()
 
+# wlw_optimize_debug_flags() - turns this directory scope's Debug flags into "optimized with debug info":
+# -O2 -g (MSVC /O2 /Ob2, /RTC removed: it can't be combined with /O2). Only the optimization changes: the
+# Debug runtime (/MDd, _ITERATOR_DEBUG_LEVEL) and NDEBUG-off asserts stay, so the objects still link with
+# Debug ones. Used by the root CMakeLists for WLW_OPTIMIZE_ENGINE_IN_DEBUG.
+macro(wlw_optimize_debug_flags)
+  foreach(_wlw_lang C CXX)
+    if(MSVC)
+      string(REGEX REPLACE "/RTC[1csu]+" "" CMAKE_${_wlw_lang}_FLAGS_DEBUG "${CMAKE_${_wlw_lang}_FLAGS_DEBUG}")
+      string(REGEX REPLACE "/O[bd0-9]+" "" CMAKE_${_wlw_lang}_FLAGS_DEBUG "${CMAKE_${_wlw_lang}_FLAGS_DEBUG}")
+      string(APPEND CMAKE_${_wlw_lang}_FLAGS_DEBUG " /O2 /Ob2")
+    else()
+      string(REGEX REPLACE "(^| )-O[0-9sgz]?" "" CMAKE_${_wlw_lang}_FLAGS_DEBUG "${CMAKE_${_wlw_lang}_FLAGS_DEBUG}")
+      string(APPEND CMAKE_${_wlw_lang}_FLAGS_DEBUG " -O2")
+    endif()
+  endforeach()
+endmacro()
+
 # wlw_enable_sanitizers() - WLW_SANITIZE="address;undefined" (or one of them) builds every target after
 # this call with those sanitizers (clang and gcc; MSVC supports only address). Errors stop the program, so
 # a test that triggers one fails. Off by default; the linux-asan preset and CI turn it on.
@@ -39,13 +56,27 @@ macro(wlw_enable_sanitizers)
   endif()
 endmacro()
 
-# wlw_set_warnings(<target>) - common compiler settings for engine + game targets.
+# wlw_set_warnings(<target>) - common compiler settings for engine + game targets: MSVC /W4 /permissive-,
+# clang/gcc -Wall -Wextra -Wshadow. Two warnings stay off everywhere:
+#   unused parameters (C4100 / -Wunused-parameter): virtual hooks and callbacks often ignore theirs;
+#   missing field initializers: config structs are filled with designated initializers that leave the
+#   defaults out on purpose (Viewport::Create({.format = ...})).
+# WLW_WARNINGS_AS_ERRORS (CI turns it on) makes every warning an error (/WX, -Werror). Third-party code never
+# gets these flags: its sources are other targets and its headers are SYSTEM includes.
+option(WLW_WARNINGS_AS_ERRORS "Treat compiler warnings as errors in targets that use wlw_set_warnings" OFF)
 function(wlw_set_warnings target)
   if(MSVC)
-    target_compile_options(${target} PRIVATE /W3 /utf-8 /MP)
+    target_compile_options(${target} PRIVATE /W4 /permissive- /wd4100 /utf-8 /MP)
     target_compile_definitions(${target} PRIVATE _CRT_SECURE_NO_WARNINGS)
+    if(WLW_WARNINGS_AS_ERRORS)
+      target_compile_options(${target} PRIVATE /WX)
+    endif()
   else()
-    target_compile_options(${target} PRIVATE -Wall -Wextra -Wno-unused-parameter)
+    target_compile_options(${target} PRIVATE
+      -Wall -Wextra -Wshadow -Wno-unused-parameter -Wno-missing-field-initializers)
+    if(WLW_WARNINGS_AS_ERRORS)
+      target_compile_options(${target} PRIVATE -Werror)
+    endif()
   endif()
 endfunction()
 

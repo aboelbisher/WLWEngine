@@ -40,18 +40,18 @@ class ShaderMaterial : public Material {
 
   // A uniform of the shader, by name (e.g. SetParam("uTime", t)); setting a name again replaces
   // its value. Names the shader doesn't have are ignored. Textures get their own texture units.
-  void SetParam(const std::string& name, Param value) {
+  void SetParam(const std::string& uniform, Param value) {
     for (auto& [key, existing] : params_) {
-      if (key == name) {
+      if (key == uniform) {
         existing = std::move(value);
         return;
       }
     }
-    params_.emplace_back(name, std::move(value));
+    params_.emplace_back(uniform, std::move(value));
   }
-  const Param* GetParam(const std::string& name) const {
+  const Param* GetParam(const std::string& uniform) const {
     for (const auto& [key, value] : params_) {
-      if (key == name) return &value;
+      if (key == uniform) return &value;
     }
     return nullptr;
   }

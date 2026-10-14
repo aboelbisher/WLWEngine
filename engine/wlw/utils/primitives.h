@@ -323,15 +323,15 @@ inline std::shared_ptr<core::Mesh<core::Vertex3D>> createSphereWithNormals(float
   // --- 1. Generate Vertices ---
 
   // Constants for stack/sector sizing
-  const float stack_step = M_PI / stacks;
-  const float sector_step = 2 * M_PI / sectors;
+  const float stack_step = static_cast<float>(M_PI / stacks);
+  const float sector_step = static_cast<float>(2 * M_PI / sectors);
 
   // Random color for the sphere (simplifying the color assignment)
   const core::Color sphere_color = {0.8f, 0.8f, 0.8f, 1.0f};
 
   for (int i = 0; i <= stacks; ++i) {
     // Current angle for the stack (latitude) - ranges from -PI/2 to PI/2
-    float stack_angle = M_PI / 2 - i * stack_step;
+    float stack_angle = static_cast<float>(M_PI / 2) - i * stack_step;
 
     // Radius of the circle at this latitude (r * cos(phi))
     float xy_radius = radius * std::cos(stack_angle);

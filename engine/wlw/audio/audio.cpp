@@ -222,7 +222,7 @@ void Audio::SetOtherMusicPlaying(bool playing) {
 void Audio::UpdateDevice() {
   if (!device_) return;
   const bool play = !suspended_ && !interrupted_;
-  if (play == ma_device_is_started(&device_->device)) return;
+  if (play == (ma_device_is_started(&device_->device) != MA_FALSE)) return;
   if (play) {
     ma_device_start(&device_->device);
   } else {

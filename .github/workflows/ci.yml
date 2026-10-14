@@ -18,8 +18,20 @@ concurrency:
 env:
   # vcpkg keeps the packages it built (glfw, glm) here; actions/cache saves the folder between runs.
   VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/.vcpkg-cache
+  # ccache with precompiled headers (the engine's WLW_PCH): without these it never gets a cache hit
+  CCACHE_SLOPPINESS: pch_defines,time_macros,include_file_mtime,include_file_ctime
 
 jobs:
+  format:
+    name: clang-format
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check
+        # The pinned clang-format (downloaded by the script); prints the files that differ.
+        run: cmake -DCHECK=ON -P cmake/ClangFormat.cmake
+
   windows:
     name: Windows MSVC ${{ matrix.config }}
     strategy:
@@ -30,16 +42,26 @@ jobs:
     runs-on: windows-2022
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: true
-      - uses: ilammy/msvc-dev-cmd@v1  # cl.exe + Ninja on PATH for the Ninja generator
+      - name: MSVC environment
+        # cl.exe + Ninja on PATH for the Ninja generator: VS's vcvars64.bat, its variables copied to later steps
+        shell: pwsh
+        run: |
+          $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * `
+            -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          cmd /c "`"$vs\VC\Auxiliary\Build\vcvars64.bat`" > nul && set" | ForEach-Object {
+            if ($_ -match '^([^=]+)=(.*)$' -and [Environment]::GetEnvironmentVariable($Matches[1]) -ne $Matches[2]) {
+              "$($Matches[1])=$($Matches[2])" >> $env:GITHUB_ENV
+            }
+          }
       - name: Make the vcpkg cache folder
         shell: bash
         run: |
           mkdir -p "$VCPKG_DEFAULT_BINARY_CACHE"
           echo "VCPKG_COMMIT=$(git rev-parse HEAD:vcpkg)" >> "$GITHUB_ENV"
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
           key: vcpkg-windows-${{ hashFiles('vcpkg.json') }}-${{ env.VCPKG_COMMIT }}
@@ -52,7 +74,7 @@ jobs:
         run: ctest --preset windows-${{ matrix.config }} -j4 -LE gpu
       - name: Upload the test log
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-log-windows-${{ matrix.config }}
           path: build/windows-${{ matrix.config }}/Testing/Temporary/LastTest.log
@@ -66,7 +88,7 @@ jobs:
       ASAN_OPTIONS: detect_leaks=1:abort_on_error=1:strict_string_checks=1
       UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: true
       - name: Install packages
@@ -82,12 +104,12 @@ jobs:
         run: |
           mkdir -p "$VCPKG_DEFAULT_BINARY_CACHE"
           echo "VCPKG_COMMIT=$(git rev-parse HEAD:vcpkg)" >> "$GITHUB_ENV"
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
           key: vcpkg-linux-${{ hashFiles('vcpkg.json') }}-${{ env.VCPKG_COMMIT }}
           restore-keys: vcpkg-linux-
-      - uses: hendrikmuhs/ccache-action@v1.2
+      - uses: hendrikmuhs/ccache-action@v1.2.24
         with:
           key: linux-asan
       - name: Configure
@@ -106,14 +128,14 @@ jobs:
         run: xvfb-run -a -s "-screen 0 1024x768x24" ctest --preset linux-asan -j4 -L gpu
       - name: Upload the golden-image output
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: gpu-output
           path: build/linux-asan/tests/gpu/gpu_output
           if-no-files-found: ignore
       - name: Upload the test log
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-log-linux-asan
           path: build/linux-asan/Testing/Temporary/LastTest.log
@@ -126,18 +148,19 @@ jobs:
     env:
       NDK_VERSION: 30.0.16248370  # the version the games pin in Gradle (ndkVersion)
     steps:
-      - uses: actions/checkout@v4  # no submodules: Android doesn't use vcpkg (glm comes from FetchContent)
+      - uses: actions/checkout@v7  # no submodules: Android doesn't use vcpkg (everything it needs is in third_party)
       - name: Install the NDK and Ninja
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends ninja-build ccache
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;$NDK_VERSION" > /dev/null
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
-      - uses: hendrikmuhs/ccache-action@v1.2
+      - uses: hendrikmuhs/ccache-action@v1.2.24
         with:
           key: android-arm64
       - name: Configure
         # WLW_PROFILE: Tracy + ATrace compile here too (no extra job); a build check only, nothing runs.
-        run: cmake --preset android-arm64 -DWLW_PROFILE=ON -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+        # WLW_PCH=OFF: every file must include what it uses (the precompiled header would hide a missing one).
+        run: cmake --preset android-arm64 -DWLW_PROFILE=ON -DWLW_PCH=OFF -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
       - name: Build
         run: cmake --build --preset android-arm64

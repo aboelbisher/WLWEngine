@@ -42,6 +42,7 @@ add_executable(wlw_tests
   viewport_tests.cpp)
 target_link_libraries(wlw_tests PRIVATE wlw::wlw wlw::kit wlw_doctest wlw_test_support)
 target_compile_definitions(wlw_tests PRIVATE WLW_TEST_FONT="${CMAKE_CURRENT_SOURCE_DIR}/data/LilitaOne-Regular.ttf")
+wlw_set_warnings(wlw_tests)
 doctest_discover_tests(wlw_tests)
 
 # Golden-image tests (tests/gpu): they need a GL 3.3 context, so they're their own binary, labelled "gpu".

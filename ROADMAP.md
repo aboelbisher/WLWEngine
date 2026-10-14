@@ -5,20 +5,24 @@ first (Android, iOS, web), with desktop as a full target. This plan came out of 
 architecture review. Work goes one step at a time, in order. Step ids are stable: commits name
 them ("Roadmap 4.3b: ...").
 
-**Current step:** 0.8 Build hygiene (not started) · **Updated:** 2026-10-14
+**Current step:** 0.9 Versioning (not started) · **Updated:** 2026-10-15
 
-**Next session:** start 0.8 (build hygiene) with its concept and plan; wait for the owner's OK before any code.
+**Next session:** start 0.9 (versioning) with its concept and plan; wait for the owner's OK before any code.
 
-Where things stand (end of 2026-10-14):
-- Done: 0.1 doctest, 0.2 CI, 0.3 golden images, 0.4 logging and asserts, 0.5 cvars and console, 0.6 Tracy, 0.7 benchmarks. Each is one
-  squashed commit on main named "Roadmap 0.x: ...", with details in CHANGELOG.md.
+Where things stand (2026-10-15):
+- Done: 0.1 doctest, 0.2 CI, 0.3 golden images, 0.4 logging and asserts, 0.5 cvars and console, 0.6 Tracy, 0.7 benchmarks,
+  0.8 build hygiene. Each is one squashed commit on main named "Roadmap 0.x: ...", with details in CHANGELOG.md
+  (0.8 also has a separate reformat commit, listed in `.git-blame-ignore-revs`).
 - How the owner works: the plan goes in chat first; code only after an OK. Work on a branch (`<topic>/setup`)
   pushed to GitHub so CI checks it, then show the result and squash-merge to main only on approval. Delete the
   work branch after. Ask before deleting files.
-- CI: GitHub Actions (`.github/workflows/ci.yml`). Every push runs Windows MSVC Debug, Linux clang ASan+UBSan
-  (+ golden images on llvmpipe under xvfb) and Android arm64 (NDK 30, builds engine + Snake). Windows Release
-  runs only on main and manual runs (private repo: the owner wants zero cost; GitHub stops at the free minutes).
-  Markdown-only pushes don't run CI.
+- CI: GitHub Actions (`.github/workflows/ci.yml`). Every push runs clang-format (check), Windows MSVC Debug, Linux
+  clang ASan+UBSan (+ golden images on llvmpipe under xvfb) and Android arm64 (NDK 30, builds engine + Snake,
+  WLW_PROFILE on, WLW_PCH off). Windows Release runs only on main and manual runs (private repo: the owner wants
+  zero cost; GitHub stops at the free minutes). Markdown-only pushes don't run CI. Warnings are errors in every
+  preset; actions are on their Node 24 versions.
+- Formatting (from 0.8): `cmake -P cmake/ClangFormat.cmake` before committing (pinned clang-format 23.1.3 from its
+  PyPI wheel, downloaded into build/tools; no install). `.clang-format` = the style the code was already in.
 - GitHub CLI: installed and logged in (`C:\Program Files\GitHub CLI\gh.exe`, not on the bash PATH: call it by
   its full path). `gh run list/watch/view --log-failed`, `gh run download <id> --name gpu-output`.
 - Golden images: a rendering change that changes pictures on purpose gets new references from CI's `gpu-output`
@@ -33,17 +37,17 @@ Where things stand (end of 2026-10-14):
   main, manual runs and `bench/**` branches (name a perf work branch `bench/...` to get CI numbers). Known hot
   spots: render/gather 10k = 1.86 ms on the Pixel 4 (GetAABB + world matrices recomputed per node: Phases 2.2,
   4.5), fx/particles instances 5k = 440 us (1.6), transform/move flat 10k = 1.3 ms (2.2).
-- For 0.8: the warnings that will fail with warnings-as-errors already show in MSVC builds (`audio.cpp` C4805,
-  `utils/primitives.h` C4244 double->float) and clang (`scene/post_effects.cpp` missing designated initializers).
-  Node.js 20 deprecation annotations on actions/checkout@v4, cache@v4, ccache-action, msvc-dev-cmd: bump them.
+- From 0.8: games get `WLW_OPTIMIZE_ENGINE_IN_DEBUG` (engine -O2 in their Debug builds) and `/W4` warnings once
+  they move their submodule up. Checked 2026-10-15: Bluzzle desktop Debug builds against 0.8 with zero warnings,
+  its tests pass, it runs. Header-only engine code (node.h transforms, templates) stays -O0 in a game's Debug
+  build: moving hot code into .cpp files (Phase 2.2) is what makes it fast there.
 - From 0.6: on desktop NVIDIA the frame's first glGet waits for the driver thread (frame pacing). The renderer
   calls `glGetIntegerv(GL_FRAMEBUFFER_BINDING)` every frame; caching it would stop that wait landing in our code
   (it moves, it isn't removed: worth checking in Phase 4). Tracy in a phone game needs the INTERNET permission
   in the game's profile build; nobody has profiled on the Pixel 4 yet.
 - Open items: Bluzzle and Threadlock still pin the engine submodule from before 0.1; moving them up needs no
   code changes (checked: they don't rely on `<sstream>` coming through `node.h`). Typing in the console on
-  phones waits for GameTextInput (D9). Pre-existing clang warnings in `scene/post_effects.cpp` (missing
-  designated initializers) belong to 0.8. Nobody has typed into the new console yet: the owner was asked to
+  phones waits for GameTextInput (D9). Nobody has typed into the new console yet: the owner was asked to
   try ` in Snake.
 - Local machine: use `build/win-debug` and `build/win-release` (`build/windows-debug` is stale), from a VS 18
   dev shell. The Android preset builds locally with
@@ -144,7 +148,7 @@ libunibreak (zlib), msdfgen (MIT), Jolt (MIT), Box2D v3 (MIT), ImGuizmo (MIT), F
 - [x] **0.7 Benchmarks.** *(done 2026-10-14, commit "Roadmap 0.7: benchmarks"; nanobench 4.3.11; gather/cull moved to GL-free `rendering/scene_gather.h`; CI reports, warns at +25%, never fails; Pixel 4 baseline pinned to the prime core)* nanobench target: gather/cull/sort at 1k and 10k nodes, transform updates,
   FlowParticles 20k, ParticleSystem 5k, canvas text 1k glyphs, mixer 24 voices; baselines committed;
   CI reports them.
-- [ ] **0.8 Build hygiene.** `WLW_OPTIMIZE_ENGINE_IN_DEBUG` (engine and third_party at -O2 with debug
+- [x] **0.8 Build hygiene.** *(done 2026-10-15, commit "Roadmap 0.8: build hygiene" + a reformat commit; engine-in-Debug 10-35x faster; PCH -33% clean build; glm vendored; clang-format 23.1.3 pinned via its PyPI wheel; C4100 and missing-field-initializers stay off)* `WLW_OPTIMIZE_ENGINE_IN_DEBUG` (engine and third_party at -O2 with debug
   info, game code at -O0); `/W4 /permissive-` and `-Wall -Wextra -Wshadow`; warnings as errors in
   CI; precompiled headers; dependencies vendored per D13; clang-format check.
 - [ ] **0.9 Versioning.** `wlw/version.h` from `project(VERSION)`, CHANGELOG.md, `WLW_DEPRECATED`

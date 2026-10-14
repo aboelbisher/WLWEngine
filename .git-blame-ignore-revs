@@ -1,0 +1,3 @@
+# Commits git blame skips (git config blame.ignoreRevsFile .git-blame-ignore-revs; GitHub reads it itself)
+# Roadmap 0.8: reformat with clang-format 23.1.3
+dd4ebffa8f77a660b422c60f60204fcbf49f832c

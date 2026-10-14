@@ -353,7 +353,7 @@ void Application::SaveCVars() {
 // Profile builds: this frame's numbers as graphs under the timeline (whole numbers, see profile.h).
 void Application::PlotFrame(double frame_seconds) {
   if constexpr (profile::kEnabled) {
-    const scene::RenderStats& stats = window_->GetScreen().GetRenderStats();
+    [[maybe_unused]] const scene::RenderStats& stats = window_->GetScreen().GetRenderStats();
     WLW_PROFILE_PLOT("Frame us", frame_seconds * 1e6);
     WLW_PROFILE_PLOT("Draw calls (screen)", stats.draw_calls);
     WLW_PROFILE_PLOT("Program changes (screen)", stats.program_changes);

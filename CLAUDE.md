@@ -195,10 +195,11 @@ benchmarks/   wlw_benchmarks (nanobench; top-level only, desktop + Android execu
               --threshold %, never a failure), --smoke = CTest "bench: smoke" (label bench). Baselines in
               benchmarks/baselines/: windows-local (owner's Ryzen 7 9800X3D, MSVC Release), linux-ci (bench.yml
               artifact), optional per-phone ones (<device>.json, e.g. pixel4; see "Benchmarks" below).
-third_party/  glad (desktop only), stb, tinygltf + nlohmann json (also its own target wlw_json), miniaudio 0.11.25, stb_vorbis, Dear ImGui 1.92.9b,
+third_party/  glm 1.0.1 (wlw_glm, public through wlw::wlw), glad (desktop only), stb, tinygltf + nlohmann json (also its own target wlw_json), miniaudio 0.11.25, stb_vorbis, Dear ImGui 1.92.9b,
               doctest 2.4.12, nanobench 4.3.11 (wlw_nanobench), Tracy 0.14.1 client (target wlw_tracy, only with WLW_PROFILE) (vendored; versions and licences in third_party/README.md)
-cmake/WLWHelpers.cmake  wlw_add_game(), wlw_add_assets(), wlw_set_warnings()
-vcpkg/ + vcpkg.json     desktop deps (glm, glfw3). Android fetches glm via FetchContent instead.
+cmake/WLWHelpers.cmake  wlw_add_game(), wlw_add_assets(), wlw_set_warnings(), wlw_optimize_debug_flags()
+cmake/ClangFormat.cmake the format check / fix (pinned clang-format, see "Building")
+vcpkg/ + vcpkg.json     GLFW only (desktop); everything else is vendored in third_party/ (D13)
 ```
 
 ## Rules
@@ -219,8 +220,13 @@ vcpkg/ + vcpkg.json     desktop deps (glm, glfw3). Android fetches glm via Fetch
 - **GPU resource destructors** must check `platform::HasCurrentGLContext()` before calling GL.
 - **New source files** must be added to the explicit list in `engine/CMakeLists.txt`.
 - **Conventions:** namespaces `wlw::{core,scene,rendering,input,platform,utils}`; classes and
-  methods `PascalCase`; variables `snake_case`; private members `snake_case_`; `.clang-format`
-  (LLVM, 2 spaces, 120 columns) for new code.
+  methods `PascalCase`; variables `snake_case`; private members `snake_case_`. Formatting is `.clang-format`
+  (Google-based, 120 columns, `T& x`) and CI checks every file: run `cmake -P cmake/ClangFormat.cmake` before
+  committing (it fixes everything in place; `-DCHECK=ON` only checks).
+- **Warnings are errors** in the engine's presets and CI (`/W4 /permissive-`, `-Wall -Wextra -Wshadow`). Fix the
+  cause; never silence a warning for engine code. Third-party implementation files are the only exception.
+- **Include what you use:** the engine has a precompiled header (`WLW_PCH`) that would hide a missing `#include`;
+  the Android CI job builds without it and fails on one.
 - **Don't delete files without asking the owner first.**
 
 ## Building the engine on its own
@@ -237,7 +243,16 @@ CI (`.github/workflows/ci.yml`, GitHub Actions on every push) runs the same pres
 `cmake --preset <name>` + `cmake --build --preset <name>` + `ctest --preset <name>`:
 `windows-debug` / `windows-release` (Release only on main), `linux-asan` (clang, ASan + UBSan via
 `WLW_SANITIZE`), `android-arm64` (build only: set `ANDROID_NDK_HOME` to NDK 30.0.16248370, the games' version).
-New code must pass all of them: no MSVC-only includes, no UB, no leaks. The Android job also turns on `WLW_PROFILE`.
+New code must pass all of them: no MSVC-only includes, no UB, no leaks. The Android job also turns on `WLW_PROFILE`
+and turns off `WLW_PCH`. A `clang-format` job checks formatting (`cmake -DCHECK=ON -P cmake/ClangFormat.cmake`).
+
+Build options (CMake cache variables):
+- `WLW_WARNINGS_AS_ERRORS`: on in every engine preset, off for games unless they turn it on.
+- `WLW_OPTIMIZE_ENGINE_IN_DEBUG`: Debug builds compile engine + kit + third_party at -O2 -g, game code at -O0
+  (10-35x faster engine work in Debug). On when the engine is a game's submodule, off when it's top-level. Turn it
+  off to step through engine code; header-only engine code always gets the caller's flags.
+- `WLW_PCH` (on): precompiled standard library + glm headers for the engine target.
+- `WLW_PROFILE`, `WLW_DEBUG_UI`, `WLW_ENABLE_ASSERTS`, `WLW_SANITIZE`: see "Profiling" and the CMake files.
 
 ## Benchmarks
 Numbers only from optimized builds (a Debug run prints a warning). `.github/workflows/bench.yml` runs them on Linux

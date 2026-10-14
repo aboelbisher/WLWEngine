@@ -17,7 +17,8 @@ static bool Has(const std::string& text, const std::string& part) { return text.
 // The line `part` is on (1 = first).
 static long LineOf(const std::string& text, const std::string& part) {
   const size_t at = text.find(part);
-  return at == std::string::npos ? -1 : 1 + std::count(text.begin(), text.begin() + static_cast<long>(at), '\n');
+  if (at == std::string::npos) return -1;
+  return 1 + static_cast<long>(std::count(text.begin(), text.begin() + static_cast<std::ptrdiff_t>(at), '\n'));
 }
 
 TEST_CASE("canvas") {
