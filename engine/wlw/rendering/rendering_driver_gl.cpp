@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <cstdio>
 #include <unordered_map>
 #include <vector>
 
@@ -11,10 +12,12 @@
 #include "wlw/rendering/gl.h"
 
 #include "wlw/core/assert.h"
+#include "wlw/core/profile.h"
 #include "wlw/platform/platform.h"
 #include "rendering_driver.h"
 #include "wlw/rendering/frame_uniforms.h"
 #include "wlw/rendering/gl_blend.h"
+#include "wlw/rendering/gl_gpu_profile.h"
 #include "wlw/rendering/gl_gpu_queries.h"
 #include "wlw/rendering/gl_index_buffer.h"
 #include "wlw/rendering/gl_instance_buffer.h"
@@ -120,6 +123,7 @@ public:
     // GPU timing, if this GPU can (gpu_timer.h).
     if (auto queries = CreateGLGpuQueries()) gpu_timer_ = std::make_unique<GpuTimer>(std::move(queries));
     window->SetGpuTimingSupported(gpu_timer_ != nullptr);
+    StartGpuProfiler();  // the profiler's GPU zones (gl_gpu_profile.h), profile builds only
 
     glEnable(GL_DEPTH_TEST);
     return true;
@@ -203,16 +207,22 @@ public:
   // One frame of a window: its offscreen viewports into their textures (in the order added, so
   // one may use the picture of an earlier one), then the screen, the overlays, and present.
   void DrawWindow(std::shared_ptr<scene::Window> window) override {
+    WLW_PROFILE_SCOPE("Draw window");
     window->MakeContextCurrent();
 
     GLint screen_framebuffer = 0;  // not always 0: the platform may draw into its own
-    glGetIntegerv(GL_FRAMEBUFFER_BINDING, &screen_framebuffer);
+    {
+      // A glGet: drivers that queue GL calls on their own thread (desktop NVIDIA) wait for it here.
+      WLW_PROFILE_SCOPE("Screen framebuffer");
+      glGetIntegerv(GL_FRAMEBUFFER_BINDING, &screen_framebuffer);
+    }
     const glm::vec2 screen_pixels{window->GetSize().x, window->GetSize().y};
 
     // GPU timing: this frame's sections are measured; the results of one a few frames ago arrive.
     timing_ = gpu_timer_ && window->GpuTiming();
     invalidate_ = window->InvalidateFramebuffers();
     if (timing_) {
+      WLW_PROFILE_SCOPE("GPU timer read");
       gpu_timer_->BeginFrame(gpu_samples_);
       ApplyGpuSamples(*window);
     }
@@ -229,17 +239,26 @@ public:
     DrawViewport(window->GetScreen(), {static_cast<int>(screen_pixels.x), static_cast<int>(screen_pixels.y)},
                  static_cast<GLuint>(screen_framebuffer), /*has_depth=*/true);
     if (timing_) gpu_timer_->End();
-    window->DrawOverlays();  // e.g. the debug UI: on top of everything (not timed)
+    {
+      WLW_PROFILE_SCOPE("Overlays");
+      WLW_PROFILE_GPU_ZONE("Overlays");
+      window->DrawOverlays();  // e.g. the debug UI: on top of everything (not timed)
+    }
     // The screen's depth (and stencil) end with the frame: not written back to memory.
     glBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(screen_framebuffer));
     Invalidate(static_cast<GLuint>(screen_framebuffer), /*color=*/false, /*depth=*/true);
 
     // Present the frame we just drew (previously the swap happened before drawing,
     // so every frame was shown one frame late).
-    window->SwapBuffers();
+    {
+      WLW_PROFILE_SCOPE("Present");
+      window->SwapBuffers();
+    }
+    CollectGpuProfiler();  // finished GPU zones -> the profiler
   }
 
   void WarmUp(scene::Window& window) override {
+    WLW_PROFILE_SCOPE("Shader warm-up");
     window.MakeContextCurrent();
     const auto start = std::chrono::steady_clock::now();
     const size_t before = mesh_programs_.size();
@@ -288,6 +307,13 @@ public:
   // its camera, its post passes if it has any (the scene then goes into the scene picture first,
   // and the last pass writes `destination`), then its canvas over it.
   void DrawViewport(scene::Viewport& viewport, glm::ivec2 pixels, GLuint destination, bool has_depth) {
+    WLW_PROFILE_SCOPE("Viewport");
+#if WLW_PROFILE
+    char label[32];
+    const int label_size = viewport.IsScreen() ? std::snprintf(label, sizeof(label), "screen")
+                                               : std::snprintf(label, sizeof(label), "offscreen %u", viewport.Id());
+    WLW_PROFILE_TEXT(label, static_cast<size_t>(label_size));
+#endif
     using Clock = std::chrono::steady_clock;
     // With post passes the 3D goes into the scene picture, a target of the viewport's own format.
     const PostPlan* post = nullptr;
@@ -313,6 +339,7 @@ public:
     node_slots_.clear();
     const auto start = Clock::now();
     if (draw_scene) {
+      WLW_PROFILE_SCOPE("Gather");
       if (pixels.x > 0 && pixels.y > 0) {  // a minimized window has no size
         camera->UpdateSize({static_cast<float>(pixels.x), static_cast<float>(pixels.y)});
       }
@@ -322,14 +349,20 @@ public:
       BuildDrawList(frame_, stats);
     }
     const auto gathered = Clock::now();
-    SortDrawOrder(draw_order_);
+    {
+      WLW_PROFILE_SCOPE("Sort");
+      SortDrawOrder(draw_order_);
+    }
     const auto sorted = Clock::now();
     // GPU work from here on: the frame block, instance data, the shadow and main passes.
     glBindFramebuffer(GL_FRAMEBUFFER, scene_framebuffer);  // (the shadow pass returns to it)
     TimeSection(viewport.Id(), GpuSection::Kind::Scene);
     if (draw_scene) {
-      UploadFrame(*camera, frame_);
-      for (NodeSlot& slot : node_slots_) slot.instances = PrepareInstances(*slot.node, &stats);
+      {
+        WLW_PROFILE_SCOPE("Upload");
+        UploadFrame(*camera, frame_);
+        for (NodeSlot& slot : node_slots_) slot.instances = PrepareInstances(*slot.node, &stats);
+      }
       if (frame_.shadow_active) DrawShadowMap(frame_);
     }
 
@@ -361,6 +394,8 @@ public:
         if (canvas.QuadCount() == 0) return;
         if (!timed) TimeSection(viewport.Id(), GpuSection::Kind::Canvas);
         timed = true;
+        WLW_PROFILE_SCOPE("Canvas");
+        WLW_PROFILE_GPU_ZONE("Canvas");
         ui_renderer_->Draw(canvas, canvas_pixels);
       });
       if (timed && timing_) gpu_timer_->End();
@@ -465,6 +500,8 @@ public:
     const std::vector<PostPass>& passes = chain.Passes();
     for (const PostStep& step : plan.steps) {
       const PostPass& pass = passes[static_cast<size_t>(step.pass)];
+      WLW_PROFILE_SCOPE_DYNAMIC(pass.name.empty() ? "Post pass" : pass.name.c_str());
+      WLW_PROFILE_GPU_ZONE_DYNAMIC(pass.name.empty() ? "Post pass" : pass.name.c_str());
       TimeSection(viewport_id, GpuSection::Kind::PostPass, step.pass);
       const GLuint output = step.output == kDestination ? destination : GLFramebuffer(chain.Target(step.output));
       glBindFramebuffer(GL_FRAMEBUFFER, output);
@@ -681,6 +718,8 @@ public:
 
   // --- 4. SHADOWS: every caster's depth, seen from the shadow light ---
   void DrawShadowMap(const Frame& frame) {
+    WLW_PROFILE_SCOPE("Shadow pass");
+    WLW_PROFILE_GPU_ZONE("Shadow pass");
     GLint previous_framebuffer = 0;  // not always 0: the platform may draw into its own
     glGetIntegerv(GL_FRAMEBUFFER_BINDING, &previous_framebuffer);
     glBindFramebuffer(GL_FRAMEBUFFER, shadow_framebuffer_);
@@ -707,6 +746,8 @@ public:
 
   // --- 5. MAIN PASS: the skybox, then the draw list in key order ---
   void DrawMainPass(const scene::Scene& scene, const Frame& frame, scene::RenderStats& stats) {
+    WLW_PROFILE_SCOPE("Main pass");
+    WLW_PROFILE_GPU_ZONE("Main pass");
     if (const auto& skybox = scene.GetSkybox()) {
       glDisable(GL_DEPTH_TEST);
       glDisable(GL_CULL_FACE);

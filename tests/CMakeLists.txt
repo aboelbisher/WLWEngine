@@ -28,6 +28,7 @@ add_executable(wlw_tests
   picking_tests.cpp
   post_tests.cpp
   primitives_tests.cpp
+  profile_tests.cpp
   quality_tests.cpp
   render_list_tests.cpp
   resource_tests.cpp

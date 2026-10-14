@@ -33,6 +33,7 @@
 
 #include "wlw/app/application.h"
 #include "wlw/core/cvar.h"
+#include "wlw/core/profile.h"
 #include "wlw/platform/bridge.h"
 #include "wlw/platform/platform.h"
 #include "wlw/scene/window.h"
@@ -325,6 +326,8 @@ bool LoadGLFunctions() { return true; }  // libGLESv3 is linked directly
 void* GetGLProcAddress(const char* name) { return reinterpret_cast<void*>(eglGetProcAddress(name)); }
 
 std::optional<std::vector<uint8_t>> ReadFile(const std::string& path) {
+  WLW_PROFILE_SCOPE("Read file");
+  WLW_PROFILE_TEXT(path.data(), path.size());
   // Assets live inside the APK (zip), not on the file system: read them via AAssetManager.
   if (!g_app) return std::nullopt;
   AAsset* asset = AAssetManager_open(g_app->activity->assetManager, path.c_str(), AASSET_MODE_BUFFER);

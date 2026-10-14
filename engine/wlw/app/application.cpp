@@ -2,6 +2,7 @@
 
 #include "wlw/app/engine_cvars.h"
 #include "wlw/core/log.h"
+#include "wlw/core/profile.h"
 #include "wlw/audio/audio.h"
 #include "wlw/platform/bridge.h"
 #include "wlw/platform/platform.h"
@@ -20,12 +21,26 @@
 
 namespace wlw::app {
 
+namespace {
+
+// `hook(system)` for every system, each in a profiler zone named after it (a slow system stands out).
+template <typename Hook>
+void ForEachSystem(SystemList& systems, Hook&& hook) {
+  systems.ForEach([&hook](System& system) {
+    WLW_PROFILE_SCOPE_DYNAMIC(system.Name().c_str());
+    hook(system);
+  });
+}
+
+}  // namespace
+
 Application::Application(AppConfig config)
     : config_(std::move(config)),
       engine_(WLWEngine::Create()),
       window_(scene::Window::Create(config_.window_size, config_.title)),
       timestep_(config_.fixed_timestep, config_.max_frame_time) {
-  LogThreadId();  // the main thread is T0 in log records
+  LogThreadId();     // the main thread is T0 in log records
+  profile::Start();  // names this thread "Game" in the profiler; log records go to its timeline
   // Log filters from the environment (desktop): WLW_LOG="Render=Verbose,Audio=Warning".
   if (const char* filter = std::getenv("WLW_LOG"); filter != nullptr && !SetLogFilter(filter)) {
     WLW_LOG(LogApp, Warning, "WLW_LOG=\"%s\": some parts aren't category=level", filter);
@@ -48,11 +63,17 @@ Application::Application(AppConfig config)
 
 Application::~Application() {
   for (const auto& [cvar, id] : cvar_callbacks_) cvar->RemoveOnChange(id);
+  profile::Stop();
 }
 
 int Application::Run() {
   ApplyStartupCVars();
-  if (!engine_->Start(window_)) {
+  bool started = false;
+  {
+    WLW_PROFILE_SCOPE("Engine start");
+    started = engine_->Start(window_);
+  }
+  if (!started) {
     WLW_LOG(LogApp, Error, "Engine failed to start");
     return 1;
   }
@@ -79,7 +100,10 @@ int Application::Run() {
 #if WLW_DEBUG_UI
   debug_ui_ = std::make_unique<debug::DebugUI>(*window_);  // needs the GL context Start() made
 #endif
-  systems_.StartPending();  // the systems added before Run, in order
+  {
+    WLW_PROFILE_SCOPE("Systems start");
+    systems_.StartPending();  // the systems added before Run, in order
+  }
   // The scenes they built: compile the shader variants they need now, not during the first frames.
   engine_->GetRenderingDriver()->WarmUp(*window_);
   // The game has started: ReadOnly cvars keep their values from now on. A quality lock from a config
@@ -93,23 +117,28 @@ int Application::Run() {
   const Clock::time_point start = previous;
 
   while (!quit_requested_ && !window_->ShouldClose()) {
-    systems_.StartPending();  // systems added during the last frame start now
+    if (systems_.Started() < systems_.Size()) {
+      WLW_PROFILE_SCOPE("Systems start");
+      systems_.StartPending();  // systems added during the last frame start now
+    }
 
     // 1. Lifecycle. Paused before resumed: coming back from the background, both can arrive in
     // one frame (the loop doesn't run while the app is away), and the game must end up paused
     // but audible.
     if (window_->ConsumePaused()) {
+      WLW_PROFILE_SCOPE("App paused");
       audio_->Suspend();  // silent in the background
-      systems_.ForEach([](System& system) { system.OnAppPaused(); });
+      ForEachSystem(systems_, [](System& system) { system.OnAppPaused(); });
       screens_.AppPaused();  // e.g. the game screen opens its pause panel
     }
     if (window_->ConsumeResumed()) {
+      WLW_PROFILE_SCOPE("App resumed");
       // Back from the background (mobile): don't count the time we were away as one huge frame.
       previous = Clock::now();
       timestep_.Reset();
       quality_.Settle();  // the first frames back are slow for reasons that pass
       audio_->Resume();
-      systems_.ForEach([](System& system) { system.OnAppResumed(); });
+      ForEachSystem(systems_, [](System& system) { system.OnAppResumed(); });
     }
 
     // 2. Time.
@@ -125,8 +154,11 @@ int Application::Run() {
     time_.alpha_ = timestep_.Alpha();
 
 #if WLW_DEBUG_UI
-    // First, so the debug UI can claim the pointer before the game reads input this frame.
-    debug_ui_->BeginFrame(time_.real_delta_);
+    {
+      // First, so the debug UI can claim the pointer before the game reads input this frame.
+      WLW_PROFILE_SCOPE("Debug UI begin");
+      debug_ui_->BeginFrame(time_.real_delta_);
+    }
 #endif
 
     // 3. Back: the top screen first (close a panel...), then the systems; with nothing left to
@@ -138,49 +170,84 @@ int Application::Run() {
 
     // 4. Results from platform code (an ad closed, a cloud save arrived...) reach the game here,
     // on its own thread, before this frame's updates.
-    platform::DispatchBridgeMessages();
+    {
+      WLW_PROFILE_SCOPE("Bridge messages");
+      platform::DispatchBridgeMessages();
+    }
 
     // 5-7. Updates and rendering: the systems, then the screens.
     const float step = timestep_.Step();
     for (int i = 0; i < steps; ++i) {
-      systems_.ForEach([step](System& system) { system.OnFixedUpdate(step); });
-      screens_.FixedUpdate(step);
+      WLW_PROFILE_SCOPE("FixedUpdate");
+      ForEachSystem(systems_, [step](System& system) { system.OnFixedUpdate(step); });
+      {
+        WLW_PROFILE_SCOPE("Screens");
+        screens_.FixedUpdate(step);
+      }
     }
-    const float dt = time_.delta_;
-    systems_.ForEach([dt](System& system) { system.OnUpdate(dt); });
-    screens_.Update(dt);
-    const float alpha = time_.alpha_;
-    systems_.ForEach([alpha](System& system) { system.OnRender(alpha); });
-    screens_.Render(alpha);
+    {
+      WLW_PROFILE_SCOPE("Update");
+      const float dt = time_.delta_;
+      ForEachSystem(systems_, [dt](System& system) { system.OnUpdate(dt); });
+      {
+        WLW_PROFILE_SCOPE("Screens");
+        screens_.Update(dt);
+      }
+    }
+    {
+      WLW_PROFILE_SCOPE("Render");
+      const float alpha = time_.alpha_;
+      ForEachSystem(systems_, [alpha](System& system) { system.OnRender(alpha); });
+      {
+        WLW_PROFILE_SCOPE("Screens");
+        screens_.Render(alpha);
+      }
+    }
 
     // 8. UI.
     BuildUI();
 
     // 9. Debug panels.
 #if WLW_DEBUG_UI
-    if (debug_ui_->IsOpen()) {
-      systems_.ForEach([](System& system) { system.OnDebugUI(); });
-      screens_.DebugUI();
+    {
+      WLW_PROFILE_SCOPE("DebugUI");
+      if (debug_ui_->IsOpen()) {
+        ForEachSystem(systems_, [](System& system) { system.OnDebugUI(); });
+        screens_.DebugUI();
+      }
+      debug_ui_->EndFrame();  // drawn on top of the scene by Iterate()
     }
-    debug_ui_->EndFrame();  // drawn on top of the scene by Iterate()
 #endif
 
     // 10. Draw + present every window, then poll input; screen changes requested this frame
     // happen now, between frames.
     engine_->Iterate();
-    screens_.EndFrame(time_.real_delta_);
+    WLW_PROFILE_FRAME();  // presented: one frame on the profiler's timeline
+    {
+      WLW_PROFILE_SCOPE("Screen changes");
+      screens_.EndFrame(time_.real_delta_);
+    }
     UpdateStats(frame_seconds);
-    UpdateQuality(frame_seconds);
-    if (ConsumeSavedCVarsChanged()) SaveCVars();  // rare: a setting the player changed
+    {
+      WLW_PROFILE_SCOPE("Quality");
+      UpdateQuality(frame_seconds);
+    }
+    if (ConsumeSavedCVarsChanged()) {
+      WLW_PROFILE_SCOPE("Save cvars");
+      SaveCVars();  // rare: a setting the player changed
+    }
+    PlotFrame(frame_seconds);
   }
 
   platform::SetBridgeHandler("audio", nullptr);
+  WLW_PROFILE_SCOPE("Shutdown");
   screens_.Clear();  // OnExit for every screen while the systems are still fully alive
-  systems_.ForEach([](System& system) { system.OnShutdown(); });
+  ForEachSystem(systems_, [](System& system) { system.OnShutdown(); });
   return 0;
 }
 
 void Application::BuildUI() {
+  WLW_PROFILE_SCOPE("RenderUI");
   const core::Vector2 framebuffer = window_->GetSize();
   const glm::vec2 reference{config_.ui_reference_size.x, config_.ui_reference_size.y};
   // Offscreen viewports' canvas layers: emptied and sized to their viewport (same units as the
@@ -211,8 +278,11 @@ void Application::BuildUI() {
   ui_->pointer = pointer;
 
   ui::UIContext& ui = *ui_;
-  systems_.ForEach([&ui](System& system) { system.OnRenderUI(ui); });
-  screens_.RenderUI(ui);
+  ForEachSystem(systems_, [&ui](System& system) { system.OnRenderUI(ui); });
+  {
+    WLW_PROFILE_SCOPE("Screens");
+    screens_.RenderUI(ui);
+  }
   if (const float fade = screens_.FadeAmount(); fade > 0.0f) {  // screen transitions
     canvas.FillRect({{0.0f, 0.0f}, canvas.Size()}, {0.0f, 0.0f, 0.0f, fade});
   }
@@ -276,6 +346,23 @@ void Application::SaveCVars() {
   const std::string text = SavedCVarText();
   if (!platform::WriteFileAtomic(cvar_file_, {text.begin(), text.end()})) {
     WLW_LOG(LogApp, Warning, "Couldn't save %s", cvar_file_.c_str());
+  }
+}
+
+// Profile builds: this frame's numbers as graphs under the timeline (whole numbers, see profile.h).
+void Application::PlotFrame(double frame_seconds) {
+  if constexpr (profile::kEnabled) {
+    const scene::RenderStats& stats = window_->GetScreen().GetRenderStats();
+    WLW_PROFILE_PLOT("Frame us", frame_seconds * 1e6);
+    WLW_PROFILE_PLOT("Draw calls (screen)", stats.draw_calls);
+    WLW_PROFILE_PLOT("Program changes (screen)", stats.program_changes);
+    WLW_PROFILE_PLOT("Texture binds (screen)", stats.texture_binds);
+    WLW_PROFILE_PLOT("Instance bytes (screen)", stats.instance_bytes);
+    WLW_PROFILE_PLOT("Mixer voices", audio_->GetMixer().ActiveVoices());
+    if (quality_.Configured()) WLW_PROFILE_PLOT("Quality level", quality_.Level());
+    if (window_->GpuTiming()) WLW_PROFILE_PLOT("GPU us", window_->GpuFrameMs() * 1000.0f);
+  } else {
+    static_cast<void>(frame_seconds);
   }
 }
 

@@ -2,6 +2,7 @@
 
 #include "wlw/rendering/rendering_driver.h"
 #include "wlw/rendering/render_device.h"
+#include "wlw/core/profile.h"
 #include "wlw/platform/platform.h"
 
 #include <unordered_map>
@@ -51,6 +52,7 @@ namespace wlw {
       for (auto& [_, window] : windows_) {
         window->GetInput().BeginFrame();
       }
+      WLW_PROFILE_SCOPE("Poll input");
       for (auto& [_, window] : windows_) {
         window->ProcessEvents();
       }

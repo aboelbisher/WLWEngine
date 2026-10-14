@@ -6,6 +6,10 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(WLWHelpers)
 wlw_enable_sanitizers()  # WLW_SANITIZE: before any target, so everything is instrumented
 
+# Profiling (wlw/core/profile.h): Tracy + ATrace on Android. Off by default in every build type, so it never
+# ships by accident; the *-profile presets turn it on in an optimized build with symbols.
+option(WLW_PROFILE "Build the Tracy profiler client and the WLW_PROFILE_* zones in" OFF)
+
 add_subdirectory(third_party)
 add_subdirectory(engine)
 add_subdirectory(kit)

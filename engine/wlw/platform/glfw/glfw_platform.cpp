@@ -23,6 +23,7 @@
 #include <unistd.h>  // fsync
 #endif
 
+#include "wlw/core/profile.h"
 #include "wlw/platform/bridge.h"
 #include "wlw/platform/platform.h"
 #include "wlw/scene/window.h"
@@ -86,6 +87,8 @@ bool LoadGLFunctions() { return gladLoadGLLoader(reinterpret_cast<GLADloadproc>(
 void* GetGLProcAddress(const char* name) { return reinterpret_cast<void*>(glfwGetProcAddress(name)); }
 
 std::optional<std::vector<uint8_t>> ReadFile(const std::string& path) {
+  WLW_PROFILE_SCOPE("Read file");
+  WLW_PROFILE_TEXT(path.data(), path.size());
   std::ifstream file(path, std::ios::binary);
   if (!file && std::filesystem::path(path).is_relative()) {
     file.open(ExecutableDirectory() / path, std::ios::binary);  // e.g. launched from elsewhere

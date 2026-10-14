@@ -53,6 +53,7 @@ add_library(wlw STATIC
   wlw/core/color.h
   wlw/core/fixed_timestep.h
   wlw/core/time_scale.h
+  wlw/core/type_name.h
   wlw/core/assert.cpp
   wlw/core/assert.h
   wlw/app/engine_cvars.h
@@ -65,6 +66,8 @@ add_library(wlw STATIC
   wlw/core/mesh.h
   wlw/core/random.h
   wlw/core/model.h
+  wlw/core/profile.cpp
+  wlw/core/profile.h
   wlw/core/vector2.h
   wlw/core/vector3.h
   wlw/core/vertex_2d.h
@@ -99,6 +102,8 @@ add_library(wlw STATIC
   wlw/rendering/gl_program.h
   wlw/rendering/gl_gpu_queries.cpp
   wlw/rendering/gl_gpu_queries.h
+  wlw/rendering/gl_gpu_profile.cpp
+  wlw/rendering/gl_gpu_profile.h
   wlw/rendering/gl_resources.cpp
   wlw/rendering/gpu_timer.cpp
   wlw/rendering/gpu_timer.h
@@ -263,6 +268,15 @@ else()
   target_compile_definitions(wlw PUBLIC WLW_DEBUG_UI=0)
 endif()
 message(STATUS "WLWengine debug UI: ${WLW_DEBUG_UI}")
+
+# ---- Profiling (core/profile.h; the option is in the top-level CMakeLists) ----
+if(WLW_PROFILE)
+  target_compile_definitions(wlw PUBLIC WLW_PROFILE=1)
+  target_link_libraries(wlw PUBLIC wlw_tracy)  # games' zones use Tracy's headers too
+else()
+  target_compile_definitions(wlw PUBLIC WLW_PROFILE=0)
+endif()
+message(STATUS "WLWengine profiling (Tracy): ${WLW_PROFILE}")
 
 wlw_set_warnings(wlw)
 

@@ -13,6 +13,7 @@
 #include "wlw/core/console.h"
 #include "wlw/core/cvar.h"
 #include "wlw/core/fixed_timestep.h"
+#include "wlw/core/type_name.h"
 #include "wlw/core/vector2.h"
 #include "wlw/input/input.h"
 #include "wlw/scene/window.h"
@@ -81,7 +82,8 @@ class Application final {
   // next frame when added while running. Returns it, e.g. to wire systems together.
   template <typename T, typename... Args>
   T& AddSystem(Args&&... args) {
-    return static_cast<T&>(systems_.Add(std::make_unique<T>(std::forward<Args>(args)...), this));
+    return static_cast<T&>(
+        systems_.Add(std::make_unique<T>(std::forward<Args>(args)...), this, std::string(core::TypeName<T>())));
   }
   // The first system of type T, else null (a short search: for setup, not per frame).
   template <typename T>
@@ -108,6 +110,7 @@ class Application final {
  private:
   void BuildUI();  // phase 8: canvases, pointer, safe area, OnRenderUI, screens, fades
   void UpdateStats(double frame_seconds);
+  void PlotFrame(double frame_seconds);
   void UpdateQuality(double frame_seconds);
   // Cvars (core/cvar.h): wlw.cfg, the player's saved ones, the command line; then the engine's own wired up.
   void ApplyStartupCVars();

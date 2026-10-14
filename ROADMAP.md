@@ -5,12 +5,12 @@ first (Android, iOS, web), with desktop as a full target. This plan came out of 
 architecture review. Work goes one step at a time, in order. Step ids are stable: commits name
 them ("Roadmap 4.3b: ...").
 
-**Current step:** 0.6 Tracy (not started) · **Updated:** 2026-10-14
+**Current step:** 0.7 Benchmarks (not started) · **Updated:** 2026-10-14
 
-**Next session:** start 0.6 (Tracy) with its concept and plan; wait for the owner's OK before any code.
+**Next session:** start 0.7 (benchmarks) with its concept and plan; wait for the owner's OK before any code.
 
 Where things stand (end of 2026-10-14):
-- Done: 0.1 doctest, 0.2 CI, 0.3 golden images, 0.4 logging and asserts, 0.5 cvars and console. Each is one
+- Done: 0.1 doctest, 0.2 CI, 0.3 golden images, 0.4 logging and asserts, 0.5 cvars and console, 0.6 Tracy. Each is one
   squashed commit on main named "Roadmap 0.x: ...", with details in CHANGELOG.md.
 - How the owner works: the plan goes in chat first; code only after an OK. Work on a branch (`<topic>/setup`)
   pushed to GitHub so CI checks it, then show the result and squash-merge to main only on approval. Delete the
@@ -26,8 +26,13 @@ Where things stand (end of 2026-10-14):
 - Tests: `wlw_tests` + `snake_game_tests` (210 cases) + `wlw_gpu_tests` (7, label gpu) = 217 CTest tests. Cases
   run in parallel processes (no shared temp files); global state (log filters, cvars) is restored per case, and
   test cvars are static with unique "test.<case>.*" names.
-- For 0.6: profiler switches can be cvars (`core/cvar.h`); zones go on the Application phases and renderer
-  stages (the frame is described in `app/application.h`); log categories (`core/log.h`) give zone names.
+- For 0.7: the profile presets (`windows-profile`, `android-arm64-profile`) are the optimized builds to measure
+  with; Tracy zones (`core/profile.h`) already sit on gather / sort / particles / mixer, so a benchmark and a trace
+  can be compared. Tracy tools for Windows (capture, csvexport) come from its v0.14.1 GitHub release.
+- From 0.6: on desktop NVIDIA the frame's first glGet waits for the driver thread (frame pacing). The renderer
+  calls `glGetIntegerv(GL_FRAMEBUFFER_BINDING)` every frame; caching it would stop that wait landing in our code
+  (it moves, it isn't removed: worth checking in Phase 4). Tracy in a phone game needs the INTERNET permission
+  in the game's profile build; nobody has profiled on the Pixel 4 yet.
 - Open items: Bluzzle and Threadlock still pin the engine submodule from before 0.1; moving them up needs no
   code changes (checked: they don't rely on `<sstream>` coming through `node.h`). Typing in the console on
   phones waits for GameTextInput (D9). Pre-existing clang warnings in `scene/post_effects.cpp` (missing
@@ -123,7 +128,7 @@ libunibreak (zlib), msdfgen (MIT), Jolt (MIT), Box2D v3 (MIT), ImGuizmo (MIT), F
 - [x] **0.5 CVars and console.** *(done 2026-10-14, commit "Roadmap 0.5: cvars and console"; dotted lowercase names; command line and adb work in release except Cheat cvars; typing in the console on phones waits for GameTextInput, D9)* Typed console variables (name, default, help, flags) set from
   code, a config file and the command line (adb intent extras on Android); a debug-UI panel listing
   them; an ImGui console with log, commands and completion.
-- [ ] **0.6 Tracy.** `WLW_PROFILE_*` macros (zones, frame marks, plots, thread names, GPU zones
+- [x] **0.6 Tracy.** *(done 2026-10-14, commit "Roadmap 0.6: Tracy"; Tracy 0.14.1, TRACY_ON_DEMAND, off unless `WLW_PROFILE`; profile presets; GPU zones via Tracy's OpenGL timestamps (GLES: EXT_disjoint_timer_query); Pixel 4 run pending)* `WLW_PROFILE_*` macros (zones, frame marks, plots, thread names, GPU zones
   where supported), ATrace on Android, compiled out of shipping builds; zones on every Application
   phase and renderer stage.
 - [ ] **0.7 Benchmarks.** nanobench target: gather/cull/sort at 1k and 10k nodes, transform updates,

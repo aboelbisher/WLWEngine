@@ -137,6 +137,7 @@ jobs:
         with:
           key: android-arm64
       - name: Configure
-        run: cmake --preset android-arm64 -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+        # WLW_PROFILE: Tracy + ATrace compile here too (no extra job); a build check only, nothing runs.
+        run: cmake --preset android-arm64 -DWLW_PROFILE=ON -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
       - name: Build
         run: cmake --build --preset android-arm64

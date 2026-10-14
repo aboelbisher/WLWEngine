@@ -3,6 +3,7 @@
 #include "wlw/rendering/gl_program.h"
 
 #include "wlw/core/log.h"
+#include "wlw/core/profile.h"
 #include "wlw/rendering/shader_library.h"
 #include "wlw/rendering/shader_preprocessor.h"
 
@@ -49,6 +50,8 @@ GLuint CompileStage(GLenum type, std::string_view label, const ShaderStageSource
 
 GLuint BuildProgram(std::string_view label, const ShaderStageSource& vertex, const ShaderStageSource& fragment,
                     const std::vector<std::string>& defines) {
+  WLW_PROFILE_SCOPE("Compile program");  // a hitch when it happens during play
+  WLW_PROFILE_TEXT(label.data(), label.size());
   const GLuint vs = CompileStage(GL_VERTEX_SHADER, label, vertex, defines);
   const GLuint fs = vs ? CompileStage(GL_FRAGMENT_SHADER, label, fragment, defines) : 0;
   if (!vs || !fs) {

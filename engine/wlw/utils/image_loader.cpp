@@ -1,5 +1,6 @@
 #include <iostream>
 #include "wlw/core/assert.h"
+#include "wlw/core/profile.h"
 #include "image_loader.h"
 #include "wlw/platform/platform.h"
 #include "stb_image.h"
@@ -9,6 +10,8 @@
 namespace wlw::utils {
 
   std::unique_ptr<RawImage> ImageLoader::LoadImage(const std::string &file_path) {
+    WLW_PROFILE_SCOPE("Load image");
+    WLW_PROFILE_TEXT(file_path.data(), file_path.size());
     int width, height, channels_count;
 
     // Read through the platform layer so this also works for assets packed inside an APK.

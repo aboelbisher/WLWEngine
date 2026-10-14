@@ -9,6 +9,7 @@
 #include "imgui.h"
 #include "wlw/app/application.h"
 #include "wlw/app/engine_cvars.h"
+#include "wlw/core/profile.h"
 
 namespace wlw::debug {
 
@@ -18,6 +19,13 @@ void EnginePanel::OnDebugUI() {
   ImGui::SetNextWindowPos(ImVec2(8.0f, 8.0f), ImGuiCond_FirstUseEver);
   ImGui::Begin("Engine");
   ImGui::Text("%.0f fps, %.2f ms", App().Time().Fps(), App().Time().FrameMs());
+  if constexpr (profile::kEnabled) {  // profile builds (core/profile.h)
+    if (profile::Connected()) {
+      ImGui::Text("Profiler: Tracy connected");
+    } else {
+      ImGui::TextDisabled("Profiler: waiting for Tracy (port 8086)");
+    }
+  }
   // The GPU's own time (it runs behind the CPU: these are a few frames old, smoothed).
   if (!window.GpuTimingSupported()) {
     ImGui::TextDisabled("GPU timing: not supported on this GPU");

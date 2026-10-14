@@ -38,3 +38,20 @@ target_include_directories(wlw_miniaudio SYSTEM INTERFACE miniaudio stb)
 # doctest.cmake gives doctest_discover_tests(): every TEST_CASE becomes its own CTest test.
 add_library(wlw_doctest INTERFACE)
 target_include_directories(wlw_doctest SYSTEM INTERFACE doctest)
+
+# ---- Tracy v0.14.1 (BSD-3; the client from its public/ folder): the profiler (wlw/core/profile.h) ----
+# Only with WLW_PROFILE. TRACY_ON_DEMAND: nothing is recorded until a viewer connects, so a profile build runs
+# at full speed without one. The viewer (tracy-profiler) must be the same version.
+if(WLW_PROFILE)
+  add_library(wlw_tracy STATIC tracy/TracyClient.cpp)
+  target_include_directories(wlw_tracy SYSTEM PUBLIC tracy)
+  target_compile_definitions(wlw_tracy PUBLIC TRACY_ENABLE TRACY_ON_DEMAND)
+  set_target_properties(wlw_tracy PROPERTIES FOLDER "third_party" POSITION_INDEPENDENT_CODE ON)
+  find_package(Threads REQUIRED)
+  target_link_libraries(wlw_tracy PUBLIC Threads::Threads ${CMAKE_DL_LIBS})
+  if(WIN32)
+    target_link_libraries(wlw_tracy PUBLIC ws2_32 dbghelp)
+  elseif(ANDROID)
+    target_link_libraries(wlw_tracy PUBLIC log)
+  endif()
+endif()

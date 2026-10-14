@@ -7,6 +7,7 @@
 
 #include "miniaudio.h"
 #include "wlw/core/log.h"
+#include "wlw/core/profile.h"
 #include "wlw/platform/platform.h"
 
 namespace wlw::audio {
@@ -75,8 +76,10 @@ struct Audio::MusicStream final : StreamSource {
 };
 
 void Audio::DecodeLoop() {
+  WLW_PROFILE_THREAD_NAME("Audio decode");
   while (decoding_.load()) {
     {
+      WLW_PROFILE_SCOPE("Decode music");
       std::lock_guard<std::mutex> lock(music_mutex_);
       for (auto& [path, stream] : music_) stream->Fill();
     }
@@ -89,6 +92,14 @@ constexpr uint32_t kFallbackSampleRate = 48000;
 
 // Runs on the audio thread, every few milliseconds: fill `output` with the next `frames`.
 void DataCallback(ma_device* device, void* output, const void* /*input*/, ma_uint32 frames) {
+#if WLW_PROFILE
+  static thread_local bool named = false;  // the device may restart on another thread
+  if (!named) {
+    WLW_PROFILE_THREAD_NAME("Audio callback");
+    named = true;
+  }
+#endif
+  WLW_PROFILE_SCOPE("Mix");
   static_cast<Mixer*>(device->pUserData)->Mix(static_cast<float*>(output), frames);
 }
 }  // namespace

@@ -20,6 +20,12 @@
     { "name": "windows-debug",   "displayName": "Windows Debug",   "inherits": "windows-base", "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" } },
     { "name": "windows-release", "displayName": "Windows Release", "inherits": "windows-base", "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" } },
     {
+      "name": "windows-profile",
+      "displayName": "Windows Profile (optimized + symbols, Tracy, debug UI)",
+      "inherits": "windows-base",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "RelWithDebInfo", "WLW_PROFILE": "ON", "WLW_DEBUG_UI": "ON" }
+    },
+    {
       "name": "unix-base",
       "hidden": true,
       "inherits": "base",
@@ -53,6 +59,12 @@
       }
     },
     {
+      "name": "android-arm64-profile",
+      "displayName": "Android arm64 Profile (optimized + symbols, Tracy + ATrace, debug UI)",
+      "inherits": "android-arm64",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "RelWithDebInfo", "WLW_PROFILE": "ON", "WLW_DEBUG_UI": "ON" }
+    },
+    {
       "name": "xcode",
       "displayName": "Xcode project",
       "inherits": "base",
@@ -63,15 +75,18 @@
   "buildPresets": [
     { "name": "windows-debug",   "configurePreset": "windows-debug" },
     { "name": "windows-release", "configurePreset": "windows-release" },
+    { "name": "windows-profile", "configurePreset": "windows-profile" },
     { "name": "debug",           "configurePreset": "debug" },
     { "name": "release",         "configurePreset": "release" },
     { "name": "linux-asan",      "configurePreset": "linux-asan" },
     { "name": "android-arm64",   "configurePreset": "android-arm64" },
+    { "name": "android-arm64-profile", "configurePreset": "android-arm64-profile" },
     { "name": "xcode-debug",     "configurePreset": "xcode", "configuration": "Debug" }
   ],
   "testPresets": [
     { "name": "windows-debug",   "configurePreset": "windows-debug",   "output": { "outputOnFailure": true }, "execution": { "jobs": 8 } },
     { "name": "windows-release", "configurePreset": "windows-release", "output": { "outputOnFailure": true }, "execution": { "jobs": 8 } },
+    { "name": "windows-profile", "configurePreset": "windows-profile", "output": { "outputOnFailure": true }, "execution": { "jobs": 8 } },
     { "name": "debug",           "configurePreset": "debug",           "output": { "outputOnFailure": true }, "execution": { "jobs": 8 } },
     { "name": "release",         "configurePreset": "release",         "output": { "outputOnFailure": true }, "execution": { "jobs": 8 } },
     { "name": "linux-asan",      "configurePreset": "linux-asan",      "output": { "outputOnFailure": true }, "execution": { "jobs": 8 } }

@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include "wlw/core/assert.h"
+#include "wlw/core/profile.h"
 
 namespace wlw::fx {
 
@@ -153,6 +154,7 @@ void FlowParticles::Clear() {
 }
 
 void FlowParticles::Update(float dt) {
+  WLW_PROFILE_SCOPE("FlowParticles::Update");
   if (dt <= 0.0f) return;
   time_ += dt;
   for (Path& p : paths_) {
@@ -211,6 +213,7 @@ void FlowParticles::Update(float dt) {
 }
 
 void FlowParticles::WriteTo(scene::SpriteBatch& batch) const {
+  WLW_PROFILE_SCOPE("FlowParticles::WriteTo");
   const std::span<rendering::SpriteInstance> out = batch.Write(dist_.size());
   glm::vec2 lo(std::numeric_limits<float>::max()), hi(std::numeric_limits<float>::lowest());
   const float inv_fade = fade_length > 0.0f ? 1.0f / fade_length : 0.0f;

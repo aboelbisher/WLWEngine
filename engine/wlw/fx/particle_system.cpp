@@ -5,6 +5,8 @@
 
 #include <glm/gtc/matrix_transform.hpp>
 
+#include "wlw/core/profile.h"
+
 namespace wlw::fx {
 
 float ParticleSystem::Particle::Size() const {
@@ -67,6 +69,7 @@ int ParticleSystem::Burst(const BurstSettings& settings, const glm::vec3& origin
 }
 
 void ParticleSystem::Update(float dt) {
+  WLW_PROFILE_SCOPE("ParticleSystem::Update");
   const float damping = std::exp(-drag * dt);
   for (size_t i = 0; i < particles_.size();) {
     Particle& p = particles_[i];

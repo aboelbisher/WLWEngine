@@ -4,6 +4,30 @@ Steps refer to ROADMAP.md. Breaking changes come with migration notes.
 
 ## Unreleased
 
+### Tracy profiler (Roadmap 0.6)
+- `wlw/core/profile.h`: `WLW_PROFILE_SCOPE("name")`, `WLW_PROFILE_FUNCTION()`, `WLW_PROFILE_SCOPE_DYNAMIC(name)`,
+  `WLW_PROFILE_TEXT`, `WLW_PROFILE_FRAME`, `WLW_PROFILE_PLOT`, `WLW_PROFILE_THREAD_NAME`, `WLW_PROFILE_MESSAGE`.
+  They feed Tracy 0.14.1 (vendored in `third_party/tracy`, BSD-3) and, on Android, ATrace sections and counters
+  (Perfetto / Android Studio). Built in only with the CMake option `WLW_PROFILE` (off by default everywhere);
+  without it the macros are empty and their arguments aren't evaluated. `TRACY_ON_DEMAND`: nothing is recorded
+  until a viewer connects. A profile build takes ~0.5 s longer to start (Tracy calibrates its timer).
+- New presets `windows-profile` and `android-arm64-profile`: RelWithDebInfo (optimized, with symbols), Tracy on,
+  debug UI on.
+- Zones: every Application phase; each system's hooks, named after the system's type (`System::Name()`, set by
+  `AddSystem` through the new `core::TypeName<T>()`); the renderer (draw window, each viewport, gather, sort,
+  upload, shadow pass, main pass, canvas, each post pass by name, overlays, present, shader warm-up and every
+  program compile); input polling; the audio callback and decode thread (named threads); particle updates; file
+  reads, image and glTF loads. Frame marks after present. Plots: frame us, draw calls, program changes, texture
+  binds, instance bytes, mixer voices, quality level, GPU us. Log records show on the timeline while a viewer is
+  connected.
+- GPU zones (`wlw/rendering/gl_gpu_profile.h`, GL backend): Tracy's OpenGL timestamp zones for the shadow pass,
+  main pass, canvas, post passes and overlays. On GLES they need EXT_disjoint_timer_query (looked up at run time).
+  The query context is made when a viewer first connects. The cvar `profile.gpu_zones` turns them off.
+- Engine panel: "Profiler: Tracy connected / waiting" in profile builds.
+- CI: the Android job builds with `WLW_PROFILE=ON`.
+
+Migration: none needed. `SystemList::Add` takes an optional name.
+
 ### Console variables and console (Roadmap 0.5)
 - `wlw/core/cvar.h`: `CVar<bool|int|float|std::string>{"r.name", default, "help", flags, range}`, with dotted
   lowercase names. Flags: `Saved` (kept in `<save dir>/cvars.cfg`), `ReadOnly` (only before the game starts),

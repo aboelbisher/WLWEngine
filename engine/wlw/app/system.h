@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <string>
 #include <vector>
 
 namespace wlw::ui {
@@ -35,6 +36,9 @@ class System {
   virtual void OnAppResumed() {}  // came back from the background
   virtual void OnShutdown() {}    // the loop ended; services are still alive
 
+  // Its type's name ("MyGame"; AddSystem sets it): the profiler names its hooks' zones with it.
+  const std::string& Name() const { return name_; }
+
  protected:
   // The app's services (window, input, audio, screens, time...). Valid from OnStart on (not in
   // the constructor: the system isn't added yet).
@@ -43,6 +47,7 @@ class System {
  private:
   friend class SystemList;
   Application* app_ = nullptr;
+  std::string name_;
 };
 
 // The app's systems in order, and how the frame's phases reach them. Kept apart from Application
@@ -50,8 +55,9 @@ class System {
 class SystemList {
  public:
   // Takes `system`, owned from now on. It's started (OnStart) by the next StartPending.
-  System& Add(std::unique_ptr<System> system, Application* app) {
+  System& Add(std::unique_ptr<System> system, Application* app, std::string name = "System") {
     system->app_ = app;
+    system->name_ = std::move(name);
     systems_.push_back(std::move(system));
     return *systems_.back();
   }

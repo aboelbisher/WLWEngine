@@ -55,7 +55,7 @@ engine/wlw/
               GPU < budget x up_at for 10 s = up (wait doubles per failure of that level, max 8x), 3 s settle after a
               change/resume, readings smoothed ~0.5 s and clamped at 2 budgets; no GPU timer = down only; level saved
               in <save dir>/quality.txt. Fed by Application after each frame (UpdateQuality). Engine panel: level, -/+/Auto
-  core/       math types, FixedTimestep, Random (SplitMix64: deterministic everywhere, state saveable), log.h (WLW_LOG(Category, Level, fmt...): levels Verbose..Fatal, categories LogCore/App/Render/Shader/Audio/Platform/UI/FX (+ kit LogKit, games WLW_LOG_CATEGORY), compile-time stripping, SetLogFilter("Render=Verbose,*=Warning") / env WLW_LOG, sinks: platform, RecentLogs ring (512), StartLogFile (debug builds: <save dir>/log.txt, previous run log.txt.prev), AddLogSink; LogThreadId), assert.h (WLW_ASSERT debug-only fatal, WLW_VERIFY always evaluated: logs + returns false, WLW_UNREACHABLE; SetAssertHandler for tests), cvar.h (CVar<bool/int/float/std::string>{"r.name", default, help, flags Saved/ReadOnly/Cheat, range}: dotted lowercase names; sources in order code default < wlw.cfg (assets) < <save dir>/cvars.cfg (Saved, written when changed) < command line +name value / Android --es wlw "a=1;b=2" < console; unknown names wait for registration; OnChange; game thread), console.h (ConsoleCommand RAII, ExecuteConsoleLine, built-ins help/find/set/reset/exec (+quit from Application), CompleteConsoleName, ConsoleModel), mesh/model, collision.h (AABB, Ray, Plane, IntersectPlane)
+  core/       math types, FixedTimestep, Random (SplitMix64: deterministic everywhere, state saveable), log.h (WLW_LOG(Category, Level, fmt...): levels Verbose..Fatal, categories LogCore/App/Render/Shader/Audio/Platform/UI/FX (+ kit LogKit, games WLW_LOG_CATEGORY), compile-time stripping, SetLogFilter("Render=Verbose,*=Warning") / env WLW_LOG, sinks: platform, RecentLogs ring (512), StartLogFile (debug builds: <save dir>/log.txt, previous run log.txt.prev), AddLogSink; LogThreadId), assert.h (WLW_ASSERT debug-only fatal, WLW_VERIFY always evaluated: logs + returns false, WLW_UNREACHABLE; SetAssertHandler for tests), cvar.h (CVar<bool/int/float/std::string>{"r.name", default, help, flags Saved/ReadOnly/Cheat, range}: dotted lowercase names; sources in order code default < wlw.cfg (assets) < <save dir>/cvars.cfg (Saved, written when changed) < command line +name value / Android --es wlw "a=1;b=2" < console; unknown names wait for registration; OnChange; game thread), console.h (ConsoleCommand RAII, ExecuteConsoleLine, built-ins help/find/set/reset/exec (+quit from Application), CompleteConsoleName, ConsoleModel), profile.h (WLW_PROFILE_SCOPE/FUNCTION/SCOPE_DYNAMIC/TEXT/FRAME/PLOT/THREAD_NAME/MESSAGE -> Tracy + Android ATrace; only with the CMake option WLW_PROFILE, else empty with unevaluated arguments; one zone per scope; see "Profiling"), type_name.h (TypeName<T>() at compile time: "wlw::app::System"; System::Name() for zones), mesh/model, collision.h (AABB, Ray, Plane, IntersectPlane)
   input/      Input: keys (pressed vs held; text-editing keys + Grave), Text() (typed code points), pointer (mouse/first
               finger), swipes, taps; pointer and keyboard can be blocked (debug UI), Raw* queries ignore that
   math/       ExactCover: Knuth's Algorithm X with Dancing Links (exact cover search, counting, hints);
@@ -111,6 +111,10 @@ engine/wlw/
               EXT_disjoint_timer_query (the Android emulator lacks it; platform::GetGLProcAddress). Sections per viewport:
               3D, each post pass, canvas -> Viewport::GetGpuStats (smoothed ms), Window::GpuFrameMs / SetGpuTiming (on in
               debug builds) / GpuTimingSupported. Engine panel shows them.
+              Profiler GPU zones (gl_gpu_profile.h, WLW_PROFILE builds): WLW_PROFILE_GPU_ZONE(_DYNAMIC) = Tracy's OpenGL
+              timestamp zones (shadow, main pass, canvas, post passes, overlays); GLES: EXT_disjoint_timer_query functions
+              looked up at run time and #defined to the desktop names before TracyOpenGL.hpp; context made when a viewer
+              connects; cvar profile.gpu_zones. Separate from GpuTimer.
               Custom shaders (shader.h): one text (shader_type canvas|mesh|post; fragment(), optional vertex()) -> Shader::Create(code) or Shader::FromFile(path) -> ShaderMaterial::Create(shader)
               + SetParam(name, float/vec/mat4/texture); node/mesh SetMaterial or Canvas::ShaderRect. Engine inputs are prepended
               (documented in shader.h; may #include wlw/lighting.glsl and use SceneLighting). Data textures: WTexture2D::Create(w, h, {R8/RGB8/RGBA8/R16F/RGBA16F}) + Update (copied, uploaded before the next draw)
@@ -170,7 +174,7 @@ kit/wlw/kit/  wlw::kit: game-level building blocks shared by games (separate tar
               (UMP consent, load/show/retry); games add that dir to their sourceSets and depend on play-services-ads + UMP
 samples/      small games, built only when the engine is the top-level project (desktop):
               snake/ (Snake + its rules tests)
-tests/        engine unit tests (no window/GPU: quality levels (down/up, back-off, settle, frame-time-only, lock, saved), draw order (sort keys), shader system (preprocessor, embedded files in every variant, std140 layout, lights, variants, UI kinds), systems (order, starting, Back), blending (depth-write rule, canvas batches, images, falloff texture), resources (made without a GPU, updates, alive list), post passes (planning, ping-pong, named inputs, chain targets, effects), viewports (scenes, sizes, update modes), anim, audio, core (random, atomic files, bridge queue), exact cover, search (bitboards, minimax, expectimax), gf2 (Lights Out), shader text splitting, lighting (light nodes, shadow-box fitting), fx, input, kit, picking, primitives, ui (canvas, safe area, widgets), screens). doctest: one binary wlw_tests, a TEST_SUITE per file, shared main test_main.cpp,
+tests/        engine unit tests (no window/GPU: quality levels (down/up, back-off, settle, frame-time-only, lock, saved), draw order (sort keys), shader system (preprocessor, embedded files in every variant, std140 layout, lights, variants, UI kinds), systems (order, starting, Back), blending (depth-write rule, canvas batches, images, falloff texture), resources (made without a GPU, updates, alive list), post passes (planning, ping-pong, named inputs, chain targets, effects), viewports (scenes, sizes, update modes), anim, audio, core (random, atomic files, bridge queue), exact cover, search (bitboards, minimax, expectimax), gf2 (Lights Out), shader text splitting, lighting (light nodes, shadow-box fitting), fx, input, kit, picking, primitives, ui (canvas, safe area, widgets), screens, profile macros + TypeName). doctest: one binary wlw_tests, a TEST_SUITE per file, shared main test_main.cpp,
               test_helpers.h (Near = absolute tolerance); compound checks in double parentheses CHECK((a && b));
               each TEST_CASE is its own CTest test (cases run in parallel processes: no shared temp files);
               test data in tests/data/, also top-level only. tests/support/ = wlw_test_support (image_compare.h: PNG
@@ -183,7 +187,7 @@ tests/        engine unit tests (no window/GPU: quality levels (down/up, back-of
               rewrites references from this GPU: only commit llvmpipe ones. A rendering change that changes pictures
               on purpose = new references from CI's artifact, reviewed like code. Windows CI skips them (-LE gpu).
 third_party/  glad (desktop only), stb, tinygltf + nlohmann json (also its own target wlw_json), miniaudio 0.11.25, stb_vorbis, Dear ImGui 1.92.9b,
-              doctest 2.4.12 (vendored; versions and licences in third_party/README.md)
+              doctest 2.4.12, Tracy 0.14.1 client (target wlw_tracy, only with WLW_PROFILE) (vendored; versions and licences in third_party/README.md)
 cmake/WLWHelpers.cmake  wlw_add_game(), wlw_add_assets(), wlw_set_warnings()
 vcpkg/ + vcpkg.json     desktop deps (glm, glfw3). Android fetches glm via FetchContent instead.
 ```
@@ -224,7 +228,25 @@ CI (`.github/workflows/ci.yml`, GitHub Actions on every push) runs the same pres
 `cmake --preset <name>` + `cmake --build --preset <name>` + `ctest --preset <name>`:
 `windows-debug` / `windows-release` (Release only on main), `linux-asan` (clang, ASan + UBSan via
 `WLW_SANITIZE`), `android-arm64` (build only: set `ANDROID_NDK_HOME` to NDK 30.0.16248370, the games' version).
-New code must pass all of them: no MSVC-only includes, no UB, no leaks.
+New code must pass all of them: no MSVC-only includes, no UB, no leaks. The Android job also turns on `WLW_PROFILE`.
+
+## Profiling
+Build with a profile preset: `windows-profile` or `android-arm64-profile` (RelWithDebInfo = optimized with symbols,
+`WLW_PROFILE=ON`, debug UI on). A game's own build passes `-DWLW_PROFILE=ON` and RelWithDebInfo the same way.
+- Desktop: run the game, then the viewer `tracy-profiler.exe` from Tracy's GitHub release **v0.14.1** (it must match
+  `third_party/tracy`) and connect to localhost. Command line: `tracy-capture -a 127.0.0.1 -o run.tracy -s 5`, then
+  `tracy-csvexport run.tracy` (`-g` GPU zones, `-m` messages, `-u -p` plots).
+- Android: the app needs the INTERNET permission (add it in the game's profile build only), then
+  `adb forward tcp:8086 tcp:8086` and connect the viewer to localhost. ATrace sections and counters show in a
+  Perfetto / Android Studio system trace.
+- Nothing is recorded until a viewer connects (TRACY_ON_DEMAND); zones cost a branch until then. Startup is ~0.5 s
+  longer (timer calibration).
+- Zones (all with WLW_PROFILE_*): Application phases + each system's hook named after its type, renderer stages,
+  program compiles, input polling, audio callback + decode thread, particles, file/image/glTF loads. Plots: Frame us,
+  draw calls, program changes, texture binds, instance bytes, mixer voices, quality level, GPU us. Log lines go to the
+  timeline while connected.
+- Desktop NVIDIA: the driver thread makes the frame's first glGet wait (frame pacing). It shows in
+  `tracy::GpuCtx::Collect` (GPU zones on) or "Screen framebuffer" (off); not a real cost.
 
 **Don't add features to the samples** (owner's rule): engine features are shown and verified
 through Bluzzle and the engine tests. Snake only has to keep compiling.

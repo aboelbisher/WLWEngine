@@ -7,6 +7,7 @@
 
 #include "gltf_loader.h"
 #include "wlw/core/assert.h"
+#include "wlw/core/profile.h"
 #include "wlw/core/mesh.h"
 #include "wlw/core/model.h"
 #include "wlw/rendering/material.h"
@@ -149,6 +150,8 @@ namespace wlw::utils {
   }
 
   std::shared_ptr<core::Model<core::Vertex3D>> GLTFLoader::LoadModel(const std::string& filename, bool normalize) {
+    WLW_PROFILE_SCOPE("Load glTF");
+    WLW_PROFILE_TEXT(filename.data(), filename.size());
     tinygltf::Model model;
     tinygltf::TinyGLTF loader;
     std::string err, warn;
