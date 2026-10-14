@@ -9,6 +9,12 @@ roadmap and the owner's working preferences: read it too when working from there
 
 Remote: `git@github.com:aboelbisher/WLWEngine.git`, branch `main`.
 
+## Roadmap
+The engine is being brought to big-engine quality step by step: **ROADMAP.md** holds the current
+step, the phases, the decisions and the definition of done. For every step: explain the concept and
+the exact plan in chat and wait for the owner's OK before writing code; show the changes and commit
+only after approval; then tick the step in ROADMAP.md.
+
 ## Layout
 ```
 engine/wlw/
@@ -153,8 +159,12 @@ kit/wlw/kit/  wlw::kit: game-level building blocks shared by games (separate tar
               (UMP consent, load/show/retry); games add that dir to their sourceSets and depend on play-services-ads + UMP
 samples/      small games, built only when the engine is the top-level project (desktop):
               snake/ (Snake + its rules tests)
-tests/        engine unit tests (no window/GPU: quality levels (down/up, back-off, settle, frame-time-only, lock, saved), draw order (sort keys), shader system (preprocessor, embedded files in every variant, std140 layout, lights, variants, UI kinds), systems (order, starting, Back), blending (depth-write rule, canvas batches, images, falloff texture), resources (made without a GPU, updates, alive list), post passes (planning, ping-pong, named inputs, chain targets, effects), viewports (scenes, sizes, update modes), anim, audio, core (random, atomic files, bridge queue), exact cover, search (bitboards, minimax, expectimax), gf2 (Lights Out), shader text splitting, lighting (light nodes, shadow-box fitting), fx, input, kit, picking, primitives, ui (canvas, safe area, widgets), screens); test data in tests/data/, also top-level only; ctest
-third_party/  glad (desktop only), stb, tinygltf + nlohmann json (also its own target wlw_json), miniaudio 0.11.25, stb_vorbis, Dear ImGui 1.92.9b (vendored)
+tests/        engine unit tests (no window/GPU: quality levels (down/up, back-off, settle, frame-time-only, lock, saved), draw order (sort keys), shader system (preprocessor, embedded files in every variant, std140 layout, lights, variants, UI kinds), systems (order, starting, Back), blending (depth-write rule, canvas batches, images, falloff texture), resources (made without a GPU, updates, alive list), post passes (planning, ping-pong, named inputs, chain targets, effects), viewports (scenes, sizes, update modes), anim, audio, core (random, atomic files, bridge queue), exact cover, search (bitboards, minimax, expectimax), gf2 (Lights Out), shader text splitting, lighting (light nodes, shadow-box fitting), fx, input, kit, picking, primitives, ui (canvas, safe area, widgets), screens). doctest: one binary wlw_tests, a TEST_SUITE per file, shared main test_main.cpp,
+              test_helpers.h (Near = absolute tolerance); compound checks in double parentheses CHECK((a && b));
+              each TEST_CASE is its own CTest test (cases run in parallel processes: no shared temp files);
+              test data in tests/data/, also top-level only
+third_party/  glad (desktop only), stb, tinygltf + nlohmann json (also its own target wlw_json), miniaudio 0.11.25, stb_vorbis, Dear ImGui 1.92.9b,
+              doctest 2.4.12 (vendored; versions and licences in third_party/README.md)
 cmake/WLWHelpers.cmake  wlw_add_game(), wlw_add_assets(), wlw_set_warnings()
 vcpkg/ + vcpkg.json     desktop deps (glm, glfw3). Android fetches glm via FetchContent instead.
 ```
@@ -185,7 +195,9 @@ Windows (from a "Developer PowerShell for VS"):
 cmake --preset windows-debug
 cmake --build --preset windows-debug
 .\build\windows-debug\samples\snake\wlw_snake.exe
-ctest --test-dir build\windows-debug --output-on-failure
+ctest --test-dir build\windows-debug --output-on-failure -j8
+ctest --test-dir build\windows-debug -R tween                 # cases whose name matches
+.\build\windows-debug\tests\wlw_tests.exe -ts=anim            # one suite (-tc="tween*" = cases)
 ```
 **Don't add features to the samples** (owner's rule): engine features are shown and verified
 through Bluzzle and the engine tests. Snake only has to keep compiling.

@@ -4,11 +4,13 @@
 #include <string>
 #include <vector>
 
-#include "check.h"
+#include "test_helpers.h"
 #include "wlw/scene/orthographic_camera.h"
 #include "wlw/scene/scene.h"
 #include "wlw/scene/viewport.h"
 #include "wlw/scene/window.h"
+
+TEST_SUITE_BEGIN("viewport");
 
 using namespace wlw;
 
@@ -32,7 +34,7 @@ std::shared_ptr<scene::Viewport> Offscreen(const std::string& name = "Viewport")
 
 }  // namespace
 
-static void TestScene() {
+TEST_CASE("scene") {
   auto scene = scene::Scene::Create();
   auto a = std::make_shared<scene::Node3D>();
   auto b = std::make_shared<scene::Node3D>();
@@ -51,31 +53,31 @@ static void TestScene() {
   scene->RemoveNode(id_a);
   CHECK(scene->NodeCount() == 1);
   scene->Clear();
-  CHECK(scene->NodeCount() == 0 && scene->GetSkybox() == nullptr);
+  CHECK((scene->NodeCount() == 0 && scene->GetSkybox() == nullptr));
   CHECK(scene->AddNode(a) == 0);  // ids start over after Clear
 }
 
-static void TestViewportShowsASharedScene() {
+TEST_CASE("viewport shows a shared scene") {
   auto world = scene::Scene::Create();
   auto main_view = Offscreen();
   auto minimap = Offscreen();
-  CHECK(main_view->GetScene() != nullptr && main_view->GetScene() != minimap->GetScene());  // each starts with its own
+  CHECK((main_view->GetScene() != nullptr && main_view->GetScene() != minimap->GetScene()));  // each starts with its own
   main_view->SetScene(world);
   minimap->SetScene(world);
   world->AddNode(std::make_shared<scene::Node3D>());
-  CHECK(main_view->GetScene()->NodeCount() == 1 && minimap->GetScene()->NodeCount() == 1);  // same world
+  CHECK((main_view->GetScene()->NodeCount() == 1 && minimap->GetScene()->NodeCount() == 1));  // same world
 
   auto camera = std::make_shared<scene::OrthographicCamera>();
   minimap->SetCamera(camera);
   CHECK(minimap->GetCamera() == camera);
   CHECK(main_view->GetCamera() != nullptr);  // a default camera until SetCamera
 
-  CHECK(!main_view->IsScreen() && main_view->GetTarget() != nullptr);
+  CHECK((!main_view->IsScreen() && main_view->GetTarget() != nullptr));
   scene::Viewport screen(nullptr, {});
-  CHECK(screen.IsScreen() && screen.GetTexture() == nullptr);
+  CHECK((screen.IsScreen() && screen.GetTexture() == nullptr));
 }
 
-static void TestViewportSize() {
+TEST_CASE("viewport size") {
   auto view = Offscreen();
   // Default: the screen's size.
   CHECK(view->PixelSize({1080.0f, 2400.0f}) == glm::ivec2(1080, 2400));
@@ -92,18 +94,18 @@ static void TestViewportSize() {
   CHECK(view->PixelSize({}) == glm::ivec2(1, 1));
 }
 
-static void TestUpdateModes() {
+TEST_CASE("update modes") {
   auto view = Offscreen();
   const glm::ivec2 size{100, 50};
   // Always: every frame.
-  CHECK(view->BeginDraw(size) && view->BeginDraw(size));
+  CHECK((view->BeginDraw(size) && view->BeginDraw(size)));
   CHECK(!view->BeginDraw({0, 0}));  // nothing to draw into
 
   // Once: the next frame only, then it keeps its picture (and reports Disabled).
   view->SetUpdateMode(scene::Viewport::UpdateMode::Once);
   CHECK(view->BeginDraw(size));
   CHECK(view->GetUpdateMode() == scene::Viewport::UpdateMode::Disabled);
-  CHECK(!view->BeginDraw(size) && !view->BeginDraw(size));
+  CHECK((!view->BeginDraw(size) && !view->BeginDraw(size)));
   // A resize throws the kept picture away: it's drawn once more at the new size.
   CHECK(view->BeginDraw({200, 100}));
   CHECK(!view->BeginDraw({200, 100}));
@@ -111,22 +113,22 @@ static void TestUpdateModes() {
   // Disabled from the start: never drawn, not even after a resize (there was no picture to keep).
   auto never = Offscreen();
   never->SetUpdateMode(scene::Viewport::UpdateMode::Disabled);
-  CHECK(!never->BeginDraw(size) && !never->BeginDraw({300, 300}));
+  CHECK((!never->BeginDraw(size) && !never->BeginDraw({300, 300})));
   // Once, again later: draws one more frame.
   never->SetUpdateMode(scene::Viewport::UpdateMode::Once);
-  CHECK(never->BeginDraw({300, 300}) && !never->BeginDraw({300, 300}));
+  CHECK((never->BeginDraw({300, 300}) && !never->BeginDraw({300, 300})));
 }
 
-static void TestClearColor() {
+TEST_CASE("clear color") {
   auto view = Offscreen();
-  CHECK(view->GetClearColor().has_value() && view->GetClearColor()->a == 0.0f);  // transparent by default
+  CHECK((view->GetClearColor().has_value() && view->GetClearColor()->a == 0.0f));  // transparent by default
   view->SetClearColor(std::nullopt);  // keep the last picture (trails)
   CHECK(!view->GetClearColor().has_value());
 }
 
-static void TestWindowViewports() {
+TEST_CASE("window viewports") {
   FakeWindow window;
-  CHECK(window.GetScreen().IsScreen() && window.GetScreen().GetScene() != nullptr);
+  CHECK((window.GetScreen().IsScreen() && window.GetScreen().GetScene() != nullptr));
   CHECK(window.GetScreen().GetClearColor()->a == 1.0f);  // the screen is opaque
 
   auto first = Offscreen("first");
@@ -137,17 +139,17 @@ static void TestWindowViewports() {
   window.AddViewport(third);
   // Drawn in the order added.
   CHECK(window.GetViewports().size() == 3);
-  CHECK(window.GetViewports()[0].second == first && window.GetViewports()[2].second == third);
+  CHECK((window.GetViewports()[0].second == first && window.GetViewports()[2].second == third));
   window.RemoveViewport(id_second);
-  CHECK(window.GetViewports().size() == 2 && window.GetViewports()[1].second == third);
+  CHECK((window.GetViewports().size() == 2 && window.GetViewports()[1].second == third));
 
   // Shutdown: scenes and viewports are let go (the game may still hold its own references).
   window.GetScreen().GetScene()->AddNode(std::make_shared<scene::Node3D>());
   window.ReleaseScenes();
-  CHECK(window.GetViewports().empty() && window.GetScreen().GetScene() == nullptr);
+  CHECK((window.GetViewports().empty() && window.GetScreen().GetScene() == nullptr));
 }
 
-static void TestCanvasMatchesScreenUnits() {
+TEST_CASE("canvas matches screen units") {
   // A half-resolution viewport's canvas has the same size in units as the screen's, so the game
   // can draw at the same coordinates (just with fewer pixels).
   auto view = Offscreen();
@@ -162,7 +164,7 @@ static void TestCanvasMatchesScreenUnits() {
   CHECK(Near(view->GetCanvas().PixelsPerUnit() * 2.0f, screen_canvas.PixelsPerUnit(), 0.01f));
 }
 
-static void TestCanvasLayers() {
+TEST_CASE("canvas layers") {
   using scene::CanvasMode;
   auto view = Offscreen();
   ui::Canvas& ui = view->GetCanvas();  // the default layer: Overlay, order 0
@@ -187,9 +189,9 @@ static void TestCanvasLayers() {
 
   // Every layer is started each frame at the viewport's size, in the same units.
   view->BeginCanvases({540.0f, 1200.0f}, {360.0f, 640.0f});
-  CHECK(Near(glow.Size().x, ui.Size().x) && Near(popup.Size().y, ui.Size().y));
+  CHECK((Near(glow.Size().x, ui.Size().x) && Near(popup.Size().y, ui.Size().y)));
   glow.FillRect({{0, 0}, {10, 10}}, {1, 1, 1, 1});
-  CHECK(glow.QuadCount() == 1 && ui.QuadCount() == 0);  // separate draw lists
+  CHECK((glow.QuadCount() == 1 && ui.QuadCount() == 0));  // separate draw lists
   view->BeginCanvases({540.0f, 1200.0f}, {360.0f, 640.0f});
   CHECK(glow.QuadCount() == 0);
 
@@ -201,14 +203,4 @@ static void TestCanvasLayers() {
   CHECK(&view->GetCanvas() == &ui);
 }
 
-int main() {
-  TestCanvasLayers();
-  TestScene();
-  TestViewportShowsASharedScene();
-  TestViewportSize();
-  TestUpdateModes();
-  TestClearColor();
-  TestWindowViewports();
-  TestCanvasMatchesScreenUnits();
-  return TestResult("viewport");
-}
+TEST_SUITE_END();

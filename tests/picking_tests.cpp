@@ -3,8 +3,10 @@
 // does), then pick them back and check we land on the same point.
 #include <glm/gtc/matrix_transform.hpp>
 
-#include "check.h"
+#include "test_helpers.h"
 #include "wlw/scene/orthographic_camera.h"
+
+TEST_SUITE_BEGIN("picking");
 
 using namespace wlw;
 
@@ -48,7 +50,7 @@ const glm::vec3 kGroundPoints[] = {{0, 0, 0}, {-3.5f, 0, -3.5f}, {3.5f, 0, 3.5f}
 
 }  // namespace
 
-static void TestOrthographicTilted() {
+TEST_CASE("orthographic tilted") {
   auto camera = scene::OrthographicCamera::Create();
   camera->SetPosition({0, 12, 5});
   camera->SetTarget({0, 0, 0});
@@ -62,7 +64,7 @@ static void TestOrthographicTilted() {
   CHECK(glm::length(a - b) < 1e-4f);
 }
 
-static void TestPerspective() {
+TEST_CASE("perspective") {
   PerspectiveTestCamera camera;
   for (const glm::vec3& p : kGroundPoints) CheckRoundTrip(camera, p);
 
@@ -72,7 +74,7 @@ static void TestPerspective() {
   CHECK(glm::length(a - b) > 0.1f);
 }
 
-static void TestScreenCenterAndFlip() {
+TEST_CASE("screen center and flip") {
   auto camera = scene::OrthographicCamera::Create();
   camera->SetPosition({0, 10, 0});
   camera->SetTarget({0, 0, 0});
@@ -80,25 +82,25 @@ static void TestScreenCenterAndFlip() {
   camera->SetVisibleArea(10, 10);
   camera->UpdateSize(kScreen);
   const auto center = scene::IntersectPlane(camera->ScreenPointToRay({270, 480}, kScreen), {{0, 1, 0}, 0});
-  CHECK(center && glm::length(*center) < 1e-4f);
+  CHECK((center && glm::length(*center) < 1e-4f));
   // Top of the screen (small pixel y) must be screen-up (-z), not -down: catches a missing flip.
   const auto top = scene::IntersectPlane(camera->ScreenPointToRay({270, 100}, kScreen), {{0, 1, 0}, 0});
-  CHECK(top && top->z < -1.0f);
+  CHECK((top && top->z < -1.0f));
 }
 
-static void TestIntersectPlane() {
+TEST_CASE("intersect plane") {
   const scene::Plane ground{{0, 1, 0}, 0};
   CHECK(!scene::IntersectPlane({{0, 1, 0}, {1, 0, 0}}, ground));  // parallel
   CHECK(!scene::IntersectPlane({{0, 1, 0}, {0, 1, 0}}, ground));  // pointing away
   const auto hit = scene::IntersectPlane({{1, 5, 2}, {0, -1, 0}}, ground);
-  CHECK(hit && Near(hit->x, 1) && Near(hit->y, 0) && Near(hit->z, 2));
+  CHECK((hit && Near(hit->x, 1) && Near(hit->y, 0) && Near(hit->z, 2)));
 
   const scene::Plane raised = scene::Plane::FromPointAndNormal({0, 2, 0}, {0, 1, 0});  // y = 2
   const auto raised_hit = scene::IntersectPlane({{0, 5, 0}, {0, -1, 0}}, raised);
-  CHECK(raised_hit && Near(raised_hit->y, 2));
+  CHECK((raised_hit && Near(raised_hit->y, 2)));
 }
 
-static void TestWorldToScreenIsTheInverse() {
+TEST_CASE("world to screen is the inverse") {
   auto ortho = scene::OrthographicCamera::Create();
   ortho->SetPosition({0, 12, 5});
   ortho->SetTarget({0, 0, 0});
@@ -110,20 +112,13 @@ static void TestWorldToScreenIsTheInverse() {
       // WorldToScreen matches the GPU's own projection...
       const glm::vec3 screen = camera->WorldToScreen(world, kScreen);
       const core::Vector2 expected = WorldToScreen(*camera, world);
-      CHECK(Near(screen.x, expected.x, 1e-2f) && Near(screen.y, expected.y, 1e-2f));
-      CHECK(screen.z > -1.0f && screen.z < 1.0f);  // between near and far: visible
+      CHECK((Near(screen.x, expected.x, 1e-2f) && Near(screen.y, expected.y, 1e-2f)));
+      CHECK((screen.z > -1.0f && screen.z < 1.0f));  // between near and far: visible
       // ...and picking that pixel lands back on the point.
       const auto hit = scene::IntersectPlane(camera->ScreenPointToRay({screen.x, screen.y}, kScreen), {{0, 1, 0}, 0});
-      CHECK(hit && glm::length(*hit - world) < 1e-3f);
+      CHECK((hit && glm::length(*hit - world) < 1e-3f));
     }
   }
 }
 
-int main() {
-  TestWorldToScreenIsTheInverse();
-  TestOrthographicTilted();
-  TestPerspective();
-  TestScreenCenterAndFlip();
-  TestIntersectPlane();
-  return TestResult("picking");
-}
+TEST_SUITE_END();

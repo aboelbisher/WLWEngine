@@ -6,8 +6,10 @@
 #include <memory>
 #include <vector>
 
-#include "check.h"
+#include "test_helpers.h"
 #include "wlw/rendering/gpu_timer.h"
+
+TEST_SUITE_BEGIN("gpu_timer");
 
 using namespace wlw;
 using rendering::GpuSample;
@@ -56,7 +58,7 @@ void MeasureFrame(GpuTimer& timer, std::vector<GpuSample>& results) {
 
 }  // namespace
 
-static void TestLatency() {
+TEST_CASE("latency") {
   FakeGpu gpu;
   std::vector<GpuSample> results;
   {
@@ -69,12 +71,12 @@ static void TestLatency() {
     // Then each frame gets the one kLatency frames before it, in order.
     timer.BeginFrame(results);
     CHECK(results.size() == 2);
-    CHECK(results[0].section.kind == GpuSection::Kind::Scene && results[0].section.viewport == 1);
+    CHECK((results[0].section.kind == GpuSection::Kind::Scene && results[0].section.viewport == 1));
     CHECK(results[1].section.kind == GpuSection::Kind::Canvas);
-    CHECK(Near(results[0].ms, 1.0f) && Near(results[1].ms, 2.0f));  // the first frame's two queries
+    CHECK((Near(results[0].ms, 1.0f) && Near(results[1].ms, 2.0f)));  // the first frame's two queries
 
     // Sections never overlap (Begin ends the open one).
-    CHECK(gpu.max_open == 1 && gpu.open == 0);
+    CHECK((gpu.max_open == 1 && gpu.open == 0));
     // Each slot reuses its queries: 4 slots x 2 sections, however many frames.
     for (int frame = 0; frame < 20; ++frame) MeasureFrame(timer, results);
     CHECK(gpu.created == 2 * (GpuTimer::kLatency + 1));
@@ -82,7 +84,7 @@ static void TestLatency() {
   CHECK(gpu.destroyed == gpu.created);
 }
 
-static void TestDroppedFrames() {
+TEST_CASE("dropped frames") {
   FakeGpu gpu;
   GpuTimer timer(std::make_unique<FakeQueries>(gpu));
   std::vector<GpuSample> results;
@@ -110,18 +112,13 @@ static void TestDroppedFrames() {
   CHECK(results.empty());
 }
 
-static void TestSmoothing() {
+TEST_CASE("smoothing") {
   CHECK(rendering::SmoothMs(-1.0f, 4.0f) == 4.0f);  // the first reading is taken as is
   float shown = 2.0f;
   for (int frame = 0; frame < 120; ++frame) shown = rendering::SmoothMs(shown, 4.0f);
   CHECK(Near(shown, 4.0f, 0.01f));                   // follows a steady value within ~2 s
   const float after_spike = rendering::SmoothMs(4.0f, 40.0f);
-  CHECK(after_spike > 4.0f && after_spike < 7.0f);   // one slow frame doesn't jump the display
+  CHECK((after_spike > 4.0f && after_spike < 7.0f));   // one slow frame doesn't jump the display
 }
 
-int main() {
-  TestLatency();
-  TestDroppedFrames();
-  TestSmoothing();
-  return TestResult("gpu_timer");
-}
+TEST_SUITE_END();

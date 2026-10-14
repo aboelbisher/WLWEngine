@@ -4,8 +4,10 @@
 #include <string>
 #include <vector>
 
-#include "check.h"
+#include "test_helpers.h"
 #include "wlw/app/system.h"
+
+TEST_SUITE_BEGIN("system");
 
 using wlw::app::System;
 using wlw::app::SystemList;
@@ -50,14 +52,14 @@ class Other : public System {};
 
 }  // namespace
 
-static void TestOrderAndStarting() {
+TEST_CASE("order and starting") {
   g_log.clear();
   SystemList list;
   list.Add(std::make_unique<Recorder>("a"), nullptr);
   list.Add(std::make_unique<Recorder>("b"), nullptr);
   // Nothing runs before they're started.
   list.ForEach([](System& s) { s.OnUpdate(0.0f); });
-  CHECK(g_log.empty() && list.Started() == 0);
+  CHECK((g_log.empty() && list.Started() == 0));
 
   list.StartPending();
   list.ForEach([](System& s) { s.OnUpdate(0.0f); });
@@ -72,7 +74,7 @@ static void TestOrderAndStarting() {
   CHECK((g_log == std::vector<std::string>{"a:update", "b:update", "c:start"}));
 }
 
-static void TestAddedWhileStarting() {
+TEST_CASE("added while starting") {
   g_log.clear();
   SystemList list;
   list.Add(std::make_unique<Spawner>(list), nullptr);
@@ -80,10 +82,10 @@ static void TestAddedWhileStarting() {
   list.StartPending();
   // The child comes after everything added before it, and is started in the same pass.
   CHECK((g_log == std::vector<std::string>{"spawner:start", "after:start", "child:start"}));
-  CHECK(list.Size() == 3 && list.Started() == 3);
+  CHECK((list.Size() == 3 && list.Started() == 3));
 }
 
-static void TestBackGoesLastAddedFirst() {
+TEST_CASE("back goes last added first") {
   g_log.clear();
   SystemList list;
   list.Add(std::make_unique<Recorder>("game", /*handles_back=*/true), nullptr);
@@ -101,7 +103,7 @@ static void TestBackGoesLastAddedFirst() {
   CHECK(!nobody.Back());  // unhandled: the app goes to the background
 }
 
-static void TestGetAndApp() {
+TEST_CASE("get and app") {
   SystemList list;
   auto* app = reinterpret_cast<wlw::app::Application*>(0x1234);  // only stored, never used here
   Recorder& recorder = static_cast<Recorder&>(list.Add(std::make_unique<Recorder>("r"), app));
@@ -111,10 +113,4 @@ static void TestGetAndApp() {
   CHECK(list.Get<Other>() == nullptr);
 }
 
-int main() {
-  TestOrderAndStarting();
-  TestAddedWhileStarting();
-  TestBackGoesLastAddedFirst();
-  TestGetAndApp();
-  return TestResult("system");
-}
+TEST_SUITE_END();

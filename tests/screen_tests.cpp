@@ -3,11 +3,13 @@
 #include <string>
 #include <vector>
 
-#include "check.h"
+#include "test_helpers.h"
 #include "wlw/app/screen.h"
 #include "wlw/ui/canvas.h"
 #include "wlw/ui/ui_context.h"
 #include "wlw/ui/widgets.h"
+
+TEST_SUITE_BEGIN("screen");
 
 using wlw::app::Screen;
 using wlw::app::ScreenStack;
@@ -59,13 +61,13 @@ bool LogIs(const std::vector<std::string>& expected) {
 
 }  // namespace
 
-static void TestPushIsDeferredAndCoversTheScreenBelow() {
+TEST_CASE("push is deferred and covers the screen below") {
   g_log.clear();
   ScreenStack stack;
   stack.Push(std::make_unique<Recorder>("menu"));
-  CHECK(stack.Empty() && g_log.empty());  // nothing happens until the frame ends
+  CHECK((stack.Empty() && g_log.empty()));  // nothing happens until the frame ends
   stack.EndFrame(0.016f);
-  CHECK(stack.Size() == 1 && LogIs({"menu:enter"}));
+  CHECK((stack.Size() == 1 && LogIs({"menu:enter"})));
 
   stack.Push(std::make_unique<Recorder>("play"));
   stack.EndFrame(0.016f);
@@ -75,7 +77,7 @@ static void TestPushIsDeferredAndCoversTheScreenBelow() {
   CHECK(LogIs({"play:update", "play:render"}));  // only the top updates; menu is hidden (opaque top)
 }
 
-static void TestOverlayDrawsTheScreenBelowAndPopUncovers() {
+TEST_CASE("overlay draws the screen below and pop uncovers") {
   g_log.clear();
   ScreenStack stack;
   stack.Push(std::make_unique<Recorder>("play"));
@@ -92,7 +94,7 @@ static void TestOverlayDrawsTheScreenBelowAndPopUncovers() {
   CHECK(stack.Size() == 1);
 }
 
-static void TestReplaceAndReset() {
+TEST_CASE("replace and reset") {
   g_log.clear();
   ScreenStack stack;
   stack.Push(std::make_unique<Recorder>("a"));
@@ -108,7 +110,7 @@ static void TestReplaceAndReset() {
   CHECK(stack.Size() == 1);
 }
 
-static void TestScreenCanPopItselfDuringUpdate() {
+TEST_CASE("screen can pop itself during update") {
   g_log.clear();
   ScreenStack stack;
   stack.Push(std::make_unique<Recorder>("play"));
@@ -124,7 +126,7 @@ static void TestScreenCanPopItselfDuringUpdate() {
   CHECK(LogIs({"dialog:update", "play:render", "dialog:render", "dialog:exit", "play:uncovered"}));
 }
 
-static void TestBackGoesTopDown() {
+TEST_CASE("back goes top down") {
   g_log.clear();
   ScreenStack stack;
   stack.Push(std::make_unique<Recorder>("play", false, /*handles_back=*/true));
@@ -143,7 +145,7 @@ static void TestBackGoesTopDown() {
   CHECK(!lone.Back());  // nobody handled it: the app leaves
 }
 
-static void TestFadeTransition() {
+TEST_CASE("fade transition") {
   g_log.clear();
   ScreenStack stack;
   stack.fade_time = 0.2f;
@@ -153,7 +155,7 @@ static void TestFadeTransition() {
 
   stack.Replace(std::make_unique<Recorder>("play"), Transition::Fade);
   stack.EndFrame(0.0f);  // starts fading out; nothing changed yet
-  CHECK(stack.Transitioning() && stack.Top() && g_log.empty());
+  CHECK((stack.Transitioning() && stack.Top() && g_log.empty()));
   stack.EndFrame(0.1f);
   CHECK(Near(stack.FadeAmount(), 0.5f, 1e-3f));
   stack.Update(0.016f);
@@ -165,10 +167,10 @@ static void TestFadeTransition() {
   stack.EndFrame(0.1f);
   CHECK(Near(stack.FadeAmount(), 0.5f, 1e-3f));  // fading back in
   stack.EndFrame(0.11f);
-  CHECK(!stack.Transitioning() && stack.FadeAmount() == 0.0f);
+  CHECK((!stack.Transitioning() && stack.FadeAmount() == 0.0f));
 }
 
-static void TestClearExitsEveryone() {
+TEST_CASE("clear exits everyone") {
   g_log.clear();
   {
     ScreenStack stack;
@@ -177,7 +179,7 @@ static void TestClearExitsEveryone() {
     stack.EndFrame(0.016f);
     g_log.clear();
     stack.Clear();
-    CHECK(LogIs({"b:exit", "a:exit"}) && stack.Empty());
+    CHECK((LogIs({"b:exit", "a:exit"}) && stack.Empty()));
   }
   CHECK(g_log.empty());  // nothing left for the destructor
 }
@@ -195,7 +197,10 @@ static void Frame(wlw::ui::UIContext& ui, glm::vec2 at, bool down, bool pressed,
   ui.pointer = pointer;
 }
 
-static void TestButtonClicks(const wlw::ui::Font& font) {
+TEST_CASE("button clicks") {
+  const auto loaded_font = wlw::ui::Font::Load(WLW_TEST_FONT);
+  REQUIRE(loaded_font.get() != nullptr);
+  const wlw::ui::Font& font = *loaded_font;
   wlw::ui::Canvas canvas;
   wlw::ui::UIContext ui(canvas);
   using wlw::ui::Button;
@@ -232,14 +237,4 @@ static void TestButtonClicks(const wlw::ui::Font& font) {
   CHECK(canvas.QuadCount() > quads_before);
 }
 
-int main() {
-  TestPushIsDeferredAndCoversTheScreenBelow();
-  TestOverlayDrawsTheScreenBelowAndPopUncovers();
-  TestReplaceAndReset();
-  TestScreenCanPopItselfDuringUpdate();
-  TestBackGoesTopDown();
-  TestFadeTransition();
-  TestClearExitsEveryone();
-  if (auto font = wlw::ui::Font::Load(WLW_TEST_FONT)) TestButtonClicks(*font);
-  return TestResult("screen");
-}
+TEST_SUITE_END();

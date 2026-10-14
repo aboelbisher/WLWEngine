@@ -7,10 +7,12 @@
 
 #include <glm/glm.hpp>
 
-#include "check.h"
+#include "test_helpers.h"
 #include "wlw/fx/flow_particles.h"
 #include "wlw/fx/particle_system.h"
 #include "wlw/scene/sprite_batch.h"
+
+TEST_SUITE_BEGIN("fx");
 
 using wlw::fx::BurstSettings;
 using wlw::fx::FlowParticles;
@@ -22,22 +24,22 @@ static BurstSettings Fixed(int count) {
   return s;
 }
 
-static void TestBurstCountAndCapacity() {
+TEST_CASE("burst count and capacity") {
   ParticleSystem ps(50);
   BurstSettings s;
   s.count_min = 8;
   s.count_max = 12;
   for (int i = 0; i < 4; ++i) {
     const int made = ps.Burst(s, glm::vec3(0.0f));
-    CHECK(made >= 8 && made <= 12);
+    CHECK((made >= 8 && made <= 12));
   }
-  CHECK(ps.Count() >= 32 && ps.Count() <= 48);
+  CHECK((ps.Count() >= 32 && ps.Count() <= 48));
   for (int i = 0; i < 10; ++i) ps.Burst(s, glm::vec3(0.0f));
   CHECK(ps.Count() == 50);  // full: bursts are cut short, memory doesn't grow
   CHECK(ps.Burst(s, glm::vec3(0.0f)) == 0);
 }
 
-static void TestParticlesDieAtTheirLifetime() {
+TEST_CASE("particles die at their lifetime") {
   ParticleSystem ps;
   BurstSettings s = Fixed(20);
   s.lifetime_min = 0.5f;
@@ -49,7 +51,7 @@ static void TestParticlesDieAtTheirLifetime() {
   CHECK(ps.Count() == 0);
 }
 
-static void TestGravity() {
+TEST_CASE("gravity") {
   ParticleSystem ps;
   ps.gravity = glm::vec3(0.0f, -10.0f, 0.0f);
   ps.drag = 0.0f;
@@ -63,7 +65,7 @@ static void TestGravity() {
   CHECK(std::fabs(ps.Particles()[0].velocity.y + 10.0f) < 1e-3f);
 }
 
-static void TestDragIsFrameRateIndependent() {
+TEST_CASE("drag is frame rate independent") {
   auto speed_after_one_second = [](float dt) {
     ParticleSystem ps;
     ps.gravity = glm::vec3(0.0f);
@@ -81,7 +83,7 @@ static void TestDragIsFrameRateIndependent() {
   CHECK(std::fabs(at30 - 10.0f * std::exp(-2.0f)) < 1e-3f);
 }
 
-static void TestDirectionsStayInTheCone() {
+TEST_CASE("directions stay in the cone") {
   ParticleSystem ps;
   BurstSettings s = Fixed(200);
   s.direction = glm::vec3(0.0f, 2.0f, 0.0f);  // not unit length on purpose
@@ -91,7 +93,7 @@ static void TestDirectionsStayInTheCone() {
   for (const auto& p : ps.Particles()) CHECK(glm::dot(glm::normalize(p.velocity), glm::vec3(0, 1, 0)) >= cos_limit);
 }
 
-static void TestDelayAndInstances() {
+TEST_CASE("delay and instances") {
   ParticleSystem ps;
   ps.gravity = glm::vec3(0.0f, -10.0f, 0.0f);
   BurstSettings s = Fixed(5);
@@ -117,7 +119,7 @@ static void TestDelayAndInstances() {
   CHECK(Near(glm::length(glm::vec3(instances[0].transform[0])), 0.5f, 1e-3f));
 }
 
-static void TestEmitExactly() {
+TEST_CASE("emit exactly") {
   ParticleSystem system(2);
   ParticleSystem::Particle p;
   p.position = {1.0f, 2.0f, 3.0f};
@@ -125,17 +127,17 @@ static void TestEmitExactly() {
   p.color = {0.2f, 0.4f, 0.6f, 1.0f};
   p.size_start = p.size_end = 0.5f;
   p.lifetime = 1.0f;
-  CHECK(system.Emit(p) && system.Count() == 1);
+  CHECK((system.Emit(p) && system.Count() == 1));
   // Exactly as given: no randomness anywhere.
   const ParticleSystem::Particle& out = system.Particles()[0];
-  CHECK(out.position == p.position && out.color.g == 0.4f && out.Size() == 0.5f);
+  CHECK((out.position == p.position && out.color.g == 0.4f && out.Size() == 0.5f));
   // Delayed with a negative age, like a burst.
   p.age = -0.5f;
   CHECK(system.Emit(p));
-  CHECK(!system.Emit(p) && system.Count() == 2);  // full: refused, not grown
+  CHECK((!system.Emit(p) && system.Count() == 2));  // full: refused, not grown
 }
 
-static void TestFloorBounceAndEdge() {
+TEST_CASE("floor bounce and edge") {
   ParticleSystem system(4);
   system.drag = 0.0f;
   system.gravity = {0.0f, -10.0f, 0.0f};
@@ -158,8 +160,8 @@ static void TestFloorBounceAndEdge() {
     if (bounced) peak_after_bounce = std::max(peak_after_bounce, q.position.y);
     if (q.position.x > 0.9f) break;  // stay on the floor for this part
   }
-  CHECK(bounced && lowest >= 0.1f - 1e-3f);           // never sank in: the cube's half size above
-  CHECK(peak_after_bounce > 0.1f && peak_after_bounce < 0.6f);  // lower than where it fell from
+  CHECK((bounced && lowest >= 0.1f - 1e-3f));           // never sank in: the cube's half size above
+  CHECK((peak_after_bounce > 0.1f && peak_after_bounce < 0.6f));  // lower than where it fell from
   // Sliding loses speed at each bounce (friction).
   CHECK(system.Particles()[0].velocity.x < 0.5f);
 
@@ -186,31 +188,31 @@ static void TestFloorBounceAndEdge() {
 
 // ---- SpriteBatch: the 16-byte dots ----
 
-static void TestSpriteBatch() {
+TEST_CASE("sprite batch") {
   using wlw::rendering::PackColor;
   using wlw::rendering::UnpackColor;
   CHECK(sizeof(wlw::rendering::SpriteInstance) == 16);
   const uint32_t red = PackColor({1.0f, 0.0f, 0.5f, 1.0f});
-  CHECK((red & 0xFFu) == 255 && ((red >> 8) & 0xFFu) == 0 && ((red >> 16) & 0xFFu) == 128 && (red >> 24) == 255);
-  CHECK(Near(UnpackColor(red).b, 128.0f / 255.0f) && PackColor({2.0f, -1.0f, 0.0f, 0.0f}) == 0xFFu);  // clamped
+  CHECK(((red & 0xFFu) == 255 && ((red >> 8) & 0xFFu) == 0 && ((red >> 16) & 0xFFu) == 128 && (red >> 24) == 255));
+  CHECK((Near(UnpackColor(red).b, 128.0f / 255.0f) && PackColor({2.0f, -1.0f, 0.0f, 0.0f}) == 0xFFu));  // clamped
 
   wlw::scene::SpriteBatch batch(3);
   std::shared_ptr<wlw::scene::Node3D> as_node = std::make_shared<wlw::scene::SpriteBatch>(1);
-  CHECK(as_node->AsSpriteBatch() != nullptr && wlw::scene::Node3D().AsSpriteBatch() == nullptr);
-  CHECK(batch.GetMaterial() && batch.GetMaterial()->blend == wlw::rendering::BlendMode::Additive);
+  CHECK((as_node->AsSpriteBatch() != nullptr && wlw::scene::Node3D().AsSpriteBatch() == nullptr));
+  CHECK((batch.GetMaterial() && batch.GetMaterial()->blend == wlw::rendering::BlendMode::Additive));
   const uint64_t before = batch.Version();
   auto out = batch.Write(5);
-  CHECK(out.size() == 3 && batch.Count() == 3 && batch.Version() == before + 1);  // cut at the capacity
+  CHECK((out.size() == 3 && batch.Count() == 3 && batch.Version() == before + 1));  // cut at the capacity
   out[0] = {{0.0f, 0.0f}, 2.0f, red};
   out[1] = {{4.0f, 1.0f}, 1.0f, red};
   out[2] = {{1.0f, 0.0f}, 0.5f, red};
   batch.FitBounds();
-  CHECK(batch.BoundsMin() == glm::vec2(-1.0f, -1.0f) && batch.BoundsMax() == glm::vec2(4.5f, 1.5f));
+  CHECK((batch.BoundsMin() == glm::vec2(-1.0f, -1.0f) && batch.BoundsMax() == glm::vec2(4.5f, 1.5f)));
   batch.SetPosition({10.0f, 0.0f, 2.0f});
   const wlw::scene::AABB world = batch.WorldBounds();
-  CHECK(Near(world.min.x, 9.0f) && Near(world.max.x, 14.5f) && Near(world.min.z, 2.0f) && Near(world.max.z, 2.0f));
+  CHECK((Near(world.min.x, 9.0f) && Near(world.max.x, 14.5f) && Near(world.min.z, 2.0f) && Near(world.max.z, 2.0f)));
   batch.Clear();
-  CHECK(batch.Empty() && batch.Version() == before + 2);
+  CHECK((batch.Empty() && batch.Version() == before + 2));
 }
 
 // ---- FlowParticles: dots along paths ----
@@ -226,11 +228,11 @@ static int Line(FlowParticles& flow, float length, float speed, float packed = 4
   return flow.AddPath(points, {.width = 0.2f, .speed = speed, .packed_per_unit = packed});
 }
 
-static void TestFlowPathGeometry() {
+TEST_CASE("flow path geometry") {
   FlowParticles flow;
   const std::vector<glm::vec2> corner = {{0.0f, 0.0f}, {1.0f, 0.0f}, {1.0f, 1.0f}};
   const int path = flow.AddPath(corner, {.width = 0.2f});
-  CHECK(path == 0 && flow.PathCount() == 1);
+  CHECK((path == 0 && flow.PathCount() == 1));
   CHECK(Near(flow.PathLength(path), 2.0f));
   CHECK(glm::length(flow.PointAt(path, 0.5f) - glm::vec2(0.5f, 0.0f)) < 1e-4f);
   CHECK(glm::length(flow.PointAt(path, 1.5f) - glm::vec2(1.0f, 0.5f)) < 1e-4f);  // round the corner
@@ -238,18 +240,18 @@ static void TestFlowPathGeometry() {
   CHECK(glm::length(flow.PointAt(path, -1.0f)) < 1e-4f);
 }
 
-static void TestFlowMovesAtItsSpeed() {
+TEST_CASE("flow moves at its speed") {
   FlowParticles flow = Exact();
   const int path = Line(flow, 10.0f, 2.0f);
   CHECK(flow.Emit(path, 1.0f, {1, 1, 1, 1}));
   flow.Update(0.5f);
-  CHECK(Near(flow.GetDot(0).distance, 2.0f) && flow.GetDot(0).place == -1);
+  CHECK((Near(flow.GetDot(0).distance, 2.0f) && flow.GetDot(0).place == -1));
   flow.SetSpeed(path, 0.0f);
   flow.Update(1.0f);
   CHECK(Near(flow.GetDot(0).distance, 2.0f));  // speed 0: still
 }
 
-static void TestFlowRoutingAndDeadEnds() {
+TEST_CASE("flow routing and dead ends") {
   FlowParticles flow = Exact();
   const int a = Line(flow, 1.0f, 1.0f), b = Line(flow, 1.0f, 1.0f), c = Line(flow, 1.0f, 1.0f);
   const std::vector<int> next = {b, c};
@@ -258,13 +260,13 @@ static void TestFlowRoutingAndDeadEnds() {
   flow.Emit(a, 0.9f, {1, 1, 1, 1});
   flow.Update(0.2f);
   CHECK(flow.Count() == 2);
-  CHECK(flow.GetDot(0).path == b && flow.GetDot(1).path == c);  // in turn
-  CHECK(Near(flow.GetDot(0).distance, 0.1f) && Near(flow.GetDot(1).distance, 0.1f));  // the overshoot is kept
+  CHECK((flow.GetDot(0).path == b && flow.GetDot(1).path == c));  // in turn
+  CHECK((Near(flow.GetDot(0).distance, 0.1f) && Near(flow.GetDot(1).distance, 0.1f)));  // the overshoot is kept
   flow.Update(1.0f);
   CHECK(flow.Count() == 0);  // b and c lead nowhere: removed at their ends
 }
 
-static void TestFlowQueuesAtAStop() {
+TEST_CASE("flow queues at a stop") {
   FlowParticles flow = Exact();
   const int path = Line(flow, 10.0f, 5.0f, /*packed=*/10.0f);
   flow.SetStop(path, 5.0f);
@@ -277,29 +279,29 @@ static void TestFlowQueuesAtAStop() {
   }
   flow.Emit(path, 0.0f, {1, 1, 1, 1});  // a latecomer joins at the back
   flow.Update(2.0f);
-  CHECK(flow.Queued(path) == 4 && Near(flow.GetDot(3).distance, 4.7f));
+  CHECK((flow.Queued(path) == 4 && Near(flow.GetDot(3).distance, 4.7f)));
 
   flow.SetStop(path, FlowParticles::kOpen);  // open the gate: everyone moves on
-  CHECK(flow.Queued(path) == 0 && flow.GetDot(0).place == -1);
+  CHECK((flow.Queued(path) == 0 && flow.GetDot(0).place == -1));
   flow.Update(0.1f);
-  CHECK(flow.GetDot(0).distance > 5.0f && Near(flow.GetDot(3).distance, 5.2f));
+  CHECK((flow.GetDot(0).distance > 5.0f && Near(flow.GetDot(3).distance, 5.2f)));
 }
 
-static void TestFlowEmittersAndCapacity() {
+TEST_CASE("flow emitters and capacity") {
   FlowParticles flow = Exact(100);
   const int path = Line(flow, 1000.0f, 1.0f);
   flow.SetEmitter(path, 60.0f, {0, 1, 0, 1});
   for (int i = 0; i < 60; ++i) flow.Update(1.0f / 60.0f);
-  CHECK(flow.Count() >= 59 && flow.Count() <= 61);  // about the rate x the time
+  CHECK((flow.Count() >= 59 && flow.Count() <= 61));  // about the rate x the time
   CHECK(flow.GetDot(0).color == wlw::rendering::PackColor({0, 1, 0, 1}));
   flow.SetEmitter(path, 100000.0f, {0, 1, 0, 1});
   flow.Update(0.1f);
-  CHECK(flow.Count() == 100 && !flow.Emit(path, 0.0f, {1, 1, 1, 1}));  // full: no growth
+  CHECK((flow.Count() == 100 && !flow.Emit(path, 0.0f, {1, 1, 1, 1})));  // full: no growth
   flow.Clear();
   CHECK(flow.Count() == 0);
 }
 
-static void TestFlowWritesSprites() {
+TEST_CASE("flow writes sprites") {
   FlowParticles flow(500);
   const std::vector<glm::vec2> points = {{0.0f, 0.0f}, {10.0f, 0.0f}};
   const int path = flow.AddPath(points, {.width = 0.4f, .wobble = 0.5f});
@@ -317,7 +319,7 @@ static void TestFlowWritesSprites() {
                      dot.position.y - dot.size * 0.5f >= batch.BoundsMin().y - 1e-4f &&
                      dot.position.y + dot.size * 0.5f <= batch.BoundsMax().y + 1e-4f;
   }
-  CHECK(inside_width && inside_bounds);
+  CHECK((inside_width && inside_bounds));
 
   // Dots grow in at the start of a path nothing feeds, and shrink out at a dead end.
   FlowParticles ends = Exact();
@@ -329,16 +331,16 @@ static void TestFlowWritesSprites() {
   wlw::scene::SpriteBatch small(2);
   ends.WriteTo(small);
   CHECK(small.Count() == 2);  // cut at the batch's capacity
-  CHECK(Near(small.Sprites()[0].size, 0.0f) && Near(small.Sprites()[1].size, ends.dot_size));
+  CHECK((Near(small.Sprites()[0].size, 0.0f) && Near(small.Sprites()[1].size, ends.dot_size)));
 }
-static void TestFlowDensity() {
+TEST_CASE("flow density") {
   // Emitters spawn the density's share of their rate.
   FlowParticles flow = Exact();
   const int pipe = Line(flow, 1000.0f, 1.0f);
   flow.SetDensity(0.5f);
   flow.SetEmitter(pipe, 60.0f, {1, 1, 1, 1});
   for (int i = 0; i < 60; ++i) flow.Update(1.0f / 60.0f);
-  CHECK(flow.Count() >= 29 && flow.Count() <= 31);
+  CHECK((flow.Count() >= 29 && flow.Count() <= 31));
   flow.SetDensity(5.0f);
   CHECK(flow.Density() == 1.0f);  // clamped to 0.01..1
 
@@ -356,7 +358,7 @@ static void TestFlowDensity() {
   queue.Emit(path, 0.0f, {1, 1, 1, 1});
   queue.Update(2.0f);
   CHECK(queue.Queued(path) == 4);
-  CHECK(Near(queue.GetDot(2).distance, 4.8f) && Near(queue.GetDot(3).distance, 4.6f));  // 0.2 apart now
+  CHECK((Near(queue.GetDot(2).distance, 4.8f) && Near(queue.GetDot(3).distance, 4.6f)));  // 0.2 apart now
   queue.SetStop(path, FlowParticles::kOpen);  // the line's length goes with it
   queue.SetStop(path, 9.0f);
   queue.Update(2.0f);
@@ -365,25 +367,7 @@ static void TestFlowDensity() {
     front = std::max(front, queue.GetDot(i).distance);
     back = std::min(back, queue.GetDot(i).distance);
   }
-  CHECK(queue.Queued(path) == 4 && Near(front, 9.0f) && Near(back, 8.4f));  // 4 dots at 0.2 apart
+  CHECK((queue.Queued(path) == 4 && Near(front, 9.0f) && Near(back, 8.4f)));  // 4 dots at 0.2 apart
 }
 
-int main() {
-  TestBurstCountAndCapacity();
-  TestParticlesDieAtTheirLifetime();
-  TestGravity();
-  TestDragIsFrameRateIndependent();
-  TestDirectionsStayInTheCone();
-  TestDelayAndInstances();
-  TestEmitExactly();
-  TestFloorBounceAndEdge();
-  TestSpriteBatch();
-  TestFlowPathGeometry();
-  TestFlowMovesAtItsSpeed();
-  TestFlowRoutingAndDeadEnds();
-  TestFlowQueuesAtAStop();
-  TestFlowEmittersAndCapacity();
-  TestFlowWritesSprites();
-  TestFlowDensity();
-  return TestResult("fx");
-}
+TEST_SUITE_END();

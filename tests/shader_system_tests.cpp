@@ -8,13 +8,15 @@
 #include <string>
 #include <vector>
 
-#include "check.h"
+#include "test_helpers.h"
 #include "wlw/rendering/frame_uniforms.h"
 #include "wlw/rendering/mesh_variant.h"
 #include "wlw/rendering/shader_library.h"
 #include "wlw/rendering/shader_preprocessor.h"
 #include "wlw/scene/light.h"
 #include "wlw/ui/canvas.h"
+
+TEST_SUITE_BEGIN("shader_system");
 
 using namespace wlw::rendering;
 
@@ -32,7 +34,7 @@ ShaderFileLookup Files(const std::map<std::string, std::string, std::less<>>& fi
 
 }  // namespace
 
-static void TestIncludes() {
+TEST_CASE("includes") {
   const std::map<std::string, std::string, std::less<>> files = {
       {"a.glsl", "float A() { return 1.0; }\n"},
       {"b.glsl", "#include \"a.glsl\"\nfloat B() { return A(); }\n"},
@@ -43,10 +45,10 @@ static void TestIncludes() {
   CHECK(out.ok);
   // Defines first, in order; each file once; the main text keeps its line numbers.
   CHECK(out.code.rfind("#define LIT\n#define N 4\n#line 1 0\n", 0) == 0);
-  CHECK(out.code.find("float A()") != std::string::npos && out.code.find("float A()") == out.code.rfind("float A()"));
+  CHECK((out.code.find("float A()") != std::string::npos && out.code.find("float A()") == out.code.rfind("float A()")));
   CHECK(out.code.find("float A()") < out.code.find("float B()"));
   CHECK((out.files == std::vector<std::string>{"main", "b.glsl", "a.glsl"}));
-  CHECK(Contains(out.code, "#line 1 1\n") && Contains(out.code, "#line 1 2\n"));
+  CHECK((Contains(out.code, "#line 1 1\n") && Contains(out.code, "#line 1 2\n")));
   CHECK(Contains(out.code, "#line 2 1\n"));  // back in b.glsl after its include
   CHECK(Contains(out.code, "#line 2 0\n"));  // back in main after its first include
   // The second include of a.glsl is an empty line, so "void main" is still main's line 3.
@@ -55,33 +57,33 @@ static void TestIncludes() {
   CHECK(!Contains(out.code, "#include"));
 }
 
-static void TestPrelude() {
+TEST_CASE("prelude") {
   const std::map<std::string, std::string, std::less<>> files = {{"inputs.glsl", "in vec2 vUV;\n"}};
   const PreprocessedShader out = PreprocessShader("shader", "void fragment() {}\n", {}, {"inputs.glsl"}, Files(files));
   CHECK(out.ok);
   CHECK(out.code.find("in vec2 vUV;") < out.code.find("#line 1 0\nvoid fragment"));  // inputs first, then the text at its line 1
 }
 
-static void TestIncludeErrors() {
+TEST_CASE("include errors") {
   const std::map<std::string, std::string, std::less<>> files = {
       {"loop_a.glsl", "#include \"loop_b.glsl\"\n"},
       {"loop_b.glsl", "#include \"loop_a.glsl\"\n"},
       {"self.glsl", "#include \"self.glsl\"\n"},
   };
   const PreprocessedShader missing = PreprocessShader("main", "\n#include \"nope.glsl\"\n", {}, {}, Files(files));
-  CHECK(!missing.ok && Contains(missing.error, "main:2") && Contains(missing.error, "nope.glsl"));
+  CHECK((!missing.ok && Contains(missing.error, "main:2") && Contains(missing.error, "nope.glsl")));
   const PreprocessedShader cycle = PreprocessShader("main", "#include \"loop_a.glsl\"\n", {}, {}, Files(files));
-  CHECK(!cycle.ok && Contains(cycle.error, "cycle") && Contains(cycle.error, "loop_a.glsl -> loop_b.glsl -> loop_a.glsl"));
+  CHECK((!cycle.ok && Contains(cycle.error, "cycle") && Contains(cycle.error, "loop_a.glsl -> loop_b.glsl -> loop_a.glsl")));
   const PreprocessedShader self = PreprocessShader("main", "#include \"self.glsl\"\n", {}, {}, Files(files));
-  CHECK(!self.ok && Contains(self.error, "cycle"));
+  CHECK((!self.ok && Contains(self.error, "cycle")));
   const PreprocessedShader malformed = PreprocessShader("main", "#include <a.glsl>\n", {}, {}, Files(files));
-  CHECK(!malformed.ok && Contains(malformed.error, "malformed"));
+  CHECK((!malformed.ok && Contains(malformed.error, "malformed")));
   // Other directives pass through untouched.
   const PreprocessedShader plain = PreprocessShader("main", "#ifdef X\n#endif\n", {}, {}, Files(files));
-  CHECK(plain.ok && Contains(plain.code, "#ifdef X\n#endif\n"));
+  CHECK((plain.ok && Contains(plain.code, "#ifdef X\n#endif\n")));
 }
 
-static void TestMapShaderLog() {
+TEST_CASE("map shader log") {
   const std::vector<std::string> files = {"mesh.frag", "wlw/frame.glsl", "wlw/lighting.glsl"};
   CHECK(MapShaderLog("ERROR: 2:14: 'x' : undeclared", files) == "ERROR: wlw/lighting.glsl:14: 'x' : undeclared");
   CHECK(MapShaderLog("0(7) : error C1008: undefined variable", files) == "mesh.frag:7 : error C1008: undefined variable");
@@ -89,7 +91,7 @@ static void TestMapShaderLog() {
   CHECK(MapShaderLog("no positions here", files) == "no positions here");
 }
 
-static void TestEngineShaderFiles() {
+TEST_CASE("engine shader files") {
   for (const char* name : {"mesh.vert", "mesh.frag", "shadow.vert", "shadow.frag", "skybox.vert", "skybox.frag", "ui.vert",
                            "ui.frag", "wlw/frame.glsl", "wlw/lighting.glsl", "wlw/shadows.glsl", "wlw/common.glsl",
                            "wlw/color.glsl", "custom/canvas.vert", "custom/canvas_fragment.glsl", "custom/mesh_vertex.glsl",
@@ -126,10 +128,10 @@ static void TestEngineShaderFiles() {
   AddShaderFile("game/waves.glsl", "float Wave(float x) { return sin(x); }\n");
   const PreprocessedShader game = PreprocessShader("shader", "#include \"game/waves.glsl\"\n#include \"wlw/lighting.glsl\"\n",
                                                    {}, {"custom/mesh_fragment.glsl"});
-  CHECK(game.ok && Contains(game.code, "float Wave") && Contains(game.code, "SceneLighting"));
+  CHECK((game.ok && Contains(game.code, "float Wave") && Contains(game.code, "SceneLighting")));
 }
 
-static void TestFrameBlockLayout() {
+TEST_CASE("frame block layout") {
   // std140: every member here is a whole number of 16-byte slots, so these are WlwFrame's offsets.
   CHECK(offsetof(FrameUniforms, view) == 0);
   CHECK(offsetof(FrameUniforms, projection) == 64);
@@ -142,8 +144,8 @@ static void TestFrameBlockLayout() {
   CHECK(offsetof(FrameUniforms, directional) == 320);
   CHECK(offsetof(FrameUniforms, point) == 320 + 4 * 32);
   CHECK(offsetof(FrameUniforms, spot) == 448 + 4 * 48);
-  CHECK(sizeof(FrameUniforms::Directional) == 32 && sizeof(FrameUniforms::Point) == 48 &&
-        sizeof(FrameUniforms::Spot) == 80 && sizeof(FrameUniforms) == 960);
+  CHECK((sizeof(FrameUniforms::Directional) == 32 && sizeof(FrameUniforms::Point) == 48 &&
+        sizeof(FrameUniforms::Spot) == 80 && sizeof(FrameUniforms) == 960));
 
   // ...and frame.glsl declares the same members in the same order.
   const std::string& glsl = *FindShaderFile("wlw/frame.glsl");
@@ -154,13 +156,13 @@ static void TestFrameBlockLayout() {
                              "uPointLights[WLW_MAX_LIGHTS_PER_TYPE];", "uSpotLights[WLW_MAX_LIGHTS_PER_TYPE];"}) {
     const size_t at = glsl.find(member);
     if (at == std::string::npos || at < last) std::printf("  frame.glsl: %s missing or out of order\n", member);
-    CHECK(at != std::string::npos && at >= last);
+    CHECK((at != std::string::npos && at >= last));
     last = at;
   }
   CHECK(Contains(glsl, "#define WLW_MAX_LIGHTS_PER_TYPE " + std::to_string(kMaxLightsPerType)));
 }
 
-static void TestFrameLights() {
+TEST_CASE("frame lights") {
   auto sun = std::make_shared<wlw::scene::DirectionalLight>();
   sun->SetDirection({0.0f, -1.0f, 0.0f});
   sun->SetColor({1.0f, 0.5f, 0.25f});
@@ -176,11 +178,11 @@ static void TestFrameLights() {
   FrameUniforms frame;
   SetFrameLights(frame, {fill.get(), bulb.get(), sun.get(), spot.get()}, sun.get());
   CHECK(frame.light_counts == glm::ivec4(2, 1, 1, 1));  // the sun is the second directional light
-  CHECK(Near(frame.directional[1].color.r, 2.0f) && Near(frame.directional[1].color.g, 1.0f));  // colour x intensity
-  CHECK(Near(frame.directional[1].direction_ambient.y, -1.0f) && Near(frame.directional[1].direction_ambient.w, 0.3f));
-  CHECK(Near(frame.point[0].position_ambient.x, 1.0f) && Near(frame.point[0].position_ambient.z, 3.0f));
-  CHECK(Near(frame.point[0].attenuation.y, 0.45f) && Near(frame.point[0].attenuation.z, 0.75f));  // ~1% at the range
-  CHECK(Near(frame.spot[0].cone.x, std::cos(glm::radians(10.0f))) && Near(frame.spot[0].cone.y, std::cos(glm::radians(20.0f))));
+  CHECK((Near(frame.directional[1].color.r, 2.0f) && Near(frame.directional[1].color.g, 1.0f)));  // colour x intensity
+  CHECK((Near(frame.directional[1].direction_ambient.y, -1.0f) && Near(frame.directional[1].direction_ambient.w, 0.3f)));
+  CHECK((Near(frame.point[0].position_ambient.x, 1.0f) && Near(frame.point[0].position_ambient.z, 3.0f)));
+  CHECK((Near(frame.point[0].attenuation.y, 0.45f) && Near(frame.point[0].attenuation.z, 0.75f)));  // ~1% at the range
+  CHECK((Near(frame.spot[0].cone.x, std::cos(glm::radians(10.0f))) && Near(frame.spot[0].cone.y, std::cos(glm::radians(20.0f)))));
 
   // No shadow light: w = -1. More than the block holds: the extra ones are dropped.
   std::vector<std::shared_ptr<wlw::scene::DirectionalLight>> many(6);
@@ -191,12 +193,12 @@ static void TestFrameLights() {
   }
   SetFrameLights(frame, lights, many[5].get());
   CHECK(frame.light_counts == glm::ivec4(kMaxLightsPerType, 0, 0, -1));  // the 6th (shadow) light didn't fit
-  CHECK(Near(AttenuationFor(0.0f).y, 0.0f) && Near(AttenuationFor(0.0f).x, 1.0f));  // no range: no falloff
+  CHECK((Near(AttenuationFor(0.0f).y, 0.0f) && Near(AttenuationFor(0.0f).x, 1.0f)));  // no range: no falloff
 }
 
-static void TestMeshVariants() {
+TEST_CASE("mesh variants") {
   MeshDraw draw;
-  CHECK(MeshVariantKey(draw) == 0 && MeshVariantDefines(0).empty());
+  CHECK((MeshVariantKey(draw) == 0 && MeshVariantDefines(0).empty()));
   draw.instanced = draw.textured = draw.blends = true;
   CHECK(MeshVariantKey(draw) == (kMeshInstanced | kMeshTextured | kMeshBlend));
   // Shadows need lights, a shadow map this frame, and a node that receives them.
@@ -211,7 +213,7 @@ static void TestMeshVariants() {
          std::vector<std::string>{"INSTANCED", "TEXTURED", "LIT", "SHADOWS", "BLEND"}));
 }
 
-static void TestUiKindsMatchTheShader() {
+TEST_CASE("ui kinds match the shader") {
   const std::string& ui = *FindShaderFile("ui.frag");
   CHECK(Contains(ui, "#define KIND_TEXT " + std::to_string(static_cast<int>(wlw::ui::QuadKind::Text)) + "\n"));
   CHECK(Contains(ui, "#define KIND_RECT " + std::to_string(static_cast<int>(wlw::ui::QuadKind::Rect)) + "\n"));
@@ -220,15 +222,4 @@ static void TestUiKindsMatchTheShader() {
   CHECK(Contains(ui, "#define KIND_ARC " + std::to_string(static_cast<int>(wlw::ui::QuadKind::Arc)) + "\n"));
 }
 
-int main() {
-  TestIncludes();
-  TestPrelude();
-  TestIncludeErrors();
-  TestMapShaderLog();
-  TestEngineShaderFiles();
-  TestFrameBlockLayout();
-  TestFrameLights();
-  TestMeshVariants();
-  TestUiKindsMatchTheShader();
-  return TestResult("shader system");
-}
+TEST_SUITE_END();

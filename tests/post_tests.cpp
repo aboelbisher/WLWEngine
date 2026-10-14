@@ -7,12 +7,14 @@
 #include <string>
 #include <vector>
 
-#include "check.h"
+#include "test_helpers.h"
 #include "wlw/rendering/post_pass.h"
 #include "wlw/rendering/shader.h"
 #include "wlw/rendering/shader_library.h"
 #include "wlw/scene/post_effects.h"
 #include "wlw/scene/viewport.h"
+
+TEST_SUITE_BEGIN("post");
 
 using namespace wlw;
 using rendering::kDestination;
@@ -43,7 +45,7 @@ void CheckPlanIsSafe(const std::vector<PostPass>& passes, const PostPlan& plan) 
     if (i == 0) {
       CHECK(step.source == kSceneTarget);
     } else {
-      CHECK(step.source >= 0 && holds[static_cast<size_t>(step.source)] == static_cast<int>(i) - 1);
+      CHECK((step.source >= 0 && holds[static_cast<size_t>(step.source)] == static_cast<int>(i) - 1));
     }
     for (const auto& [uniform, texture] : step.inputs) {
       CHECK(texture != step.output);
@@ -60,28 +62,28 @@ void CheckPlanIsSafe(const std::vector<PostPass>& passes, const PostPlan& plan) 
 
 }  // namespace
 
-static void TestEmptyAndSingle() {
+TEST_CASE("empty and single") {
   CHECK(rendering::PlanPostChain({}, kPhone).steps.empty());
 
   // One pass reads the scene picture and writes the destination: no extra textures.
   const std::vector<PostPass> one{Pass(0.25f)};
   const PostPlan plan = rendering::PlanPostChain(one, kPhone);
-  CHECK(plan.steps.size() == 1 && plan.targets.empty());
-  CHECK(plan.steps[0].source == kSceneTarget && plan.steps[0].output == kDestination);
+  CHECK((plan.steps.size() == 1 && plan.targets.empty()));
+  CHECK((plan.steps[0].source == kSceneTarget && plan.steps[0].output == kDestination));
   CHECK(plan.steps[0].size == kPhone);  // the last pass is always full size
 }
 
-static void TestPingPong() {
+TEST_CASE("ping pong") {
   // A chain of full-size passes needs only two textures, used in turn.
   const std::vector<PostPass> passes{Pass(), Pass(), Pass(), Pass(), Pass()};
   const PostPlan plan = rendering::PlanPostChain(passes, kPhone);
   CHECK(plan.targets.size() == 2);
-  CHECK(plan.steps[0].output == 0 && plan.steps[1].output == 1 && plan.steps[2].output == 0 &&
-        plan.steps[3].output == 1);
+  CHECK((plan.steps[0].output == 0 && plan.steps[1].output == 1 && plan.steps[2].output == 0 &&
+        plan.steps[3].output == 1));
   CheckPlanIsSafe(passes, plan);
 }
 
-static void TestSizesAndFormats() {
+TEST_CASE("sizes and formats") {
   const std::vector<PostPass> passes{Pass(0.5f), Pass(0.25f), Pass(0.25f, "", {}, TextureFormat::RGBA16F),
                                      Pass(0.25f)};
   const PostPlan plan = rendering::PlanPostChain(passes, kPhone);
@@ -98,15 +100,15 @@ static void TestSizesAndFormats() {
   CHECK(rendering::PlanPostChain(tiny, {3, 3}).steps[0].size == glm::ivec2(1, 1));
 }
 
-static void TestNamedOutputsAreKept() {
+TEST_CASE("named outputs are kept") {
   // Pass 3 reads pass 0's output: nothing in between may overwrite it.
   const std::vector<PostPass> passes{Pass(1.0f, "base"), Pass(), Pass(), Pass(1.0f, "", {{"uBase", "base"}})};
   const PostPlan plan = rendering::PlanPostChain(passes, kPhone);
   CHECK(plan.errors.empty());
   const int base = plan.steps[0].output;
-  CHECK(plan.steps[1].output != base && plan.steps[2].output != base);
-  CHECK(plan.steps[3].inputs.size() == 1 && plan.steps[3].inputs[0].first == "uBase" &&
-        plan.steps[3].inputs[0].second == base);
+  CHECK((plan.steps[1].output != base && plan.steps[2].output != base));
+  CHECK((plan.steps[3].inputs.size() == 1 && plan.steps[3].inputs[0].first == "uBase" &&
+        plan.steps[3].inputs[0].second == base));
   CHECK(plan.targets.size() == 3);
   CheckPlanIsSafe(passes, plan);
 
@@ -117,15 +119,15 @@ static void TestNamedOutputsAreKept() {
   CheckPlanIsSafe(later, reused);
 }
 
-static void TestInputErrors() {
+TEST_CASE("input errors") {
   // The scene picture by name; an unknown name and a name used twice are reported.
   const std::vector<PostPass> passes{Pass(1.0f, "x", {{"uFirst", rendering::kScenePicture}}), Pass(1.0f, "x"),
                                      Pass(1.0f, "", {{"uX", "x"}, {"uMissing", "nope"}})};
   const PostPlan plan = rendering::PlanPostChain(passes, kPhone);
-  CHECK(plan.steps[0].inputs.size() == 1 && plan.steps[0].inputs[0].second == kSceneTarget);
+  CHECK((plan.steps[0].inputs.size() == 1 && plan.steps[0].inputs[0].second == kSceneTarget));
   CHECK(plan.errors.size() == 2);
   // "x" means the latest pass before the reader with that name (pass 1); the unknown input is skipped.
-  CHECK(plan.steps[2].inputs.size() == 1 && plan.steps[2].inputs[0].second == plan.steps[1].output);
+  CHECK((plan.steps[2].inputs.size() == 1 && plan.steps[2].inputs[0].second == plan.steps[1].output));
   CheckPlanIsSafe(passes, plan);
 
   // Reading a later pass isn't possible (it hasn't run yet).
@@ -133,27 +135,27 @@ static void TestInputErrors() {
   CHECK(rendering::PlanPostChain(forward, kPhone).errors.size() == 1);
 }
 
-static void TestChainTargets() {
+TEST_CASE("chain targets") {
   rendering::PostChain chain;
   chain.Add(Pass(0.5f));
   chain.Add(Pass(0.5f));
   chain.Add(Pass());
   const rendering::RenderTargetSettings scene{TextureFormat::RGBA8, true, /*depth=*/true};
   const PostPlan& plan = chain.Prepare({200, 100}, scene);
-  CHECK(plan.steps.size() == 3 && chain.TargetCount() == 2);
-  CHECK(chain.Target(0).Width() == 100 && chain.Target(0).Height() == 50);
-  CHECK(chain.SceneTarget().Width() == 200 && chain.SceneTarget().Settings().depth);
+  CHECK((plan.steps.size() == 3 && chain.TargetCount() == 2));
+  CHECK((chain.Target(0).Width() == 100 && chain.Target(0).Height() == 50));
+  CHECK((chain.SceneTarget().Width() == 200 && chain.SceneTarget().Settings().depth));
 
   // The same size again: the same textures (nothing made per frame).
   const rendering::RenderTarget* first = &chain.Target(0);
   const rendering::RenderTarget* scene_target = &chain.SceneTarget();
   chain.Prepare({200, 100}, scene);
-  CHECK(&chain.Target(0) == first && &chain.SceneTarget() == scene_target);
+  CHECK((&chain.Target(0) == first && &chain.SceneTarget() == scene_target));
 
   // A new size: the same textures, resized (materials holding them keep working).
   chain.Prepare({400, 300}, scene);
-  CHECK(&chain.Target(0) == first && chain.Target(0).Width() == 200 && chain.Target(0).Height() == 150);
-  CHECK(&chain.SceneTarget() == scene_target && chain.SceneTarget().Height() == 300);
+  CHECK((&chain.Target(0) == first && chain.Target(0).Width() == 200 && chain.Target(0).Height() == 150));
+  CHECK((&chain.SceneTarget() == scene_target && chain.SceneTarget().Height() == 300));
 
   // If the GPU fell back to RGBA8, the targets aren't remade every frame.
   chain.SceneTarget().SetFormat(TextureFormat::RGBA8);
@@ -168,7 +170,7 @@ static void TestChainTargets() {
   CHECK(chain.Empty());
 }
 
-static void TestPostShaders() {
+TEST_CASE("post shaders") {
   // `shader_type post` has no vertex(); the engine's post shaders all parse as post shaders.
   CHECK(rendering::SplitShaderSource("shader_type post; void fragment() { FragColor = vec4(1.0); }").target ==
         rendering::Shader::Target::Post);
@@ -179,9 +181,9 @@ static void TestPostShaders() {
     CHECK(text != nullptr);
     if (!text) continue;
     const rendering::ShaderSource source = rendering::SplitShaderSource(*text);
-    CHECK(source.ok && source.target == rendering::Shader::Target::Post);
+    CHECK((source.ok && source.target == rendering::Shader::Target::Post));
   }
-  CHECK(rendering::FindShaderFile("custom/post.vert") && rendering::FindShaderFile("custom/post_fragment.glsl"));
+  CHECK((rendering::FindShaderFile("custom/post.vert") && rendering::FindShaderFile("custom/post_fragment.glsl")));
 
   // The blur's weights add up to 1 (the centre once, each side pair twice): it keeps brightness.
   const std::string* blur = rendering::FindShaderFile("post/blur.glsl");
@@ -196,18 +198,18 @@ static void TestPostShaders() {
   }
 }
 
-static void TestEffects() {
+TEST_CASE("effects") {
   // Blur: one pass across and one down per iteration, at its scale.
   auto view = scene::Viewport::Create();
   const scene::Blur blur = scene::AddBlur(*view, {.scale = 0.5f, .iterations = 2});
   const auto& passes = view->Post().Passes();
-  CHECK(passes.size() == 4 && blur.passes.size() == 4);
-  CHECK(passes[0].scale == 0.5f && passes[0].material == blur.passes[0]);
+  CHECK((passes.size() == 4 && blur.passes.size() == 4));
+  CHECK((passes[0].scale == 0.5f && passes[0].material == blur.passes[0]));
   const auto* across = std::get_if<glm::vec2>(blur.passes[0]->GetParam("uDirection"));
   const auto* down = std::get_if<glm::vec2>(blur.passes[1]->GetParam("uDirection"));
-  CHECK(across && down && across->x == 1.0f && down->y == 1.0f);
+  CHECK((across && down && across->x == 1.0f && down->y == 1.0f));
   for (const auto& material : blur.passes) {
-    CHECK(material->IsValid() && material->GetShader()->GetTarget() == rendering::Shader::Target::Post);
+    CHECK((material->IsValid() && material->GetShader()->GetTarget() == rendering::Shader::Target::Post));
   }
   CHECK(blur.passes[0]->GetShader() == blur.passes[3]->GetShader());  // one shader, shared
 
@@ -216,34 +218,34 @@ static void TestEffects() {
   const scene::Bloom bloom = scene::AddBloom(*screen, {.threshold = 0.7f, .iterations = 1});
   const auto& bloom_passes = screen->Post().Passes();
   CHECK(bloom_passes.size() == 4);
-  CHECK(bloom_passes.front().material == bloom.bright && bloom_passes.back().material == bloom.combine);
-  CHECK(bloom_passes.back().inputs.size() == 1 && bloom_passes.back().inputs[0].pass == rendering::kScenePicture);
+  CHECK((bloom_passes.front().material == bloom.bright && bloom_passes.back().material == bloom.combine));
+  CHECK((bloom_passes.back().inputs.size() == 1 && bloom_passes.back().inputs[0].pass == rendering::kScenePicture));
   const auto* threshold = std::get_if<float>(bloom.bright->GetParam("uThreshold"));
-  CHECK(threshold && *threshold == 0.7f);
+  CHECK((threshold && *threshold == 0.7f));
 
   // Bloom after other passes adds its glow onto their result (the last one gets a name).
   const scene::Bloom after = scene::AddBloom(*view);
   const auto& all = view->Post().Passes();
-  CHECK(!all[3].name.empty() && all.back().inputs[0].pass == all[3].name);
+  CHECK((!all[3].name.empty() && all.back().inputs[0].pass == all[3].name));
   const PostPlan plan = rendering::PlanPostChain(all, kPhone);
   CHECK(plan.errors.empty());
   CheckPlanIsSafe(all, plan);
-  CHECK(after.combine && after.bright);
+  CHECK((after.combine && after.bright));
 
   // Liquid: blur then threshold, the threshold pass last (it writes the viewport's picture).
   auto liquid = scene::Viewport::Create({.format = TextureFormat::RGBA16F, .depth = false});
   scene::AddBlur(*liquid, {.scale = 1.0f});
   const auto threshold_material = scene::AddThreshold(*liquid, {.threshold = 0.4f, .softness = 0.0f});
   const auto& liquid_passes = liquid->Post().Passes();
-  CHECK(liquid_passes.size() == 3 && liquid_passes.back().material == threshold_material);
+  CHECK((liquid_passes.size() == 3 && liquid_passes.back().material == threshold_material));
   CHECK(threshold_material->IsValid());
   const auto* level = std::get_if<float>(threshold_material->GetParam("uThreshold"));
   const auto* softness = std::get_if<float>(threshold_material->GetParam("uSoftness"));
-  CHECK(level && *level == 0.4f && softness && *softness > 0.0f);  // never 0: smoothstep needs an edge
+  CHECK((level && *level == 0.4f && softness && *softness > 0.0f));  // never 0: smoothstep needs an edge
   CHECK(rendering::PlanPostChain(liquid_passes, kPhone).errors.empty());
 }
 
-static void TestScaleWhileRunning() {
+TEST_CASE("scale while running") {
   // A quality level changes an effect's resolution: its passes only (found by their materials,
   // whatever was added around them), and the targets follow at the next Prepare.
   auto view = scene::Viewport::Create();
@@ -264,12 +266,12 @@ static void TestScaleWhileRunning() {
   bloom.SetScale(*view, 0.125f);
   const auto& passes = chain.Passes();
   CHECK(passes[0].scale == 1.0f);                           // not the bloom's
-  CHECK(passes[1].scale == 0.125f && passes[2].scale == 0.125f && passes[3].scale == 0.125f);
-  CHECK(passes[4].material == bloom.combine && passes[4].scale == 1.0f);  // writes the picture
+  CHECK((passes[1].scale == 0.125f && passes[2].scale == 0.125f && passes[3].scale == 0.125f));
+  CHECK((passes[4].material == bloom.combine && passes[4].scale == 1.0f));  // writes the picture
   const PostPlan& plan = chain.Prepare({400, 200}, scene);
   CHECK(plan.steps[1].size == glm::ivec2(50, 25));
   CHECK(chain.TargetCount() == targets);
-  CHECK(has_width(50) && !has_width(100));
+  CHECK((has_width(50) && !has_width(100)));
 
   auto liquid = scene::Viewport::Create();
   const scene::Blur blur = scene::AddBlur(*liquid, {.scale = 1.0f});
@@ -277,15 +279,4 @@ static void TestScaleWhileRunning() {
   for (const auto& pass : liquid->Post().Passes()) CHECK(pass.scale == 0.5f);
 }
 
-int main() {
-  TestEmptyAndSingle();
-  TestPingPong();
-  TestSizesAndFormats();
-  TestNamedOutputsAreKept();
-  TestInputErrors();
-  TestChainTargets();
-  TestPostShaders();
-  TestEffects();
-  TestScaleWhileRunning();
-  return TestResult("post");
-}
+TEST_SUITE_END();

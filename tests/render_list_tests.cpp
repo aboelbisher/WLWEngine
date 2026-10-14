@@ -4,8 +4,10 @@
 #include <limits>
 #include <vector>
 
-#include "check.h"
+#include "test_helpers.h"
 #include "wlw/rendering/render_list.h"
+
+TEST_SUITE_BEGIN("render_list");
 
 using namespace wlw::rendering;
 
@@ -23,22 +25,22 @@ std::vector<uint32_t> Order(const std::vector<uint64_t>& keys) {
 
 }  // namespace
 
-static void TestDepthBits() {
+TEST_CASE("depth bits") {
   // Monotonic: a farther depth never sorts before a nearer one.
   const float depths[] = {0.0f, 1e-6f, 0.001f, 0.5f, 1.0f, 1.5f, 10.0f, 1000.0f, 1e9f};
   for (size_t i = 1; i < std::size(depths); ++i) CHECK(DepthBits(depths[i - 1]) < DepthBits(depths[i]));
   // Behind the near plane, and NaN: like 0.
-  CHECK(DepthBits(-3.0f) == 0 && DepthBits(std::numeric_limits<float>::quiet_NaN()) == 0);
+  CHECK((DepthBits(-3.0f) == 0 && DepthBits(std::numeric_limits<float>::quiet_NaN()) == 0));
   CHECK(DepthBits(std::numeric_limits<float>::infinity()) <= 0x7FFFFFFFu);
 }
 
-static void TestOpaqueBeforeTransparent() {
+TEST_CASE("opaque before transparent") {
   // However near a transparent draw is and however far an opaque one is.
   CHECK(OpaqueSortKey(0xFFFF, 0xFFFF, 1e9f) < TransparentSortKey(0.0f, 0));
-  CHECK(!IsTransparentKey(OpaqueSortKey(3, 4, 5.0f)) && IsTransparentKey(TransparentSortKey(5.0f, 3)));
+  CHECK((!IsTransparentKey(OpaqueSortKey(3, 4, 5.0f)) && IsTransparentKey(TransparentSortKey(5.0f, 3))));
 }
 
-static void TestOpaqueGroupsThenFrontToBack() {
+TEST_CASE("opaque groups then front to back") {
   const std::vector<uint64_t> keys = {
       OpaqueSortKey(2, 7, 1.0f),  // 0: program 2
       OpaqueSortKey(1, 9, 5.0f),  // 1: program 1, texture 9, far
@@ -51,7 +53,7 @@ static void TestOpaqueGroupsThenFrontToBack() {
   CHECK((Order(keys) == std::vector<uint32_t>{4, 2, 3, 1, 0}));
 }
 
-static void TestTransparentBackToFront() {
+TEST_CASE("transparent back to front") {
   const std::vector<uint64_t> keys = {
       TransparentSortKey(2.0f, 1),
       TransparentSortKey(9.0f, 5),
@@ -62,26 +64,18 @@ static void TestTransparentBackToFront() {
   CHECK((Order(keys) == std::vector<uint32_t>{3, 1, 0, 2}));
 }
 
-static void TestTiesKeepListOrder() {
+TEST_CASE("ties keep list order") {
   // Equal keys (the same mesh drawn by several nodes at the same depth) keep their list order,
   // the same every frame: no flicker between equal draws.
   const uint64_t key = OpaqueSortKey(1, 1, 3.0f);
   CHECK((Order({key, key, key}) == std::vector<uint32_t>{0, 1, 2}));
 }
 
-static void TestIdsUseLow16Bits() {
+TEST_CASE("ids use low16 bits") {
   // Ids are grouped by their low 16 bits only; higher bits must not spill into other fields.
   CHECK(OpaqueSortKey(0x10001, 0, 1.0f) == OpaqueSortKey(1, 0, 1.0f));
   CHECK(OpaqueSortKey(0, 0x10002, 1.0f) == OpaqueSortKey(0, 2, 1.0f));
   CHECK(!IsTransparentKey(OpaqueSortKey(0xFFFFFFFFu, 0xFFFFFFFFu, 1e30f)));
 }
 
-int main() {
-  TestDepthBits();
-  TestOpaqueBeforeTransparent();
-  TestOpaqueGroupsThenFrontToBack();
-  TestTransparentBackToFront();
-  TestTiesKeepListOrder();
-  TestIdsUseLow16Bits();
-  return TestResult("render list");
-}
+TEST_SUITE_END();

@@ -5,15 +5,17 @@
 #include <thread>
 #include <vector>
 
-#include "check.h"
+#include "test_helpers.h"
 #include "wlw/core/random.h"
 #include "wlw/core/time_scale.h"
 #include "wlw/platform/bridge.h"
 #include "wlw/platform/platform.h"
 
+TEST_SUITE_BEGIN("core");
+
 using wlw::core::Random;
 
-static void TestRandomIsPinned() {
+TEST_CASE("random is pinned") {
   // These exact numbers must never change: seeded levels, daily puzzles and saved games depend on
   // the sequence (the same values are pinned in Bluzzle's tests).
   Random rng(0);
@@ -21,15 +23,15 @@ static void TestRandomIsPinned() {
   CHECK(rng.Next() == 0x6E789E6Au);
 }
 
-static void TestRandomRangesAndState() {
+TEST_CASE("random ranges and state") {
   Random rng(123);
   for (int i = 0; i < 1000; ++i) {
     const int b = rng.Below(7);
-    CHECK(b >= 0 && b < 7);
+    CHECK((b >= 0 && b < 7));
     const float u = rng.Unit();
-    CHECK(u >= 0.0f && u < 1.0f);
+    CHECK((u >= 0.0f && u < 1.0f));
     const float r = rng.Range(-2.0f, 3.0f);
-    CHECK(r >= -2.0f && r < 3.0f);
+    CHECK((r >= -2.0f && r < 3.0f));
   }
   CHECK(rng.Below(0) == 0);
   // Saving and restoring the state continues the exact same sequence (resuming a game).
@@ -37,10 +39,10 @@ static void TestRandomRangesAndState() {
   const uint32_t a = rng.Next(), b = rng.Next();
   Random resumed;
   resumed.SetState(saved);
-  CHECK(resumed.Next() == a && resumed.Next() == b);
+  CHECK((resumed.Next() == a && resumed.Next() == b));
 }
 
-static void TestAtomicWriteAndRead() {
+TEST_CASE("atomic write and read") {
   namespace fs = std::filesystem;
   const fs::path folder = fs::temp_directory_path() / "wlw_core_tests";
   fs::create_directories(folder);
@@ -58,7 +60,7 @@ static void TestAtomicWriteAndRead() {
   fs::remove_all(folder);
 }
 
-static void TestBridgeQueue() {
+TEST_CASE("bridge queue") {
   using namespace wlw::platform;
   CHECK(!HasBridge());  // desktop: no platform-language side
   CHECK(!BridgeCall("ads", "init"));
@@ -73,7 +75,7 @@ static void TestBridgeQueue() {
   PostBridgeMessage("nobody", "x", "{}");  // no handler: dropped
   CHECK(seen.empty());                     // nothing runs before the dispatch
   CHECK(DispatchBridgeMessages() == 3);
-  CHECK(seen.size() == 2 && seen[0] == "a1" && seen[1] == "b2");
+  CHECK((seen.size() == 2 && seen[0] == "a1" && seen[1] == "b2"));
 
   // A handler that posts again: delivered at the next dispatch, not in a loop.
   SetBridgeHandler("test", [&](const std::string& event, const std::string&) {
@@ -88,15 +90,15 @@ static void TestBridgeQueue() {
   CHECK(DispatchBridgeMessages() == 0);
 }
 
-static void TestTimeScale() {
+TEST_CASE("time scale") {
   wlw::core::TimeScale time;
-  CHECK(Near(time.Apply(0.016f), 0.016f) && time.Normal());  // normal speed by default
+  CHECK((Near(time.Apply(0.016f), 0.016f) && time.Normal()));  // normal speed by default
 
   // Hit-stop: frozen for 60 ms of real time. The frame that crosses the end is split.
   time.Set(0.0f, 0.06f);
   CHECK(Near(time.Apply(0.05f), 0.0f));
   CHECK(Near(time.Apply(0.02f), 0.01f));  // 10 ms frozen, then 10 ms at normal speed
-  CHECK(time.Normal() && Near(time.Apply(0.016f), 0.016f));
+  CHECK((time.Normal() && Near(time.Apply(0.016f), 0.016f)));
 
   // Slow motion with an eased recovery: 0.5 for 0.2 s, then linearly back to 1 over 0.2 s.
   time.Set(0.5f, 0.2f, 0.2f);
@@ -112,16 +114,9 @@ static void TestTimeScale() {
   for (int i = 0; i < 100; ++i) time.Apply(0.1f);
   CHECK(Near(time.Apply(0.1f), 0.025f));
   time.Set(0.0f, 0.0f, 0.1f);
-  CHECK(Near(time.Apply(0.1f), 0.05f) && time.Normal());
+  CHECK((Near(time.Apply(0.1f), 0.05f) && time.Normal()));
   time.Set(0.3f, 0.0f);
   CHECK(time.Normal());
 }
 
-int main() {
-  TestRandomIsPinned();
-  TestTimeScale();
-  TestRandomRangesAndState();
-  TestAtomicWriteAndRead();
-  TestBridgeQueue();
-  return TestResult("core");
-}
+TEST_SUITE_END();

@@ -2,28 +2,30 @@
 #include <utility>
 #include <vector>
 
-#include "check.h"
+#include "test_helpers.h"
 #include "wlw/math/bit_grid.h"
 #include "wlw/math/game_search.h"
 
+TEST_SUITE_BEGIN("search");
+
 using namespace wlw::math;
 
-static void TestBitGrid() {
+TEST_CASE("bit grid") {
   using Grid = BitGrid<10, 10>;  // 100 cells: two words, the second partly used
   static_assert(Grid::kWords == 2);
   Grid grid = Grid::Cell(0, 0) | Grid::Cell(9, 9) | Grid::Cell(3, 6);
-  CHECK(grid.Count() == 3 && grid.Test(9, 9) && grid.Test(3, 6) && !grid.Test(4, 6));
-  CHECK(!grid.Test(-1, 0) && !grid.Test(10, 0));  // outside: never set
-  CHECK(Grid::Full().Count() == 100 && (~Grid()).Count() == 100);  // padding bits stay clear
+  CHECK((grid.Count() == 3 && grid.Test(9, 9) && grid.Test(3, 6) && !grid.Test(4, 6)));
+  CHECK((!grid.Test(-1, 0) && !grid.Test(10, 0)));  // outside: never set
+  CHECK((Grid::Full().Count() == 100 && (~Grid()).Count() == 100));  // padding bits stay clear
   CHECK((~Grid::Full()).None());
-  CHECK(Grid::Row(2).Count() == 10 && Grid::Column(7).Count() == 10 && Grid::Row(2, 6).Count() == 6);
-  CHECK(Grid::Rect(1, 1, 3, 2).Count() == 6 && Grid::Rect(1, 1, 3, 2).Test(3, 2));
-  CHECK(Grid::Full().Contains(grid) && !grid.Contains(Grid::Full()));
+  CHECK((Grid::Row(2).Count() == 10 && Grid::Column(7).Count() == 10 && Grid::Row(2, 6).Count() == 6));
+  CHECK((Grid::Rect(1, 1, 3, 2).Count() == 6 && Grid::Rect(1, 1, 3, 2).Test(3, 2)));
+  CHECK((Grid::Full().Contains(grid) && !grid.Contains(Grid::Full())));
 
   // Shifting moves cells and drops what falls off any edge (no wrapping into the next row).
   const Grid l = Grid::Cell(0, 0) | Grid::Cell(0, 1) | Grid::Cell(1, 1);
   const Grid moved = l.Shifted(8, 3);
-  CHECK(moved.Count() == 3 && moved.Test(8, 3) && moved.Test(9, 4));
+  CHECK((moved.Count() == 3 && moved.Test(8, 3) && moved.Test(9, 4)));
   CHECK(l.Shifted(9, 0).Count() == 2);  // (1,1) would land on x = 10: gone, not wrapped to (0,2)
   CHECK(l.Shifted(0, 9).Count() == 1);
 
@@ -33,7 +35,7 @@ static void TestBitGrid() {
   CHECK((l.Shifted(2, 3) & occupied).Any());
   Grid x = grid;
   x ^= Grid::Cell(0, 0);
-  CHECK(x.Count() == 2 && !x.Test(0, 0));
+  CHECK((x.Count() == 2 && !x.Test(0, 0)));
 }
 
 // ---- Tic-tac-toe: small enough to search completely ----
@@ -72,24 +74,24 @@ struct TicTacToe {
   bool MaxToMove(const State& s) const { return s.x.Count() == s.o.Count(); }  // X starts
 };
 
-static void TestMinimaxTicTacToe() {
+TEST_CASE("minimax tic tac toe") {
   const TicTacToe game;
   SearchStats stats;
   CHECK(Minimax(game, TicTacToe::State{}, 9, -kSearchInfinity, kSearchInfinity, &stats) == 0.0);  // perfect play: draw
   // The full game tree has 549,946 positions; alpha-beta proves the draw seeing a fraction.
-  CHECK(stats.cutoffs > 0 && stats.nodes < 549946 / 5);
+  CHECK((stats.cutoffs > 0 && stats.nodes < 549946 / 5));
 
   // X to move with two in a row: the search takes the win.
   TicTacToe::State s;
   s.x = TicTacToe::Board::Cell(0, 0) | TicTacToe::Board::Cell(1, 0);
   s.o = TicTacToe::Board::Cell(0, 1) | TicTacToe::Board::Cell(1, 1);
   const auto best = BestMove(game, s, 9);
-  CHECK(best && best->first == 2 && best->second == 1.0);
+  CHECK((best && best->first == 2 && best->second == 1.0));
   // O to move in the same spot must block at cell 2 (else X wins next move).
   s.x = TicTacToe::Board::Cell(0, 0) | TicTacToe::Board::Cell(1, 0) | TicTacToe::Board::Cell(2, 2);
   s.o = TicTacToe::Board::Cell(1, 1) | TicTacToe::Board::Cell(0, 2);
   const auto block = BestMove(game, s, 9);
-  CHECK(block && block->first == 2);
+  CHECK((block && block->first == 2));
 }
 
 // ---- Expectimax: a safe choice against a gamble ----
@@ -113,16 +115,11 @@ struct Gamble {
   std::vector<std::pair<Move, double>> Outcomes(const State&) const { return {{0, 0.5}, {1, 0.5}}; }
 };
 
-static void TestExpectimax() {
+TEST_CASE("expectimax") {
   Gamble game;
   CHECK(Near(static_cast<float>(Expectimax(game, Gamble::State{}, 3)), 4.0f));  // 0.5*10 + 0.5*-2 = 4 > 3
   game.win = 6.0;                                                                // now 2 < 3: play safe
   CHECK(Near(static_cast<float>(Expectimax(game, Gamble::State{}, 3)), 3.0f));
 }
 
-int main() {
-  TestBitGrid();
-  TestMinimaxTicTacToe();
-  TestExpectimax();
-  return TestResult("search");
-}
+TEST_SUITE_END();

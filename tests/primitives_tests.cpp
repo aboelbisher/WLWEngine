@@ -1,8 +1,10 @@
 // Tests for procedural meshes in wlw/utils/primitives.h (CPU-side only: nothing is uploaded).
 #include <glm/glm.hpp>
 
-#include "check.h"
+#include "test_helpers.h"
 #include "wlw/utils/primitives.h"
+
+TEST_SUITE_BEGIN("primitives");
 
 using namespace wlw;
 
@@ -35,7 +37,7 @@ float CheckClosedSolid(const core::Mesh<core::Vertex3D>& mesh) {
 
 }  // namespace
 
-static void TestBeveledCube() {
+TEST_CASE("beveled cube") {
   const float size = 2.0f, bevel = 0.25f;
   const auto mesh = utils::createBeveledCubeWithNormals(size, bevel, {1, 0, 0, 1});
   // 6 faces x 2 triangles + 12 edge strips x 2 + 8 corners x 1 = 44 triangles.
@@ -43,7 +45,7 @@ static void TestBeveledCube() {
   CHECK(mesh->GetIndices().size() == mesh->GetVertices().size());
 
   const auto& box = mesh->GetLocalAABB();  // outer size unchanged by the bevel
-  CHECK(Near(box.min.x, -1) && Near(box.max.x, 1) && Near(box.min.y, -1) && Near(box.max.z, 1));
+  CHECK((Near(box.min.x, -1) && Near(box.max.x, 1) && Near(box.min.y, -1) && Near(box.max.z, 1)));
 
   // A chamfered cube = full cube - 12 edge prisms (triangle b*b/2, length s-2b) - what's cut from
   // the 8 corner b*b*b cubes (only the tetrahedron b^3/6 under the corner triangle remains, so
@@ -53,28 +55,23 @@ static void TestBeveledCube() {
   CHECK(Near(CheckClosedSolid(*mesh), expected, 1e-3f));
 }
 
-static void TestPlainCubeStillClosed() {
+TEST_CASE("plain cube still closed") {
   // The original cube, as a reference for what CheckClosedSolid accepts.
   const auto mesh = utils::createCubeWithNormals(2.0f);
   CHECK(Near(CheckClosedSolid(*mesh), 8.0f, 1e-3f));
 }
 
-static void TestPlane() {
+TEST_CASE("plane") {
   // 4 corners, 2 triangles, both facing up (counter-clockwise seen from above), spanning the size.
   const auto mesh = utils::createPlaneWithNormals(4.0f, 2.0f);
   const auto& v = mesh->GetVertices();
   const auto& index = mesh->GetIndices();
-  CHECK(v.size() == 4 && index.size() == 6);
+  CHECK((v.size() == 4 && index.size() == 6));
   for (size_t i = 0; i + 2 < index.size(); i += 3) {
     const glm::vec3 a = ToGlm(v[index[i]].position), b = ToGlm(v[index[i + 1]].position), c = ToGlm(v[index[i + 2]].position);
     CHECK(glm::cross(b - a, c - a).y > 0.0f);
   }
-  for (const auto& vertex : v) CHECK(Near(vertex.normal.y, 1.0f) && Near(std::abs(vertex.position.x), 2.0f) && Near(std::abs(vertex.position.z), 1.0f));
+  for (const auto& vertex : v) CHECK((Near(vertex.normal.y, 1.0f) && Near(std::abs(vertex.position.x), 2.0f) && Near(std::abs(vertex.position.z), 1.0f)));
 }
 
-int main() {
-  TestBeveledCube();
-  TestPlainCubeStillClosed();
-  TestPlane();
-  return TestResult("primitives");
-}
+TEST_SUITE_END();

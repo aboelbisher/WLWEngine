@@ -5,8 +5,10 @@
 #include <utility>
 #include <vector>
 
-#include "check.h"
+#include "test_helpers.h"
 #include "wlw/math/exact_cover.h"
+
+TEST_SUITE_BEGIN("exact_cover");
 
 using wlw::math::ExactCover;
 
@@ -16,7 +18,7 @@ static std::vector<int> Sorted(std::vector<int> v) {
 }
 
 // The example from Knuth's "Dancing Links" paper: 7 columns, rows A..F, one solution {A, D, E}.
-static void TestKnuthExample() {
+TEST_CASE("knuth example") {
   ExactCover problem(7);
   const int a = problem.AddRow({2, 4, 5});
   problem.AddRow({0, 3, 6});
@@ -25,12 +27,12 @@ static void TestKnuthExample() {
   const int e = problem.AddRow({1, 6});
   problem.AddRow({3, 4, 6});
   const auto result = problem.Solve();
-  CHECK(result.count == 1 && result.complete);
+  CHECK((result.count == 1 && result.complete));
   if (result.count == 1) CHECK(Sorted(result.solutions[0]) == (std::vector<int>{a, d, e}));
   CHECK(result.nodes > 0);
 }
 
-static void TestNoSolutionAndLimits() {
+TEST_CASE("no solution and limits") {
   ExactCover clash(3);
   clash.AddRow({0, 1});
   clash.AddRow({1, 2});  // column 0 and 2 can't both be covered without covering 1 twice
@@ -43,13 +45,13 @@ static void TestNoSolutionAndLimits() {
   }
   CHECK(many.Solve().count == 9);
   const auto first_two = many.Solve(2);
-  CHECK(first_two.count == 2 && !first_two.complete);
+  CHECK((first_two.count == 2 && !first_two.complete));
 
   ExactCover empty(0);  // nothing to cover: exactly one solution, choosing nothing
   CHECK(empty.Solve().count == 1);
 }
 
-static void TestChosenRows() {
+TEST_CASE("chosen rows") {
   ExactCover problem(4);
   const int r01 = problem.AddRow({0, 1});
   const int r23 = problem.AddRow({2, 3});
@@ -65,7 +67,7 @@ static void TestChosenRows() {
 
 // A 4x4 Sudoku as exact cover: 64 columns (cell filled, row has digit, column has digit, box has
 // digit; 16 each), one row per (cell, digit).
-static void TestSudoku() {
+TEST_CASE("sudoku") {
   const int puzzle[4][4] = {{1, 0, 0, 0}, {0, 0, 3, 0}, {0, 4, 0, 0}, {0, 0, 0, 2}};
   ExactCover problem(64);
   std::vector<std::pair<int, int>> what;  // row id -> (cell, digit)
@@ -80,7 +82,7 @@ static void TestSudoku() {
     }
   }
   const auto result = problem.Solve(2);
-  CHECK(result.count == 1 && result.complete);  // a proper Sudoku: exactly one solution
+  CHECK((result.count == 1 && result.complete));  // a proper Sudoku: exactly one solution
   if (result.count != 1) return;
   int grid[16] = {};
   for (int row : result.solutions[0]) grid[what[row].first] = what[row].second;
@@ -90,14 +92,14 @@ static void TestSudoku() {
       in_row.insert(grid[i * 4 + j]);
       in_column.insert(grid[j * 4 + i]);
     }
-    CHECK(in_row.size() == 4 && in_column.size() == 4);
+    CHECK((in_row.size() == 4 && in_column.size() == 4));
   }
 }
 
 // The 12 pentominoes tile a 3x20 rectangle in exactly 2 ways; counting the rectangle's own 4
 // symmetries (identity, half turn, two mirrors) that's 8 raw solutions. A classic check that a
 // DLX solver is right.
-static void TestPentominoes3x20() {
+TEST_CASE("pentominoes3x20") {
   const char* pentominoes[12] = {"#####", "##/##/#.", "###/#../#..", "##./.##/..#", ".#./###/.#.", "##/#./##",
                                  "####/#...", "####/.#..", "###/.#./.#.", ".##/##./.#.", "##../.###", "##./.#./.##"};
   const int width = 20, height = 3;
@@ -158,7 +160,7 @@ static void TestPentominoes3x20() {
               static_cast<long long>(result.nodes));
 }
 
-static void TestShuffleIsDeterministic() {
+TEST_CASE("shuffle is deterministic") {
   ExactCover many(2);
   for (int i = 0; i < 5; ++i) {
     many.AddRow({0});
@@ -171,12 +173,4 @@ static void TestShuffleIsDeterministic() {
   CHECK(firsts.size() > 1);  // different seeds find different solutions first
 }
 
-int main() {
-  TestKnuthExample();
-  TestNoSolutionAndLimits();
-  TestChosenRows();
-  TestSudoku();
-  TestPentominoes3x20();
-  TestShuffleIsDeterministic();
-  return TestResult("exact cover");
-}
+TEST_SUITE_END();

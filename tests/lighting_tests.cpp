@@ -4,9 +4,11 @@
 
 #include <glm/glm.hpp>
 
-#include "check.h"
+#include "test_helpers.h"
 #include "wlw/scene/light.h"
 #include "wlw/scene/shadow_map.h"
+
+TEST_SUITE_BEGIN("lighting");
 
 using namespace wlw;
 
@@ -18,19 +20,19 @@ bool NearVec(const glm::vec3& a, const glm::vec3& b, float tolerance = 1e-4f) {
 
 }  // namespace
 
-static void TestLightsAreNodes() {
+TEST_CASE("lights are nodes") {
   auto sun = std::make_shared<scene::DirectionalLight>();
   auto bulb = std::make_shared<scene::PointLight>();
   scene::Node3D plain;
-  CHECK(sun->AsLight() == sun.get() && bulb->AsLight() == bulb.get() && plain.AsLight() == nullptr);
-  CHECK(sun->GetType() == scene::LightNode::Type::Directional && bulb->GetType() == scene::LightNode::Type::Point);
+  CHECK((sun->AsLight() == sun.get() && bulb->AsLight() == bulb.get() && plain.AsLight() == nullptr));
+  CHECK((sun->GetType() == scene::LightNode::Type::Directional && bulb->GetType() == scene::LightNode::Type::Point));
   // Shadows are opt-in, for lights and for geometry.
-  CHECK(!sun->CastsShadows() && !plain.CastsShadow() && !plain.ReceivesShadow());
+  CHECK((!sun->CastsShadows() && !plain.CastsShadow() && !plain.ReceivesShadow()));
   // A directional light points straight down by default.
   CHECK(NearVec(sun->GetDirection(), {0.0f, -1.0f, 0.0f}));
 }
 
-static void TestSetDirection() {
+TEST_CASE("set direction") {
   // SetDirection turns the node so its forward axis (-Z) points that way, for any direction.
   scene::DirectionalLight light;
   const glm::vec3 directions[] = {{-0.5f, -1.0f, -0.7f}, {0.0f, 0.0f, -1.0f}, {1.0f, 0.0f, 0.0f},
@@ -49,7 +51,7 @@ static void TestSetDirection() {
   CHECK(NearVec(child->GetDirection(), {-1.0f, 0.0f, 0.0f}, 1e-3f));
 }
 
-static void TestShadowBoxContainsTheBounds() {
+TEST_CASE("shadow box contains the bounds") {
   // Every corner of the bounds lands inside the light's box (clip space -1..1 on all axes).
   const scene::AABB bounds{{-4.0f, 0.0f, -5.0f}, {4.0f, 1.0f, 7.0f}};
   const glm::vec3 directions[] = {{-0.5f, -1.0f, -0.7f}, {0.0f, -1.0f, 0.0f}, {0.2f, -0.3f, 1.0f}};
@@ -59,15 +61,15 @@ static void TestShadowBoxContainsTheBounds() {
       const glm::vec3 corner{(i & 1) ? bounds.max.x : bounds.min.x, (i & 2) ? bounds.max.y : bounds.min.y,
                              (i & 4) ? bounds.max.z : bounds.min.z};
       const glm::vec4 clip = f.ViewProjection() * glm::vec4(corner, 1.0f);
-      CHECK(std::abs(clip.x) <= 1.0f && std::abs(clip.y) <= 1.0f && std::abs(clip.z) <= 1.0f);
+      CHECK((std::abs(clip.x) <= 1.0f && std::abs(clip.y) <= 1.0f && std::abs(clip.z) <= 1.0f));
     }
     // ...and tightly: never wider than the bounds' diagonal plus the half-unit rounding step.
     const glm::vec3 diagonal = glm::vec3(bounds.max) - glm::vec3(bounds.min);
-    CHECK(f.texel_world > 0.0f && f.texel_world * 1024.0f <= glm::length(diagonal) + 0.5f);
+    CHECK((f.texel_world > 0.0f && f.texel_world * 1024.0f <= glm::length(diagonal) + 0.5f));
   }
 }
 
-static void TestShadowBoxIsStable() {
+TEST_CASE("shadow box is stable") {
   // Looking straight down, a box 8 x 12 wide maps to a square of 12 (rounded up to half units).
   const scene::AABB bounds{{-4.0f, 0.0f, -6.0f}, {4.0f, 1.0f, 6.0f}};
   const scene::ShadowFrustum f = scene::FitDirectionalShadow({0.0f, -1.0f, 0.0f}, bounds, 1024);
@@ -85,10 +87,10 @@ static void TestShadowBoxIsStable() {
   const scene::ShadowFrustum h = scene::FitDirectionalShadow({0.0f, -1.0f, 0.0f}, moved, 1024);
   const glm::vec4 a = f.ViewProjection() * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
   const glm::vec4 b = h.ViewProjection() * glm::vec4(10.0f * f.texel_world, 0.0f, 0.0f, 1.0f);
-  CHECK(Near(a.x, b.x, 1e-3f) && Near(a.y, b.y, 1e-3f));
+  CHECK((Near(a.x, b.x, 1e-3f) && Near(a.y, b.y, 1e-3f)));
 }
 
-static void TestBigReceiverDoesNotStretchTheMap() {
+TEST_CASE("big receiver does not stretch the map") {
   // Small casters over a huge floor: the map covers the casters (sharp shadows), and the floor
   // under them still fits in the box's depth.
   const scene::AABB casters{{-2.0f, 0.0f, -2.0f}, {2.0f, 1.0f, 2.0f}};
@@ -98,18 +100,11 @@ static void TestBigReceiverDoesNotStretchTheMap() {
   CHECK(f.texel_world * 1024.0f < 8.0f);  // about the casters' size, not the floor's 100
   // The floor point right under the casters' centre is inside the map, at a valid depth.
   const glm::vec4 clip = f.ViewProjection() * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
-  CHECK(std::abs(clip.x) <= 1.0f && std::abs(clip.y) <= 1.0f && std::abs(clip.z) <= 1.0f);
+  CHECK((std::abs(clip.x) <= 1.0f && std::abs(clip.y) <= 1.0f && std::abs(clip.z) <= 1.0f));
   // So is the floor straight "behind" a caster corner along the light (where its shadow falls).
   const glm::vec3 shadow_spot = glm::vec3(2.0f, 1.0f, 2.0f) + glm::normalize(sun) * (1.0f / std::abs(glm::normalize(sun).y));
   const glm::vec4 spot = f.ViewProjection() * glm::vec4(shadow_spot, 1.0f);
-  CHECK(std::abs(spot.x) <= 1.0f && std::abs(spot.y) <= 1.0f && std::abs(spot.z) <= 1.0f);
+  CHECK((std::abs(spot.x) <= 1.0f && std::abs(spot.y) <= 1.0f && std::abs(spot.z) <= 1.0f));
 }
 
-int main() {
-  TestLightsAreNodes();
-  TestSetDirection();
-  TestShadowBoxContainsTheBounds();
-  TestShadowBoxIsStable();
-  TestBigReceiverDoesNotStretchTheMap();
-  return TestResult("lighting");
-}
+TEST_SUITE_END();

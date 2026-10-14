@@ -33,3 +33,8 @@ set_target_properties(wlw_imgui PROPERTIES FOLDER "third_party" POSITION_INDEPEN
 # Header-only; compiled once in the engine (wlw/audio/miniaudio_impl.cpp).
 add_library(wlw_miniaudio INTERFACE)
 target_include_directories(wlw_miniaudio SYSTEM INTERFACE miniaudio stb)
+
+# ---- doctest v2.4.12 (MIT): the unit-test framework (header-only) ----
+# doctest.cmake gives doctest_discover_tests(): every TEST_CASE becomes its own CTest test.
+add_library(wlw_doctest INTERFACE)
+target_include_directories(wlw_doctest SYSTEM INTERFACE doctest)

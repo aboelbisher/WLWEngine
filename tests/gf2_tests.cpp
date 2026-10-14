@@ -2,8 +2,10 @@
 // well known.
 #include <vector>
 
-#include "check.h"
+#include "test_helpers.h"
 #include "wlw/math/gf2.h"
+
+TEST_SUITE_BEGIN("gf2");
 
 using namespace wlw::math;
 
@@ -34,34 +36,34 @@ static BitVector Apply(const std::vector<BitVector>& columns, const BitVector& x
   return result;
 }
 
-static void TestBitVector() {
+TEST_CASE("bit vector") {
   BitVector v(130);  // three words
   v.Set(0);
   v.Set(64);
   v.Set(129);
-  CHECK(v.Count() == 3 && v.Get(129) && !v.Get(128));
+  CHECK((v.Count() == 3 && v.Get(129) && !v.Get(128)));
   v.Flip(64);
-  CHECK(v.Count() == 2 && !v.Get(64));
+  CHECK((v.Count() == 2 && !v.Get(64)));
   BitVector w(130);
   w.Set(0);
-  CHECK((v ^ w).Count() == 1 && (v ^ v).Count() == 0 && !(v ^ v).Any());
+  CHECK(((v ^ w).Count() == 1 && (v ^ v).Count() == 0 && !(v ^ v).Any()));
 }
 
-static void TestLightsOut3x3() {
+TEST_CASE("lights out3x3") {
   const auto columns = LightsOut(3);
   BitVector all(9);
   for (int i = 0; i < 9; ++i) all.Set(i);
   const auto solution = SolveGf2(columns, all);
-  CHECK(solution && solution->rank == 9 && solution->null_space.empty());  // every pattern solvable
+  CHECK((solution && solution->rank == 9 && solution->null_space.empty()));  // every pattern solvable
   if (solution) CHECK(Apply(columns, solution->x, 9) == all);
 }
 
-static void TestLightsOut5x5() {
+TEST_CASE("lights out5x5") {
   const auto columns = LightsOut(5);
   BitVector all(25);
   for (int i = 0; i < 25; ++i) all.Set(i);
   const auto solution = SolveGf2(columns, all);
-  CHECK(solution && solution->rank == 23 && solution->null_space.size() == 2);
+  CHECK((solution && solution->rank == 23 && solution->null_space.size() == 2));
   if (!solution) return;
   CHECK(Apply(columns, solution->x, 25) == all);
   for (const BitVector& v : solution->null_space) CHECK(!Apply(columns, v, 25).Any());  // they change nothing
@@ -74,7 +76,7 @@ static void TestLightsOut5x5() {
   CHECK(!SolveGf2(columns, corner).has_value());
 }
 
-static void TestInconsistentAndSampled() {
+TEST_CASE("inconsistent and sampled") {
   // One move that flips cells 0 and 1 can't light only cell 0.
   BitVector move(2);
   move.Set(0);
@@ -89,14 +91,8 @@ static void TestInconsistentAndSampled() {
   const auto solution = SolveGf2(columns, all);
   if (solution) {
     const BitVector sampled = LightestSolution(*solution, /*max_exhaustive=*/0, /*samples=*/200);
-    CHECK(Apply(columns, sampled, 25) == all && sampled.Count() >= 15);
+    CHECK((Apply(columns, sampled, 25) == all && sampled.Count() >= 15));
   }
 }
 
-int main() {
-  TestBitVector();
-  TestLightsOut3x3();
-  TestLightsOut5x5();
-  TestInconsistentAndSampled();
-  return TestResult("gf2");
-}
+TEST_SUITE_END();

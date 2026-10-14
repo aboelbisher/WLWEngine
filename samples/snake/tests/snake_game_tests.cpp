@@ -1,8 +1,9 @@
 // Unit tests for the Snake rules. No engine, no window, no GPU: possible only because the rules
 // live in SnakeGame, separate from rendering. Run: ctest (or the snake_game_tests executable).
-#include <cstdio>
-#include <cstdlib>
 #include <set>
+
+#define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
+#include <doctest.h>
 
 #include "../src/snake_game.h"
 
@@ -10,16 +11,7 @@ using snake::Cell;
 using snake::SnakeGame;
 using Result = SnakeGame::StepResult;
 
-static int g_failures = 0;
-#define CHECK(cond)                                                    \
-  do {                                                                 \
-    if (!(cond)) {                                                     \
-      std::printf("  FAILED: %s (line %d)\n", #cond, __LINE__);        \
-      ++g_failures;                                                    \
-    }                                                                  \
-  } while (0)
-
-static void TestMovesForward() {
+TEST_CASE("moves forward") {
   SnakeGame g(10);
   g.SetFoodForTest({0, 0});
   const Cell head = g.Body().front();
@@ -29,7 +21,7 @@ static void TestMovesForward() {
   CHECK(g.PreviousBody().front() == head);  // the view interpolates previous -> current
 }
 
-static void TestEatingGrowsAndScores() {
+TEST_CASE("eating grows and scores") {
   SnakeGame g(10);
   const Cell head = g.Body().front();
   g.SetFoodForTest({head.x + 1, head.z});
@@ -39,7 +31,7 @@ static void TestEatingGrowsAndScores() {
   CHECK(g.Food() != g.Body().front());  // new food spawned somewhere else
 }
 
-static void TestNoReverseAndBuffering() {
+TEST_CASE("no reverse + turn buffering") {
   SnakeGame g(10);
   g.SetFoodForTest({0, 0});
   g.QueueTurn({-1, 0});  // straight back: ignored
@@ -54,7 +46,7 @@ static void TestNoReverseAndBuffering() {
   CHECK(g.Direction() == (Cell{-1, 0}));
 }
 
-static void TestWallKills() {
+TEST_CASE("wall kills") {
   SnakeGame g(5);
   g.SetBodyForTest({{4, 2}, {3, 2}, {2, 2}}, {1, 0});
   g.SetFoodForTest({0, 0});
@@ -63,7 +55,7 @@ static void TestWallKills() {
   CHECK(g.Body().front() == (Cell{4, 2}));  // didn't move into the wall
 }
 
-static void TestSelfCollisionKills() {
+TEST_CASE("self collision kills") {
   // Head at (2,2) moving down into (2,3), which is part of the body (not the tail).
   SnakeGame g(10);
   g.SetBodyForTest({{2, 2}, {3, 2}, {3, 3}, {2, 3}, {1, 3}}, {0, 1});
@@ -71,7 +63,7 @@ static void TestSelfCollisionKills() {
   CHECK(g.Step() == Result::Died);
 }
 
-static void TestMovingIntoTailCellIsLegal() {
+TEST_CASE("moving into the tail's cell is legal") {
   // A 2x2 loop: the head moves into the cell the tail is leaving on the same step.
   SnakeGame g(10);
   g.SetBodyForTest({{2, 2}, {3, 2}, {3, 3}, {2, 3}}, {0, 1});
@@ -79,7 +71,7 @@ static void TestMovingIntoTailCellIsLegal() {
   CHECK(g.Step() == Result::Moved);
 }
 
-static void TestFoodNeverOnSnake() {
+TEST_CASE("food never spawns on the snake") {
   for (uint32_t seed = 0; seed < 200; ++seed) {
     SnakeGame g(6, seed);
     std::set<std::pair<int, int>> body;
@@ -88,7 +80,7 @@ static void TestFoodNeverOnSnake() {
   }
 }
 
-static void TestSameSeedSameGame() {
+TEST_CASE("same seed, same game") {
   SnakeGame a(10, 42), b(10, 42), c(10, 7);
   CHECK(a.Food() == b.Food());  // deterministic
   bool any_different = false;
@@ -97,7 +89,7 @@ static void TestSameSeedSameGame() {
   (void)c;
 }
 
-static void TestSpeedsUp() {
+TEST_CASE("speeds up with score") {
   SnakeGame g(20);
   const float start = g.MoveInterval();
   for (int i = 0; i < 5; ++i) {
@@ -110,33 +102,12 @@ static void TestSpeedsUp() {
   CHECK(g.MoveInterval() >= 0.07f);
 }
 
-static void TestResetRestoresStart() {
+TEST_CASE("reset") {
   SnakeGame g(5);
   g.SetBodyForTest({{4, 2}, {3, 2}, {2, 2}}, {1, 0});
   g.Step();  // dies
   g.Reset(1);
   CHECK(g.GetState() == SnakeGame::State::Playing);
-  CHECK(g.Score() == 0 && g.Body().size() == 3);
+  CHECK((g.Score() == 0 && g.Body().size() == 3));
 }
 
-int main() {
-  struct { const char* name; void (*fn)(); } tests[] = {
-      {"moves forward", TestMovesForward},
-      {"eating grows and scores", TestEatingGrowsAndScores},
-      {"no reverse + turn buffering", TestNoReverseAndBuffering},
-      {"wall kills", TestWallKills},
-      {"self collision kills", TestSelfCollisionKills},
-      {"moving into the tail's cell is legal", TestMovingIntoTailCellIsLegal},
-      {"food never spawns on the snake", TestFoodNeverOnSnake},
-      {"same seed, same game", TestSameSeedSameGame},
-      {"speeds up with score", TestSpeedsUp},
-      {"reset", TestResetRestoresStart},
-  };
-  for (const auto& t : tests) {
-    const int before = g_failures;
-    t.fn();
-    std::printf("%s %s\n", g_failures == before ? "[ OK ]" : "[FAIL]", t.name);
-  }
-  std::printf("%s\n", g_failures == 0 ? "All tests passed." : "Some tests FAILED.");
-  return g_failures == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
-}

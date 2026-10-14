@@ -5,8 +5,10 @@
 #include <cstring>
 #include <vector>
 
-#include "check.h"
+#include "test_helpers.h"
 #include "wlw/audio/mixer.h"
+
+TEST_SUITE_BEGIN("audio");
 
 using namespace wlw::audio;
 
@@ -71,16 +73,16 @@ class ConstantStream : public StreamSource {
   bool endless_;
 };
 
-void TestStreamsFadeAndCrossfade() {
+TEST_CASE("streams fade and crossfade") {
   Mixer mixer(1000);  // 1000 frames per second: a 0.1 s fade is 100 frames
   ConstantStream a(0.5f), b(-0.5f);
   std::vector<float> out(2 * 400);
   mixer.PlayStream(&a, 0.1f);
   mixer.Mix(out.data(), 50);
-  CHECK(out[0] > 0.0f && out[0] < 0.02f);                   // fading in from silence
+  CHECK((out[0] > 0.0f && out[0] < 0.02f));                   // fading in from silence
   CHECK(Near(out[49 * 2], 0.25f, 0.02f));                   // halfway through the fade
   mixer.Mix(out.data(), 100);
-  CHECK(Near(out[99 * 2], 0.5f) && Near(out[99 * 2 + 1], 0.5f));  // fully in
+  CHECK((Near(out[99 * 2], 0.5f) && Near(out[99 * 2 + 1], 0.5f)));  // fully in
   mixer.SetBusVolume(Bus::Music, 0.5f);
   mixer.Mix(out.data(), 10);
   CHECK(Near(out[0], 0.25f));  // the music bus volume applies
@@ -98,13 +100,13 @@ void TestStreamsFadeAndCrossfade() {
   // Stop: fades to silence, then the slot is free.
   mixer.PlayStream(nullptr, 0.1f);
   mixer.Mix(out.data(), 200);
-  CHECK(Near(out[199 * 2], 0.0f) && Near(out[50 * 2], -0.25f, 0.03f));
+  CHECK((Near(out[199 * 2], 0.0f) && Near(out[50 * 2], -0.25f, 0.03f)));
 
   // A stream that ends stops by itself (its remaining frames are silence).
   ConstantStream short_one(0.5f, 30);
   mixer.PlayStream(&short_one, 0.001f);
   mixer.Mix(out.data(), 60);
-  CHECK(Near(out[20 * 2], 0.5f) && Near(out[45 * 2], 0.0f));
+  CHECK((Near(out[20 * 2], 0.5f) && Near(out[45 * 2], 0.0f)));
   // Muting silences music too.
   mixer.PlayStream(&a, 0.001f);
   mixer.SetMuted(true);
@@ -114,34 +116,34 @@ void TestStreamsFadeAndCrossfade() {
 
 }  // namespace
 
-static void TestDecodeResamplesToStereo() {
+TEST_CASE("decode resamples to stereo") {
   const std::vector<uint8_t> wav = MakeWav(22050, 2205);  // 0.1 s, mono, 22.05 kHz
   const auto data = Decode(wav.data(), wav.size(), kRate);
   CHECK(data.has_value());
   if (!data) return;
   CHECK(data->samples.size() == data->frames * 2);           // stereo
-  CHECK(data->frames > 4700 && data->frames < 4900);         // 0.1 s at 48 kHz
+  CHECK((data->frames > 4700 && data->frames < 4900));         // 0.1 s at 48 kHz
   float peak = 0.0f;
   for (float s : data->samples) peak = std::max(peak, std::fabs(s));
-  CHECK(peak > 0.3f && peak < 0.4f);  // 12000 / 32768
+  CHECK((peak > 0.3f && peak < 0.4f));  // 12000 / 32768
   CHECK(!Decode(wav.data(), 10, kRate).has_value());  // truncated: rejected, no crash
 }
 
-static void TestMixesVolumeAndPan() {
+TEST_CASE("mixes volume and pan") {
   Mixer mixer(kRate);
   const auto sound = mixer.AddSound(Constant(0.5f, 1000));
   auto out = Mix(mixer, 10);
-  CHECK(out[0] == 0.0f && out[19] == 0.0f);  // silence before anything plays
+  CHECK((out[0] == 0.0f && out[19] == 0.0f));  // silence before anything plays
 
   mixer.Play(sound, {.volume = 0.5f});
   out = Mix(mixer, 10);
-  CHECK(Near(out[0], 0.25f) && Near(out[1], 0.25f));
+  CHECK((Near(out[0], 0.25f) && Near(out[1], 0.25f)));
   CHECK(mixer.ActiveVoices() == 1);
 
   mixer.StopAll();
   mixer.Play(sound, {.pan = 1.0f});  // hard right
   out = Mix(mixer, 10);
-  CHECK(Near(out[0], 0.0f) && Near(out[1], 0.5f));
+  CHECK((Near(out[0], 0.0f) && Near(out[1], 0.5f)));
 
   mixer.SetMuted(true);
   out = Mix(mixer, 10);
@@ -152,7 +154,7 @@ static void TestMixesVolumeAndPan() {
   CHECK(Near(out[1], 0.25f));
 }
 
-static void TestPitchAndEnd() {
+TEST_CASE("pitch and end") {
   Mixer mixer(kRate);
   const auto sound = mixer.AddSound(Constant(0.5f, 100));
   mixer.Play(sound, {.pitch = 2.0f});
@@ -166,7 +168,7 @@ static void TestPitchAndEnd() {
   CHECK(mixer.ActiveVoices() == 1);  // a looping sound keeps going
 }
 
-static void TestVoiceLimits() {
+TEST_CASE("voice limits") {
   Mixer mixer(kRate, /*max_voices=*/6);
   mixer.max_instances_per_sound = 3;
   const auto pop = mixer.AddSound(Constant(0.1f, 10000));
@@ -185,21 +187,13 @@ static void TestVoiceLimits() {
   CHECK(mixer.ActiveVoices() == 6);  // full: new sounds steal the oldest voices, never more
 }
 
-static void TestManyPlaysInOneFrame() {
+TEST_CASE("many plays in one frame") {
   Mixer mixer(kRate);
   const auto sound = mixer.AddSound(Constant(0.9f, 100));
   for (int i = 0; i < 1000; ++i) mixer.Play(sound);  // more than the command queue holds
   const auto out = Mix(mixer, 50);
-  for (float s : out) CHECK(s <= 1.0f && s >= -1.0f);  // clipped, never wraps around
+  for (float s : out) CHECK((s <= 1.0f && s >= -1.0f));  // clipped, never wraps around
   CHECK(mixer.ActiveVoices() <= 4);
 }
 
-int main() {
-  TestDecodeResamplesToStereo();
-  TestMixesVolumeAndPan();
-  TestPitchAndEnd();
-  TestVoiceLimits();
-  TestManyPlaysInOneFrame();
-  TestStreamsFadeAndCrossfade();
-  return TestResult("audio");
-}
+TEST_SUITE_END();
