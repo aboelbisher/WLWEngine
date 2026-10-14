@@ -37,16 +37,15 @@ Where things stand (2026-10-15):
   main, manual runs and `bench/**` branches (name a perf work branch `bench/...` to get CI numbers). Known hot
   spots: render/gather 10k = 1.86 ms on the Pixel 4 (GetAABB + world matrices recomputed per node: Phases 2.2,
   4.5), fx/particles instances 5k = 440 us (1.6), transform/move flat 10k = 1.3 ms (2.2).
-- From 0.8: games get `WLW_OPTIMIZE_ENGINE_IN_DEBUG` (engine -O2 in their Debug builds) and `/W4` warnings once
-  they move their submodule up. Checked 2026-10-15: Bluzzle desktop Debug builds against 0.8 with zero warnings,
-  its tests pass, it runs. Header-only engine code (node.h transforms, templates) stays -O0 in a game's Debug
+- Games: Bluzzle and Threadlock are on engine v0.1.0 (2026-10-15; glm dropped from their vcpkg.json). Both
+  (desktop + Android) and Threadlock (Android) build with zero warnings, their tests pass, Threadlock runs on the Pixel 4. They get
+  `WLW_OPTIMIZE_ENGINE_IN_DEBUG` (engine -O2 in their Debug builds) and the `/W4` warnings from 0.8. Header-only engine code (node.h transforms, templates) stays -O0 in a game's Debug
   build: moving hot code into .cpp files (Phase 2.2) is what makes it fast there.
 - From 0.6: on desktop NVIDIA the frame's first glGet waits for the driver thread (frame pacing). The renderer
   calls `glGetIntegerv(GL_FRAMEBUFFER_BINDING)` every frame; caching it would stop that wait landing in our code
   (it moves, it isn't removed: worth checking in Phase 4). Tracy in a phone game needs the INTERNET permission
   in the game's profile build; nobody has profiled on the Pixel 4 yet.
-- Open items: Bluzzle and Threadlock still pin the engine submodule from before 0.1; moving them up needs no
-  code changes (checked: they don't rely on `<sstream>` coming through `node.h`). Typing in the console on
+- Open items: typing in the console on
   phones waits for GameTextInput (D9). Nobody has typed into the new console yet: the owner was asked to
   try ` in Snake.
 - Local machine: use `build/win-debug` and `build/win-release` (`build/windows-debug` is stale), from a VS 18
