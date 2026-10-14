@@ -193,8 +193,8 @@ benchmarks/   wlw_benchmarks (nanobench; top-level only, desktop + Android execu
               particles 5k), ui (text 1k glyphs), audio (mix 24 voices). Add: WLW_BENCHMARK("group") { ctx.Run("group/name",
               [&] { ... }); } (names are stable: baselines match by name). --out JSON, --baseline compare (warning past
               --threshold %, never a failure), --smoke = CTest "bench: smoke" (label bench). Baselines in
-              benchmarks/baselines/: windows-local (owner's Ryzen 7 9800X3D, MSVC Release), pixel4 (Release, taskset 80 =
-              prime core: unpinned runs jump ~17% between big and prime cores), linux-ci (bench.yml artifact).
+              benchmarks/baselines/: windows-local (owner's Ryzen 7 9800X3D, MSVC Release), linux-ci (bench.yml
+              artifact), optional per-phone ones (<device>.json, e.g. pixel4; see "Benchmarks" below).
 third_party/  glad (desktop only), stb, tinygltf + nlohmann json (also its own target wlw_json), miniaudio 0.11.25, stb_vorbis, Dear ImGui 1.92.9b,
               doctest 2.4.12, nanobench 4.3.11 (wlw_nanobench), Tracy 0.14.1 client (target wlw_tracy, only with WLW_PROFILE) (vendored; versions and licences in third_party/README.md)
 cmake/WLWHelpers.cmake  wlw_add_game(), wlw_add_assets(), wlw_set_warnings()
@@ -242,15 +242,20 @@ New code must pass all of them: no MSVC-only includes, no UB, no leaks. The Andr
 ## Benchmarks
 Numbers only from optimized builds (a Debug run prints a warning). `.github/workflows/bench.yml` runs them on Linux
 clang Release on main, manual runs and `bench/**` branches (summary table + `bench-linux-ci` artifact; refresh
-`linux-ci.json` from that artifact). Performance work: run before and after, compare with `--baseline`.
+`linux-ci.json` from that artifact). Performance work: run before and after, compare with `--baseline`. The required
+comparison is desktop (`windows-local.json`) + Linux CI; phone numbers are optional, taken when a phone is at hand.
 ```
-cmake --preset windows-release -B buildwin-release ; cmake --build buildwin-release --target wlw_benchmarks
-.uildwin-releaseenchmarkswlw_benchmarks.exe [filter] --baseline benchmarksaselineswindows-local.json [--out run.json]
+cmake --preset windows-release -B build\win-release ; cmake --build build\win-release --target wlw_benchmarks
+.\build\win-release\benchmarks\wlw_benchmarks.exe [filter] --baseline benchmarks\baselines\windows-local.json [--out run.json]
 ```
-Pixel 4: `cmake --preset android-arm64 -B buildandroid-release -DCMAKE_BUILD_TYPE=Release`, build `wlw_benchmarks`, then
-`adb push` it and `tests/data/LilitaOne-Regular.ttf` to `/data/local/tmp/wlw/` and
-`adb shell "cd /data/local/tmp/wlw && taskset 80 ./wlw_benchmarks --data . --baseline pixel4.json"` (push the baseline too;
-Git Bash needs `MSYS_NO_PATHCONV=1` for adb paths).
+Any Android phone (optional): one baseline per device, `benchmarks/baselines/<device>.json` (e.g. `pixel4.json`), and a
+phone is only ever compared with its own baseline. Build: `cmake --preset android-arm64 -B build\android-release
+-DCMAKE_BUILD_TYPE=Release`, then `cmake --build build\android-release --target wlw_benchmarks`. Run: `adb push` the binary,
+`tests/data/LilitaOne-Regular.ttf` and the device's baseline to `/data/local/tmp/wlw/`, then
+`adb shell "cd /data/local/tmp/wlw && taskset <mask> ./wlw_benchmarks --data . --baseline <device>.json"`. Pin to one fast
+core, or the scheduler moves it between core types (Pixel 4: `taskset 80` = the prime core; unpinned runs differ ~17%).
+Git Bash needs `MSYS_NO_PATHCONV=1` for adb paths. The emulator runs on the PC's x86 CPU: its numbers don't count.
+Firebase Test Lab (roadmap 6.6) is the planned way to get numbers from phones the owner doesn't have.
 
 ## Profiling
 Build with a profile preset: `windows-profile` or `android-arm64-profile` (RelWithDebInfo = optimized with symbols,

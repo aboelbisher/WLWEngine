@@ -27,8 +27,9 @@ Where things stand (end of 2026-10-14):
   run in parallel processes (no shared temp files); global state (log filters, cvars) is restored per case, and
   test cvars are static with unique "test.<case>.*" names.
 - Benchmarks (from 0.7): `wlw_benchmarks` + baselines in `benchmarks/baselines/` (windows-local, pixel4, linux-ci);
-  CLAUDE.md "Benchmarks" has the commands. Performance steps run it before and after with `--baseline`. Pixel 4
-  runs must be pinned (`taskset 80`, prime core): unpinned runs jump ~17% between cores. `bench.yml` runs on
+  CLAUDE.md "Benchmarks" has the commands. Performance steps run it before and after with `--baseline` on
+  desktop + CI; phone runs are optional (owner's decision 2026-10-14: the engine isn't tied to one phone). Phone
+  runs must be pinned to one fast core (Pixel 4: `taskset 80`): unpinned runs jump ~17% between cores. `bench.yml` runs on
   main, manual runs and `bench/**` branches (name a perf work branch `bench/...` to get CI numbers). Known hot
   spots: render/gather 10k = 1.86 ms on the Pixel 4 (GetAABB + world matrices recomputed per node: Phases 2.2,
   4.5), fx/particles instances 5k = 440 us (1.6), transform/move flat 10k = 1.3 ms (2.2).
@@ -60,8 +61,9 @@ Where things stand (end of 2026-10-14):
 ## Definition of done (every step)
 - CI green on every platform that exists at that point (from 0.2 on).
 - New logic has unit tests; rendering changes have golden-image tests (from 0.3 on); performance
-  work has benchmark numbers before and after, plus Pixel 4 numbers at -O2 when it is GPU or
-  mobile work.
+  work has benchmark numbers before and after on desktop (`windows-local`) and Linux CI. Phone
+  numbers (any Android device, compared only with its own baseline) are optional: taken when a
+  phone is at hand, never a blocker. Firebase Test Lab (6.6) brings a device matrix later.
 - Bluzzle (desktop and Android) and Threadlock (Android) build and run with the change; Snake
   compiles.
 - CLAUDE.md and CHANGELOG.md updated; breaking changes come with migration notes.
@@ -113,7 +115,9 @@ libunibreak (zlib), msdfgen (MIT), Jolt (MIT), Box2D v3 (MIT), ImGuizmo (MIT), F
 - Metal, macOS and iOS need a Mac (and an iPhone; the Apple Developer Program to ship). Until then
   CI can only compile them.
 - Vulkan on Windows: the Vulkan SDK installed (validation layers, tools).
-- Test GPUs: Adreno (Pixel 4) plus at least one Mali phone; Firebase Test Lab for a wider matrix.
+- Devices: development isn't tied to any phone the owner has. Phone checks use whatever Android
+  device is at hand (a Pixel 4 / Adreno 640 was used so far); Firebase Test Lab (6.6) for a matrix
+  (Adreno, Mali, low end) without owning them.
 - Bluzzle is live in testing: its releases pin a tagged engine version (0.9).
 
 ## Phase 0: Safety net and tooling
@@ -153,7 +157,7 @@ libunibreak (zlib), msdfgen (MIT), Jolt (MIT), Box2D v3 (MIT), ImGuizmo (MIT), F
 - [ ] **1.2 Render scale.** `Viewport::SetRenderScale` for the 3D picture (UI stays native),
   bilinear upscale, a Quality hook, shown in the engine panel.
 - [ ] **1.3 Fragment precision.** `mediump` by default on GLES; `highp` for positions, UVs, depth
-  and shadow coordinates; GPU time measured on Pixel 4.
+  and shadow coordinates; GPU time measured on a real phone (whichever is at hand, or Test Lab).
 - [ ] **1.4 Cofactor normals.** Replace the per-vertex `inverse()` and the CPU inverse; correct for
   mirrored transforms; tested against inverse-transpose.
 - [ ] **1.5 Skybox after opaques.** Depth test `LEQUAL`; golden image.
@@ -262,7 +266,7 @@ libunibreak (zlib), msdfgen (MIT), Jolt (MIT), Box2D v3 (MIT), ImGuizmo (MIT), F
 - [ ] **5.5 Vulkan on Android.** A device policy (Vulkan 1.1+, Android 10+, a driver denylist, GL
   fallback), Swappy for Vulkan, validation layers in debug APKs, AGI profiling.
 - [ ] **5.6 Parity and default.** Golden images on lavapipe (CI) and real GPUs; Bluzzle and
-  Threadlock on Vulkan (Windows, Pixel 4, emulator); CPU, GPU and power compared with GL; the
+  Threadlock on Vulkan (Windows, a real phone or Test Lab, emulator); CPU, GPU and power compared with GL; the
   default backend per platform chosen from the numbers.
 
 ## Phase 6: Android platform
