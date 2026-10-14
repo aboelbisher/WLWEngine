@@ -21,8 +21,8 @@ struct InstanceData {
 // a flat round dot needs no rotation, scale or normals - only where, how big and what colour. The
 // GPU builds its quad in the vertex shader (shaders/sprite.vert).
 struct SpriteInstance {
-  glm::vec2 position{0.0f};  // centre, on the batch node's z = 0 plane (node units)
-  float size = 1.0f;         // diameter (node units)
+  glm::vec2 position{0.0f};      // centre, on the batch node's z = 0 plane (node units)
+  float size = 1.0f;             // diameter (node units)
   uint32_t color = 0xFFFFFFFFu;  // RGBA8, see PackColor: read by the GPU as 4 bytes scaled to 0..1
 };
 static_assert(sizeof(SpriteInstance) == 16, "the GPU reads it with a 16-byte stride");

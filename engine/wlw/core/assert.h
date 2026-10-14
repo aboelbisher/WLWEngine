@@ -71,11 +71,11 @@ bool VerifyFailed(const char* expression, const char* file, int line, const char
 #define WLW_DETAIL_FORMAT(...) " " __VA_ARGS__
 
 #if WLW_ASSERTS_ENABLED
-#define WLW_ASSERT(Condition, ...)                                                            \
-  do {                                                                                        \
-    if (!(Condition)) [[unlikely]] {                                                          \
-      ::wlw::detail::AssertFailed(#Condition, __FILE__, __LINE__, WLW_DETAIL_FORMAT(__VA_ARGS__));            \
-    }                                                                                         \
+#define WLW_ASSERT(Condition, ...)                                                                 \
+  do {                                                                                             \
+    if (!(Condition)) [[unlikely]] {                                                               \
+      ::wlw::detail::AssertFailed(#Condition, __FILE__, __LINE__, WLW_DETAIL_FORMAT(__VA_ARGS__)); \
+    }                                                                                              \
   } while (0)
 #else
 // Not evaluated, but still compiled (so it can't rot) and its variables count as used.
@@ -86,6 +86,8 @@ bool VerifyFailed(const char* expression, const char* file, int line, const char
 #endif
 
 #define WLW_VERIFY(Condition, ...) \
-  (static_cast<bool>(Condition) ? true : ::wlw::detail::VerifyFailed(#Condition, __FILE__, __LINE__, WLW_DETAIL_FORMAT(__VA_ARGS__)))
+  (static_cast<bool>(Condition)    \
+       ? true                      \
+       : ::wlw::detail::VerifyFailed(#Condition, __FILE__, __LINE__, WLW_DETAIL_FORMAT(__VA_ARGS__)))
 
 #define WLW_UNREACHABLE(...) ::wlw::detail::Unreachable(__FILE__, __LINE__, WLW_DETAIL_FORMAT(__VA_ARGS__))

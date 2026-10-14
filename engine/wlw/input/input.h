@@ -12,9 +12,33 @@ namespace wlw::input {
 // AKEYCODE_* on Android - the emulator's arrow keys arrive as D-pad keys). Back = Android's Back
 // button (gesture or key); on desktop, Escape plays that role (see Application).
 enum class Key : uint8_t {
-  Unknown = 0, Up, Down, Left, Right, Space, Enter, Escape, W, A, S, D, I, P, F1, Back,
+  Unknown = 0,
+  Up,
+  Down,
+  Left,
+  Right,
+  Space,
+  Enter,
+  Escape,
+  W,
+  A,
+  S,
+  D,
+  I,
+  P,
+  F1,
+  Back,
   // Text editing (the console, the debug UI) and its toggle key (` on US layouts)
-  Tab, Backspace, Delete, Home, End, PageUp, PageDown, Control, Shift, Grave,
+  Tab,
+  Backspace,
+  Delete,
+  Home,
+  End,
+  PageUp,
+  PageDown,
+  Control,
+  Shift,
+  Grave,
   Count
 };
 

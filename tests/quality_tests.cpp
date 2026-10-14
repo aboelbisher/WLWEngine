@@ -89,7 +89,7 @@ TEST_CASE("steps up slowly and backs off") {
   Quality many;
   many.Configure({.levels = 2, .settle_seconds = 0.0f});
   for (int i = 0; i < 6; ++i) {
-    Run(many, 4.0f, 15.0f);  // down (the smoothed reading takes ~1.3 s to climb from 4 ms, then 2 s)
+    Run(many, 4.0f, 15.0f);   // down (the smoothed reading takes ~1.3 s to climb from 4 ms, then 2 s)
     Run(many, 100.0f, 4.0f);  // up again
   }
   CHECK(Near(many.UpWait(1), 80.0f));

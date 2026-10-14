@@ -130,14 +130,22 @@ void DebugUI::FeedKeyboard() {
     ImGuiKey imgui;
   };
   static constexpr Mapping kKeys[] = {
-      {input::Key::Up, ImGuiKey_UpArrow},       {input::Key::Down, ImGuiKey_DownArrow},
-      {input::Key::Left, ImGuiKey_LeftArrow},   {input::Key::Right, ImGuiKey_RightArrow},
-      {input::Key::Enter, ImGuiKey_Enter},      {input::Key::Escape, ImGuiKey_Escape},
-      {input::Key::Space, ImGuiKey_Space},      {input::Key::Tab, ImGuiKey_Tab},
-      {input::Key::Backspace, ImGuiKey_Backspace}, {input::Key::Delete, ImGuiKey_Delete},
-      {input::Key::Home, ImGuiKey_Home},        {input::Key::End, ImGuiKey_End},
-      {input::Key::PageUp, ImGuiKey_PageUp},    {input::Key::PageDown, ImGuiKey_PageDown},
-      {input::Key::A, ImGuiKey_A},              {input::Key::Control, ImGuiMod_Ctrl},
+      {input::Key::Up, ImGuiKey_UpArrow},
+      {input::Key::Down, ImGuiKey_DownArrow},
+      {input::Key::Left, ImGuiKey_LeftArrow},
+      {input::Key::Right, ImGuiKey_RightArrow},
+      {input::Key::Enter, ImGuiKey_Enter},
+      {input::Key::Escape, ImGuiKey_Escape},
+      {input::Key::Space, ImGuiKey_Space},
+      {input::Key::Tab, ImGuiKey_Tab},
+      {input::Key::Backspace, ImGuiKey_Backspace},
+      {input::Key::Delete, ImGuiKey_Delete},
+      {input::Key::Home, ImGuiKey_Home},
+      {input::Key::End, ImGuiKey_End},
+      {input::Key::PageUp, ImGuiKey_PageUp},
+      {input::Key::PageDown, ImGuiKey_PageDown},
+      {input::Key::A, ImGuiKey_A},
+      {input::Key::Control, ImGuiMod_Ctrl},
       {input::Key::Shift, ImGuiMod_Shift},
   };
   ImGuiIO& io = ImGui::GetIO();

@@ -33,11 +33,8 @@ void DrawIcon(Canvas& canvas, Icon icon, const Rect& box, const core::Color& col
   const auto line = [&](glm::vec2 a, glm::vec2 b, float w) { canvas.Line(a, b, w * s, color); };
 
   switch (icon) {
-    case Icon::None:
-      break;
-    case Icon::Play:
-      canvas.Triangle(P(-0.5f, -0.78f), P(0.82f, 0.0f), P(-0.5f, 0.78f), color);
-      break;
+    case Icon::None: break;
+    case Icon::Play: canvas.Triangle(P(-0.5f, -0.78f), P(0.82f, 0.0f), P(-0.5f, 0.78f), color); break;
     case Icon::Pause:
       canvas.FillRect(R(-0.62f, -0.72f, -0.16f, 0.72f), color, 0.12f * s);
       canvas.FillRect(R(0.16f, -0.72f, 0.62f, 0.72f), color, 0.12f * s);
@@ -90,9 +87,9 @@ void DrawIcon(Canvas& canvas, Icon icon, const Rect& box, const core::Color& col
       }
       break;
     case Icon::Trophy:
-      canvas.FillRect(R(-0.5f, -0.76f, 0.5f, 0.16f), color, 0.46f * s);   // the bowl's round bottom
-      canvas.FillRect(R(-0.5f, -0.76f, 0.5f, -0.3f), color, 0.06f * s);   // ...and its square top
-      canvas.Arc(P(-0.5f, -0.4f), 0.24f * s, 0.13f * s, kPi, kPi, color);   // handles
+      canvas.FillRect(R(-0.5f, -0.76f, 0.5f, 0.16f), color, 0.46f * s);    // the bowl's round bottom
+      canvas.FillRect(R(-0.5f, -0.76f, 0.5f, -0.3f), color, 0.06f * s);    // ...and its square top
+      canvas.Arc(P(-0.5f, -0.4f), 0.24f * s, 0.13f * s, kPi, kPi, color);  // handles
       canvas.Arc(P(0.5f, -0.4f), 0.24f * s, 0.13f * s, 0.0f, kPi, color);
       line(P(0.0f, 0.1f), P(0.0f, 0.48f), 0.2f);
       canvas.FillRect(R(-0.42f, 0.46f, 0.42f, 0.76f), color, 0.08f * s);

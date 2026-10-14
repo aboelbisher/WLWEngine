@@ -41,8 +41,8 @@ size_t TexelBytes(TextureFormat format) {
     case TextureFormat::R8: return 1;
     case TextureFormat::RGB8: return 3;
     case TextureFormat::RGBA8: return 4;
-    case TextureFormat::R16F: return 4;       // one float
-    case TextureFormat::RGBA16F: return 16;   // four floats
+    case TextureFormat::R16F: return 4;      // one float
+    case TextureFormat::RGBA16F: return 16;  // four floats
   }
   return 4;
 }

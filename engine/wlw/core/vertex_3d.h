@@ -6,11 +6,11 @@
 
 namespace wlw::core {
 
-	struct Vertex3D {
-		Vector3 position;
-		Color color = {1.0f, 1.0f, 1.0f, 1.0f};
-		Vector3 normal;
-		Vector2 texCoords; 
- };
+struct Vertex3D {
+  Vector3 position;
+  Color color = {1.0f, 1.0f, 1.0f, 1.0f};
+  Vector3 normal;
+  Vector2 texCoords;
+};
 
-} // namespace wlw::core
+}  // namespace wlw::core

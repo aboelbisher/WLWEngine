@@ -19,7 +19,8 @@ std::vector<std::string> g_log;
 // Records every hook as "<name>:<hook>".
 class Recorder : public System {
  public:
-  explicit Recorder(std::string name, bool handles_back = false) : name_(std::move(name)), handles_back_(handles_back) {}
+  explicit Recorder(std::string name, bool handles_back = false)
+      : name_(std::move(name)), handles_back_(handles_back) {}
   void OnStart() override { Log("start"); }
   void OnUpdate(float) override { Log("update"); }
   bool OnBack() override {

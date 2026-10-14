@@ -83,7 +83,8 @@ int ConsoleWindow::InputCallback(ImGuiInputTextCallbackData* data) {
     data->InsertChars(0, text.c_str());
   };
   if (data->EventFlag == ImGuiInputTextFlags_CallbackCompletion) {
-    const ConsoleModel::Completion completion = self->model_.Complete({data->Buf, static_cast<size_t>(data->BufTextLen)});
+    const ConsoleModel::Completion completion =
+        self->model_.Complete({data->Buf, static_cast<size_t>(data->BufTextLen)});
     if (completion.text != std::string_view(data->Buf, static_cast<size_t>(data->BufTextLen))) replace(completion.text);
     if (!completion.candidates.empty()) {
       std::string list;

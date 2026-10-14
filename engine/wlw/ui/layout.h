@@ -14,7 +14,9 @@ namespace wlw::ui {
 inline Rect Centered(glm::vec2 center, glm::vec2 size) { return {center - size * 0.5f, center + size * 0.5f}; }
 
 // `rect` shrunk by `amount` on every side (negative grows it).
-inline Rect Inset(const Rect& rect, float amount) { return {rect.min + glm::vec2(amount), rect.max - glm::vec2(amount)}; }
+inline Rect Inset(const Rect& rect, float amount) {
+  return {rect.min + glm::vec2(amount), rect.max - glm::vec2(amount)};
+}
 
 // Row `index` of `count` equal rows stacked top to bottom in `area`, `gap` apart.
 inline Rect Row(const Rect& area, int index, int count, float gap = 10.0f) {

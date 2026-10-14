@@ -25,9 +25,7 @@ std::shared_ptr<rendering::Shader> EngineShader(const std::string& file) {
   return shader;
 }
 
-std::shared_ptr<ShaderMaterial> Material(const std::string& file) {
-  return ShaderMaterial::Create(EngineShader(file));
-}
+std::shared_ptr<ShaderMaterial> Material(const std::string& file) { return ShaderMaterial::Create(EngineShader(file)); }
 
 // The passes of `viewport` drawn with `material` (an effect's passes are found by their materials,
 // so passes added or removed around them don't matter).

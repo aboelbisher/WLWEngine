@@ -22,15 +22,15 @@
 namespace wlw::app {
 
 struct QualitySettings {
-  int levels = 3;              // 0 = the lowest
-  int start = -1;              // the level before anything is measured: -1 = the saved one, else the highest
-  float budget_ms = 16.6f;     // the frame time to fit in (16.6 = 60 fps)
-  float down_at = 0.85f;       // GPU time above budget x this ...
-  float slow_frame_at = 1.25f; // ... or frames longer than budget x this (missing vsync) ...
-  float down_seconds = 2.0f;   // ... for this long: one level down
-  float up_at = 0.55f;         // GPU time below budget x this (and frames on time) ...
-  float up_seconds = 10.0f;    // ... for this long: one level up; doubled each time that level failed
-  float settle_seconds = 3.0f; // readings ignored after a change or a resume (new buffers, warm-up)
+  int levels = 3;               // 0 = the lowest
+  int start = -1;               // the level before anything is measured: -1 = the saved one, else the highest
+  float budget_ms = 16.6f;      // the frame time to fit in (16.6 = 60 fps)
+  float down_at = 0.85f;        // GPU time above budget x this ...
+  float slow_frame_at = 1.25f;  // ... or frames longer than budget x this (missing vsync) ...
+  float down_seconds = 2.0f;    // ... for this long: one level down
+  float up_at = 0.55f;          // GPU time below budget x this (and frames on time) ...
+  float up_seconds = 10.0f;     // ... for this long: one level up; doubled each time that level failed
+  float settle_seconds = 3.0f;  // readings ignored after a change or a resume (new buffers, warm-up)
 };
 
 class Quality {

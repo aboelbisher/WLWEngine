@@ -86,8 +86,8 @@ void EnginePanel::OnDebugUI() {
       const std::string shader = has_shader ? pass.material->GetShader()->Name() : "copy";
       char gpu[32] = "";
       if (i < gpu_ms.size() && gpu_ms[i] >= 0.0f) std::snprintf(gpu, sizeof(gpu), ", GPU %.2f ms", gpu_ms[i]);
-      ImGui::BulletText("%s x%.2f%s%s%s", shader.c_str(), pass.scale, pass.name.empty() ? "" : " as ", pass.name.c_str(),
-                        gpu);
+      ImGui::BulletText("%s x%.2f%s%s%s", shader.c_str(), pass.scale, pass.name.empty() ? "" : " as ",
+                        pass.name.c_str(), gpu);
     }
   };
   post_line("Screen", window.GetScreen());

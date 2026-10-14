@@ -15,7 +15,7 @@
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <windows.h>  // GetModuleFileNameW (after glad/GLFW, which set up the GL macros)
-#include <io.h>  // _commit
+#include <io.h>       // _commit
 #elif defined(__APPLE__)
 #include <mach-o/dyld.h>
 #endif
@@ -97,10 +97,11 @@ std::optional<std::vector<uint8_t>> ReadFile(const std::string& path) {
   return std::vector<uint8_t>(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
 }
 
-
 // ---- Save data ----
 namespace {
-std::filesystem::path FromUtf8(const std::string& path) { return std::filesystem::path(std::u8string(path.begin(), path.end())); }
+std::filesystem::path FromUtf8(const std::string& path) {
+  return std::filesystem::path(std::u8string(path.begin(), path.end()));
+}
 std::string ToUtf8(const std::filesystem::path& path) {
   const std::u8string text = path.u8string();
   return std::string(text.begin(), text.end());
@@ -296,8 +297,10 @@ class GlfwWindow : public Window {
     if (button != GLFW_MOUSE_BUTTON_LEFT) return;
     double x = 0, y = 0;
     glfwGetCursorPos(w, &x, &y);
-    if (action == GLFW_PRESS) From(w)->input_.OnPointerDown((float)x, (float)y);
-    else From(w)->input_.OnPointerUp((float)x, (float)y);
+    if (action == GLFW_PRESS)
+      From(w)->input_.OnPointerDown((float)x, (float)y);
+    else
+      From(w)->input_.OnPointerUp((float)x, (float)y);
   }
 
   static void OnCursorPos(GLFWwindow* w, double x, double y) {

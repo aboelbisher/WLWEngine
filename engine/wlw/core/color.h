@@ -3,10 +3,10 @@
 namespace wlw::core {
 
 struct Color {
-	float r;
-	float g;
-	float b;
-	float a;
+  float r;
+  float g;
+  float b;
+  float a;
 };
 
-} // namespace wlw::core
+}  // namespace wlw::core

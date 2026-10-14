@@ -79,8 +79,8 @@ class SpriteBatch : public Node3D {
   AABB WorldBounds() const {
     const glm::mat4 world = GetModelMatrix();
     glm::vec3 lo(std::numeric_limits<float>::max()), hi(std::numeric_limits<float>::lowest());
-    for (const glm::vec2 corner : {bounds_min_, bounds_max_, glm::vec2(bounds_min_.x, bounds_max_.y),
-                                   glm::vec2(bounds_max_.x, bounds_min_.y)}) {
+    for (const glm::vec2 corner :
+         {bounds_min_, bounds_max_, glm::vec2(bounds_min_.x, bounds_max_.y), glm::vec2(bounds_max_.x, bounds_min_.y)}) {
       const glm::vec3 p(world * glm::vec4(corner, 0.0f, 1.0f));
       lo = glm::min(lo, p);
       hi = glm::max(hi, p);

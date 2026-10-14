@@ -46,7 +46,8 @@ void Context::Run(const std::string& name, const std::function<void()>& op) {
   bench_.run(name, op);
   const ankerl::nanobench::Result& result = bench_.results().back();
   using Measure = ankerl::nanobench::Result::Measure;
-  results_.push_back({name, result.median(Measure::elapsed) * 1e6, result.medianAbsolutePercentError(Measure::elapsed) * 100.0});
+  results_.push_back(
+      {name, result.median(Measure::elapsed) * 1e6, result.medianAbsolutePercentError(Measure::elapsed) * 100.0});
 }
 
 }  // namespace wlw::bench

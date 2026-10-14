@@ -107,8 +107,8 @@ TEST_CASE("shadows") {
   auto viewport = MakeViewport();
   viewport->SetCamera(std::make_shared<FixedCamera>(core::Vector3{0, 5, 6}, core::Vector3{0, 0, 0}));
   AddSun(*viewport, 0.3f)->SetCastsShadows(true);
-  auto ground = AddMesh(*viewport, utils::createPlaneWithNormals(8.0f, 8.0f, Color{0.7f, 0.7f, 0.75f, 1.0f}),
-                        Opaque(), {0, 0, 0});
+  auto ground = AddMesh(*viewport, utils::createPlaneWithNormals(8.0f, 8.0f, Color{0.7f, 0.7f, 0.75f, 1.0f}), Opaque(),
+                        {0, 0, 0});
   ground->SetReceivesShadow(true);
   for (int i = 0; i < 3; ++i) {
     auto cube = AddMesh(*viewport, utils::createCubeWithNormals(1.0f, Color{0.3f, 0.6f, 0.9f, 1.0f}), Opaque(),
@@ -204,7 +204,8 @@ TEST_CASE("canvas") {
   canvas.Line({130, 240}, {240, 205}, 4.0f, Color{0.9f, 0.9f, 0.3f, 1.0f});
   canvas.Arc({60, 150}, 26, 8, 0.5f, 3.5f, Color{1.0f, 0.9f, 0.9f, 1.0f});
   const auto glow = utils::RadialFalloffTexture(64);
-  canvas.Image({{150, 180}, {250, 256}}, glow, {.tint = {1.0f, 0.5f, 0.1f, 1.0f}, .blend = rendering::BlendMode::Additive});
+  canvas.Image({{150, 180}, {250, 256}}, glow,
+               {.tint = {1.0f, 0.5f, 0.1f, 1.0f}, .blend = rendering::BlendMode::Additive});
   const auto font = ui::Font::Load(WLW_TEST_FONT);
   REQUIRE(font != nullptr);
   canvas.Text(*font, "Golden 0.3", {128, 52}, 34, ui::Align::Center,

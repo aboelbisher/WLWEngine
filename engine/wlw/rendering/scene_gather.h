@@ -56,9 +56,9 @@ struct VisibleSet {
     glm::mat4 model;
     float depth;
   };
-  std::vector<Node> nodes;      // in gather order
+  std::vector<Node> nodes;  // in gather order
   std::vector<Sprites> sprites;
-  int culled = 0;               // drawables and sprite batches outside the frustum
+  int culled = 0;  // drawables and sprite batches outside the frustum
 
   void Clear() {
     nodes.clear();

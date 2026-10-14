@@ -68,10 +68,13 @@ TEST_CASE("plane") {
   const auto& index = mesh->GetIndices();
   CHECK((v.size() == 4 && index.size() == 6));
   for (size_t i = 0; i + 2 < index.size(); i += 3) {
-    const glm::vec3 a = ToGlm(v[index[i]].position), b = ToGlm(v[index[i + 1]].position), c = ToGlm(v[index[i + 2]].position);
+    const glm::vec3 a = ToGlm(v[index[i]].position), b = ToGlm(v[index[i + 1]].position),
+                    c = ToGlm(v[index[i + 2]].position);
     CHECK(glm::cross(b - a, c - a).y > 0.0f);
   }
-  for (const auto& vertex : v) CHECK((Near(vertex.normal.y, 1.0f) && Near(std::abs(vertex.position.x), 2.0f) && Near(std::abs(vertex.position.z), 1.0f)));
+  for (const auto& vertex : v)
+    CHECK((Near(vertex.normal.y, 1.0f) && Near(std::abs(vertex.position.x), 2.0f) &&
+           Near(std::abs(vertex.position.z), 1.0f)));
 }
 
 TEST_SUITE_END();

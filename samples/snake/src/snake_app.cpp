@@ -16,7 +16,8 @@ namespace {
 
 using wlw::core::Color;
 
-std::shared_ptr<wlw::core::Model<wlw::core::Vertex3D>> MakeModel(std::shared_ptr<wlw::core::Mesh<wlw::core::Vertex3D>> mesh) {
+std::shared_ptr<wlw::core::Model<wlw::core::Vertex3D>> MakeModel(
+    std::shared_ptr<wlw::core::Mesh<wlw::core::Vertex3D>> mesh) {
   auto model = std::make_shared<wlw::core::Model<wlw::core::Vertex3D>>();
   model->meshes.push_back(std::move(mesh));
   return model;
@@ -67,8 +68,9 @@ void SnakeApp::OnStart() {
   SetupCameras();
 
   Restart();
-  WLW_LOG_INFO("Steer: arrows / swipe.  Restart after game over: Space / tap.  Interpolation: I.  "
-               "Projection: P.  Quit: Esc / Back.");
+  WLW_LOG_INFO(
+      "Steer: arrows / swipe.  Restart after game over: Space / tap.  Interpolation: I.  "
+      "Projection: P.  Quit: Esc / Back.");
 }
 
 void SnakeApp::SetupCameras() {
@@ -149,8 +151,7 @@ void SnakeApp::OnFixedUpdate(float dt) {
         move_timer_ = 0.0f;
         UpdateTitle();
         return;
-      case SnakeGame::StepResult::Moved:
-        break;
+      case SnakeGame::StepResult::Moved: break;
     }
   }
 }
@@ -161,7 +162,7 @@ void SnakeApp::OnFixedUpdate(float dt) {
 void SnakeApp::OnUpdate(float dt) {
   ReadInput();
   FitPerspectiveCameraToScreen();  // the orthographic camera fits itself (SetVisibleArea)
-  food_spin_ += 120.0f * dt;  // degrees per second: purely visual, so per-frame dt is fine
+  food_spin_ += 120.0f * dt;       // degrees per second: purely visual, so per-frame dt is fine
   particles_.Update(dt);
 }
 

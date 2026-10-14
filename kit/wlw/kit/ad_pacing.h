@@ -12,9 +12,9 @@ namespace wlw::kit {
 class AdPacing {
  public:
   struct Rules {
-    int first_after_games = 3;          // the first games of a session are ad-free
-    int games_between = 3;              // then one ad per this many finished games
-    double min_seconds_between = 120.0; // and never more often than this
+    int first_after_games = 3;           // the first games of a session are ad-free
+    int games_between = 3;               // then one ad per this many finished games
+    double min_seconds_between = 120.0;  // and never more often than this
   };
 
   AdPacing() = default;

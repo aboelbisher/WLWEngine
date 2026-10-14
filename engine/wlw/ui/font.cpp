@@ -70,9 +70,9 @@ bool Font::Bake(const FontOptions& options) {
     glyph.advance = advance * impl_->scale;
 
     int w = 0, h = 0, xoff = 0, yoff = 0;
-    unsigned char* sdf = stbtt_GetCodepointSDF(&info, impl_->scale, c, options.padding, kOnEdge, per_pixel, &w, &h,
-                                               &xoff, &yoff);
-    if (!sdf) continue;  // no outline (space)
+    unsigned char* sdf =
+        stbtt_GetCodepointSDF(&info, impl_->scale, c, options.padding, kOnEdge, per_pixel, &w, &h, &xoff, &yoff);
+    if (!sdf) continue;                                                   // no outline (space)
     glyph.offset = {static_cast<float>(xoff), static_cast<float>(yoff)};  // y down, relative to baseline
     glyph.size = {static_cast<float>(w), static_cast<float>(h)};
     bitmaps[c - kFirst] = {std::vector<uint8_t>(sdf, sdf + w * h), w, h};
@@ -107,7 +107,8 @@ bool Font::Bake(const FontOptions& options) {
                   atlas_.pixels.begin() + (positions[i].y + row) * atlas_.width + positions[i].x);
     }
     Glyph& glyph = glyphs_[i];
-    glyph.uv_min = {static_cast<float>(positions[i].x) / atlas_.width, static_cast<float>(positions[i].y) / atlas_.height};
+    glyph.uv_min = {static_cast<float>(positions[i].x) / atlas_.width,
+                    static_cast<float>(positions[i].y) / atlas_.height};
     glyph.uv_max = {static_cast<float>(positions[i].x + b.width) / atlas_.width,
                     static_cast<float>(positions[i].y + b.height) / atlas_.height};
   }

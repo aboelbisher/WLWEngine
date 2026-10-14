@@ -22,12 +22,12 @@ TEST_CASE("ease endpoints") {
 TEST_CASE("ease shapes") {
   // In = slow start (below the straight line), Out = fast start (above it).
   CHECK((ease::InQuad(0.25f) < 0.25f && ease::OutQuad(0.25f) > 0.25f));
-  CHECK(ease::InCubic(0.5f) < ease::InQuad(0.5f));  // cubic is "stronger" than quad
+  CHECK(ease::InCubic(0.5f) < ease::InQuad(0.5f));                                   // cubic is "stronger" than quad
   CHECK((Near(ease::InOutQuad(0.5f), 0.5f) && Near(ease::InOutCubic(0.5f), 0.5f)));  // symmetric
 
   // Non-Back curves never leave [0, 1] and never go backwards.
-  for (EaseFunction f : {ease::Linear, ease::InQuad, ease::OutQuad, ease::InOutQuad, ease::InCubic, ease::OutCubic,
-                         ease::InOutCubic}) {
+  for (EaseFunction f :
+       {ease::Linear, ease::InQuad, ease::OutQuad, ease::InOutQuad, ease::InCubic, ease::OutCubic, ease::InOutCubic}) {
     float previous = 0.0f;
     for (int i = 1; i <= 100; ++i) {
       const float v = f(i / 100.0f);
@@ -52,7 +52,7 @@ TEST_CASE("tween timing") {
   CHECK(Near(t.Value(), 10.0f));
   t.Update(0.25f);
   CHECK((!t.Started() && Near(t.Value(), 10.0f)));  // still waiting
-  t.Update(0.75f);                                 // 0.5 s into the motion
+  t.Update(0.75f);                                  // 0.5 s into the motion
   CHECK((t.Started() && Near(t.Progress(), 0.5f) && Near(t.Value(), 15.0f)));
   t.Update(10.0f);  // way past the end: clamped, not extrapolated
   CHECK((t.Done() && Near(t.Value(), 20.0f)));

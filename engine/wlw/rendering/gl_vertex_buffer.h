@@ -5,14 +5,13 @@
 #include "wlw/rendering/gl.h"
 #include "wlw/platform/platform.h"
 
-
 #include "wlw/rendering/vertex_buffer.h"
 #include "wlw/core/vertex_2d.h"
 #include "wlw/core/vertex_3d.h"
 
 namespace wlw::core {
 class GLVertexBuffer : public WVertexBuffer {
-public:
+ public:
   GLVertexBuffer(const std::vector<Vertex3D>& vertices) {
     // 1. Generate and Bind VAO
     glGenVertexArrays(1, &m_VAO_);
@@ -34,24 +33,23 @@ public:
     glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex3D), (void*)(3 * sizeof(float)));
     glEnableVertexAttribArray(1);
 
-		// Attribute 2: Normal (3 floats)
-		glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex3D), (void*)(7 * sizeof(float)));
+    // Attribute 2: Normal (3 floats)
+    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex3D), (void*)(7 * sizeof(float)));
     glEnableVertexAttribArray(2);
 
     // Attribute 3: UV (2 floats)
     glVertexAttribPointer(3, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex3D), (void*)(10 * sizeof(float)));
     glEnableVertexAttribArray(3);
 
-    // NOTE on VAO: The VAO is created, and the VBO layout is set here. 
-    // The EBO (Index Buffer) will be bound separately during the draw call, 
+    // NOTE on VAO: The VAO is created, and the VBO layout is set here.
+    // The EBO (Index Buffer) will be bound separately during the draw call,
     // as the VAO does NOT store EBO state in this implementation pattern.
 
     // 5. Unbind
     Unbind();
-  } 
+  }
 
-
-	GLVertexBuffer(const std::vector<Vertex2D>& vertices) {
+  GLVertexBuffer(const std::vector<Vertex2D>& vertices) {
     // 1. Generate and Bind VAO
     glGenVertexArrays(1, &m_VAO_);
     glBindVertexArray(m_VAO_);
@@ -72,8 +70,8 @@ public:
     glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex2D), (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
 
-    // NOTE on VAO: The VAO is created, and the VBO layout is set here. 
-    // The EBO (Index Buffer) will be bound separately during the draw call, 
+    // NOTE on VAO: The VAO is created, and the VBO layout is set here.
+    // The EBO (Index Buffer) will be bound separately during the draw call,
     // as the VAO does NOT store EBO state in this implementation pattern.
 
     // 5. Unbind
@@ -87,20 +85,15 @@ public:
     }
   }
 
-  void Bind() const override {
-    glBindVertexArray(m_VAO_);
-  }
+  void Bind() const override { glBindVertexArray(m_VAO_); }
 
-  void Unbind() const override {
-    glBindVertexArray(0);
-  }
+  void Unbind() const override { glBindVertexArray(0); }
 
-private:
-	GLuint m_VBO_ = 0; // Vertex Buffer Object ID
-	GLuint m_VAO_ = 0; // Vertex Array Object ID
-
+ private:
+  GLuint m_VBO_ = 0;  // Vertex Buffer Object ID
+  GLuint m_VAO_ = 0;  // Vertex Array Object ID
 };
 
-} // wlw:core
+}  // namespace wlw::core
 
-#endif // WLW_RENDERER_GL
+#endif  // WLW_RENDERER_GL

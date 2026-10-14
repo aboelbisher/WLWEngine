@@ -85,8 +85,8 @@ class ParticleSystem {
     float height = 0.0f;
     glm::vec2 min{-1e9f, -1e9f};
     glm::vec2 max{1e9f, 1e9f};
-    float bounce = 0.35f;    // share of the downward speed kept, upwards (0 = dead stop, 1 = no loss)
-    float friction = 0.5f;   // share of the sideways speed and spin lost at each bounce
+    float bounce = 0.35f;   // share of the downward speed kept, upwards (0 = dead stop, 1 = no loss)
+    float friction = 0.5f;  // share of the sideways speed and spin lost at each bounce
   };
   std::optional<Floor> floor;
   float drag = 0.5f;

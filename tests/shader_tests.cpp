@@ -32,7 +32,7 @@ TEST_CASE("canvas") {
   CHECK(s.vertex.empty());  // the engine's vertex stage
   CHECK((Has(s.fragment, "uniform float uTime;") && Has(s.fragment, "FragColor = vec4(vUV, uTime, 1.0);")));
   CHECK(Has(s.fragment, "void main() { fragment(); }"));
-  CHECK(!Has(s.fragment, "shader_type"));                    // not GLSL: removed...
+  CHECK(!Has(s.fragment, "shader_type"));                               // not GLSL: removed...
   CHECK(LineOf(s.fragment, "FragColor") == LineOf(code, "FragColor"));  // ...without moving lines
 }
 
@@ -77,9 +77,9 @@ TEST_CASE("comments") {
 }
 
 TEST_CASE("errors") {
-  CHECK(!SplitShaderSource("void fragment() { FragColor = vec4(1.0); }").ok);  // no shader_type
-  CHECK(!SplitShaderSource("shader_type sprite;\nvoid fragment() {}").ok);       // unknown type
-  CHECK(!SplitShaderSource("shader_type mesh;\nvoid vertex() {}").ok);           // no fragment()
+  CHECK(!SplitShaderSource("void fragment() { FragColor = vec4(1.0); }").ok);                 // no shader_type
+  CHECK(!SplitShaderSource("shader_type sprite;\nvoid fragment() {}").ok);                    // unknown type
+  CHECK(!SplitShaderSource("shader_type mesh;\nvoid vertex() {}").ok);                        // no fragment()
   CHECK(!SplitShaderSource("shader_type canvas;\nvoid vertex() {}\nvoid fragment() {}").ok);  // canvas: no vertex()
   const ShaderSource open = SplitShaderSource("shader_type mesh;\nvoid fragment() { if (true) {\n}");
   CHECK((!open.ok && Has(open.error, "braces")));

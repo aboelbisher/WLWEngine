@@ -37,14 +37,10 @@ struct Look {
 };
 Look LookOf(const Theme& theme, Variant variant) {
   switch (variant) {
-    case Variant::Primary:
-      return {theme.primary, theme.on_primary};
-    case Variant::Danger:
-      return {theme.danger, theme.on_danger};
-    case Variant::Ghost:
-      return {{0.0f, 0.0f, 0.0f, 0.0f}, theme.text_muted};
-    case Variant::Secondary:
-      break;
+    case Variant::Primary: return {theme.primary, theme.on_primary};
+    case Variant::Danger: return {theme.danger, theme.on_danger};
+    case Variant::Ghost: return {{0.0f, 0.0f, 0.0f, 0.0f}, theme.text_muted};
+    case Variant::Secondary: break;
   }
   return {theme.secondary, theme.on_secondary};
 }
@@ -103,7 +99,7 @@ Press Pressable(UIContext& ui, uint64_t id, const Rect& rect) {
   Press press;
   if (ui.interactive) {
     if (pointer.pressed && inside) ui.active_widget = id;  // went down on this one
-    if (ui.active_widget == id && pointer.released) {     // ...and up: a click only if still on it
+    if (ui.active_widget == id && pointer.released) {      // ...and up: a click only if still on it
       press.clicked = inside;
       ui.active_widget = 0;
     } else if (ui.active_widget == id && !pointer.down) {
@@ -258,8 +254,8 @@ bool LinkRow(UIContext& ui, Icon icon, std::string_view label, const Rect& rect)
 
 // ---- Cards ----
 
-CardResult Card(UIContext& ui, std::string_view title, std::string_view subtitle, const Rect& rect,
-                const Color& accent, std::string_view badge) {
+CardResult Card(UIContext& ui, std::string_view title, std::string_view subtitle, const Rect& rect, const Color& accent,
+                std::string_view badge) {
   const Theme& theme = ui.theme;
   Canvas& canvas = ui.canvas;
   const Press press = Pressable(ui, WidgetId(title, rect), rect);
@@ -351,7 +347,8 @@ bool Segmented(UIContext& ui, std::span<const std::string_view> labels, int& sel
   float& marker = ui.Memory(Salted(WidgetId("tabs", rect), 5), static_cast<float>(selected));
   marker = Approach(marker, static_cast<float>(selected), ui.dt * 9.0f);
   const float width = inner.Size().x / static_cast<float>(count);
-  const Rect pill{{inner.min.x + marker * width, inner.min.y}, {inner.min.x + (marker + 1.0f) * width, inner.max.y - 3.0f}};
+  const Rect pill{{inner.min.x + marker * width, inner.min.y},
+                  {inner.min.x + (marker + 1.0f) * width, inner.max.y - 3.0f}};
   RaisedRect(canvas, pill, theme.primary, pill.Size().y * 0.5f, 3.0f);
   if (theme.font) {
     for (int i = 0; i < count; ++i) {

@@ -144,10 +144,14 @@ class CVar final : public CVarBase {
   void Reset() override { Set(default_); }
 
   CVarType Type() const override {
-    if constexpr (std::is_same_v<T, bool>) return CVarType::Bool;
-    else if constexpr (std::is_same_v<T, int>) return CVarType::Int;
-    else if constexpr (std::is_same_v<T, float>) return CVarType::Float;
-    else return CVarType::String;
+    if constexpr (std::is_same_v<T, bool>)
+      return CVarType::Bool;
+    else if constexpr (std::is_same_v<T, int>)
+      return CVarType::Int;
+    else if constexpr (std::is_same_v<T, float>)
+      return CVarType::Float;
+    else
+      return CVarType::String;
   }
   std::string ValueText() const override { return Text(value_); }
   std::string DefaultText() const override { return Text(default_); }
@@ -167,10 +171,14 @@ class CVar final : public CVarBase {
     return value < range_->min ? range_->min : (range_->max < value ? range_->max : value);
   }
   static std::string Text(const T& value) {
-    if constexpr (std::is_same_v<T, bool>) return value ? "1" : "0";
-    else if constexpr (std::is_same_v<T, int>) return std::to_string(value);
-    else if constexpr (std::is_same_v<T, float>) return FormatCVarFloat(value);
-    else return value;
+    if constexpr (std::is_same_v<T, bool>)
+      return value ? "1" : "0";
+    else if constexpr (std::is_same_v<T, int>)
+      return std::to_string(value);
+    else if constexpr (std::is_same_v<T, float>)
+      return FormatCVarFloat(value);
+    else
+      return value;
   }
   bool ParseAndSet(std::string_view text, CVarSource source) override {
     if constexpr (std::is_same_v<T, bool>) {

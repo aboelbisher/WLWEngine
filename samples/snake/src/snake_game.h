@@ -36,7 +36,7 @@ class SnakeGame {
   // ---- State, read by the view ----
   State GetState() const { return state_; }
   int GridSize() const { return grid_size_; }
-  const std::deque<Cell>& Body() const { return body_; }          // body_[0] is the head
+  const std::deque<Cell>& Body() const { return body_; }                   // body_[0] is the head
   const std::deque<Cell>& PreviousBody() const { return previous_body_; }  // before the last Step()
   Cell Food() const { return food_; }
   int Score() const { return score_; }

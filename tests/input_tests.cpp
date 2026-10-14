@@ -34,7 +34,7 @@ TEST_CASE("blocked pointer is invisible to the game") {
   in.SetPointerBlocked(true);
   CHECK((!in.IsPointerDown() && !in.WasPointerPressed() && in.Swipes().empty()));
   CHECK((in.RawPointerDown() && in.RawPointerPressed()));  // the owner still sees it
-  CHECK(in.PointerPosition().y == 300.0f);                // position stays readable
+  CHECK(in.PointerPosition().y == 300.0f);                 // position stays readable
 
   in.OnPointerUp(100, 300);
   CHECK((!in.WasPointerReleased() && !in.WasTapped()));

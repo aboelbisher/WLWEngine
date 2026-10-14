@@ -8,9 +8,7 @@ namespace wlw::rendering {
 // Sets the GL blend state for a mode (see blend_mode.h; shaders output premultiplied alpha).
 inline void ApplyBlendMode(BlendMode blend) {
   switch (blend) {
-    case BlendMode::Opaque:
-      glDisable(GL_BLEND);
-      return;
+    case BlendMode::Opaque: glDisable(GL_BLEND); return;
     case BlendMode::Alpha:
       glEnable(GL_BLEND);
       glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);

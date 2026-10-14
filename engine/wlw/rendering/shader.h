@@ -8,9 +8,9 @@
 namespace wlw::rendering {
 
 // A game's own GPU program, used through a ShaderMaterial: on 3D nodes and meshes (mesh shaders),
-// on Canvas::ShaderRect (canvas shaders) or as a viewport's post pass (post shaders). Made from one text by Shader::Create (or FromFile); if
-// it doesn't compile, the error is logged and IsValid() is false (a 3D node then draws with the
-// engine's own shader; a ShaderRect draws nothing).
+// on Canvas::ShaderRect (canvas shaders) or as a viewport's post pass (post shaders). Made from one text by
+// Shader::Create (or FromFile); if it doesn't compile, the error is logged and IsValid() is false (a 3D node then draws
+// with the engine's own shader; a ShaderRect draws nothing).
 //
 // The text (GLSL, no #version line: see rendering/gl.h), like a Godot shader:
 //

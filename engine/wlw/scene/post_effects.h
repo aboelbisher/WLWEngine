@@ -40,7 +40,7 @@ struct BloomSettings {
   float strength = 0.8f;   // how much glow is added
   float scale = 0.25f;     // the glow's resolution: a quarter is cheap on phones and soft anyway
   float spread = 1.5f;
-  int iterations = 2;      // blur rounds: more = a wider halo
+  int iterations = 2;                                                 // blur rounds: more = a wider halo
   rendering::TextureFormat format = rendering::TextureFormat::RGBA8;  // of the glow passes
 };
 

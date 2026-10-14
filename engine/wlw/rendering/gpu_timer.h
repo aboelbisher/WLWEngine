@@ -17,7 +17,7 @@ struct GpuSection {
   enum class Kind : uint8_t { Scene, PostPass, Canvas };
   uint32_t viewport = 0;  // scene::Viewport::Id()
   Kind kind = Kind::Scene;
-  int index = 0;          // PostPass: which pass
+  int index = 0;  // PostPass: which pass
 };
 
 struct GpuSample {

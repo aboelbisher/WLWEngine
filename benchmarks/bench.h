@@ -64,8 +64,8 @@ struct Registration {
 
 #define WLW_BENCH_CONCAT_(a, b) a##b
 #define WLW_BENCH_CONCAT(a, b) WLW_BENCH_CONCAT_(a, b)
-#define WLW_BENCHMARK(group)                                                                         \
-  static void WLW_BENCH_CONCAT(BenchGroup_, __LINE__)(::wlw::bench::Context & ctx);                  \
-  static const ::wlw::bench::Registration WLW_BENCH_CONCAT(bench_registration_, __LINE__)(          \
-      group, &WLW_BENCH_CONCAT(BenchGroup_, __LINE__));                                              \
+#define WLW_BENCHMARK(group)                                                               \
+  static void WLW_BENCH_CONCAT(BenchGroup_, __LINE__)(::wlw::bench::Context & ctx);        \
+  static const ::wlw::bench::Registration WLW_BENCH_CONCAT(bench_registration_, __LINE__)( \
+      group, &WLW_BENCH_CONCAT(BenchGroup_, __LINE__));                                    \
   static void WLW_BENCH_CONCAT(BenchGroup_, __LINE__)(::wlw::bench::Context & ctx)

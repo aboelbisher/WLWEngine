@@ -28,8 +28,9 @@ void DrawCVar(CVarBase& cvar, const char* label) {
     case CVarType::Int: {
       auto& typed = static_cast<CVar<int>&>(cvar);
       int value = typed.Get();
-      const bool changed = typed.GetRange() ? ImGui::SliderInt(label, &value, typed.GetRange()->min, typed.GetRange()->max)
-                                            : ImGui::InputInt(label, &value);
+      const bool changed = typed.GetRange()
+                               ? ImGui::SliderInt(label, &value, typed.GetRange()->min, typed.GetRange()->max)
+                               : ImGui::InputInt(label, &value);
       if (changed) Set(cvar, std::to_string(value));
       break;
     }

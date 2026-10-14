@@ -14,8 +14,7 @@ float ParticleSystem::Particle::Size() const {
   return size_start + (size_end - size_start) * t;
 }
 
-ParticleSystem::ParticleSystem(size_t capacity, uint32_t seed)
-    : capacity_(capacity), rng_(seed) {
+ParticleSystem::ParticleSystem(size_t capacity, uint32_t seed) : capacity_(capacity), rng_(seed) {
   particles_.reserve(capacity);  // the only allocation: bursts never grow the array
 }
 
@@ -52,7 +51,8 @@ int ParticleSystem::Burst(const BurstSettings& settings, const glm::vec3& origin
     Particle p;
     const float j = settings.position_jitter;
     p.position = origin + glm::vec3(rng_.Range(-j, j), rng_.Range(-j, j), rng_.Range(-j, j));
-    p.velocity = RandomDirectionInCone(axis, settings.spread_degrees) * rng_.Range(settings.speed_min, settings.speed_max);
+    p.velocity =
+        RandomDirectionInCone(axis, settings.spread_degrees) * rng_.Range(settings.speed_min, settings.speed_max);
     p.rotation = glm::vec3(rng_.Range(0, 360), rng_.Range(0, 360), rng_.Range(0, 360));
     const float s = settings.spin_max;
     p.spin = glm::vec3(rng_.Range(-s, s), rng_.Range(-s, s), rng_.Range(-s, s));

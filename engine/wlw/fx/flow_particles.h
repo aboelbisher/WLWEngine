@@ -17,11 +17,11 @@ namespace wlw::fx {
 
 // How dots flow along one path.
 struct FlowPathSettings {
-  float width = 0.2f;              // dots spread across this, side to side (node units)
-  float speed = 1.0f;              // units per second along the path (SetSpeed changes it)
-  float packed_per_unit = 40.0f;   // dots per unit of path length when they queue at a stop
-  float wobble = 0.3f;             // slow side-to-side drift, as a share of the half width (0..1)
-  float wobble_hz = 0.5f;          // how fast it drifts
+  float width = 0.2f;             // dots spread across this, side to side (node units)
+  float speed = 1.0f;             // units per second along the path (SetSpeed changes it)
+  float packed_per_unit = 40.0f;  // dots per unit of path length when they queue at a stop
+  float wobble = 0.3f;            // slow side-to-side drift, as a share of the half width (0..1)
+  float wobble_hz = 0.5f;         // how fast it drifts
 };
 
 // Many dots (tens of thousands) flowing along paths: liquid in pipes, conveyors, traffic. Not a
@@ -92,10 +92,10 @@ class FlowParticles {
   };
   Dot GetDot(size_t i) const { return {path_[i], dist_[i], place_[i], color_[i]}; }
 
-  float dot_size = 0.12f;       // diameter (node units)
-  float size_jitter = 0.2f;     // each dot's size is dot_size x (1 -+ this)
-  float speed_jitter = 0.15f;   // each dot's speed is the path's x (1 -+ this)
-  float fade_length = 0.15f;    // dots grow over this distance at a path nothing feeds, shrink at a dead end
+  float dot_size = 0.12f;      // diameter (node units)
+  float size_jitter = 0.2f;    // each dot's size is dot_size x (1 -+ this)
+  float speed_jitter = 0.15f;  // each dot's speed is the path's x (1 -+ this)
+  float fade_length = 0.15f;   // dots grow over this distance at a path nothing feeds, shrink at a dead end
 
  private:
   struct Path {
@@ -128,14 +128,14 @@ class FlowParticles {
 
   // One entry per dot in each (SoA).
   std::vector<int> path_;
-  std::vector<float> dist_;    // along its path
-  std::vector<float> lane_;    // -1..1: where across the width
+  std::vector<float> dist_;       // along its path
+  std::vector<float> lane_;       // -1..1: where across the width
   std::vector<float> phase_sin_;  // sin and cos of the dot's wobble phase, made once: then the wobble
   std::vector<float> phase_cos_;  //   is sin(phase + wave) = sin p cos w + cos p sin w, no sin per dot
-  std::vector<float> speed_;   // multiplier on the path's speed
-  std::vector<float> size_;    // multiplier on dot_size
-  std::vector<uint32_t> color_;  // RGBA8 (rendering::PackColor)
-  std::vector<int> place_;     // place in its path's queue, -1 = moving
+  std::vector<float> speed_;      // multiplier on the path's speed
+  std::vector<float> size_;       // multiplier on dot_size
+  std::vector<uint32_t> color_;   // RGBA8 (rendering::PackColor)
+  std::vector<int> place_;        // place in its path's queue, -1 = moving
 };
 
 }  // namespace wlw::fx

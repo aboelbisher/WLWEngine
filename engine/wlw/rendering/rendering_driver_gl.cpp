@@ -51,7 +51,7 @@ namespace wlw::rendering {
 //                shaders, the last one writing the viewport's picture (post_pass.h)
 //   7. 2D        its Overlay canvas layers on top (its default canvas = the game UI on the screen)
 class GLRenderingDriver : public RenderingDriver {
-public:
+ public:
   explicit GLRenderingDriver(RenderDevice* device) : device_(device) {}
 
   RenderDevice* GetDevice() override { return device_; }
@@ -77,9 +77,9 @@ public:
 
     gpu_name_ = reinterpret_cast<const char*>(glGetString(GL_RENDERER));
     WLW_LOG(LogRender, Info, "--- OpenGL renderer initialized ---\n  Vendor:   %s\n  Renderer: %s\n  Version:  %s",
-                 reinterpret_cast<const char*>(glGetString(GL_VENDOR)),
-                 reinterpret_cast<const char*>(glGetString(GL_RENDERER)),
-                 reinterpret_cast<const char*>(glGetString(GL_VERSION)));
+            reinterpret_cast<const char*>(glGetString(GL_VENDOR)),
+            reinterpret_cast<const char*>(glGetString(GL_RENDERER)),
+            reinterpret_cast<const char*>(glGetString(GL_VERSION)));
 
     skybox_program_ = BuildEngineProgram("skybox.vert", "skybox.frag");
     if (skybox_program_ == 0) return false;
@@ -88,19 +88,13 @@ public:
     glUseProgram(0);
 
     const float skybox_vertices[] = {
-        -1.0f,  1.0f, -1.0f, -1.0f, -1.0f, -1.0f,  1.0f, -1.0f, -1.0f,
-         1.0f, -1.0f, -1.0f,  1.0f,  1.0f, -1.0f, -1.0f,  1.0f, -1.0f,
-        -1.0f, -1.0f,  1.0f, -1.0f, -1.0f, -1.0f, -1.0f,  1.0f, -1.0f,
-        -1.0f,  1.0f, -1.0f, -1.0f,  1.0f,  1.0f, -1.0f, -1.0f,  1.0f,
-         1.0f, -1.0f, -1.0f,  1.0f, -1.0f,  1.0f,  1.0f,  1.0f,  1.0f,
-         1.0f,  1.0f,  1.0f,  1.0f,  1.0f, -1.0f,  1.0f, -1.0f, -1.0f,
-        -1.0f, -1.0f,  1.0f, -1.0f,  1.0f,  1.0f,  1.0f,  1.0f,  1.0f,
-         1.0f,  1.0f,  1.0f,  1.0f, -1.0f,  1.0f, -1.0f, -1.0f,  1.0f,
-        -1.0f,  1.0f, -1.0f,  1.0f,  1.0f, -1.0f,  1.0f,  1.0f,  1.0f,
-         1.0f,  1.0f,  1.0f, -1.0f,  1.0f,  1.0f, -1.0f,  1.0f, -1.0f,
-        -1.0f, -1.0f, -1.0f, -1.0f, -1.0f,  1.0f,  1.0f, -1.0f, -1.0f,
-         1.0f, -1.0f, -1.0f, -1.0f, -1.0f,  1.0f,  1.0f, -1.0f,  1.0f
-    };
+        -1.0f, 1.0f,  -1.0f, -1.0f, -1.0f, -1.0f, 1.0f,  -1.0f, -1.0f, 1.0f,  -1.0f, -1.0f, 1.0f,  1.0f,  -1.0f, -1.0f,
+        1.0f,  -1.0f, -1.0f, -1.0f, 1.0f,  -1.0f, -1.0f, -1.0f, -1.0f, 1.0f,  -1.0f, -1.0f, 1.0f,  -1.0f, -1.0f, 1.0f,
+        1.0f,  -1.0f, -1.0f, 1.0f,  1.0f,  -1.0f, -1.0f, 1.0f,  -1.0f, 1.0f,  1.0f,  1.0f,  1.0f,  1.0f,  1.0f,  1.0f,
+        1.0f,  1.0f,  -1.0f, 1.0f,  -1.0f, -1.0f, -1.0f, -1.0f, 1.0f,  -1.0f, 1.0f,  1.0f,  1.0f,  1.0f,  1.0f,  1.0f,
+        1.0f,  1.0f,  1.0f,  -1.0f, 1.0f,  -1.0f, -1.0f, 1.0f,  -1.0f, 1.0f,  -1.0f, 1.0f,  1.0f,  -1.0f, 1.0f,  1.0f,
+        1.0f,  1.0f,  1.0f,  1.0f,  -1.0f, 1.0f,  1.0f,  -1.0f, 1.0f,  -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, 1.0f,
+        1.0f,  -1.0f, -1.0f, 1.0f,  -1.0f, -1.0f, -1.0f, -1.0f, 1.0f,  1.0f,  -1.0f, 1.0f};
     glGenVertexArrays(1, &skybox_vao_);
     glGenBuffers(1, &skybox_vbo_);
     glBindVertexArray(skybox_vao_);
@@ -131,7 +125,8 @@ public:
   }
 
   void AttachWindow(std::shared_ptr<scene::Window> window) override {
-    if (!WLW_VERIFY(main_window_ != nullptr, "AttachWindow before Initialize: the rendering driver has no main window")) {
+    if (!WLW_VERIFY(main_window_ != nullptr,
+                    "AttachWindow before Initialize: the rendering driver has no main window")) {
       return;
     }
     window->Initialize(main_window_.get());  // shares GPU resources with the main window
@@ -163,7 +158,8 @@ public:
     // GL's row 0 is the bottom of the picture; images start at the top.
     const size_t row = static_cast<size_t>(width) * 4;
     for (int y = 0; y < height / 2; ++y) {
-      std::swap_ranges(pixels.begin() + y * row, pixels.begin() + (y + 1) * row, pixels.begin() + (height - 1 - y) * row);
+      std::swap_ranges(pixels.begin() + y * row, pixels.begin() + (y + 1) * row,
+                       pixels.begin() + (height - 1 - y) * row);
     }
     return pixels;
   }
@@ -286,7 +282,7 @@ public:
     warmed_up_ = true;
     const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
     WLW_LOG(LogRender, Info, "Shader warm-up: %zu mesh variant(s) + %d game shader(s) compiled in %.1f ms",
-                 mesh_programs_.size() - before, custom, ms);
+            mesh_programs_.size() - before, custom, ms);
   }
 
   // One viewport into `destination` (the screen's framebuffer or its target's): its scene through
@@ -550,7 +546,8 @@ public:
     for (const scene::LightNode* light : frame.lights) {
       if (!light->CastsShadows()) continue;
       if (light->GetType() != scene::LightNode::Type::Directional) {
-        if (!warned_shadow_type_) WLW_LOG(LogRender, Warning, "Only directional lights cast shadows (for now): ignoring the others");
+        if (!warned_shadow_type_)
+          WLW_LOG(LogRender, Warning, "Only directional lights cast shadows (for now): ignoring the others");
         warned_shadow_type_ = true;
         continue;
       }
@@ -563,9 +560,8 @@ public:
     if (frame.shadow_light == nullptr || !frame.has_casters) return;
     const scene::LightNode& light = *frame.shadow_light;
     if (!EnsureShadowMap(light.shadow.map_size)) return;
-    frame.shadow_frustum = scene::FitDirectionalShadow(light.GetDirection(), frame.casters,
-                                                       frame.has_receivers ? frame.receivers : frame.casters,
-                                                       shadow_map_size_);
+    frame.shadow_frustum = scene::FitDirectionalShadow(
+        light.GetDirection(), frame.casters, frame.has_receivers ? frame.receivers : frame.casters, shadow_map_size_);
     frame.shadow_active = true;
   }
 
@@ -633,7 +629,8 @@ public:
           item.program = &MeshProgramFor(MeshVariantKey(DrawFor(*node, *mesh, frame)));
           program = item.program->id;
           if (program == 0) continue;  // didn't compile (logged)
-          if (const Material* textured = TexturedMaterial(*node, *mesh)) item.texture = GLTexture(*textured->GetTexture());
+          if (const Material* textured = TexturedMaterial(*node, *mesh))
+            item.texture = GLTexture(*textured->GetTexture());
         }
         const auto index = static_cast<uint32_t>(draw_items_.size());
         draw_items_.push_back(item);
@@ -882,23 +879,23 @@ public:
   struct DrawItem {
     scene::Node3D* node = nullptr;
     core::Mesh<core::Vertex3D>* mesh = nullptr;
-    uint32_t node_slot = 0;                  // its node's per-frame data (node_slots_)
-    const Material* material = nullptr;      // the material deciding its look (mesh's, else node's)
-    const ShaderMaterial* custom = nullptr;  // drawn with this material's shader...
-    const GLShader* custom_program = nullptr;  // (its program)
-    const MeshProgram* program = nullptr;    // ...or with this engine variant
-    scene::SpriteBatch* sprites = nullptr;   // a sprite batch instead of a mesh (mesh is null)...
+    uint32_t node_slot = 0;                         // its node's per-frame data (node_slots_)
+    const Material* material = nullptr;             // the material deciding its look (mesh's, else node's)
+    const ShaderMaterial* custom = nullptr;         // drawn with this material's shader...
+    const GLShader* custom_program = nullptr;       // (its program)
+    const MeshProgram* program = nullptr;           // ...or with this engine variant
+    scene::SpriteBatch* sprites = nullptr;          // a sprite batch instead of a mesh (mesh is null)...
     const SpriteProgram* sprite_program = nullptr;  // ...with the sprite program
-    GLuint texture = 0;                      // engine variant / sprites: its texture on unit 0 (0 = none)
+    GLuint texture = 0;                             // engine variant / sprites: its texture on unit 0 (0 = none)
     BlendMode blend = BlendMode::Opaque;
     bool depth_write = true;
   };
   // What a node's meshes share, worked out once per frame.
   struct NodeSlot {
     scene::Node3D* node = nullptr;
-    glm::mat4 model{1.0f};                   // world matrix (walks the parents once)
-    glm::mat3 normal_matrix{1.0f};           // plain nodes (instanced: per vertex)
-    GLInstanceBuffer* instances = nullptr;   // instanced nodes (set just before drawing)
+    glm::mat4 model{1.0f};                  // world matrix (walks the parents once)
+    glm::mat3 normal_matrix{1.0f};          // plain nodes (instanced: per vertex)
+    GLInstanceBuffer* instances = nullptr;  // instanced nodes (set just before drawing)
   };
 
   // The engine's 3D shader for a variant key: compiled the first time it's needed, then cached.
@@ -1039,15 +1036,15 @@ public:
     platform::Shutdown();
   }
 
-private:
+ private:
   RenderDevice* device_;
   std::string gpu_name_;  // GL_RENDERER
   std::shared_ptr<scene::Window> main_window_;
   std::unique_ptr<ui::UIRenderer> ui_renderer_;
 
   std::unordered_map<uint32_t, MeshProgram> mesh_programs_;  // by variant key
-  ShadowProgram shadow_programs_[2];                          // plain, instanced
-  SpriteProgram sprite_programs_[2];                          // computed dot, textured dot
+  ShadowProgram shadow_programs_[2];                         // plain, instanced
+  SpriteProgram sprite_programs_[2];                         // computed dot, textured dot
   bool sprite_failed_[2] = {false, false};
   GLuint skybox_program_ = 0;
   GLuint skybox_vao_ = 0;
@@ -1055,12 +1052,12 @@ private:
   GLuint post_vao_ = 0;                  // empty: post passes draw a triangle made in the shader
   std::shared_ptr<Shader> copy_shader_;  // a post pass without a usable shader
   std::unique_ptr<GpuTimer> gpu_timer_;  // null: this GPU can't time
-  bool invalidate_ = true;  // Window::InvalidateFramebuffers, for this frame
+  bool invalidate_ = true;               // Window::InvalidateFramebuffers, for this frame
   bool timing_ = false;                  // timing this frame
   std::vector<GpuSample> gpu_samples_;   // results arriving this frame
   std::vector<float> raw_pass_ms_;       // scratch for ApplyGpuSamples
   GLuint frame_ubo_ = 0;
-  GLStateCache state_;          // program, blend, depth writes, unit-0 texture: skips redundant GL calls
+  GLStateCache state_;  // program, blend, depth writes, unit-0 texture: skips redundant GL calls
   // Per-viewport lists, reused every frame (cleared, never shrunk: no allocations once warm).
   Frame frame_;
   std::vector<DrawItem> draw_items_;
@@ -1077,7 +1074,7 @@ private:
   GLuint shadow_framebuffer_ = 0;
   GLuint shadow_texture_ = 0;
   int shadow_map_size_ = 0;
-  bool shadow_failed_ = false;      // the framebuffer was refused once: don't retry every frame
+  bool shadow_failed_ = false;  // the framebuffer was refused once: don't retry every frame
   bool warned_shadow_type_ = false;
 };
 

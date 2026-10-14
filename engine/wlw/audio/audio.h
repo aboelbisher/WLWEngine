@@ -62,7 +62,7 @@ class Audio {
   Mixer& GetMixer() { return *mixer_; }
 
  private:
-  struct Device;  // miniaudio's device, kept out of this header
+  struct Device;       // miniaudio's device, kept out of this header
   struct MusicStream;  // a miniaudio decoder over a file in memory
   std::unique_ptr<Mixer> mixer_;
   std::unique_ptr<Device> device_;

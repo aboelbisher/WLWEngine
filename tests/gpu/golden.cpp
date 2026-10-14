@@ -82,8 +82,8 @@ void CheckGolden(const std::string& name, const std::shared_ptr<scene::Viewport>
     testing::SavePng((output / (name + ".actual.png")).string(), actual);
     testing::SavePng((output / (name + ".diff.png")).string(), result.diff);
   }
-  INFO(name << ": " << result.bad_pixels << " pixels differ by more than " << settings.channel_tolerance
-            << " (" << result.bad_fraction * 100.0 << "%, allowed " << settings.max_bad_fraction * 100.0
+  INFO(name << ": " << result.bad_pixels << " pixels differ by more than " << settings.channel_tolerance << " ("
+            << result.bad_fraction * 100.0 << "%, allowed " << settings.max_bad_fraction * 100.0
             << "%), largest difference " << result.max_difference << "; pictures in " << output.string());
   CHECK(result.passed);
 }

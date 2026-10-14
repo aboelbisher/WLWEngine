@@ -49,8 +49,10 @@ void MixerBenchmarks(bench::Context& ctx) {
     sound.samples.resize(static_cast<size_t>(sound.frames) * 2);
     for (float& sample : sound.samples) sample = random.Range(-0.5f, 0.5f);
     const audio::Mixer::SoundId id = mixer.AddSound(std::move(sound));
-    mixer.Play(id, {.volume = 0.5f, .pitch = i % 3 == 0 ? 1.0f : 0.75f + 0.05f * static_cast<float>(i % 7),
-                    .pan = random.Range(-1.0f, 1.0f), .loop = true});
+    mixer.Play(id, {.volume = 0.5f,
+                    .pitch = i % 3 == 0 ? 1.0f : 0.75f + 0.05f * static_cast<float>(i % 7),
+                    .pan = random.Range(-1.0f, 1.0f),
+                    .loop = true});
   }
   std::vector<float> out(kFrames * 2);
   mixer.Mix(out.data(), kFrames);  // takes the play commands

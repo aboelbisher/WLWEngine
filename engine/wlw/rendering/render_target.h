@@ -10,8 +10,8 @@ namespace wlw::rendering {
 
 struct RenderTargetSettings {
   TextureFormat format = TextureFormat::RGBA8;  // RGBA16F: values above 1 (glow, dots that add up)
-  bool smooth = true;                            // linear filtering when a shader samples it
-  bool depth = false;                            // a depth buffer: needed when 3D is drawn into it
+  bool smooth = true;                           // linear filtering when a shader samples it
+  bool depth = false;                           // a depth buffer: needed when 3D is drawn into it
 };
 
 // An offscreen picture the GPU draws into (on GL, a framebuffer object), whose result is an

@@ -84,9 +84,15 @@ class BitGrid {
     return result;
   }
 
-  constexpr BitGrid operator&(const BitGrid& o) const { return Combine(o, [](uint64_t a, uint64_t b) { return a & b; }); }
-  constexpr BitGrid operator|(const BitGrid& o) const { return Combine(o, [](uint64_t a, uint64_t b) { return a | b; }); }
-  constexpr BitGrid operator^(const BitGrid& o) const { return Combine(o, [](uint64_t a, uint64_t b) { return a ^ b; }); }
+  constexpr BitGrid operator&(const BitGrid& o) const {
+    return Combine(o, [](uint64_t a, uint64_t b) { return a & b; });
+  }
+  constexpr BitGrid operator|(const BitGrid& o) const {
+    return Combine(o, [](uint64_t a, uint64_t b) { return a | b; });
+  }
+  constexpr BitGrid operator^(const BitGrid& o) const {
+    return Combine(o, [](uint64_t a, uint64_t b) { return a ^ b; });
+  }
   constexpr BitGrid operator~() const {
     BitGrid result;
     for (int i = 0; i < kWords; ++i) result.words_[i] = ~words_[i];

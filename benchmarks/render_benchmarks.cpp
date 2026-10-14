@@ -72,8 +72,8 @@ void RenderBenchmarks(bench::Context& ctx, int count, const char* size) {
   std::vector<rendering::DrawOrder> unsorted;
   for (uint32_t i = 0; i < visible.nodes.size(); ++i) {
     const float depth = visible.nodes[i].depth;
-    const uint64_t key = i % 5 == 0 ? rendering::TransparentSortKey(depth, i % 3)
-                                    : rendering::OpaqueSortKey(i % 6, i % 4, depth);
+    const uint64_t key =
+        i % 5 == 0 ? rendering::TransparentSortKey(depth, i % 3) : rendering::OpaqueSortKey(i % 6, i % 4, depth);
     unsorted.push_back({key, i});
   }
   std::vector<rendering::DrawOrder> order;

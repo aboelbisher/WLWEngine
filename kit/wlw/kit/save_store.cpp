@@ -33,7 +33,9 @@ SaveStore SaveStore::ForApp(const std::string& app, const std::string& name, int
   return SaveStore(platform::GetSaveDirectory(app), name, version);
 }
 
-void SaveStore::AddMigration(int from_version, Migration migration) { migrations_[from_version] = std::move(migration); }
+void SaveStore::AddMigration(int from_version, Migration migration) {
+  migrations_[from_version] = std::move(migration);
+}
 
 SaveStore::LoadResult SaveStore::Load() {
   LoadResult result = LoadResult::Loaded;
@@ -51,7 +53,8 @@ SaveStore::LoadResult SaveStore::Load() {
   // Upgrade old formats one version at a time.
   int file_version = document->value("version", 1);
   if (file_version > version_) {
-    WLW_LOG(LogKit, Warning, "%s is from a newer version (%d > %d); reading it as is", path_.c_str(), file_version, version_);
+    WLW_LOG(LogKit, Warning, "%s is from a newer version (%d > %d); reading it as is", path_.c_str(), file_version,
+            version_);
   }
   for (; file_version < version_; ++file_version) {
     if (auto it = migrations_.find(file_version); it != migrations_.end()) it->second(data_);

@@ -17,84 +17,66 @@
 namespace wlw::core {
 
 template <typename T>
-concept OnlyVerticesTypes =
-	std::is_same_v<T, core::Vertex2D> ||
-	std::is_same_v<T, core::Vertex3D>;
+concept OnlyVerticesTypes = std::is_same_v<T, core::Vertex2D> || std::is_same_v<T, core::Vertex3D>;
 
 template <OnlyVerticesTypes T>
 class Mesh {
-public:
-	virtual ~Mesh() = default;
+ public:
+  virtual ~Mesh() = default;
 
-	const std::vector<T>& GetVertices() const {
-		return vertices_;
-	}
+  const std::vector<T>& GetVertices() const { return vertices_; }
 
-	const std::vector<uint32_t>& GetIndices() const {
-		return indices_;
-	}
+  const std::vector<uint32_t>& GetIndices() const { return indices_; }
 
-	void SetVertices(const std::vector<T>& vertices) {
-		vertices_ = vertices;
-		vertex_buffer_ = nullptr;
-		index_buffer_ = nullptr;
+  void SetVertices(const std::vector<T>& vertices) {
+    vertices_ = vertices;
+    vertex_buffer_ = nullptr;
+    index_buffer_ = nullptr;
 
-        if (vertices_.empty()) {
-            local_aabb_ = { {0,0,0}, {0,0,0} };
-            return;
-        }
+    if (vertices_.empty()) {
+      local_aabb_ = {{0, 0, 0}, {0, 0, 0}};
+      return;
+    }
 
-        glm::vec3 minB(vertices_[0].position.x, vertices_[0].position.y, vertices_[0].position.z);
-        glm::vec3 maxB = minB;
-        for (const auto& v : vertices_) {
-            minB = glm::min(minB, glm::vec3(v.position.x, v.position.y, v.position.z));
-            maxB = glm::max(maxB, glm::vec3(v.position.x, v.position.y, v.position.z));
-        }
-        local_aabb_ = { {minB.x, minB.y, minB.z}, {maxB.x, maxB.y, maxB.z} };
-	}
+    glm::vec3 minB(vertices_[0].position.x, vertices_[0].position.y, vertices_[0].position.z);
+    glm::vec3 maxB = minB;
+    for (const auto& v : vertices_) {
+      minB = glm::min(minB, glm::vec3(v.position.x, v.position.y, v.position.z));
+      maxB = glm::max(maxB, glm::vec3(v.position.x, v.position.y, v.position.z));
+    }
+    local_aabb_ = {{minB.x, minB.y, minB.z}, {maxB.x, maxB.y, maxB.z}};
+  }
 
-    const scene::AABB& GetLocalAABB() const { return local_aabb_; }
+  const scene::AABB& GetLocalAABB() const { return local_aabb_; }
 
-	void SetIndices(const std::vector<uint32_t>& indices) {
-		indices_ = indices;
-		index_buffer_ = nullptr;
-	}
+  void SetIndices(const std::vector<uint32_t>& indices) {
+    indices_ = indices;
+    index_buffer_ = nullptr;
+  }
 
-	void SetMaterial(const std::shared_ptr<rendering::Material>& material) {
-		material_ = material;
-	}
+  void SetMaterial(const std::shared_ptr<rendering::Material>& material) { material_ = material; }
 
-	std::shared_ptr<rendering::Material> GetMaterial() const {
-		return material_;
-	}
+  std::shared_ptr<rendering::Material> GetMaterial() const { return material_; }
 
-	void SetVertexBuffer(std::unique_ptr<WVertexBuffer> vertex_buffer) {
-		vertex_buffer_ = std::move(vertex_buffer);
-	}
+  void SetVertexBuffer(std::unique_ptr<WVertexBuffer> vertex_buffer) { vertex_buffer_ = std::move(vertex_buffer); }
 
-	const WVertexBuffer* GetVertexBuffer() const {
-		return vertex_buffer_.get();
-	}
+  const WVertexBuffer* GetVertexBuffer() const { return vertex_buffer_.get(); }
 
-	void SetIndexBuffer(std::unique_ptr<WIndexBuffer> index_buffer) {
-		index_buffer_ = std::move(index_buffer);
-	}
+  void SetIndexBuffer(std::unique_ptr<WIndexBuffer> index_buffer) { index_buffer_ = std::move(index_buffer); }
 
-	const WIndexBuffer* GetIndexBuffer() const {
-		return index_buffer_.get();
-	}
+  const WIndexBuffer* GetIndexBuffer() const { return index_buffer_.get(); }
 
-	std::string name = "";
+  std::string name = "";
 
-protected:
-	std::vector<T> vertices_;
-	std::vector<uint32_t> indices_;
+ protected:
+  std::vector<T> vertices_;
+  std::vector<uint32_t> indices_;
 
-	std::unique_ptr<WVertexBuffer> vertex_buffer_ = nullptr;
-	std::unique_ptr<WIndexBuffer> index_buffer_ = nullptr;
+  std::unique_ptr<WVertexBuffer> vertex_buffer_ = nullptr;
+  std::unique_ptr<WIndexBuffer> index_buffer_ = nullptr;
 
-	std::shared_ptr<rendering::Material> material_ = nullptr;
+  std::shared_ptr<rendering::Material> material_ = nullptr;
 
-    scene::AABB local_aabb_ = { {0,0,0}, {0,0,0} };
+  scene::AABB local_aabb_ = {{0, 0, 0}, {0, 0, 0}};
 };
-} // namespace wlw::core
+}  // namespace wlw::core

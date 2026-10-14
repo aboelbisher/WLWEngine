@@ -106,7 +106,7 @@ TEST_CASE("delay and instances") {
   std::vector<wlw::rendering::InstanceData> instances;
   ps.Update(0.25f);
   ps.BuildInstances(instances);
-  CHECK(instances.empty());  // still delayed: invisible...
+  CHECK(instances.empty());                                          // still delayed: invisible...
   CHECK(ps.Particles()[0].position == glm::vec3(1.0f, 2.0f, 3.0f));  // ...and not moving
 
   ps.Update(0.25f);  // delay over
@@ -160,7 +160,7 @@ TEST_CASE("floor bounce and edge") {
     if (bounced) peak_after_bounce = std::max(peak_after_bounce, q.position.y);
     if (q.position.x > 0.9f) break;  // stay on the floor for this part
   }
-  CHECK((bounced && lowest >= 0.1f - 1e-3f));           // never sank in: the cube's half size above
+  CHECK((bounced && lowest >= 0.1f - 1e-3f));                     // never sank in: the cube's half size above
   CHECK((peak_after_bounce > 0.1f && peak_after_bounce < 0.6f));  // lower than where it fell from
   // Sliding loses speed at each bounce (friction).
   CHECK(system.Particles()[0].velocity.x < 0.5f);
@@ -260,7 +260,7 @@ TEST_CASE("flow routing and dead ends") {
   flow.Emit(a, 0.9f, {1, 1, 1, 1});
   flow.Update(0.2f);
   CHECK(flow.Count() == 2);
-  CHECK((flow.GetDot(0).path == b && flow.GetDot(1).path == c));  // in turn
+  CHECK((flow.GetDot(0).path == b && flow.GetDot(1).path == c));                        // in turn
   CHECK((Near(flow.GetDot(0).distance, 0.1f) && Near(flow.GetDot(1).distance, 0.1f)));  // the overshoot is kept
   flow.Update(1.0f);
   CHECK(flow.Count() == 0);  // b and c lead nowhere: removed at their ends

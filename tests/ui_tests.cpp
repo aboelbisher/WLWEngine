@@ -43,7 +43,7 @@ TEST_CASE("measure") {
   CHECK(font.Measure("", 40.0f) == 0.0f);
   const float w20 = font.Measure("Score 123", 20.0f);
   const float w40 = font.Measure("Score 123", 40.0f);
-  CHECK((w20 > 0.0f && Near(w40, 2.0f * w20, 1e-3f)));  // linear in size
+  CHECK((w20 > 0.0f && Near(w40, 2.0f * w20, 1e-3f)));                                              // linear in size
   CHECK(font.Measure("AV", 40.0f) <= font.Measure("A", 40.0f) + font.Measure("V", 40.0f) + 1e-4f);  // kerning
   CHECK(font.Measure("WWW", 40.0f) > font.Measure("iii", 40.0f));
 }
@@ -56,8 +56,8 @@ TEST_CASE("layout") {
   CHECK(quads.size() == 2);  // the space has no quad, only an advance
   // Left to right. (Quads overlap a little: each includes the distance field's padding.)
   CHECK((quads[0].min.x + quads[0].max.x) < (quads[1].min.x + quads[1].max.x));
-  CHECK(quads[0].min.y < pen.y);                   // 'A' is above the baseline...
-  CHECK(quads[1].max.y > pen.y);                   // ...'g' hangs below it
+  CHECK(quads[0].min.y < pen.y);  // 'A' is above the baseline...
+  CHECK(quads[1].max.y > pen.y);  // ...'g' hangs below it
   for (const GlyphQuad& q : quads) CHECK((q.uv_min.x < q.uv_max.x && q.uv_max.y <= 1.0f));
 
   quads.clear();
@@ -78,7 +78,7 @@ TEST_CASE("canvas units") {
   insets.top = 100.0f;    // status bar / camera cutout
   insets.bottom = 54.0f;  // gesture bar
   canvas.BeginFrame({1080.0f, 2400.0f}, {400.0f, 720.0f});
-  CHECK(Near(canvas.PixelsPerUnit(), 2.7f));         // the width limits: 1080 / 400
+  CHECK(Near(canvas.PixelsPerUnit(), 2.7f));  // the width limits: 1080 / 400
   CHECK((Near(canvas.Size().x, 400.0f) && Near(canvas.Size().y, 2400.0f / 2.7f, 1e-2f)));
   // The safe area (the UI layer's): the insets, converted to canvas units.
   const Rect safe = SafeAreaFor(canvas, insets);
@@ -125,7 +125,8 @@ TEST_CASE("canvas text and batches") {
   // Rounded rect: half size and a radius clamped to fit.
   canvas.FillRect({{0, 0}, {40, 10}}, {1, 1, 1, 1}, 50.0f);
   const auto& rect = canvas.Vertices().back();
-  CHECK((rect.params.x == 2.0f && Near(rect.params.y, 20.0f) && Near(rect.params.z, 5.0f) && Near(rect.params.w, 5.0f)));
+  CHECK(
+      (rect.params.x == 2.0f && Near(rect.params.y, 20.0f) && Near(rect.params.z, 5.0f) && Near(rect.params.w, 5.0f)));
 }
 
 TEST_CASE("canvas line") {
@@ -151,7 +152,8 @@ TEST_CASE("canvas line") {
 TEST_CASE("layout and toggle") {
   const Font& font = TestFont();
   const Rect area{{0.0f, 0.0f}, {100.0f, 50.0f}};
-  CHECK((Near(Centered({10.0f, 20.0f}, {4.0f, 6.0f}).min.x, 8.0f) && Near(Centered({10.0f, 20.0f}, {4.0f, 6.0f}).max.y, 23.0f)));
+  CHECK((Near(Centered({10.0f, 20.0f}, {4.0f, 6.0f}).min.x, 8.0f) &&
+         Near(Centered({10.0f, 20.0f}, {4.0f, 6.0f}).max.y, 23.0f)));
   CHECK((Near(Inset(area, 5.0f).min.x, 5.0f) && Near(Inset(area, 5.0f).max.y, 45.0f)));
   const Rect last_row = Row(area, 1, 2, 10.0f);  // two rows of 20 with a 10 gap
   CHECK((Near(last_row.min.y, 30.0f) && Near(last_row.max.y, 50.0f) && Near(last_row.max.x, 100.0f)));
@@ -185,7 +187,8 @@ TEST_CASE("canvas shapes") {
   CHECK((v[0].position.x < 0.0f && v[0].position.y < 0.0f));
   // Same triangle the other way round: the same distances (winding doesn't matter).
   canvas.Triangle({0.0f, 0.0f}, {0.0f, 40.0f}, {30.0f, 0.0f}, {1, 1, 1, 1});
-  CHECK((Near(v[4].uv.x, v[0].uv.x, 1e-3f) || Near(v[4].uv.y, v[0].uv.x, 1e-3f) || Near(v[4].params.y, v[0].uv.x, 1e-3f)));
+  CHECK((Near(v[4].uv.x, v[0].uv.x, 1e-3f) || Near(v[4].uv.y, v[0].uv.x, 1e-3f) ||
+         Near(v[4].params.y, v[0].uv.x, 1e-3f)));
   canvas.Triangle({0.0f, 0.0f}, {10.0f, 10.0f}, {20.0f, 20.0f}, {1, 1, 1, 1});  // flat: nothing
   CHECK(canvas.QuadCount() == 2);
 
@@ -340,7 +343,7 @@ TEST_CASE("canvas shader rect") {
   CHECK((!batches[2].material && batches[2].first_quad == 2 && batches[2].quad_count == 2));
   const auto& v = canvas.Vertices();
   CHECK((Near(v[4].position.x, 20.0f) && Near(v[4].position.y, 30.0f) && Near(v[6].position.x, 120.0f) &&
-        Near(v[6].position.y, 80.0f)));
+         Near(v[6].position.y, 80.0f)));
   CHECK((Near(v[4].uv.x, 0.0f) && Near(v[4].uv.y, 0.0f) && Near(v[6].uv.x, 1.0f) && Near(v[6].uv.y, 1.0f)));
   CHECK((Near(v[5].color.r, 1.0f) && Near(v[5].color.g, 0.0f)));
 }

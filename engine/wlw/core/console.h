@@ -46,7 +46,7 @@ class ConsoleCommand {
 };
 
 ConsoleCommand* FindConsoleCommand(std::string_view name);  // ignores case
-std::vector<ConsoleCommand*> AllConsoleCommands();         // sorted by name
+std::vector<ConsoleCommand*> AllConsoleCommands();          // sorted by name
 
 // Words, split at spaces; "quoted text" stays one word.
 std::vector<std::string> SplitConsoleLine(std::string_view line);

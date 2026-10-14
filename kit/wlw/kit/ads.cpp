@@ -18,7 +18,8 @@ using Json = nlohmann::json;
 class BridgeAds : public Ads {
  public:
   explicit BridgeAds(const Config& config) {
-    platform::SetBridgeHandler("ads", [this](const std::string& event, const std::string& json) { OnEvent(event, json); });
+    platform::SetBridgeHandler("ads",
+                               [this](const std::string& event, const std::string& json) { OnEvent(event, json); });
     const Json args = {{"rewarded", config.rewarded_unit},
                        {"interstitial", config.interstitial_unit},
                        {"test_devices", config.test_devices},

@@ -78,23 +78,23 @@ class SystemSection {
   ZoneScoped;                  \
   WLW_PROFILE_SYSTEM_SECTION_(__func__)
 // A transient zone: its own entry per name in Tracy's statistics (the name is copied while a viewer is connected).
-#define WLW_PROFILE_SCOPE_DYNAMIC(name)                                                               \
-  const char* const WLW_PROFILE_CONCAT_(wlw_profile_name_, __LINE__) = (name);                         \
-  SuppressVarShadowWarning(                                                                            \
-      ZoneTransientN(___tracy_scoped_zone, WLW_PROFILE_CONCAT_(wlw_profile_name_, __LINE__), true));   \
+#define WLW_PROFILE_SCOPE_DYNAMIC(name)                                                              \
+  const char* const WLW_PROFILE_CONCAT_(wlw_profile_name_, __LINE__) = (name);                       \
+  SuppressVarShadowWarning(                                                                          \
+      ZoneTransientN(___tracy_scoped_zone, WLW_PROFILE_CONCAT_(wlw_profile_name_, __LINE__), true)); \
   WLW_PROFILE_SYSTEM_SECTION_(WLW_PROFILE_CONCAT_(wlw_profile_name_, __LINE__))
 #define WLW_PROFILE_TEXT(text, size) ZoneText(text, size)
 #define WLW_PROFILE_FRAME() FrameMark
-#define WLW_PROFILE_PLOT(name, value)                          \
-  do {                                                         \
+#define WLW_PROFILE_PLOT(name, value)                               \
+  do {                                                              \
     const int64_t wlw_profile_value_ = static_cast<int64_t>(value); \
-    TracyPlot(name, wlw_profile_value_);                       \
-    WLW_PROFILE_SYSTEM_COUNTER_(name, wlw_profile_value_);     \
+    TracyPlot(name, wlw_profile_value_);                            \
+    WLW_PROFILE_SYSTEM_COUNTER_(name, wlw_profile_value_);          \
   } while (0)
 #define WLW_PROFILE_THREAD_NAME(name) ::wlw::profile::SetThreadName(name)
-#define WLW_PROFILE_MESSAGE(text)                    \
-  do {                                               \
-    const char* const wlw_profile_text_ = (text);    \
+#define WLW_PROFILE_MESSAGE(text)                                    \
+  do {                                                               \
+    const char* const wlw_profile_text_ = (text);                    \
     TracyMessage(wlw_profile_text_, std::strlen(wlw_profile_text_)); \
   } while (0)
 

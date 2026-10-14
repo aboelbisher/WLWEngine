@@ -14,9 +14,9 @@ enum class Icon {
   None,
   Play,
   Pause,
-  Back,      // <
-  Next,      // >
-  Close,     // X
+  Back,   // <
+  Next,   // >
+  Close,  // X
   Check,
   Settings,  // a gear
   Music,

@@ -10,9 +10,9 @@ namespace wlw::scene {
 
 // How a light's shadows look (only directional lights cast shadows for now).
 struct ShadowSettings {
-  int map_size = 1024;     // the shadow map is map_size x map_size depth texels
-  float softness = 1.5f;   // edge blur: radius of the PCF filter, in shadow-map texels
-  float strength = 0.6f;   // 0 = no darkening, 1 = only the ambient light is left in shadow
+  int map_size = 1024;    // the shadow map is map_size x map_size depth texels
+  float softness = 1.5f;  // edge blur: radius of the PCF filter, in shadow-map texels
+  float strength = 0.6f;  // 0 = no darkening, 1 = only the ambient light is left in shadow
 };
 
 // A light source is a node: added to the scene with Window::AddNode like geometry, moved and

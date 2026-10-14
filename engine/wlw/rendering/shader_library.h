@@ -14,7 +14,7 @@
 namespace wlw::rendering {
 
 struct EmbeddedShaderFile {
-  const char* name;    // relative to engine/wlw/rendering/shaders, '/' separated
+  const char* name;  // relative to engine/wlw/rendering/shaders, '/' separated
   const char* source;
 };
 

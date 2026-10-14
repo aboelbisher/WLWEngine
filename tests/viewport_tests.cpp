@@ -61,7 +61,8 @@ TEST_CASE("viewport shows a shared scene") {
   auto world = scene::Scene::Create();
   auto main_view = Offscreen();
   auto minimap = Offscreen();
-  CHECK((main_view->GetScene() != nullptr && main_view->GetScene() != minimap->GetScene()));  // each starts with its own
+  CHECK(
+      (main_view->GetScene() != nullptr && main_view->GetScene() != minimap->GetScene()));  // each starts with its own
   main_view->SetScene(world);
   minimap->SetScene(world);
   world->AddNode(std::make_shared<scene::Node3D>());
@@ -122,7 +123,7 @@ TEST_CASE("update modes") {
 TEST_CASE("clear color") {
   auto view = Offscreen();
   CHECK((view->GetClearColor().has_value() && view->GetClearColor()->a == 0.0f));  // transparent by default
-  view->SetClearColor(std::nullopt);  // keep the last picture (trails)
+  view->SetClearColor(std::nullopt);                                               // keep the last picture (trails)
   CHECK(!view->GetClearColor().has_value());
 }
 

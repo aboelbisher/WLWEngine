@@ -15,7 +15,7 @@ TEST_CASE("bit grid") {
   static_assert(Grid::kWords == 2);
   Grid grid = Grid::Cell(0, 0) | Grid::Cell(9, 9) | Grid::Cell(3, 6);
   CHECK((grid.Count() == 3 && grid.Test(9, 9) && grid.Test(3, 6) && !grid.Test(4, 6)));
-  CHECK((!grid.Test(-1, 0) && !grid.Test(10, 0)));  // outside: never set
+  CHECK((!grid.Test(-1, 0) && !grid.Test(10, 0)));                   // outside: never set
   CHECK((Grid::Full().Count() == 100 && (~Grid()).Count() == 100));  // padding bits stay clear
   CHECK((~Grid::Full()).None());
   CHECK((Grid::Row(2).Count() == 10 && Grid::Column(7).Count() == 10 && Grid::Row(2, 6).Count() == 6));
@@ -47,8 +47,12 @@ struct TicTacToe {
   using Move = int;  // cell 0..8
 
   static int Winner(const State& s) {
-    static const Board lines[] = {Board::Row(0),        Board::Row(1),        Board::Row(2),
-                                  Board::Column(0),     Board::Column(1),     Board::Column(2),
+    static const Board lines[] = {Board::Row(0),
+                                  Board::Row(1),
+                                  Board::Row(2),
+                                  Board::Column(0),
+                                  Board::Column(1),
+                                  Board::Column(2),
                                   Board::Cell(0, 0) | Board::Cell(1, 1) | Board::Cell(2, 2),
                                   Board::Cell(2, 0) | Board::Cell(1, 1) | Board::Cell(0, 2)};
     for (const Board& line : lines) {
@@ -70,7 +74,7 @@ struct TicTacToe {
     (MaxToMove(s) ? next.x : next.o).Set(m % 3, m / 3);
     return next;
   }
-  double Evaluate(const State& s) const { return Winner(s); }  // +1 X wins, -1 O wins, 0 otherwise
+  double Evaluate(const State& s) const { return Winner(s); }                  // +1 X wins, -1 O wins, 0 otherwise
   bool MaxToMove(const State& s) const { return s.x.Count() == s.o.Count(); }  // X starts
 };
 
@@ -104,7 +108,9 @@ struct Gamble {
   using Move = int;  // choose: 0 safe, 1 gamble; coin: 0 heads, 1 tails
   double win = 10.0, lose = -2.0, safe = 3.0;
 
-  std::vector<Move> Moves(const State& s) const { return s.phase == kChoose ? std::vector<Move>{0, 1} : std::vector<Move>{}; }
+  std::vector<Move> Moves(const State& s) const {
+    return s.phase == kChoose ? std::vector<Move>{0, 1} : std::vector<Move>{};
+  }
   State Apply(const State& s, Move m) const {
     if (s.phase == kChoose) return m == 0 ? State{kDone, safe} : State{kCoin, 0.0};
     return State{kDone, m == 0 ? win : lose};
@@ -118,7 +124,7 @@ struct Gamble {
 TEST_CASE("expectimax") {
   Gamble game;
   CHECK(Near(static_cast<float>(Expectimax(game, Gamble::State{}, 3)), 4.0f));  // 0.5*10 + 0.5*-2 = 4 > 3
-  game.win = 6.0;                                                                // now 2 < 3: play safe
+  game.win = 6.0;                                                               // now 2 < 3: play safe
   CHECK(Near(static_cast<float>(Expectimax(game, Gamble::State{}, 3)), 3.0f));
 }
 

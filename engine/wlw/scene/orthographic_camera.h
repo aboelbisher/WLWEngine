@@ -18,10 +18,8 @@ namespace wlw::scene {
 // least W x H world units visible" and the camera widens one side to match the screen's aspect
 // ratio, so the area always fits fully on screen (extra space shows on the longer side).
 class OrthographicCamera : public Camera3D {
-public:
-  static std::shared_ptr<OrthographicCamera> Create() {
-    return std::make_shared<OrthographicCamera>();
-  }
+ public:
+  static std::shared_ptr<OrthographicCamera> Create() { return std::make_shared<OrthographicCamera>(); }
 
   OrthographicCamera() {
     RebuildView();
@@ -76,7 +74,7 @@ public:
   void ProcessKeyboard(CameraMovement, float) override {}
   void ProcessMouseMovement(float, float, bool) override {}
 
-private:
+ private:
   void RebuildView() {
     view_ = glm::lookAt(glm::vec3(position_.x, position_.y, position_.z), glm::vec3(target_.x, target_.y, target_.z),
                         glm::vec3(up_.x, up_.y, up_.z));
@@ -105,4 +103,4 @@ private:
   glm::mat4 projection_{1.0f};
 };
 
-} // namespace wlw::scene
+}  // namespace wlw::scene

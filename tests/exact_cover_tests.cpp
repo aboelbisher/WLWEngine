@@ -100,8 +100,8 @@ TEST_CASE("sudoku") {
 // symmetries (identity, half turn, two mirrors) that's 8 raw solutions. A classic check that a
 // DLX solver is right.
 TEST_CASE("pentominoes3x20") {
-  const char* pentominoes[12] = {"#####", "##/##/#.", "###/#../#..", "##./.##/..#", ".#./###/.#.", "##/#./##",
-                                 "####/#...", "####/.#..", "###/.#./.#.", ".##/##./.#.", "##../.###", "##./.#./.##"};
+  const char* pentominoes[12] = {"#####",     "##/##/#.",  "###/#../#..", "##./.##/..#", ".#./###/.#.", "##/#./##",
+                                 "####/#...", "####/.#..", "###/.#./.#.", ".##/##./.#.", "##../.###",   "##./.#./.##"};
   const int width = 20, height = 3;
   ExactCover problem(width * height + 12);
   for (int p = 0; p < 12; ++p) {

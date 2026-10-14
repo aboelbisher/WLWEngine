@@ -212,8 +212,8 @@ GLuint GLFramebuffer(RenderTarget& target) {
   const GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
   glBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(previous_framebuffer));
   if (status != GL_FRAMEBUFFER_COMPLETE) {
-    WLW_LOG(LogRender, Error, "Render target %d x %d incomplete (status 0x%x): it will stay empty", gl->width_, gl->height_,
-                  status);
+    WLW_LOG(LogRender, Error, "Render target %d x %d incomplete (status 0x%x): it will stay empty", gl->width_,
+            gl->height_, status);
   }
   return gl->framebuffer_;
 }

@@ -35,7 +35,8 @@ Press Pressable(UIContext& ui, uint64_t id, const Rect& rect);
 
 // A chunky "3D" slab, the look of casual-game buttons: a soft shadow, a darker lip under the face,
 // the face (pushed down onto the lip by `press`), and a light band across its top. Returns the face.
-Rect RaisedRect(Canvas& canvas, const Rect& rect, const core::Color& face, float radius, float depth, float press = 0.0f);
+Rect RaisedRect(Canvas& canvas, const Rect& rect, const core::Color& face, float radius, float depth,
+                float press = 0.0f);
 
 // `text` scaled down to fit `max_width` if it's wider at `size` (never up).
 float FitTextSize(const Font& font, std::string_view text, float size, float max_width);

@@ -15,9 +15,9 @@ namespace wlw::rendering {
 
 struct PreprocessedShader {
   bool ok = false;
-  std::string error;                // why not: a missing file, an include cycle...
-  std::string code;                 // ready to compile (without #version)
-  std::vector<std::string> files;   // #line source-string numbers -> file names (0 = the main text)
+  std::string error;               // why not: a missing file, an include cycle...
+  std::string code;                // ready to compile (without #version)
+  std::vector<std::string> files;  // #line source-string numbers -> file names (0 = the main text)
 };
 
 using ShaderFileLookup = std::function<const std::string*(std::string_view name)>;

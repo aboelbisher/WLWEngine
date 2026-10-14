@@ -15,7 +15,7 @@ namespace wlw::rendering {
 // never see a device. Textures, shaders and render targets are made with their own Create
 // functions (texture.h, shader.h, render_target.h) and get their GPU side from the renderer.
 class RenderDevice {
-public:
+ public:
   virtual ~RenderDevice() = default;
 
   virtual std::unique_ptr<core::WVertexBuffer> CreateVertexBuffer(const std::vector<core::Vertex2D>& vertices) = 0;
@@ -26,4 +26,4 @@ public:
   static std::unique_ptr<RenderDevice> Create();
 };
 
-} // namespace wlw::rendering
+}  // namespace wlw::rendering

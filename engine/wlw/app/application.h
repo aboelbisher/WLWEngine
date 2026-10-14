@@ -98,10 +98,10 @@ class Application final {
   // ---- Services ----
   scene::Window& Window() { return *window_; }
   input::Input& Input() { return window_->GetInput(); }  // keys, pointer/touch, swipes, taps
-  audio::Audio& Audio() { return *audio_; }               // silent, but usable, without an audio device
-  ScreenStack& Screens() { return screens_; }             // game states (menu, play, pause...)
-  app::Time& Time() { return time_; }                     // this frame's time; the time scale
-  app::Quality& Quality() { return quality_; }            // quality levels from the device's speed
+  audio::Audio& Audio() { return *audio_; }              // silent, but usable, without an audio device
+  ScreenStack& Screens() { return screens_; }            // game states (menu, play, pause...)
+  app::Time& Time() { return time_; }                    // this frame's time; the time scale
+  app::Quality& Quality() { return quality_; }           // quality levels from the device's speed
   const AppConfig& Config() const { return config_; }
 #if WLW_DEBUG_UI
   debug::DebugUI& DebugUi() { return *debug_ui_; }  // e.g. HideFor() before a screenshot
@@ -135,7 +135,7 @@ class Application final {
   app::Quality quality_;
   bool quality_timing_ = false;  // GPU timing turned on for it (once: the debug panel may turn it off)
   bool quit_requested_ = false;
-  std::string cvar_file_;  // <save dir>/cvars.cfg: the player's Saved cvars
+  std::string cvar_file_;                                  // <save dir>/cvars.cfg: the player's Saved cvars
   std::vector<std::pair<CVarBase*, int>> cvar_callbacks_;  // removed in the destructor
   std::unique_ptr<ConsoleCommand> quit_command_;
 

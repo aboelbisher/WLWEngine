@@ -1,7 +1,9 @@
-BasedOnStyle: LLVM
-IndentWidth: 2
-TabWidth: 2
-UseTab: Never
-AllowShortFunctionsOnASingleLine: None
-BreakBeforeBraces: Attach
+# The engine's C++ style (checked by CI: cmake -DCHECK=ON -P cmake/ClangFormat.cmake; fix with
+# cmake -P cmake/ClangFormat.cmake). Google's style, as the code was already written, with 120 columns.
+BasedOnStyle: Google
 ColumnLimit: 120
+DerivePointerAlignment: false
+PointerAlignment: Left
+AllowShortCaseLabelsOnASingleLine: true
+IncludeBlocks: Preserve
+SortIncludes: Never

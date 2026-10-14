@@ -71,7 +71,7 @@ struct Audio::MusicStream final : StreamSource {
     }
     std::fill(stereo + n * 2, stereo + frames * 2, 0.0f);
     read.store(r + n, std::memory_order_release);  // frees the space for the decode thread
-    return frames;  // music loops: it never ends
+    return frames;                                 // music loops: it never ends
   }
 };
 
@@ -130,7 +130,8 @@ Audio::Audio() {
     ma_device_uninit(&device->device);
     return;
   }
-  WLW_LOG(LogAudio, Info, "Audio: %s, %u Hz", ma_get_backend_name(device->device.pContext->backend), device->device.sampleRate);
+  WLW_LOG(LogAudio, Info, "Audio: %s, %u Hz", ma_get_backend_name(device->device.pContext->backend),
+          device->device.sampleRate);
   device_ = std::move(device);
 }
 

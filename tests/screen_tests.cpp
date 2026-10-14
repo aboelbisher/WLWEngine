@@ -159,8 +159,8 @@ TEST_CASE("fade transition") {
   stack.EndFrame(0.1f);
   CHECK(Near(stack.FadeAmount(), 0.5f, 1e-3f));
   stack.Update(0.016f);
-  CHECK(g_log.empty());  // no updates (and no input) during a transition
-  CHECK(stack.Back());   // Back is swallowed too
+  CHECK(g_log.empty());   // no updates (and no input) during a transition
+  CHECK(stack.Back());    // Back is swallowed too
   stack.EndFrame(0.11f);  // fully black: the switch happens now
   CHECK(LogIs({"menu:exit", "play:enter"}));
   CHECK(Near(stack.FadeAmount(), 1.0f, 1e-3f));

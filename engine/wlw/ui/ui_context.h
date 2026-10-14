@@ -27,13 +27,13 @@ struct PointerState {
 struct UIContext {
   explicit UIContext(Canvas& canvas_to_draw_on) : canvas(canvas_to_draw_on) {}
 
-  Canvas& canvas;            // where the UI draws: the screen's canvas
-  PointerState pointer;      // this frame
-  Rect safe_area;            // the part of the screen not under bars / cutouts, in canvas units
-  bool interactive = true;   // false: widgets draw but don't respond (screens not on top, fades)
+  Canvas& canvas;              // where the UI draws: the screen's canvas
+  PointerState pointer;        // this frame
+  Rect safe_area;              // the part of the screen not under bars / cutouts, in canvas units
+  bool interactive = true;     // false: widgets draw but don't respond (screens not on top, fades)
   uint64_t active_widget = 0;  // the widget the pointer went down on (0 = none); kept across frames
-  Theme theme;               // how the widgets look (the game sets it, e.g. in its System's OnRenderUI)
-  float dt = 0.0f;           // real seconds since the last frame: widget animations
+  Theme theme;                 // how the widgets look (the game sets it, e.g. in its System's OnRenderUI)
+  float dt = 0.0f;             // real seconds since the last frame: widget animations
 
   // A number a widget keeps between frames (like Dear ImGui's storage): a switch's knob position, a
   // press, a dialog sliding in. `initial` the first frame it's asked for. Values not asked for

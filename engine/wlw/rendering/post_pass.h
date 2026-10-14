@@ -34,12 +34,12 @@ struct PostInput {
 };
 
 struct PostPass {
-  std::shared_ptr<ShaderMaterial> material;  // its shader must be `shader_type post;`; its params apply
-                                             // (null or not compiling: the pass copies uSource)
-  float scale = 1.0f;                        // output size as a fraction of the viewport's: 0.25 = a
-                                             // cheap blur (the last pass is always full size)
+  std::shared_ptr<ShaderMaterial> material;     // its shader must be `shader_type post;`; its params apply
+                                                // (null or not compiling: the pass copies uSource)
+  float scale = 1.0f;                           // output size as a fraction of the viewport's: 0.25 = a
+                                                // cheap blur (the last pass is always full size)
   TextureFormat format = TextureFormat::RGBA8;  // RGBA16F: values above 1 (glow); ignored by the last pass
-  std::string name;                          // lets later passes read its output (PostInput)
+  std::string name;                             // lets later passes read its output (PostInput)
   std::vector<PostInput> inputs;
 };
 
@@ -54,17 +54,17 @@ struct PostTargetSpec {
 };
 
 struct PostStep {
-  int pass = 0;                // index into the passes
-  int source = kSceneTarget;   // read as uSource: kSceneTarget or a target index
-  int output = kDestination;   // written: kDestination or a target index
-  glm::ivec2 size{1, 1};       // the output's size in pixels
+  int pass = 0;                                     // index into the passes
+  int source = kSceneTarget;                        // read as uSource: kSceneTarget or a target index
+  int output = kDestination;                        // written: kDestination or a target index
+  glm::ivec2 size{1, 1};                            // the output's size in pixels
   std::vector<std::pair<std::string, int>> inputs;  // extra textures: uniform -> kSceneTarget or target index
 };
 
 struct PostPlan {
-  std::vector<PostStep> steps;           // one per pass, in order
-  std::vector<PostTargetSpec> targets;   // the textures the passes before the last need
-  std::vector<std::string> errors;       // unknown input names, repeated names (those inputs are skipped)
+  std::vector<PostStep> steps;          // one per pass, in order
+  std::vector<PostTargetSpec> targets;  // the textures the passes before the last need
+  std::vector<std::string> errors;      // unknown input names, repeated names (those inputs are skipped)
 };
 
 // Plans the passes for a viewport of `pixels`. Targets are shared as much as possible: a pass
@@ -119,9 +119,9 @@ class PostChain {
   bool planned_ = false;
   glm::ivec2 planned_pixels_{0, 0};
   std::shared_ptr<RenderTarget> scene_target_;
-  RenderTargetSettings scene_settings_;           // as asked for (the GPU may fall back)
+  RenderTargetSettings scene_settings_;  // as asked for (the GPU may fall back)
   std::vector<std::shared_ptr<RenderTarget>> targets_;
-  std::vector<TextureFormat> target_formats_;     // as asked for
+  std::vector<TextureFormat> target_formats_;  // as asked for
 };
 
 }  // namespace wlw::rendering

@@ -155,7 +155,7 @@ TEST_CASE("config text: name = value, name value, comments") {
       "\n"
       "  test.text.b   hello world  \n"
       "test.text.c=on\n"
-      "test.text.a\n"            // no value: skipped
+      "test.text.a\n"               // no value: skipped
       "test.text.c = sometimes\n",  // bad value: skipped
       CVarSource::ConfigFile, "test.cfg");
   CHECK(applied == 3);

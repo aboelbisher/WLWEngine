@@ -15,9 +15,9 @@ namespace wlw::rendering {
 inline constexpr GLuint kFrameBlockBinding = 0;
 
 struct ShaderStageSource {
-  std::string_view name;               // for error messages
-  std::string_view text;               // the stage's main text
-  std::vector<std::string> prelude;    // files included before it (its line 1 stays line 1)
+  std::string_view name;             // for error messages
+  std::string_view text;             // the stage's main text
+  std::vector<std::string> prelude;  // files included before it (its line 1 stays line 1)
 };
 
 // Compiles + links a program; each stage also gets WLW_VERTEX / WLW_FRAGMENT defined. Errors are

@@ -37,9 +37,9 @@ struct Pending {
 };
 
 struct Registry {
-  std::map<std::string, CVarBase*> cvars;       // by lowercase name: sorted for listing
-  std::map<std::string, Pending> pending;       // values for names not registered (yet)
-  bool started = false;                         // ReadOnly cvars refuse changes after this
+  std::map<std::string, CVarBase*> cvars;  // by lowercase name: sorted for listing
+  std::map<std::string, Pending> pending;  // values for names not registered (yet)
+  bool started = false;                    // ReadOnly cvars refuse changes after this
   bool saved_changed = false;
 };
 Registry& GetRegistry() {
@@ -196,7 +196,8 @@ int ApplyCVarText(std::string_view text, CVarSource source, std::string_view ori
     if (line.empty() || line.front() == '#') continue;
     // "name = value" or "name value"
     size_t name_end = 0;
-    while (name_end < line.size() && !std::isspace(static_cast<unsigned char>(line[name_end])) && line[name_end] != '=') {
+    while (name_end < line.size() && !std::isspace(static_cast<unsigned char>(line[name_end])) &&
+           line[name_end] != '=') {
       ++name_end;
     }
     const std::string_view name = line.substr(0, name_end);

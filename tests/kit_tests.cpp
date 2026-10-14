@@ -56,7 +56,7 @@ TEST_CASE("backup survives a corrupt file") {
   store.Data()["best"] = 100;
   store.Save();
   store.Data()["best"] = 200;
-  store.Save();  // the 100 version is now the backup
+  store.Save();                                                        // the 100 version is now the backup
   WriteText(store.Path(), "{\"version\": 1, \"data\": {\"best\": 2");  // cut off mid-write
 
   SaveStore reloaded(folder, "progress", 1);

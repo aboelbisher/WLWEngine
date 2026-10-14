@@ -37,8 +37,8 @@ std::vector<uint8_t> MakeWav(uint32_t sample_rate, uint32_t frames) {
   u16(16);
   put("data", 4);
   u32(frames * 2);
-  for (uint32_t i = 0; i < frames; ++i) u16(static_cast<uint16_t>(static_cast<int16_t>(
-      12000.0 * std::sin(2.0 * 3.14159265 * 440.0 * i / sample_rate))));
+  for (uint32_t i = 0; i < frames; ++i)
+    u16(static_cast<uint16_t>(static_cast<int16_t>(12000.0 * std::sin(2.0 * 3.14159265 * 440.0 * i / sample_rate))));
   return wav;
 }
 
@@ -79,8 +79,8 @@ TEST_CASE("streams fade and crossfade") {
   std::vector<float> out(2 * 400);
   mixer.PlayStream(&a, 0.1f);
   mixer.Mix(out.data(), 50);
-  CHECK((out[0] > 0.0f && out[0] < 0.02f));                   // fading in from silence
-  CHECK(Near(out[49 * 2], 0.25f, 0.02f));                   // halfway through the fade
+  CHECK((out[0] > 0.0f && out[0] < 0.02f));  // fading in from silence
+  CHECK(Near(out[49 * 2], 0.25f, 0.02f));    // halfway through the fade
   mixer.Mix(out.data(), 100);
   CHECK((Near(out[99 * 2], 0.5f) && Near(out[99 * 2 + 1], 0.5f)));  // fully in
   mixer.SetBusVolume(Bus::Music, 0.5f);
@@ -121,11 +121,11 @@ TEST_CASE("decode resamples to stereo") {
   const auto data = Decode(wav.data(), wav.size(), kRate);
   CHECK(data.has_value());
   if (!data) return;
-  CHECK(data->samples.size() == data->frames * 2);           // stereo
-  CHECK((data->frames > 4700 && data->frames < 4900));         // 0.1 s at 48 kHz
+  CHECK(data->samples.size() == data->frames * 2);      // stereo
+  CHECK((data->frames > 4700 && data->frames < 4900));  // 0.1 s at 48 kHz
   float peak = 0.0f;
   for (float s : data->samples) peak = std::max(peak, std::fabs(s));
-  CHECK((peak > 0.3f && peak < 0.4f));  // 12000 / 32768
+  CHECK((peak > 0.3f && peak < 0.4f));                // 12000 / 32768
   CHECK(!Decode(wav.data(), 10, kRate).has_value());  // truncated: rejected, no crash
 }
 

@@ -261,7 +261,7 @@ void Application::BuildUI() {
   window_->GetScreen().BeginCanvases({framebuffer.x, framebuffer.y}, reference);
   ui::Canvas& canvas = ui_->canvas;
   ui_->NewFrame(time_.RealDelta());
-  ui_->safe_area =ui::SafeAreaFor(canvas, platform::GetSafeAreaInsets());
+  ui_->safe_area = ui::SafeAreaFor(canvas, platform::GetSafeAreaInsets());
 
   // The pointer for UI widgets, in Canvas units: pointer units -> framebuffer pixels -> units.
   // Uses the normal (blockable) queries, so the debug UI still takes precedence.
@@ -325,7 +325,8 @@ void Application::ApplyStartupCVars() {
     if (!SetLogFilter(cv_log_filter.Get())) WLW_LOG(LogApp, Warning, "log.filter: some parts aren't category=level");
   }));
   WatchCVar(cv_gpu_timing, [this] { window_->SetGpuTiming(cv_gpu_timing.Get()); });
-  WatchCVar(cv_invalidate_framebuffers, [this] { window_->SetInvalidateFramebuffers(cv_invalidate_framebuffers.Get()); });
+  WatchCVar(cv_invalidate_framebuffers,
+            [this] { window_->SetInvalidateFramebuffers(cv_invalidate_framebuffers.Get()); });
   cvar_callbacks_.emplace_back(&cv_quality_lock, cv_quality_lock.OnChange([this] {
     if (!quality_.Configured()) return;
     if (cv_quality_lock.Get() < 0) {

@@ -102,7 +102,8 @@ TEST_CASE("big receiver does not stretch the map") {
   const glm::vec4 clip = f.ViewProjection() * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
   CHECK((std::abs(clip.x) <= 1.0f && std::abs(clip.y) <= 1.0f && std::abs(clip.z) <= 1.0f));
   // So is the floor straight "behind" a caster corner along the light (where its shadow falls).
-  const glm::vec3 shadow_spot = glm::vec3(2.0f, 1.0f, 2.0f) + glm::normalize(sun) * (1.0f / std::abs(glm::normalize(sun).y));
+  const glm::vec3 shadow_spot =
+      glm::vec3(2.0f, 1.0f, 2.0f) + glm::normalize(sun) * (1.0f / std::abs(glm::normalize(sun).y));
   const glm::vec4 spot = f.ViewProjection() * glm::vec4(shadow_spot, 1.0f);
   CHECK((std::abs(spot.x) <= 1.0f && std::abs(spot.y) <= 1.0f && std::abs(spot.z) <= 1.0f));
 }

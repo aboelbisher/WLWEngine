@@ -89,8 +89,10 @@ class GLUIRenderer : public UIRenderer {
       }
       // The run's one texture on unit 0: a font atlas, an image, or (rectangles only) a white texel.
       GLuint texture = white_texture_;
-      if (batch.font) texture = AtlasTexture(*batch.font);
-      else if (batch.texture) texture = rendering::GLTexture(*batch.texture);
+      if (batch.font)
+        texture = AtlasTexture(*batch.font);
+      else if (batch.texture)
+        texture = rendering::GLTexture(*batch.texture);
       glBindTexture(GL_TEXTURE_2D, texture);
       DrawQuads(batch);
     }

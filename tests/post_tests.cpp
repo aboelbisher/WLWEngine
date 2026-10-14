@@ -79,13 +79,12 @@ TEST_CASE("ping pong") {
   const PostPlan plan = rendering::PlanPostChain(passes, kPhone);
   CHECK(plan.targets.size() == 2);
   CHECK((plan.steps[0].output == 0 && plan.steps[1].output == 1 && plan.steps[2].output == 0 &&
-        plan.steps[3].output == 1));
+         plan.steps[3].output == 1));
   CheckPlanIsSafe(passes, plan);
 }
 
 TEST_CASE("sizes and formats") {
-  const std::vector<PostPass> passes{Pass(0.5f), Pass(0.25f), Pass(0.25f, "", {}, TextureFormat::RGBA16F),
-                                     Pass(0.25f)};
+  const std::vector<PostPass> passes{Pass(0.5f), Pass(0.25f), Pass(0.25f, "", {}, TextureFormat::RGBA16F), Pass(0.25f)};
   const PostPlan plan = rendering::PlanPostChain(passes, kPhone);
   CHECK(plan.steps[0].size == glm::ivec2(540, 1200));
   CHECK(plan.steps[1].size == glm::ivec2(270, 600));
@@ -108,7 +107,7 @@ TEST_CASE("named outputs are kept") {
   const int base = plan.steps[0].output;
   CHECK((plan.steps[1].output != base && plan.steps[2].output != base));
   CHECK((plan.steps[3].inputs.size() == 1 && plan.steps[3].inputs[0].first == "uBase" &&
-        plan.steps[3].inputs[0].second == base));
+         plan.steps[3].inputs[0].second == base));
   CHECK(plan.targets.size() == 3);
   CheckPlanIsSafe(passes, plan);
 
@@ -265,7 +264,7 @@ TEST_CASE("scale while running") {
 
   bloom.SetScale(*view, 0.125f);
   const auto& passes = chain.Passes();
-  CHECK(passes[0].scale == 1.0f);                           // not the bloom's
+  CHECK(passes[0].scale == 1.0f);  // not the bloom's
   CHECK((passes[1].scale == 0.125f && passes[2].scale == 0.125f && passes[3].scale == 0.125f));
   CHECK((passes[4].material == bloom.combine && passes[4].scale == 1.0f));  // writes the picture
   const PostPlan& plan = chain.Prepare({400, 200}, scene);

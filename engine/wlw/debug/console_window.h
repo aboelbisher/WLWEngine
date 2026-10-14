@@ -26,7 +26,7 @@ class ConsoleWindow {
   ConsoleModel model_;
   char input_[512] = {};
   ImGuiTextFilter filter_;
-  int min_level_ = 0;  // LogLevel shown and above
+  int min_level_ = 0;   // LogLevel shown and above
   bool follow_ = true;  // keep the newest line in view
   bool focus_input_ = false;
 };

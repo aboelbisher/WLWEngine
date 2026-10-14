@@ -17,7 +17,7 @@
 #include <iterator>
 #include <memory>
 
-#include <csignal>   // raise(SIGTRAP)
+#include <csignal>  // raise(SIGTRAP)
 #include <cstdlib>
 #include <string>
 #include <unistd.h>  // fsync
@@ -48,7 +48,7 @@ namespace {
 android_app* g_app = nullptr;
 bool g_alive = false;
 EGLDisplay g_display = EGL_NO_DISPLAY;
-SafeAreaInsets g_insets;      // cached; refreshed when the window changes
+SafeAreaInsets g_insets;  // cached; refreshed when the window changes
 bool g_insets_valid = false;
 
 // Processes pending OS events. timeout_ms = -1 blocks until at least one event arrives.
@@ -164,18 +164,13 @@ class AndroidWindow : public scene::Window {
         break;
       case APP_CMD_PAUSE:
         resumed_ = false;
-        paused_event_ = true;  // the game should pause itself (phone call, app switch...)
+        paused_event_ = true;   // the game should pause itself (phone call, app switch...)
         was_suspended_ = true;  // and must resume once we're back, even if it never had to sleep
         break;
-      case APP_CMD_RESUME:
-        resumed_ = true;
-        break;
+      case APP_CMD_RESUME: resumed_ = true; break;
       case APP_CMD_WINDOW_RESIZED:
-      case APP_CMD_CONFIG_CHANGED:
-        UpdateSize();
-        break;
-      default:
-        break;
+      case APP_CMD_CONFIG_CHANGED: UpdateSize(); break;
+      default: break;
     }
   }
 
@@ -233,12 +228,18 @@ class AndroidWindow : public scene::Window {
       }
     }
     // An RGB888 window surface with a 24-bit depth buffer that supports OpenGL ES 3.
-    const EGLint config_attribs[] = {EGL_RENDERABLE_TYPE, EGL_OPENGL_ES3_BIT,
-                                     EGL_SURFACE_TYPE,    EGL_WINDOW_BIT,
-                                     EGL_RED_SIZE,        8,
-                                     EGL_GREEN_SIZE,      8,
-                                     EGL_BLUE_SIZE,       8,
-                                     EGL_DEPTH_SIZE,      24,
+    const EGLint config_attribs[] = {EGL_RENDERABLE_TYPE,
+                                     EGL_OPENGL_ES3_BIT,
+                                     EGL_SURFACE_TYPE,
+                                     EGL_WINDOW_BIT,
+                                     EGL_RED_SIZE,
+                                     8,
+                                     EGL_GREEN_SIZE,
+                                     8,
+                                     EGL_BLUE_SIZE,
+                                     8,
+                                     EGL_DEPTH_SIZE,
+                                     24,
                                      EGL_NONE};
     EGLint num_configs = 0;
     if (eglChooseConfig(g_display, config_attribs, &config_, 1, &num_configs) != EGL_TRUE || num_configs == 0) {
@@ -283,7 +284,7 @@ class AndroidWindow : public scene::Window {
   EGLConfig config_ = nullptr;
   EGLContext context_ = EGL_NO_CONTEXT;
   EGLSurface surface_ = EGL_NO_SURFACE;
-  bool resumed_ = true;  // the activity is starting; APP_CMD_PAUSE flips this
+  bool resumed_ = true;        // the activity is starting; APP_CMD_PAUSE flips this
   bool paused_event_ = false;  // APP_CMD_PAUSE seen, not yet reported to the game
   bool was_suspended_ = false;
   bool close_requested_ = false;
@@ -293,9 +294,7 @@ void OnAppCmd(android_app* /*app*/, int32_t cmd) {
   if (g_window) g_window->HandleCommand(cmd);
 }
 
-int32_t OnInputEvent(android_app* /*app*/, AInputEvent* event) {
-  return g_window ? g_window->HandleInput(event) : 0;
-}
+int32_t OnInputEvent(android_app* /*app*/, AInputEvent* event) { return g_window ? g_window->HandleInput(event) : 0; }
 
 }  // namespace
 
@@ -466,7 +465,8 @@ void Vibrate(int milliseconds, float strength) {
       env->CallVoidMethod(vibrator, env->GetMethodID(vibrator_class, "vibrate", "(Landroid/os/VibrationEffect;)V"),
                           effect);
     } else {
-      env->CallVoidMethod(vibrator, env->GetMethodID(vibrator_class, "vibrate", "(J)V"), static_cast<jlong>(milliseconds));
+      env->CallVoidMethod(vibrator, env->GetMethodID(vibrator_class, "vibrate", "(J)V"),
+                          static_cast<jlong>(milliseconds));
     }
   }
   if (env->ExceptionCheck()) env->ExceptionClear();  // e.g. no VIBRATE permission: just don't vibrate
@@ -487,8 +487,8 @@ bool WriteFileAtomic(const std::string& path, const std::vector<uint8_t>& data) 
   FILE* file = std::fopen(temp.c_str(), "wb");
   if (!file) return false;
   bool ok = data.empty() || std::fwrite(data.data(), 1, data.size(), file) == data.size();
-  ok = ok && std::fflush(file) == 0;     // C library buffer -> kernel
-  ok = ok && fsync(fileno(file)) == 0;   // kernel -> flash storage
+  ok = ok && std::fflush(file) == 0;    // C library buffer -> kernel
+  ok = ok && fsync(fileno(file)) == 0;  // kernel -> flash storage
   std::fclose(file);
   if (!ok || std::rename(temp.c_str(), path.c_str()) != 0) {  // POSIX rename: atomic replace
     std::remove(temp.c_str());
@@ -533,8 +533,8 @@ void BreakIntoDebugger() { raise(SIGTRAP); }
 // ---- The native bridge (bridge.h): C++ <-> com.wlw.WlwBridge (Kotlin) ----
 namespace {
 
-jclass g_bridge_class = nullptr;     // global ref; null if the app has no Kotlin side
-jmethodID g_bridge_call = nullptr;   // static void call(String service, String method, String json)
+jclass g_bridge_class = nullptr;    // global ref; null if the app has no Kotlin side
+jmethodID g_bridge_call = nullptr;  // static void call(String service, String method, String json)
 
 std::string ToString(JNIEnv* env, jstring text) {
   if (!text) return {};
@@ -614,11 +614,12 @@ std::vector<std::string> IntentCVarArguments(JNIEnv* env, jobject activity) {
   jmethodID get_intent = env->GetMethodID(env->GetObjectClass(activity), "getIntent", "()Landroid/content/Intent;");
   jobject intent = get_intent ? env->CallObjectMethod(activity, get_intent) : nullptr;
   if (intent && !env->ExceptionCheck()) {
-    jmethodID get_extra = env->GetMethodID(env->GetObjectClass(intent), "getStringExtra",
-                                           "(Ljava/lang/String;)Ljava/lang/String;");
+    jmethodID get_extra =
+        env->GetMethodID(env->GetObjectClass(intent), "getStringExtra", "(Ljava/lang/String;)Ljava/lang/String;");
     auto extra = static_cast<jstring>(env->CallObjectMethod(intent, get_extra, env->NewStringUTF("wlw")));
     if (extra && !env->ExceptionCheck()) {
-      for (const auto& [name, value] : ParseCVarList(ToString(env, extra))) arguments.push_back("+" + name + "=" + value);
+      for (const auto& [name, value] : ParseCVarList(ToString(env, extra)))
+        arguments.push_back("+" + name + "=" + value);
     }
   }
   if (env->ExceptionCheck()) env->ExceptionClear();

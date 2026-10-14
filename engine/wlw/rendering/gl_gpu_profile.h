@@ -57,11 +57,10 @@ extern void(GL_APIENTRY* get_query_object_ui64v)(GLuint id, GLenum pname, GLuint
 #define WLW_PROFILE_GPU_ZONE(name) \
   TracyGpuNamedZone(WLW_PROFILE_CONCAT_(wlw_gpu_zone_, __LINE__), name, ::wlw::rendering::GpuProfilerActive())
 // Named at run time (a null-terminated const char*, evaluated once), e.g. a post pass's name.
-#define WLW_PROFILE_GPU_ZONE_DYNAMIC(name)                                                          \
-  const char* const WLW_PROFILE_CONCAT_(wlw_gpu_zone_name_, __LINE__) = (name);                      \
-  TracyGpuZoneTransient(WLW_PROFILE_CONCAT_(wlw_gpu_zone_, __LINE__),                                \
-                        WLW_PROFILE_CONCAT_(wlw_gpu_zone_name_, __LINE__),                           \
-                        ::wlw::rendering::GpuProfilerActive())
+#define WLW_PROFILE_GPU_ZONE_DYNAMIC(name)                                      \
+  const char* const WLW_PROFILE_CONCAT_(wlw_gpu_zone_name_, __LINE__) = (name); \
+  TracyGpuZoneTransient(WLW_PROFILE_CONCAT_(wlw_gpu_zone_, __LINE__),           \
+                        WLW_PROFILE_CONCAT_(wlw_gpu_zone_name_, __LINE__), ::wlw::rendering::GpuProfilerActive())
 
 #else
 

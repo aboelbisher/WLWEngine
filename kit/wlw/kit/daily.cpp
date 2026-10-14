@@ -11,7 +11,7 @@ namespace wlw::kit {
 int64_t Date::DayNumber() const {
   const int64_t y = year - (month <= 2 ? 1 : 0);
   const int64_t era = (y >= 0 ? y : y - 399) / 400;
-  const int64_t year_of_era = y - era * 400;                                         // [0, 399]
+  const int64_t year_of_era = y - era * 400;                                             // [0, 399]
   const int64_t day_of_year = (153 * (month + (month > 2 ? -3 : 9)) + 2) / 5 + day - 1;  // [0, 365]
   const int64_t day_of_era = year_of_era * 365 + year_of_era / 4 - year_of_era / 100 + day_of_year;
   return era * 146097 + day_of_era - 719468;

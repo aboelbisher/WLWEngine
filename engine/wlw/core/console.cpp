@@ -58,46 +58,64 @@ const ConsoleCommand kHelp{"help", "Lists the commands; help <name> describes a 
                              }
                            }};
 
-const ConsoleCommand kFind{"find", "Lists the cvars and commands whose name or help contains <text>",
-                           [](const ConsoleArgs& args) {
-                             const std::string text = args.empty() ? "" : Lower(args[0]);
-                             int found = 0;
-                             for (const CVarBase* cvar : AllCVars()) {
-                               if (Lower(cvar->Name() + " " + cvar->Help()).find(text) == std::string::npos) continue;
-                               PrintCVar(*cvar);
-                               ++found;
-                             }
-                             for (const ConsoleCommand* command : AllConsoleCommands()) {
-                               if (Lower(command->Name() + " " + command->Help()).find(text) == std::string::npos) continue;
-                               WLW_LOG(LogConsole, Info, "%s (command): %s", command->Name().c_str(), command->Help().c_str());
-                               ++found;
-                             }
-                             if (found == 0) WLW_LOG(LogConsole, Info, "find: nothing matches \"%s\"", text.c_str());
-                           }};
+const ConsoleCommand kFind{
+    "find", "Lists the cvars and commands whose name or help contains <text>", [](const ConsoleArgs& args) {
+      const std::string text = args.empty() ? "" : Lower(args[0]);
+      int found = 0;
+      for (const CVarBase* cvar : AllCVars()) {
+        if (Lower(cvar->Name() + " " + cvar->Help()).find(text) == std::string::npos) continue;
+        PrintCVar(*cvar);
+        ++found;
+      }
+      for (const ConsoleCommand* command : AllConsoleCommands()) {
+        if (Lower(command->Name() + " " + command->Help()).find(text) == std::string::npos) continue;
+        WLW_LOG(LogConsole, Info, "%s (command): %s", command->Name().c_str(), command->Help().c_str());
+        ++found;
+      }
+      if (found == 0) WLW_LOG(LogConsole, Info, "find: nothing matches \"%s\"", text.c_str());
+    }};
 
 const ConsoleCommand kSet{"set", "set <cvar> <value>", [](const ConsoleArgs& args) {
-                            if (args.size() < 2) { WLW_LOG(LogConsole, Warning, "usage: set <cvar> <value>"); return; }
+                            if (args.size() < 2) {
+                              WLW_LOG(LogConsole, Warning, "usage: set <cvar> <value>");
+                              return;
+                            }
                             CVarBase* cvar = FindCVar(args[0]);
-                            if (!cvar) { WLW_LOG(LogConsole, Warning, "set: no cvar %s", args[0].c_str()); return; }
+                            if (!cvar) {
+                              WLW_LOG(LogConsole, Warning, "set: no cvar %s", args[0].c_str());
+                              return;
+                            }
                             SetAndReport(*cvar, args[1], CVarSource::Console);
                           }};
 
 const ConsoleCommand kReset{"reset", "reset <cvar>: back to its default; reset all: every cvar",
                             [](const ConsoleArgs& args) {
-                              if (args.empty()) { WLW_LOG(LogConsole, Warning, "usage: reset <cvar> | all"); return; }
+                              if (args.empty()) {
+                                WLW_LOG(LogConsole, Warning, "usage: reset <cvar> | all");
+                                return;
+                              }
                               if (Lower(args[0]) == "all") {
                                 for (CVarBase* cvar : AllCVars()) cvar->Reset();
-                                { WLW_LOG(LogConsole, Info, "every cvar is back to its default"); return; }
+                                {
+                                  WLW_LOG(LogConsole, Info, "every cvar is back to its default");
+                                  return;
+                                }
                               }
                               CVarBase* cvar = FindCVar(args[0]);
-                              if (!cvar) { WLW_LOG(LogConsole, Warning, "reset: no cvar %s", args[0].c_str()); return; }
+                              if (!cvar) {
+                                WLW_LOG(LogConsole, Warning, "reset: no cvar %s", args[0].c_str());
+                                return;
+                              }
                               cvar->Reset();
                               PrintCVar(*cvar);
                             }};
 
 const ConsoleCommand kExec{"exec", "exec <file>: runs a config file's settings (assets or a path)",
                            [](const ConsoleArgs& args) {
-                             if (args.empty()) { WLW_LOG(LogConsole, Warning, "usage: exec <file>"); return; }
+                             if (args.empty()) {
+                               WLW_LOG(LogConsole, Warning, "usage: exec <file>");
+                               return;
+                             }
                              if (!ApplyCVarFile(args[0], CVarSource::Console)) {
                                WLW_LOG(LogConsole, Warning, "exec: can't read %s", args[0].c_str());
                              }

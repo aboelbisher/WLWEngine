@@ -230,8 +230,7 @@ void FlowParticles::WriteTo(scene::SpriteBatch& batch) const {
     const glm::vec2 normal = p.normals[a] + (p.normals[a + 1] - p.normals[a]) * t;
     // Across: its lane, drifting slowly (the wobble keeps it inside the width).
     const float wobble = p.settings.wobble;
-    const float side = lane_[i] * (1.0f - wobble) +
-                       wobble * (phase_sin_[i] * p.wave_cos + phase_cos_[i] * p.wave_sin);
+    const float side = lane_[i] * (1.0f - wobble) + wobble * (phase_sin_[i] * p.wave_cos + phase_cos_[i] * p.wave_sin);
     const glm::vec2 position = point + normal * (side * 0.5f * p.settings.width);
 
     float size = dot_size * size_[i];

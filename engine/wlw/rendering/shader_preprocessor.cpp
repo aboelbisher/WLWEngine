@@ -29,8 +29,8 @@ IncludeLine ParseInclude(std::string_view line, std::string& name) {
 
 struct Expander {
   const ShaderFileLookup& lookup;
-  std::vector<std::string> files;      // source-string number -> name
-  std::vector<std::string> stack;      // files being expanded (for cycles)
+  std::vector<std::string> files;  // source-string number -> name
+  std::vector<std::string> stack;  // files being expanded (for cycles)
   std::set<std::string, std::less<>> included;
   std::string out;
   std::string error;
@@ -64,7 +64,8 @@ struct Expander {
     size_t pos = 0;
     while (pos < text.size()) {
       const size_t end = text.find('\n', pos);
-      const std::string_view line = text.substr(pos, end == std::string_view::npos ? std::string_view::npos : end - pos);
+      const std::string_view line =
+          text.substr(pos, end == std::string_view::npos ? std::string_view::npos : end - pos);
       ++line_number;
       std::string include;
       switch (ParseInclude(line, include)) {
@@ -73,7 +74,8 @@ struct Expander {
           out += '\n';
           break;
         case IncludeLine::Malformed:
-          error = std::string(name) + ":" + std::to_string(line_number) + ": malformed #include (use #include \"file\")";
+          error =
+              std::string(name) + ":" + std::to_string(line_number) + ": malformed #include (use #include \"file\")";
           return false;
         case IncludeLine::Ok: {
           const size_t before = out.size();

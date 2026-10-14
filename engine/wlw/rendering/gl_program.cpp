@@ -37,9 +37,9 @@ GLuint CompileStage(GLenum type, std::string_view label, const ShaderStageSource
     glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &length);
     std::string log(length > 1 ? static_cast<size_t>(length) : 1, '\0');
     glGetShaderInfoLog(shader, static_cast<GLsizei>(log.size()), nullptr, log.data());
-    WLW_LOG(LogShader, Error, "Shader %.*s (%s), %s stage failed to compile:\n%s", static_cast<int>(label.size()), label.data(),
-                  Joined(defines).c_str(), type == GL_VERTEX_SHADER ? "vertex" : "fragment",
-                  MapShaderLog(log, source.files).c_str());
+    WLW_LOG(LogShader, Error, "Shader %.*s (%s), %s stage failed to compile:\n%s", static_cast<int>(label.size()),
+            label.data(), Joined(defines).c_str(), type == GL_VERTEX_SHADER ? "vertex" : "fragment",
+            MapShaderLog(log, source.files).c_str());
     glDeleteShader(shader);
     return 0;
   }
@@ -72,7 +72,7 @@ GLuint BuildProgram(std::string_view label, const ShaderStageSource& vertex, con
     std::string log(length > 1 ? static_cast<size_t>(length) : 1, '\0');
     glGetProgramInfoLog(program, static_cast<GLsizei>(log.size()), nullptr, log.data());
     WLW_LOG(LogShader, Error, "Shader %.*s (%s) failed to link:\n%s", static_cast<int>(label.size()), label.data(),
-                  Joined(defines).c_str(), log.c_str());
+            Joined(defines).c_str(), log.c_str());
     glDeleteProgram(program);
     return 0;
   }
@@ -87,8 +87,9 @@ GLuint BuildEngineProgram(std::string_view vertex_file, std::string_view fragmen
   const std::string* vertex = FindShaderFile(vertex_file);
   const std::string* fragment = FindShaderFile(fragment_file);
   if (!vertex || !fragment) {
-    WLW_LOG(LogShader, Error, "Engine shader file missing: %.*s", static_cast<int>((vertex ? fragment_file : vertex_file).size()),
-                  (vertex ? fragment_file : vertex_file).data());
+    WLW_LOG(LogShader, Error, "Engine shader file missing: %.*s",
+            static_cast<int>((vertex ? fragment_file : vertex_file).size()),
+            (vertex ? fragment_file : vertex_file).data());
     return 0;
   }
   std::string label(vertex_file);

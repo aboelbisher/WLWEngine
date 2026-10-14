@@ -22,11 +22,11 @@ namespace wlw::scene {
 
 // What the renderer did for a viewport's last drawn frame (shown in the debug UI).
 struct RenderStats {
-  int draw_calls = 0;    // one per mesh drawn; an instanced node is one call for all its copies
+  int draw_calls = 0;              // one per mesh drawn; an instanced node is one call for all its copies
   int transparent_draw_calls = 0;  // of those, drawn in the transparent queue (blending, back to front)
-  int instances = 0;     // copies drawn by instanced calls (sprite batches' dots too)
-  int instance_bytes = 0;  // per-copy data uploaded to the GPU this frame (only what changed)
-  int culled_nodes = 0;  // skipped by frustum culling
+  int instances = 0;               // copies drawn by instanced calls (sprite batches' dots too)
+  int instance_bytes = 0;          // per-copy data uploaded to the GPU this frame (only what changed)
+  int culled_nodes = 0;            // skipped by frustum culling
   // GPU state work (main pass + shadow pass): what changed, and what the state cache saved.
   int program_changes = 0;
   int texture_binds = 0;
@@ -37,9 +37,9 @@ struct RenderStats {
   float submit_us = 0.0f;  // shadow + main pass: GL calls
   // Post passes (the 3D went into the scene picture first; see post_pass.h).
   int post_passes = 0;
-  int post_targets = 0;    // textures the passes before the last write into
-  float post_us = 0.0f;    // their GL calls
-  int invalidations = 0;   // glInvalidateFramebuffer calls (phones: pictures not loaded / stored)
+  int post_targets = 0;   // textures the passes before the last write into
+  float post_us = 0.0f;   // their GL calls
+  int invalidations = 0;  // glInvalidateFramebuffer calls (phones: pictures not loaded / stored)
 };
 
 // The GPU's time for a viewport (Window::SetGpuTiming), smoothed, in ms; -1 = not measured
@@ -63,10 +63,10 @@ struct CanvasLayerSettings {
 };
 
 struct ViewportSettings {
-  std::string name = "Viewport";                              // shown in the debug UI
+  std::string name = "Viewport";                                      // shown in the debug UI
   rendering::TextureFormat format = rendering::TextureFormat::RGBA8;  // RGBA16F: glow, values above 1
-  bool depth = true;    // a depth buffer; false for a 2D-only viewport (saves memory)
-  bool smooth = true;   // linear filtering when its texture is sampled
+  bool depth = true;   // a depth buffer; false for a 2D-only viewport (saves memory)
+  bool smooth = true;  // linear filtering when its texture is sampled
   // Each drawn frame starts from this colour; nullopt keeps the last picture (trails, painting).
   std::optional<core::Color> clear = core::Color{0.0f, 0.0f, 0.0f, 0.0f};
 };

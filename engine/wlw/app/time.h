@@ -10,10 +10,10 @@ class Application;
 // Application; read anywhere.
 class Time {
  public:
-  float Delta() const { return delta_; }            // game time this frame: scaled (SetScale), clamped
-  float RealDelta() const { return real_delta_; }   // real time this frame, clamped (fades, debug UI)
-  float FixedStep() const { return fixed_step_; }   // OnFixedUpdate's dt
-  float Alpha() const { return alpha_; }            // progress towards the next fixed step (OnRender)
+  float Delta() const { return delta_; }              // game time this frame: scaled (SetScale), clamped
+  float RealDelta() const { return real_delta_; }     // real time this frame, clamped (fades, debug UI)
+  float FixedStep() const { return fixed_step_; }     // OnFixedUpdate's dt
+  float Alpha() const { return alpha_; }              // progress towards the next fixed step (OnRender)
   double SinceStart() const { return since_start_; }  // real seconds since the app started
 
   // Game time speed: hit-stop (SetScale(0, 0.06f)), slow motion (SetScale(0.4f, 0.3f, 0.2f)),

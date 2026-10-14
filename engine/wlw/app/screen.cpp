@@ -122,9 +122,7 @@ void ScreenStack::Apply(Op op) {
       pop();
       if (Screen* top = Top()) top->OnUncovered();
       return;
-    case OpKind::Replace:
-      pop();
-      break;
+    case OpKind::Replace: pop(); break;
     case OpKind::Reset:
       while (!screens_.empty()) pop();
       break;

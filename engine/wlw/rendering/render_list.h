@@ -47,9 +47,8 @@ struct DrawOrder {
 
 // Sorts by key; equal keys keep the order they were listed in (the same order every frame).
 inline void SortDrawOrder(std::vector<DrawOrder>& order) {
-  std::sort(order.begin(), order.end(), [](const DrawOrder& a, const DrawOrder& b) {
-    return a.key != b.key ? a.key < b.key : a.item < b.item;
-  });
+  std::sort(order.begin(), order.end(),
+            [](const DrawOrder& a, const DrawOrder& b) { return a.key != b.key ? a.key < b.key : a.item < b.item; });
 }
 
 }  // namespace wlw::rendering

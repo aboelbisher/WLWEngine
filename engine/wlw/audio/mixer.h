@@ -105,13 +105,13 @@ class Mixer {
     float target = 0.0f;
     float step = 0.0f;  // gain change per frame
   };
-  std::array<StreamSlot, 2> streams_;  // [0] = current, [1] = the one fading out (audio thread)
-  std::vector<float> stream_scratch_;   // decode buffer, allocated once (never in Mix)
+  std::array<StreamSlot, 2> streams_;             // [0] = current, [1] = the one fading out (audio thread)
+  std::vector<float> stream_scratch_;             // decode buffer, allocated once (never in Mix)
   static constexpr uint32_t kStreamChunk = 1024;  // frames decoded per step
 
   uint32_t sample_rate_;
   std::vector<std::unique_ptr<SoundData>> sounds_;  // owned; voices point into them
-  std::vector<Voice> voices_;                        // audio thread only
+  std::vector<Voice> voices_;                       // audio thread only
   uint64_t play_counter_ = 0;
 
   // Single-producer single-consumer ring buffer: the game thread writes at head_, the audio

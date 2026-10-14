@@ -36,8 +36,8 @@ void Canvas::AddQuad(const Font* font, const glm::vec2& min, const glm::vec2& ma
   AddQuad(font, corners, uvs, color, params);
 }
 
-void Canvas::AddQuad(const Font* font, const glm::vec2 (&corners)[4], const glm::vec2 (&uvs)[4], const core::Color& color,
-                     const glm::vec4& params) {
+void Canvas::AddQuad(const Font* font, const glm::vec2 (&corners)[4], const glm::vec2 (&uvs)[4],
+                     const core::Color& color, const glm::vec4& params) {
   ++BatchFor(font, nullptr).quad_count;
   for (int i = 0; i < 4; ++i) vertices_.push_back({corners[i], uvs[i], color, params});
 }
@@ -55,7 +55,7 @@ UIBatch& Canvas::BatchFor(const Font* font, const std::shared_ptr<rendering::WTe
     const bool last_samples = last.font != nullptr || last.texture != nullptr;
     const bool same_texture = last.font == font && last.texture.get() == image;
     if (!last.material && last.blend == blend && (!samples || !last_samples || same_texture)) {
-      if (font) last.font = font;                         // a run of rectangles becomes a text run...
+      if (font) last.font = font;                           // a run of rectangles becomes a text run...
       if (image && !last.texture) last.texture = *texture;  // ...or an image run
       return last;
     }
@@ -77,7 +77,8 @@ void Canvas::FillRect(const Rect& rect, const core::Color& color, float corner_r
   AddQuad(nullptr, rect.min, rect.max, -half, half, color, {kKindRect, half.x, half.y, radius});
 }
 
-void Canvas::ShaderRect(const Rect& rect, std::shared_ptr<rendering::ShaderMaterial> material, const core::Color& tint) {
+void Canvas::ShaderRect(const Rect& rect, std::shared_ptr<rendering::ShaderMaterial> material,
+                        const core::Color& tint) {
   if (!material) return;
   UIBatch batch;
   batch.first_quad = QuadCount();
@@ -184,7 +185,8 @@ void Canvas::Text(const Font& font, std::string_view text, glm::vec2 position, f
   // Back to front: shadow, outline, then the fill on top.
   const float outline_edge = font.EdgeForOutline(style.outline);
   if (style.shadow_offset != glm::vec2(0.0f)) {
-    AddText(font, text, pen + style.shadow_offset, size, style.shadow_color, style.outline > 0.0f ? outline_edge : 0.5f);
+    AddText(font, text, pen + style.shadow_offset, size, style.shadow_color,
+            style.outline > 0.0f ? outline_edge : 0.5f);
   }
   if (style.outline > 0.0f) AddText(font, text, pen, size, style.outline_color, outline_edge);
   AddText(font, text, pen, size, style.color, 0.5f);

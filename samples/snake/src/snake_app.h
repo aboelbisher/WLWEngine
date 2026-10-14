@@ -38,7 +38,7 @@ class SnakeApp : public wlw::app::System {
   void EatBurst();
   void SetupCameras();
   void FitPerspectiveCameraToScreen();
-  void SyncSnakeNodes(float t);   // game state -> pooled segment nodes
+  void SyncSnakeNodes(float t);  // game state -> pooled segment nodes
   NodePtr AcquireSegmentNode(size_t index);
   void UpdateTitle();
 

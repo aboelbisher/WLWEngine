@@ -53,7 +53,7 @@ TEST_CASE("canvas blend per draw") {
   canvas.FillRect({{0, 0}, {10, 10}}, {1, 1, 1, 1});
   canvas.Image({{0, 0}, {4, 4}}, dot, {.blend = BlendMode::Additive});
   canvas.Image({{4, 0}, {8, 4}}, dot, {.blend = BlendMode::Additive});  // same texture + mode: same run
-  canvas.FillRect({{0, 80}, {10, 90}}, {1, 1, 1, 1});                     // back to Alpha by itself
+  canvas.FillRect({{0, 80}, {10, 90}}, {1, 1, 1, 1});                   // back to Alpha by itself
   const auto& batches = canvas.Batches();
   CHECK(batches.size() == 3);
   CHECK((batches[0].blend == BlendMode::Alpha && batches[0].quad_count == 1));
@@ -120,10 +120,10 @@ TEST_CASE("radial falloff") {
   const std::vector<uint8_t> pixels = utils::RadialFalloffPixels(size);
   CHECK(pixels.size() == size * size * 4);
   auto alpha = [&](int x, int y) { return static_cast<int>(pixels[(y * size + x) * 4 + 3]); };
-  CHECK((pixels[0] == 255 && pixels[1] == 255 && pixels[2] == 255));  // white: the tint gives the colour
-  CHECK(alpha(32, 32) > 250);                                          // full at the centre
-  CHECK((alpha(0, 0) == 0 && alpha(63, 0) == 0 && alpha(0, 63) == 0));   // nothing in the corners
-  CHECK(alpha(0, 32) < 10);                                            // fades out by the edge
+  CHECK((pixels[0] == 255 && pixels[1] == 255 && pixels[2] == 255));    // white: the tint gives the colour
+  CHECK(alpha(32, 32) > 250);                                           // full at the centre
+  CHECK((alpha(0, 0) == 0 && alpha(63, 0) == 0 && alpha(0, 63) == 0));  // nothing in the corners
+  CHECK(alpha(0, 32) < 10);                                             // fades out by the edge
   // Symmetric, and falling steadily from the centre outwards.
   CHECK((alpha(10, 32) == alpha(53, 32) && alpha(32, 10) == alpha(32, 53) && alpha(10, 32) == alpha(32, 10)));
   bool falling = true;

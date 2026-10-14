@@ -5,8 +5,8 @@
 #include "stb_vorbis.c"
 
 #define MINIAUDIO_IMPLEMENTATION
-#define MA_NO_ENCODING     // we only play sounds
-#define MA_NO_GENERATION   // no built-in waveform/noise generators
+#define MA_NO_ENCODING    // we only play sounds
+#define MA_NO_GENERATION  // no built-in waveform/noise generators
 #include "miniaudio.h"
 
 #undef STB_VORBIS_HEADER_ONLY

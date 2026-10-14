@@ -48,7 +48,7 @@ class BitVector {
 // A x = b over GF(2), with A given column by column: column j = what unknown j does (e.g. which
 // cells move j flips), b = the target (e.g. which cells are lit).
 struct Gf2Solution {
-  BitVector x;                       // one solution (free unknowns set to 0)
+  BitVector x;                        // one solution (free unknowns set to 0)
   std::vector<BitVector> null_space;  // a basis: x ^ any combination of these is also a solution
   int rank = 0;
 };

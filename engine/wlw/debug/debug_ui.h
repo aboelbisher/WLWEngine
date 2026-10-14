@@ -47,7 +47,7 @@ class DebugUI {
 
   scene::Window& window_;
   bool open_ = false;
-  float hidden_for_ = 0.0f;  // seconds left with the toggle button hidden
+  float hidden_for_ = 0.0f;          // seconds left with the toggle button hidden
   bool imgui_pointer_down_ = false;  // the button state ImGui has been told about
   int overlay_id_ = -1;
   ConsoleWindow console_;

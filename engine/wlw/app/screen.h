@@ -33,7 +33,7 @@ class Screen {
   // Every *visible* screen draws, bottom to top (see IsOverlay).
   virtual void Render(float alpha) {}
   virtual void RenderUI(ui::UIContext& ui) {}  // draw with ui.canvas, widgets from ui/widgets.h
-  virtual void DebugUI() {}  // top screen only (WLW_DEBUG_UI builds)
+  virtual void DebugUI() {}                    // top screen only (WLW_DEBUG_UI builds)
 
   // Android Back / desktop Escape, top screen first. Return true if handled (e.g. a pause
   // panel closes itself); false lets the screen below try, and in the end the app goes to the

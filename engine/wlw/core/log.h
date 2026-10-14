@@ -55,12 +55,12 @@ class LogCategory {
 };
 
 struct LogRecord {
-  double seconds = 0.0;      // since the program started
-  int thread = 0;            // small id per thread, in the order threads first log (see LogThreadId)
+  double seconds = 0.0;  // since the program started
+  int thread = 0;        // small id per thread, in the order threads first log (see LogThreadId)
   LogLevel level = LogLevel::Info;
-  const char* category = ""; // the category's name
+  const char* category = "";  // the category's name
   std::string message;
-  const char* file = "";     // where it was logged
+  const char* file = "";  // where it was logged
   int line = 0;
 };
 
@@ -119,7 +119,8 @@ void Log(LogLevel level, const char* format, ...)
 }  // namespace wlw
 
 // ---- Declaring categories ----
-#define WLW_LOG_CATEGORY(Name) inline ::wlw::LogCategory Name{#Name}
+#define WLW_LOG_CATEGORY(Name) \
+  inline ::wlw::LogCategory Name { #Name }
 
 // ---- Compile-time level: 0 Verbose, 1 Debug, 2 Info, 3 Warning, 4 Error, 5 Fatal ----
 #ifndef WLW_LOG_COMPILE_LEVEL
@@ -130,22 +131,22 @@ void Log(LogLevel level, const char* format, ...)
 #endif
 #endif
 
-#define WLW_LOG(Category, Level, ...)                                                                    \
-  do {                                                                                                   \
-    if constexpr (static_cast<int>(::wlw::LogLevel::Level) >= WLW_LOG_COMPILE_LEVEL) {                  \
-      if ((Category).Enabled(::wlw::LogLevel::Level)) {                                                  \
-        ::wlw::detail::LogWrite((Category), ::wlw::LogLevel::Level, __FILE__, __LINE__, __VA_ARGS__);    \
-      }                                                                                                  \
-    }                                                                                                    \
+#define WLW_LOG(Category, Level, ...)                                                                 \
+  do {                                                                                                \
+    if constexpr (static_cast<int>(::wlw::LogLevel::Level) >= WLW_LOG_COMPILE_LEVEL) {                \
+      if ((Category).Enabled(::wlw::LogLevel::Level)) {                                               \
+        ::wlw::detail::LogWrite((Category), ::wlw::LogLevel::Level, __FILE__, __LINE__, __VA_ARGS__); \
+      }                                                                                               \
+    }                                                                                                 \
   } while (0)
 
 namespace wlw {
 // The engine's categories. Games make their own with WLW_LOG_CATEGORY.
-WLW_LOG_CATEGORY(LogGeneral);   // WLW_LOG_INFO / WARN / ERROR, Log()
-WLW_LOG_CATEGORY(LogCore);      // asserts, files, the basics
-WLW_LOG_CATEGORY(LogApp);       // Application, systems, screens, quality levels
-WLW_LOG_CATEGORY(LogRender);    // the renderer, GPU resources, viewports, post passes
-WLW_LOG_CATEGORY(LogShader);    // shader building and compiling
+WLW_LOG_CATEGORY(LogGeneral);  // WLW_LOG_INFO / WARN / ERROR, Log()
+WLW_LOG_CATEGORY(LogCore);     // asserts, files, the basics
+WLW_LOG_CATEGORY(LogApp);      // Application, systems, screens, quality levels
+WLW_LOG_CATEGORY(LogRender);   // the renderer, GPU resources, viewports, post passes
+WLW_LOG_CATEGORY(LogShader);   // shader building and compiling
 WLW_LOG_CATEGORY(LogAudio);
 WLW_LOG_CATEGORY(LogPlatform);  // OS windows, the native bridge, save files
 WLW_LOG_CATEGORY(LogUI);        // canvas, fonts, widgets

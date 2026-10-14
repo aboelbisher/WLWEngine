@@ -89,8 +89,8 @@ TEST_CASE("gather grows shadow boxes") {
 TEST_CASE("cull keeps what the camera sees") {
   scene::Scene scene;
   auto front = Cube({0, 0, 0});
-  auto behind = Cube({0, 0, 20});   // behind the camera
-  auto aside = Cube({50, 0, 0});    // far outside the side planes
+  auto behind = Cube({0, 0, 20});  // behind the camera
+  auto aside = Cube({50, 0, 0});   // far outside the side planes
   auto near = Cube({0, 0, 5});
   scene.AddNode(front);
   scene.AddNode(behind);

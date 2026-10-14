@@ -25,8 +25,8 @@ struct Rect {
 
 // How Canvas::Image draws its texture.
 struct ImageStyle {
-  core::Color tint{1.0f, 1.0f, 1.0f, 1.0f};        // multiplies the texture (white texture + tint = any colour)
-  Rect uv{{0.0f, 0.0f}, {1.0f, 1.0f}};             // the part of the texture (sprite sheets); (0, 0) = first row uploaded
+  core::Color tint{1.0f, 1.0f, 1.0f, 1.0f};  // multiplies the texture (white texture + tint = any colour)
+  Rect uv{{0.0f, 0.0f}, {1.0f, 1.0f}};       // the part of the texture (sprite sheets); (0, 0) = first row uploaded
   rendering::BlendMode blend = rendering::BlendMode::Alpha;  // e.g. Additive for glows (see blend_mode.h)
 };
 
@@ -60,19 +60,21 @@ struct UIVertex {
   glm::vec2 position{0.0f};  // Canvas units
   glm::vec2 uv{0.0f};        // text: atlas coordinate; rect: position relative to the rect centre
   core::Color color{1.0f, 1.0f, 1.0f, 1.0f};
-  glm::vec4 params{0.0f};  // x = kind (QuadKind); text: y = SDF edge; rect: y,z = half size, w = radius;
-                           // triangle: uv.x, uv.y, y = distances to its 3 edges; arc: y = radius, z = half thickness, w = half sweep
+  glm::vec4 params{
+      0.0f};  // x = kind (QuadKind); text: y = SDF edge; rect: y,z = half size, w = radius;
+              // triangle: uv.x, uv.y, y = distances to its 3 edges; arc: y = radius, z = half thickness, w = half sweep
 };
 
 // A run of consecutive quads that can be drawn in one call: same blend mode, and at most one
 // texture they sample (a font's atlas or an image's texture; rectangles sample none).
 struct UIBatch {
-  const Font* font = nullptr;                          // text: this font's atlas
-  std::shared_ptr<rendering::WTexture2D> texture;      // images: this texture (else null)
+  const Font* font = nullptr;                      // text: this font's atlas
+  std::shared_ptr<rendering::WTexture2D> texture;  // images: this texture (else null)
   size_t first_quad = 0;
   size_t quad_count = 0;
   std::shared_ptr<rendering::ShaderMaterial> material;  // a ShaderRect: one quad, drawn with this material's shader
-  rendering::BlendMode blend = rendering::BlendMode::Alpha;  // Image: its style's; ShaderRect: its material's; else Alpha
+  rendering::BlendMode blend =
+      rendering::BlendMode::Alpha;  // Image: its style's; ShaderRect: its material's; else Alpha
 };
 
 // The 2D UI layer, drawn over the 3D scene (Application::OnRenderUI). Immediate mode: draw
@@ -90,7 +92,7 @@ class Canvas {
   // Empties it, sized for `framebuffer_pixels` with `reference` units fitting (see above).
   void BeginFrame(glm::vec2 framebuffer_pixels, glm::vec2 reference);
 
-  glm::vec2 Size() const { return size_; }       // the whole area it covers, in units
+  glm::vec2 Size() const { return size_; }  // the whole area it covers, in units
   float PixelsPerUnit() const { return pixels_per_unit_; }
   glm::vec2 FromPixels(glm::vec2 pixels) const { return pixels / pixels_per_unit_; }
 
@@ -141,7 +143,8 @@ class Canvas {
                const glm::vec2& uv_max, const core::Color& color, const glm::vec4& params);
   void AddQuad(const Font* font, const glm::vec2 (&corners)[4], const glm::vec2 (&uvs)[4], const core::Color& color,
                const glm::vec4& params);
-  void AddText(const Font& font, std::string_view text, glm::vec2 pen, float size, const core::Color& color, float edge);
+  void AddText(const Font& font, std::string_view text, glm::vec2 pen, float size, const core::Color& color,
+               float edge);
 
   glm::vec2 size_{1.0f};
   float pixels_per_unit_ = 1.0f;

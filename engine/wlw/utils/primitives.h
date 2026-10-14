@@ -6,14 +6,15 @@
 #include "wlw/core/mesh.h"
 #include "wlw/core/vertex_3d.h"
 
-
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
 
 namespace wlw::utils {
 
-inline std::shared_ptr<core::Mesh<core::Vertex3D>> createPyramidFrustumWithNormals(float baseSize = 2.0f, float topSize = 1.0f, float height = 1.5f) {
+inline std::shared_ptr<core::Mesh<core::Vertex3D>> createPyramidFrustumWithNormals(float baseSize = 2.0f,
+                                                                                   float topSize = 1.0f,
+                                                                                   float height = 1.5f) {
   // Define half-sizes
   const float HB = baseSize / 2.0f;
   const float HT = topSize / 2.0f;
@@ -21,40 +22,40 @@ inline std::shared_ptr<core::Mesh<core::Vertex3D>> createPyramidFrustumWithNorma
 
   // Define the 8 UNIQUE POSITIONS first (for readability)
   const core::Vector3 P[8] = {
-      {-HB, -HB, -HH}, {HB, -HB, -HH}, {HB, HB, -HH}, {-HB, HB, -HH}, // Base (0-3)
-      {-HT, -HT, HH}, {HT, -HT, HH}, {HT, HT, HH}, {-HT, HT, HH}      // Top (4-7)
+      {-HB, -HB, -HH}, {HB, -HB, -HH}, {HB, HB, -HH}, {-HB, HB, -HH},  // Base (0-3)
+      {-HT, -HT, HH},  {HT, -HT, HH},  {HT, HT, HH},  {-HT, HT, HH}    // Top (4-7)
   };
 
   std::vector<core::Vertex3D> vertices;
   std::vector<uint32_t> indices;
 
-  // UV Shorthand 
-  const core::Vector2 UV_BL = { 0.0f, 0.0f }; // Bottom-Left
-  const core::Vector2 UV_BR = { 1.0f, 0.0f }; // Bottom-Right
-  const core::Vector2 UV_TR = { 1.0f, 1.0f }; // Top-Right
-  const core::Vector2 UV_TL = { 0.0f, 1.0f }; // Top-Left
+  // UV Shorthand
+  const core::Vector2 UV_BL = {0.0f, 0.0f};  // Bottom-Left
+  const core::Vector2 UV_BR = {1.0f, 0.0f};  // Bottom-Right
+  const core::Vector2 UV_TR = {1.0f, 1.0f};  // Top-Right
+  const core::Vector2 UV_TL = {0.0f, 1.0f};  // Top-Left
 
   // NOTE: C is a placeholder for the color attribute in the struct { P[i], C, N, UV }
 
   // --- 1. Bottom Face (Normal: 0, 0, -1) ---
-  core::Vector3 N_Bottom = { 0.0f, 0.0f, -1.0f };
-  vertices.push_back({ P[0], {1.0f, 0.0f, 0.0f, 1.0f}, N_Bottom, UV_BL }); // 0
-  vertices.push_back({ P[1], {1.0f, 0.5f, 0.0f, 1.0f}, N_Bottom, UV_BR }); // 1
-  vertices.push_back({ P[2], {0.0f, 1.0f, 0.0f, 1.0f}, N_Bottom, UV_TR }); // 2
+  core::Vector3 N_Bottom = {0.0f, 0.0f, -1.0f};
+  vertices.push_back({P[0], {1.0f, 0.0f, 0.0f, 1.0f}, N_Bottom, UV_BL});  // 0
+  vertices.push_back({P[1], {1.0f, 0.5f, 0.0f, 1.0f}, N_Bottom, UV_BR});  // 1
+  vertices.push_back({P[2], {0.0f, 1.0f, 0.0f, 1.0f}, N_Bottom, UV_TR});  // 2
 
-  vertices.push_back({ P[2], {0.0f, 1.0f, 0.0f, 1.0f}, N_Bottom, UV_TR }); // 3
-  vertices.push_back({ P[3], {0.0f, 0.0f, 1.0f, 1.0f}, N_Bottom, UV_TL }); // 4
-  vertices.push_back({ P[0], {1.0f, 0.0f, 0.0f, 1.0f}, N_Bottom, UV_BL }); // 5
+  vertices.push_back({P[2], {0.0f, 1.0f, 0.0f, 1.0f}, N_Bottom, UV_TR});  // 3
+  vertices.push_back({P[3], {0.0f, 0.0f, 1.0f, 1.0f}, N_Bottom, UV_TL});  // 4
+  vertices.push_back({P[0], {1.0f, 0.0f, 0.0f, 1.0f}, N_Bottom, UV_BL});  // 5
 
   // --- 2. Top Face (Normal: 0, 0, 1) ---
-  core::Vector3 N_Top = { 0.0f, 0.0f, 1.0f };
-  vertices.push_back({ P[4], {1.0f, 1.0f, 1.0f, 1.0f}, N_Top, UV_BL }); // 6
-  vertices.push_back({ P[7], {0.0f, 1.0f, 1.0f, 1.0f}, N_Top, UV_TL }); // 7
-  vertices.push_back({ P[6], {1.0f, 1.0f, 0.0f, 1.0f}, N_Top, UV_TR }); // 8
+  core::Vector3 N_Top = {0.0f, 0.0f, 1.0f};
+  vertices.push_back({P[4], {1.0f, 1.0f, 1.0f, 1.0f}, N_Top, UV_BL});  // 6
+  vertices.push_back({P[7], {0.0f, 1.0f, 1.0f, 1.0f}, N_Top, UV_TL});  // 7
+  vertices.push_back({P[6], {1.0f, 1.0f, 0.0f, 1.0f}, N_Top, UV_TR});  // 8
 
-  vertices.push_back({ P[6], {1.0f, 1.0f, 0.0f, 1.0f}, N_Top, UV_TR }); // 9
-  vertices.push_back({ P[5], {0.5f, 0.5f, 0.5f, 1.0f}, N_Top, UV_BR }); // 10
-  vertices.push_back({ P[4], {1.0f, 1.0f, 1.0f, 1.0f}, N_Top, UV_BL }); // 11
+  vertices.push_back({P[6], {1.0f, 1.0f, 0.0f, 1.0f}, N_Top, UV_TR});  // 9
+  vertices.push_back({P[5], {0.5f, 0.5f, 0.5f, 1.0f}, N_Top, UV_BR});  // 10
+  vertices.push_back({P[4], {1.0f, 1.0f, 1.0f, 1.0f}, N_Top, UV_BL});  // 11
 
   // --- 3. Side 1 (Face 0-1-5-4) ---
   // P[0] is BL, P[1] is BR, P[5] is TR (top-right), P[4] is TL (top-left)
@@ -63,13 +64,13 @@ inline std::shared_ptr<core::Mesh<core::Vertex3D>> createPyramidFrustumWithNorma
   core::Vector3 N_Side1 = V1_0.Cross(V4_0).Normalize();
 
   // Triangle 1: 0, 1, 5
-  vertices.push_back({ P[0], {1.0f, 0.0f, 0.0f, 1.0f}, N_Side1, UV_BL }); // 12
-  vertices.push_back({ P[1], {1.0f, 0.5f, 0.0f, 1.0f}, N_Side1, UV_BR }); // 13
-  vertices.push_back({ P[5], {0.5f, 0.5f, 0.5f, 1.0f}, N_Side1, UV_TR }); // 14
+  vertices.push_back({P[0], {1.0f, 0.0f, 0.0f, 1.0f}, N_Side1, UV_BL});  // 12
+  vertices.push_back({P[1], {1.0f, 0.5f, 0.0f, 1.0f}, N_Side1, UV_BR});  // 13
+  vertices.push_back({P[5], {0.5f, 0.5f, 0.5f, 1.0f}, N_Side1, UV_TR});  // 14
   // Triangle 2: 5, 4, 0
-  vertices.push_back({ P[5], {0.5f, 0.5f, 0.5f, 1.0f}, N_Side1, UV_TR }); // 15
-  vertices.push_back({ P[4], {1.0f, 1.0f, 1.0f, 1.0f}, N_Side1, UV_TL }); // 16
-  vertices.push_back({ P[0], {1.0f, 0.0f, 0.0f, 1.0f}, N_Side1, UV_BL }); // 17
+  vertices.push_back({P[5], {0.5f, 0.5f, 0.5f, 1.0f}, N_Side1, UV_TR});  // 15
+  vertices.push_back({P[4], {1.0f, 1.0f, 1.0f, 1.0f}, N_Side1, UV_TL});  // 16
+  vertices.push_back({P[0], {1.0f, 0.0f, 0.0f, 1.0f}, N_Side1, UV_BL});  // 17
 
   // --- 4. Side 2 (Face 1-2-6-5) ---
   // P[1] is BL, P[2] is BR, P[6] is TR, P[5] is TL
@@ -78,13 +79,13 @@ inline std::shared_ptr<core::Mesh<core::Vertex3D>> createPyramidFrustumWithNorma
   core::Vector3 N_Side2 = V2_1.Cross(V5_1).Normalize();
 
   // Triangle 1: 1, 2, 6
-  vertices.push_back({ P[1], {1.0f, 0.5f, 0.0f, 1.0f}, N_Side2, UV_BL }); // 18
-  vertices.push_back({ P[2], {0.0f, 1.0f, 0.0f, 1.0f}, N_Side2, UV_BR }); // 19
-  vertices.push_back({ P[6], {1.0f, 1.0f, 0.0f, 1.0f}, N_Side2, UV_TR }); // 20
+  vertices.push_back({P[1], {1.0f, 0.5f, 0.0f, 1.0f}, N_Side2, UV_BL});  // 18
+  vertices.push_back({P[2], {0.0f, 1.0f, 0.0f, 1.0f}, N_Side2, UV_BR});  // 19
+  vertices.push_back({P[6], {1.0f, 1.0f, 0.0f, 1.0f}, N_Side2, UV_TR});  // 20
   // Triangle 2: 6, 5, 1
-  vertices.push_back({ P[6], {1.0f, 1.0f, 0.0f, 1.0f}, N_Side2, UV_TR }); // 21
-  vertices.push_back({ P[5], {0.5f, 0.5f, 0.5f, 1.0f}, N_Side2, UV_TL }); // 22
-  vertices.push_back({ P[1], {1.0f, 0.5f, 0.0f, 1.0f}, N_Side2, UV_BL }); // 23
+  vertices.push_back({P[6], {1.0f, 1.0f, 0.0f, 1.0f}, N_Side2, UV_TR});  // 21
+  vertices.push_back({P[5], {0.5f, 0.5f, 0.5f, 1.0f}, N_Side2, UV_TL});  // 22
+  vertices.push_back({P[1], {1.0f, 0.5f, 0.0f, 1.0f}, N_Side2, UV_BL});  // 23
 
   // --- 5. Side 3 (Face 2-3-7-6) ---
   // P[2] is BL, P[3] is BR, P[7] is TR, P[6] is TL
@@ -93,15 +94,14 @@ inline std::shared_ptr<core::Mesh<core::Vertex3D>> createPyramidFrustumWithNorma
   core::Vector3 N_Side3 = V3_2.Cross(V6_2).Normalize();
 
   // Triangle 1: 2, 3, 7
-  vertices.push_back({ P[2], {0.0f, 1.0f, 0.0f, 1.0f}, N_Side3, UV_BL }); // 24
-  vertices.push_back({ P[3], {0.0f, 0.0f, 1.0f, 1.0f}, N_Side3, UV_BR }); // 25
-  vertices.push_back({ P[7], {0.0f, 1.0f, 1.0f, 1.0f}, N_Side3, UV_TR }); // 26
+  vertices.push_back({P[2], {0.0f, 1.0f, 0.0f, 1.0f}, N_Side3, UV_BL});  // 24
+  vertices.push_back({P[3], {0.0f, 0.0f, 1.0f, 1.0f}, N_Side3, UV_BR});  // 25
+  vertices.push_back({P[7], {0.0f, 1.0f, 1.0f, 1.0f}, N_Side3, UV_TR});  // 26
 
   // Triangle 2: 7, 6, 2
-  vertices.push_back({ P[7], {0.0f, 1.0f, 1.0f, 1.0f}, N_Side3, UV_TR }); // 27
-  vertices.push_back({ P[6], {1.0f, 1.0f, 0.0f, 1.0f}, N_Side3, UV_TL }); // 28
-  vertices.push_back({ P[2], {0.0f, 1.0f, 0.0f, 1.0f}, N_Side3, UV_BL }); // 29
-
+  vertices.push_back({P[7], {0.0f, 1.0f, 1.0f, 1.0f}, N_Side3, UV_TR});  // 27
+  vertices.push_back({P[6], {1.0f, 1.0f, 0.0f, 1.0f}, N_Side3, UV_TL});  // 28
+  vertices.push_back({P[2], {0.0f, 1.0f, 0.0f, 1.0f}, N_Side3, UV_BL});  // 29
 
   // --- 6. Side 4 (Face 3-0-4-7) ---
   // P[3] is BL, P[0] is BR, P[4] is TR, P[7] is TL
@@ -110,15 +110,14 @@ inline std::shared_ptr<core::Mesh<core::Vertex3D>> createPyramidFrustumWithNorma
   core::Vector3 N_Side4 = V0_3.Cross(V7_3).Normalize();
 
   // Triangle 1: 3, 0, 4
-  vertices.push_back({ P[3], {0.0f, 0.0f, 1.0f, 1.0f}, N_Side4, UV_BL }); // 30
-  vertices.push_back({ P[0], {1.0f, 0.0f, 0.0f, 1.0f}, N_Side4, UV_BR }); // 31
-  vertices.push_back({ P[4], {1.0f, 1.0f, 1.0f, 1.0f}, N_Side4, UV_TR }); // 32
+  vertices.push_back({P[3], {0.0f, 0.0f, 1.0f, 1.0f}, N_Side4, UV_BL});  // 30
+  vertices.push_back({P[0], {1.0f, 0.0f, 0.0f, 1.0f}, N_Side4, UV_BR});  // 31
+  vertices.push_back({P[4], {1.0f, 1.0f, 1.0f, 1.0f}, N_Side4, UV_TR});  // 32
 
   // Triangle 2: 4, 7, 3
-  vertices.push_back({ P[4], {1.0f, 1.0f, 1.0f, 1.0f}, N_Side4, UV_TR }); // 33
-  vertices.push_back({ P[7], {0.0f, 1.0f, 1.0f, 1.0f}, N_Side4, UV_TL }); // 34
-  vertices.push_back({ P[3], {0.0f, 0.0f, 1.0f, 1.0f}, N_Side4, UV_BL }); // 35
-
+  vertices.push_back({P[4], {1.0f, 1.0f, 1.0f, 1.0f}, N_Side4, UV_TR});  // 33
+  vertices.push_back({P[7], {0.0f, 1.0f, 1.0f, 1.0f}, N_Side4, UV_TL});  // 34
+  vertices.push_back({P[3], {0.0f, 0.0f, 1.0f, 1.0f}, N_Side4, UV_BL});  // 35
 
   // ... (indices and mesh_ setup remains the same) ...
   indices.resize(vertices.size());
@@ -132,7 +131,9 @@ inline std::shared_ptr<core::Mesh<core::Vertex3D>> createPyramidFrustumWithNorma
   return mesh_;
 }
 
-inline std::shared_ptr<core::Mesh<core::Vertex3D>> createCubeWithNormals(float size = 1.0f, const core::Color& color = {1.0f, 1.0f, 1.0f, 1.0f}) {
+inline std::shared_ptr<core::Mesh<core::Vertex3D>> createCubeWithNormals(float size = 1.0f,
+                                                                         const core::Color& color = {1.0f, 1.0f, 1.0f,
+                                                                                                     1.0f}) {
   const float HS = size / 2.0f;
   std::vector<core::Vertex3D> vertices;
 
@@ -208,11 +209,11 @@ inline std::shared_ptr<core::Mesh<core::Vertex3D>> createCubeWithNormals(float s
   return mesh_;
 }
 
-
 // A flat rectangle in the XZ plane, facing up (+Y), centred on the origin: a floor or a ground
 // for shadows to land on. One quad, two triangles.
-inline std::shared_ptr<core::Mesh<core::Vertex3D>> createPlaneWithNormals(
-    float width = 1.0f, float depth = 1.0f, const core::Color& color = {1.0f, 1.0f, 1.0f, 1.0f}) {
+inline std::shared_ptr<core::Mesh<core::Vertex3D>> createPlaneWithNormals(float width = 1.0f, float depth = 1.0f,
+                                                                          const core::Color& color = {1.0f, 1.0f, 1.0f,
+                                                                                                      1.0f}) {
   const float hw = width / 2.0f, hd = depth / 2.0f;
   const core::Vector3 up = {0.0f, 1.0f, 0.0f};
   std::vector<core::Vertex3D> vertices = {
@@ -233,8 +234,9 @@ inline std::shared_ptr<core::Mesh<core::Vertex3D>> createPlaneWithNormals(
 // along the edges and 8 small triangles at the corners. Every facet has its own flat normal, so
 // the edges catch the light differently from the faces - that's what makes it read as a solid,
 // "physical" block instead of a flat-shaded box. `bevel` is clamped to [0, size / 2).
-inline std::shared_ptr<core::Mesh<core::Vertex3D>> createBeveledCubeWithNormals(
-    float size = 1.0f, float bevel = 0.1f, const core::Color& color = {1.0f, 1.0f, 1.0f, 1.0f}) {
+inline std::shared_ptr<core::Mesh<core::Vertex3D>> createBeveledCubeWithNormals(float size = 1.0f, float bevel = 0.1f,
+                                                                                const core::Color& color = {
+                                                                                    1.0f, 1.0f, 1.0f, 1.0f}) {
   const float h = size / 2.0f;                              // half size: the outer surface
   const float in = h - std::clamp(bevel, 0.0f, h * 0.99f);  // where the flat faces end
   std::vector<core::Vertex3D> vertices;
@@ -274,8 +276,8 @@ inline std::shared_ptr<core::Mesh<core::Vertex3D>> createBeveledCubeWithNormals(
     for (float s : signs) {
       glm::vec3 normal(0.0f);
       normal[a] = s;
-      add_polygon({point(a, s * h, b, -in, c, -in), point(a, s * h, b, in, c, -in),
-                   point(a, s * h, b, in, c, in), point(a, s * h, b, -in, c, in)},
+      add_polygon({point(a, s * h, b, -in, c, -in), point(a, s * h, b, in, c, -in), point(a, s * h, b, in, c, in),
+                   point(a, s * h, b, -in, c, in)},
                   normal);
     }
   }
@@ -313,11 +315,8 @@ inline std::shared_ptr<core::Mesh<core::Vertex3D>> createBeveledCubeWithNormals(
   return mesh;
 }
 
-inline std::shared_ptr<core::Mesh<core::Vertex3D>> createSphereWithNormals(
-  float radius = 1.0f,
-  int stacks = 32,
-  int sectors = 64
-) {
+inline std::shared_ptr<core::Mesh<core::Vertex3D>> createSphereWithNormals(float radius = 1.0f, int stacks = 32,
+                                                                           int sectors = 64) {
   std::vector<core::Vertex3D> vertices;
   std::vector<uint32_t> indices;
 
@@ -328,7 +327,7 @@ inline std::shared_ptr<core::Mesh<core::Vertex3D>> createSphereWithNormals(
   const float sector_step = 2 * M_PI / sectors;
 
   // Random color for the sphere (simplifying the color assignment)
-  const core::Color sphere_color = { 0.8f, 0.8f, 0.8f, 1.0f };
+  const core::Color sphere_color = {0.8f, 0.8f, 0.8f, 1.0f};
 
   for (int i = 0; i <= stacks; ++i) {
     // Current angle for the stack (latitude) - ranges from -PI/2 to PI/2
@@ -349,24 +348,21 @@ inline std::shared_ptr<core::Mesh<core::Vertex3D>> createSphereWithNormals(
       float y = xy_radius * std::sin(sector_angle);
 
       // 1. Position
-      core::Vector3 position = { x, y, z };
+      core::Vector3 position = {x, y, z};
 
       // 2. Normal (Vector pointing from center to vertex, normalized)
       core::Vector3 normal = position.Normalize();
 
       // 3. UV Coordinates (0.0 to 1.0)
       core::Vector2 uv = {
-          (float)j / sectors, // U: Horizontal texture coordinate
-          (float)i / stacks   // V: Vertical texture coordinate
+          (float)j / sectors,  // U: Horizontal texture coordinate
+          (float)i / stacks    // V: Vertical texture coordinate
       };
 
       // Create and store the vertex
-      vertices.push_back({
-          position,
-          sphere_color, // Simple grey color
-          normal,
-          uv
-        });
+      vertices.push_back({position,
+                          sphere_color,  // Simple grey color
+                          normal, uv});
     }
   }
 
@@ -374,8 +370,8 @@ inline std::shared_ptr<core::Mesh<core::Vertex3D>> createSphereWithNormals(
 
   // A quad is formed by two triangles (triangle strip)
   for (int i = 0; i < stacks; ++i) {
-    int k1 = i * (sectors + 1);     // Index of the first vertex in the current stack
-    int k2 = (i + 1) * (sectors + 1); // Index of the first vertex in the next stack
+    int k1 = i * (sectors + 1);        // Index of the first vertex in the current stack
+    int k2 = (i + 1) * (sectors + 1);  // Index of the first vertex in the next stack
 
     for (int j = 0; j < sectors; ++j, ++k1, ++k2) {
       // The pole caps are special cases, but the UV method handles them gracefully.
@@ -404,9 +400,10 @@ inline std::shared_ptr<core::Mesh<core::Vertex3D>> createSphereWithNormals(
   mesh_->SetVertices(vertices);
   mesh_->SetIndices(indices);
   return mesh_;
-  }
+}
 
-  inline std::shared_ptr<core::Mesh<core::Vertex3D>> createCylinderWithNormals(float radius = 0.5f, float height = 1.0f, int segments = 32) {
+inline std::shared_ptr<core::Mesh<core::Vertex3D>> createCylinderWithNormals(float radius = 0.5f, float height = 1.0f,
+                                                                             int segments = 32) {
   std::vector<core::Vertex3D> vertices;
   std::vector<uint32_t> indices;
   const float HH = height / 2.0f;
@@ -424,12 +421,12 @@ inline std::shared_ptr<core::Mesh<core::Vertex3D>> createSphereWithNormals(
 
     // Side vertices
     core::Vector3 normal = core::Vector3(x, 0, z).Normalize();
-    vertices.push_back({{x, HH, z}, color, normal, {u, 1.0f}}); // Top side
-    vertices.push_back({{x, -HH, z}, color, normal, {u, 0.0f}}); // Bottom side
+    vertices.push_back({{x, HH, z}, color, normal, {u, 1.0f}});   // Top side
+    vertices.push_back({{x, -HH, z}, color, normal, {u, 0.0f}});  // Bottom side
 
     // Cap vertices
-    vertices.push_back({{x, HH, z}, color, {0, 1, 0}, {u, 1.0f}}); // Top cap
-    vertices.push_back({{x, -HH, z}, color, {0, -1, 0}, {u, 0.0f}}); // Bottom cap
+    vertices.push_back({{x, HH, z}, color, {0, 1, 0}, {u, 1.0f}});    // Top cap
+    vertices.push_back({{x, -HH, z}, color, {0, -1, 0}, {u, 0.0f}});  // Bottom cap
   }
 
   int stride = 4;
@@ -438,27 +435,35 @@ inline std::shared_ptr<core::Mesh<core::Vertex3D>> createSphereWithNormals(
     int next = (i + 1) * stride;
 
     // Side faces
-    indices.push_back(curr); indices.push_back(next); indices.push_back(curr + 1);
-    indices.push_back(curr + 1); indices.push_back(next); indices.push_back(next + 1);
+    indices.push_back(curr);
+    indices.push_back(next);
+    indices.push_back(curr + 1);
+    indices.push_back(curr + 1);
+    indices.push_back(next);
+    indices.push_back(next + 1);
 
     // Top cap
     int tcIdx = (int)vertices.size();
     vertices.push_back(topCenter);
-    indices.push_back(tcIdx); indices.push_back(curr + 2); indices.push_back(next + 2);
+    indices.push_back(tcIdx);
+    indices.push_back(curr + 2);
+    indices.push_back(next + 2);
 
     // Bottom cap
     int bcIdx = (int)vertices.size();
     vertices.push_back(bottomCenter);
-    indices.push_back(bcIdx); indices.push_back(next + 3); indices.push_back(curr + 3);
+    indices.push_back(bcIdx);
+    indices.push_back(next + 3);
+    indices.push_back(curr + 3);
   }
 
   auto mesh_ = std::make_shared<core::Mesh<core::Vertex3D>>();
   mesh_->SetVertices(vertices);
   mesh_->SetIndices(indices);
   return mesh_;
-  }
+}
 
-  inline std::shared_ptr<core::Mesh<core::Vertex3D>> createGemWithNormals(float width = 0.5f, float height = 1.0f) {
+inline std::shared_ptr<core::Mesh<core::Vertex3D>> createGemWithNormals(float width = 0.5f, float height = 1.0f) {
   std::vector<core::Vertex3D> vertices;
   const float HW = width / 2.0f;
   const float HH = height / 2.0f;
@@ -489,6 +494,6 @@ inline std::shared_ptr<core::Mesh<core::Vertex3D>> createSphereWithNormals(
   mesh_->SetVertices(vertices);
   mesh_->SetIndices(indices);
   return mesh_;
-  }
+}
 
-} // namespace wlw::utils
+}  // namespace wlw::utils

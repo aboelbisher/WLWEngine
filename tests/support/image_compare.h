@@ -23,15 +23,15 @@ bool LoadPng(const std::string& path, Image& image);
 bool SavePng(const std::string& path, const Image& image);
 
 struct CompareSettings {
-  int channel_tolerance = 2;       // a pixel differs when any channel differs by more than this (0..255)
-  double max_bad_fraction = 0.001; // the images match while at most this share of pixels differ
+  int channel_tolerance = 2;        // a pixel differs when any channel differs by more than this (0..255)
+  double max_bad_fraction = 0.001;  // the images match while at most this share of pixels differ
 };
 
 struct CompareResult {
   bool same_size = false;
-  int bad_pixels = 0;        // pixels with a channel beyond the tolerance
-  int max_difference = 0;    // the largest channel difference anywhere (0..255)
-  double bad_fraction = 0.0; // bad_pixels / all pixels (1 when the sizes differ)
+  int bad_pixels = 0;         // pixels with a channel beyond the tolerance
+  int max_difference = 0;     // the largest channel difference anywhere (0..255)
+  double bad_fraction = 0.0;  // bad_pixels / all pixels (1 when the sizes differ)
   bool passed = false;
   // The reference faded to grey with the bad pixels in red, to see where they are (empty when the
   // sizes differ).

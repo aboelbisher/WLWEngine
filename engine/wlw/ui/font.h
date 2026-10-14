@@ -63,7 +63,7 @@ class Font {
 
  private:
   struct Glyph {
-    float advance = 0.0f;  // pen movement, atlas pixels
+    float advance = 0.0f;    // pen movement, atlas pixels
     glm::vec2 offset{0.0f};  // top-left of the bitmap relative to the pen on the baseline
     glm::vec2 size{0.0f};    // bitmap size, atlas pixels (0 for spaces)
     glm::vec2 uv_min{0.0f};
@@ -82,8 +82,8 @@ class Font {
   std::array<Glyph, kLast - kFirst + 1> glyphs_{};
   Atlas atlas_;
   float bake_size_ = 48.0f;
-  float ascent_ = 0.0f;   // atlas pixels
-  float descent_ = 0.0f;  // atlas pixels, positive
+  float ascent_ = 0.0f;              // atlas pixels
+  float descent_ = 0.0f;             // atlas pixels, positive
   float distance_per_pixel_ = 0.0f;  // SDF value change per atlas pixel (0..1 scale)
   uint32_t id_ = 0;
 };

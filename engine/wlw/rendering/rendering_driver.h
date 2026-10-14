@@ -19,11 +19,11 @@ namespace wlw::rendering {
 class RenderTarget;
 
 class RenderingDriver {
-public:
+ public:
   virtual ~RenderingDriver() = default;
 
-	virtual bool Initialize(std::shared_ptr<scene::Window> window) = 0;
-	virtual void AttachWindow(std::shared_ptr<scene::Window> window) = 0;
+  virtual bool Initialize(std::shared_ptr<scene::Window> window) = 0;
+  virtual void AttachWindow(std::shared_ptr<scene::Window> window) = 0;
   virtual void DrawWindow(std::shared_ptr<scene::Window> window) = 0;
   // Compiles the shader variants everything in the window's scenes needs now, so the first frames
   // don't stall on it (the Application calls it once the game has built its scenes). Variants
@@ -43,6 +43,6 @@ public:
 
   virtual RenderDevice* GetDevice() = 0;
 
-	static std::unique_ptr<RenderingDriver> Create(RenderDevice* device);
+  static std::unique_ptr<RenderingDriver> Create(RenderDevice* device);
 };
-} // wlw::rendering
+}  // namespace wlw::rendering

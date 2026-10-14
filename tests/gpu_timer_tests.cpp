@@ -116,9 +116,9 @@ TEST_CASE("smoothing") {
   CHECK(rendering::SmoothMs(-1.0f, 4.0f) == 4.0f);  // the first reading is taken as is
   float shown = 2.0f;
   for (int frame = 0; frame < 120; ++frame) shown = rendering::SmoothMs(shown, 4.0f);
-  CHECK(Near(shown, 4.0f, 0.01f));                   // follows a steady value within ~2 s
+  CHECK(Near(shown, 4.0f, 0.01f));  // follows a steady value within ~2 s
   const float after_spike = rendering::SmoothMs(4.0f, 40.0f);
-  CHECK((after_spike > 4.0f && after_spike < 7.0f));   // one slow frame doesn't jump the display
+  CHECK((after_spike > 4.0f && after_spike < 7.0f));  // one slow frame doesn't jump the display
 }
 
 TEST_SUITE_END();

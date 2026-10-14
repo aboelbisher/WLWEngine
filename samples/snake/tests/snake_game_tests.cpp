@@ -110,4 +110,3 @@ TEST_CASE("reset") {
   CHECK(g.GetState() == SnakeGame::State::Playing);
   CHECK((g.Score() == 0 && g.Body().size() == 3));
 }
-
