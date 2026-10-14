@@ -32,7 +32,7 @@ namespace {
 bool g_alive = false;
 
 void GlfwErrorCallback(int error, const char* description) {
-  WLW_LOG_ERROR("GLFW error %d: %s", error, description);
+  WLW_LOG(LogPlatform, Error, "GLFW error %d: %s", error, description);
 }
 
 // The folder of the running executable: where the build copies the game's assets.
@@ -167,12 +167,13 @@ void Vibrate(int, float) {}  // desktops don't vibrate
 bool HasBridge() { return false; }
 bool BridgeCall(const std::string&, const std::string&, const std::string&) { return false; }
 
-void WriteLog(LogLevel level, const char* message) {
-  static const char* kPrefix[] = {"", "[warning] ", "[error] "};
-  FILE* out = level == LogLevel::Error ? stderr : stdout;
-  std::fprintf(out, "%s%s\n", kPrefix[static_cast<int>(level)], message);
+void WriteLog(const LogRecord& record) {
+  FILE* out = record.level >= LogLevel::Error ? stderr : stdout;
+  std::fprintf(out, "%s\n", FormatLogRecord(record).c_str());
   std::fflush(out);
 }
+
+// IsDebuggerAttached / BreakIntoDebugger: glfw_debugger.cpp (needs <windows.h>, kept out of this file).
 
 }  // namespace wlw::platform
 
@@ -216,7 +217,7 @@ class GlfwWindow : public Window {
 
   bool Initialize(Window* share_with) override {
     if (window_ != nullptr) {
-      WLW_LOG_WARN("Window '%s' is already initialized", title_.c_str());
+      WLW_LOG(LogPlatform, Warning, "Window '%s' is already initialized", title_.c_str());
       return true;
     }
     GLFWwindow* share = share_with ? static_cast<GlfwWindow*>(share_with)->window_ : nullptr;
@@ -224,7 +225,7 @@ class GlfwWindow : public Window {
     window_ = glfwCreateWindow((int)size_.x, (int)size_.y, title_.c_str(), nullptr, share);
     glfwWindowHint(GLFW_VISIBLE, GLFW_TRUE);
     if (window_ == nullptr) {
-      WLW_LOG_ERROR("Failed to create GLFW window '%s'", title_.c_str());
+      WLW_LOG(LogPlatform, Error, "Failed to create GLFW window '%s'", title_.c_str());
       return false;
     }
 

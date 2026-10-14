@@ -171,7 +171,7 @@ const GLShader* GLShaderFor(const Shader& shader) {
   }
   if (warmed_up) {  // not prepared by the warm-up: it costs a frame now (worth knowing on phones)
     const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
-    WLW_LOG_INFO("Shader compiled during play (%.1f ms): %s", ms, shader.Name().c_str());
+    WLW_LOG(LogRender, Info, "Shader compiled during play (%.1f ms): %s", ms, shader.Name().c_str());
   }
   return gl;
 }
@@ -181,7 +181,7 @@ GLuint GLFramebuffer(RenderTarget& target) {
   const bool created = gl == nullptr;
   if (created) {
     if (!CanRenderTo(target.Settings().format)) {
-      WLW_LOG_WARN("This GPU can't draw into 16-bit float textures: render target falls back to RGBA8");
+      WLW_LOG(LogRender, Warning, "This GPU can't draw into 16-bit float textures: render target falls back to RGBA8");
       target.SetFormat(TextureFormat::RGBA8);
     }
     auto made = std::make_unique<GLFramebufferObject>(target.Settings().depth);
@@ -212,7 +212,7 @@ GLuint GLFramebuffer(RenderTarget& target) {
   const GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
   glBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(previous_framebuffer));
   if (status != GL_FRAMEBUFFER_COMPLETE) {
-    WLW_LOG_ERROR("Render target %d x %d incomplete (status 0x%x): it will stay empty", gl->width_, gl->height_,
+    WLW_LOG(LogRender, Error, "Render target %d x %d incomplete (status 0x%x): it will stay empty", gl->width_, gl->height_,
                   status);
   }
   return gl->framebuffer_;

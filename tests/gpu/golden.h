@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <ostream>  // doctest prints values (e.g. shared_ptr) with <<
 #include <string>
 
 #include <doctest.h>

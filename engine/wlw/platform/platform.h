@@ -71,6 +71,13 @@ bool MoveToBackground();
 // manifest. No-op on desktop.
 void Vibrate(int milliseconds, float strength = 1.0f);
 
-void WriteLog(LogLevel level, const char* message);
+// The platform's log output (core/log.h's default sink): stdout/stderr with time, thread and category on
+// desktop; logcat (tag WLW, "[Category] message") on Android. Called under the log's lock.
+void WriteLog(const LogRecord& record);
+
+// A debugger is attached to this process (desktop: Windows, Linux, macOS; Android: Linux's TracerPid).
+bool IsDebuggerAttached();
+// Stops in the attached debugger here (only call it when one is attached: without one it kills the app).
+void BreakIntoDebugger();
 
 }  // namespace wlw::platform

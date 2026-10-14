@@ -17,6 +17,9 @@
 #include <iterator>
 #include <memory>
 
+#include <csignal>   // raise(SIGTRAP)
+#include <cstdlib>
+#include <string>
 #include <unistd.h>  // fsync
 
 #include <EGL/egl.h>
@@ -93,7 +96,7 @@ class AndroidWindow : public scene::Window {
   }
 
   bool Initialize(scene::Window* share_with) override {
-    if (share_with) WLW_LOG_WARN("Multiple windows aren't supported on Android");
+    if (share_with) WLW_LOG(LogPlatform, Warning, "Multiple windows aren't supported on Android");
     input_.SetTouchScreen(true);  // the pointer is a finger: no hover, coarse aim
     // The native window arrives asynchronously (APP_CMD_INIT_WINDOW): wait for it.
     while (g_app->window == nullptr && !g_app->destroyRequested) PollEvents(-1);
@@ -124,7 +127,7 @@ class AndroidWindow : public scene::Window {
     if (error == EGL_BAD_SURFACE || error == EGL_BAD_NATIVE_WINDOW) {
       DestroySurface();  // recreated on the next APP_CMD_INIT_WINDOW
     } else {
-      WLW_LOG_ERROR("eglSwapBuffers failed: 0x%x", error);
+      WLW_LOG(LogPlatform, Error, "eglSwapBuffers failed: 0x%x", error);
     }
   }
 
@@ -223,7 +226,7 @@ class AndroidWindow : public scene::Window {
     if (g_display == EGL_NO_DISPLAY) {
       g_display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
       if (g_display == EGL_NO_DISPLAY || eglInitialize(g_display, nullptr, nullptr) != EGL_TRUE) {
-        WLW_LOG_ERROR("eglInitialize failed: 0x%x", eglGetError());
+        WLW_LOG(LogPlatform, Error, "eglInitialize failed: 0x%x", eglGetError());
         return false;
       }
     }
@@ -237,13 +240,13 @@ class AndroidWindow : public scene::Window {
                                      EGL_NONE};
     EGLint num_configs = 0;
     if (eglChooseConfig(g_display, config_attribs, &config_, 1, &num_configs) != EGL_TRUE || num_configs == 0) {
-      WLW_LOG_ERROR("No EGL config with OpenGL ES 3 + 24-bit depth");
+      WLW_LOG(LogPlatform, Error, "No EGL config with OpenGL ES 3 + 24-bit depth");
       return false;
     }
     const EGLint context_attribs[] = {EGL_CONTEXT_CLIENT_VERSION, 3, EGL_NONE};
     context_ = eglCreateContext(g_display, config_, EGL_NO_CONTEXT, context_attribs);
     if (context_ == EGL_NO_CONTEXT) {
-      WLW_LOG_ERROR("eglCreateContext failed: 0x%x", eglGetError());
+      WLW_LOG(LogPlatform, Error, "eglCreateContext failed: 0x%x", eglGetError());
       return false;
     }
     return true;
@@ -256,7 +259,7 @@ class AndroidWindow : public scene::Window {
     ANativeWindow_setBuffersGeometry(g_app->window, 0, 0, format);
     surface_ = eglCreateWindowSurface(g_display, config_, g_app->window, nullptr);
     if (surface_ == EGL_NO_SURFACE) {
-      WLW_LOG_ERROR("eglCreateWindowSurface failed: 0x%x", eglGetError());
+      WLW_LOG(LogPlatform, Error, "eglCreateWindowSurface failed: 0x%x", eglGetError());
       return false;
     }
     eglMakeCurrent(g_display, surface_, surface_, context_);
@@ -496,12 +499,32 @@ std::optional<std::vector<uint8_t>> ReadLocalFile(const std::string& path) {
   return std::vector<uint8_t>(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
 }
 
-void WriteLog(LogLevel level, const char* message) {
-  const int priority = level == LogLevel::Error   ? ANDROID_LOG_ERROR
-                       : level == LogLevel::Warning ? ANDROID_LOG_WARN
-                                                    : ANDROID_LOG_INFO;
-  __android_log_write(priority, "WLW", message);
+void WriteLog(const LogRecord& record) {
+  int priority = ANDROID_LOG_INFO;
+  switch (record.level) {
+    case LogLevel::Verbose: priority = ANDROID_LOG_VERBOSE; break;
+    case LogLevel::Debug: priority = ANDROID_LOG_DEBUG; break;
+    case LogLevel::Info: priority = ANDROID_LOG_INFO; break;
+    case LogLevel::Warning: priority = ANDROID_LOG_WARN; break;
+    case LogLevel::Error: priority = ANDROID_LOG_ERROR; break;
+    case LogLevel::Fatal:
+    case LogLevel::Off: priority = ANDROID_LOG_FATAL; break;
+  }
+  // logcat has its own time and thread columns: only the category goes in front.
+  __android_log_print(priority, "WLW", "[%s] %s", record.category, record.message.c_str());
 }
+
+// A debugger (ptrace) shows as a non-zero TracerPid in /proc/self/status.
+bool IsDebuggerAttached() {
+  std::ifstream status("/proc/self/status");
+  std::string line;
+  while (std::getline(status, line)) {
+    if (line.rfind("TracerPid:", 0) == 0) return std::atoi(line.c_str() + 10) != 0;
+  }
+  return false;
+}
+
+void BreakIntoDebugger() { raise(SIGTRAP); }
 
 // ---- The native bridge (bridge.h): C++ <-> com.wlw.WlwBridge (Kotlin) ----
 namespace {
@@ -536,7 +559,7 @@ void ConnectBridge(JNIEnv* env, jobject activity) {
   env->DeleteLocalRef(name);
   if (env->ExceptionCheck() || !bridge) {
     env->ExceptionClear();
-    WLW_LOG_INFO("No com.wlw.WlwBridge class: the native bridge is off (an app without Kotlin code)");
+    WLW_LOG(LogPlatform, Info, "No com.wlw.WlwBridge class: the native bridge is off (an app without Kotlin code)");
     return;
   }
   static const JNINativeMethod kNatives[] = {
@@ -544,13 +567,13 @@ void ConnectBridge(JNIEnv* env, jobject activity) {
   };
   if (env->RegisterNatives(bridge, kNatives, 1) != JNI_OK) {
     env->ExceptionClear();
-    WLW_LOG_ERROR("Bridge: couldn't register WlwBridge.nativePost");
+    WLW_LOG(LogPlatform, Error, "Bridge: couldn't register WlwBridge.nativePost");
     return;
   }
   g_bridge_call = env->GetStaticMethodID(bridge, "call", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V");
   if (!g_bridge_call) {
     env->ExceptionClear();
-    WLW_LOG_ERROR("Bridge: WlwBridge.call(String, String, String) is missing");
+    WLW_LOG(LogPlatform, Error, "Bridge: WlwBridge.call(String, String, String) is missing");
     return;
   }
   g_bridge_class = static_cast<jclass>(env->NewGlobalRef(bridge));

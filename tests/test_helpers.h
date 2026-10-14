@@ -4,6 +4,7 @@
 // doctest's CHECK can't decompose && / || / ?:, so compound conditions go in double parentheses:
 // CHECK((a && b)).
 #include <cmath>
+#include <ostream>  // doctest prints values (e.g. shared_ptr) with <<
 
 #include <doctest.h>
 

@@ -1,5 +1,5 @@
 #include <iostream>
-#include "wlw/core/logger.h"
+#include "wlw/core/assert.h"
 #include "image_loader.h"
 #include "wlw/platform/platform.h"
 #include "stb_image.h"
@@ -13,12 +13,12 @@ namespace wlw::utils {
 
     // Read through the platform layer so this also works for assets packed inside an APK.
     const auto file = platform::ReadFile(file_path);
-    if (FAIL_IF(!file, "Failed to read image file: " << file_path)) {
+    if (!WLW_VERIFY(file, "Failed to read image file: %s", file_path.c_str())) {
       return nullptr;
     }
     unsigned char* data = stbi_load_from_memory(file->data(), static_cast<int>(file->size()), &width, &height,
                                                 &channels_count, 0);
-    if (FAIL_IF(data == nullptr, "Failed to decode image: " << file_path)) {
+    if (!WLW_VERIFY(data != nullptr, "Failed to decode image: %s", file_path.c_str())) {
       return nullptr;
     }
 

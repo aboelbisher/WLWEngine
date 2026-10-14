@@ -102,7 +102,7 @@ PostPlan PlanPostChain(std::span<const PostPass> passes, glm::ivec2 pixels) {
 const PostPlan& PostChain::Prepare(glm::ivec2 pixels, const RenderTargetSettings& scene) {
   if (!planned_ || pixels != planned_pixels_) {
     plan_ = PlanPostChain(passes_, pixels);
-    for (const std::string& error : plan_.errors) WLW_LOG_WARN("%s", error.c_str());
+    for (const std::string& error : plan_.errors) WLW_LOG(LogRender, Warning, "%s", error.c_str());
     planned_ = true;
     planned_pixels_ = pixels;
     // The targets, at the plan's sizes: kept and reused from frame to frame (a resize only

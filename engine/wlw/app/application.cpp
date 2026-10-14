@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdio>
+#include <cstdlib>
 
 namespace wlw::app {
 
@@ -22,9 +23,18 @@ Application::Application(AppConfig config)
       engine_(WLWEngine::Create()),
       window_(scene::Window::Create(config_.window_size, config_.title)),
       timestep_(config_.fixed_timestep, config_.max_frame_time) {
+  LogThreadId();  // the main thread is T0 in log records
+  // Log filters from the environment (desktop): WLW_LOG="Render=Verbose,Audio=Warning".
+  if (const char* filter = std::getenv("WLW_LOG"); filter != nullptr && !SetLogFilter(filter)) {
+    WLW_LOG(LogApp, Warning, "WLW_LOG=\"%s\": some parts aren't category=level", filter);
+  }
   time_.fixed_step_ = config_.fixed_timestep;
   if (const std::string folder = platform::GetSaveDirectory(config_.title); !folder.empty()) {
     quality_.SetSaveFile(folder + "/quality.txt");
+#ifndef NDEBUG
+    // Debug builds keep a log file (the run before as log.txt.prev); release builds don't write one.
+    StartLogFile(folder + "/log.txt");
+#endif
   }
 #if WLW_DEBUG_UI
   AddSystem<debug::EnginePanel>();  // the engine's own debug window, first of the debug panels
@@ -35,7 +45,7 @@ Application::~Application() = default;
 
 int Application::Run() {
   if (!engine_->Start(window_)) {
-    WLW_LOG_ERROR("Engine failed to start");
+    WLW_LOG(LogApp, Error, "Engine failed to start");
     return 1;
   }
   audio_ = std::make_unique<audio::Audio>();
@@ -43,7 +53,7 @@ int Application::Run() {
   // assistant interrupts us: silent until it ends, and the game pauses like when it goes to the
   // background (the player has stopped playing). The player's own music: ours steps aside.
   platform::SetBridgeHandler("audio", [this](const std::string& event, const std::string&) {
-    WLW_LOG_INFO("Audio: %s", event.c_str());
+    WLW_LOG(LogApp, Info, "Audio: %s", event.c_str());
     if (event == "interrupted") {
       if (!audio_->Interrupted()) screens_.AppPaused();
       audio_->SetInterrupted(true);

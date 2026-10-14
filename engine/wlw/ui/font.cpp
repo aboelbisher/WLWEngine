@@ -18,11 +18,11 @@ struct Font::Impl {
 std::shared_ptr<Font> Font::Load(const std::string& path, const FontOptions& options) {
   std::optional<std::vector<uint8_t>> data = platform::ReadFile(path);
   if (!data) {
-    WLW_LOG_ERROR("Font not found: %s", path.c_str());
+    WLW_LOG(LogUI, Error, "Font not found: %s", path.c_str());
     return nullptr;
   }
   auto font = FromMemory(std::move(*data), options);
-  if (!font) WLW_LOG_ERROR("Not a usable TrueType font: %s", path.c_str());
+  if (!font) WLW_LOG(LogUI, Error, "Not a usable TrueType font: %s", path.c_str());
   return font;
 }
 

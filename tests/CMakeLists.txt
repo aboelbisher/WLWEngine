@@ -21,6 +21,7 @@ add_executable(wlw_tests
   image_compare_tests.cpp
   input_tests.cpp
   kit_tests.cpp
+  log_tests.cpp
   lighting_tests.cpp
   picking_tests.cpp
   post_tests.cpp

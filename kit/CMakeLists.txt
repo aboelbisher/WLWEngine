@@ -9,6 +9,7 @@ add_library(wlw_kit STATIC
   wlw/kit/cloud_sync.h
   wlw/kit/daily.h
   wlw/kit/daily.cpp
+  wlw/kit/kit_log.h
   wlw/kit/progress.h
   wlw/kit/progress.cpp
   wlw/kit/save_store.h

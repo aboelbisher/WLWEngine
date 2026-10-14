@@ -53,7 +53,7 @@ int DispatchBridgeMessages() {
   for (const Message& message : messages) {
     const auto it = Handlers().find(message.service);
     if (it == Handlers().end()) {
-      WLW_LOG_WARN("Bridge: no handler for %s.%s", message.service.c_str(), message.event.c_str());
+      WLW_LOG(LogPlatform, Warning, "Bridge: no handler for %s.%s", message.service.c_str(), message.event.c_str());
       continue;
     }
     const BridgeHandler handler = it->second;  // a copy: the handler may replace itself

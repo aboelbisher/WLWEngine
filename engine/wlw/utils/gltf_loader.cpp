@@ -6,7 +6,7 @@
 #include <limits>
 
 #include "gltf_loader.h"
-#include "wlw/core/logger.h"
+#include "wlw/core/assert.h"
 #include "wlw/core/mesh.h"
 #include "wlw/core/model.h"
 #include "wlw/rendering/material.h"

@@ -8,7 +8,7 @@
 #include <vector>
 
 #include "wlw/core/collision.h"
-#include "wlw/core/logger.h"
+#include "wlw/core/assert.h"
 #include "wlw/core/model.h"
 #include "wlw/core/vertex_2d.h"
 #include "wlw/core/vertex_3d.h"
@@ -170,7 +170,7 @@ public:
 	// ---- Hierarchy ----
 	// Adds `node` as a child (moving it from its previous parent if it had one). Returns its id, or -1.
 	int AddNode(std::shared_ptr<Node> node) {
-		if (FAIL_IF(node == nullptr || node.get() == this, "invalid child node")) {
+		if (!WLW_VERIFY(node != nullptr && node.get() != this, "invalid child node")) {
 			return -1;
 		}
 		if (node->parent_) {

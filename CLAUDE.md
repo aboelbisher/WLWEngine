@@ -49,7 +49,7 @@ engine/wlw/
               GPU < budget x up_at for 10 s = up (wait doubles per failure of that level, max 8x), 3 s settle after a
               change/resume, readings smoothed ~0.5 s and clamped at 2 budgets; no GPU timer = down only; level saved
               in <save dir>/quality.txt. Fed by Application after each frame (UpdateQuality). Engine panel: level, -/+/Auto
-  core/       math types, FixedTimestep, Random (SplitMix64: deterministic everywhere, state saveable), log.h (WLW_LOG_*), logger.h (FAIL_IF), mesh/model, collision.h (AABB, Ray, Plane, IntersectPlane)
+  core/       math types, FixedTimestep, Random (SplitMix64: deterministic everywhere, state saveable), log.h (WLW_LOG(Category, Level, fmt...): levels Verbose..Fatal, categories LogCore/App/Render/Shader/Audio/Platform/UI/FX (+ kit LogKit, games WLW_LOG_CATEGORY), compile-time stripping, SetLogFilter("Render=Verbose,*=Warning") / env WLW_LOG, sinks: platform, RecentLogs ring (512), StartLogFile (debug builds: <save dir>/log.txt, previous run log.txt.prev), AddLogSink; LogThreadId), assert.h (WLW_ASSERT debug-only fatal, WLW_VERIFY always evaluated: logs + returns false, WLW_UNREACHABLE; SetAssertHandler for tests), mesh/model, collision.h (AABB, Ray, Plane, IntersectPlane)
   input/      Input: keys (pressed vs held), pointer (mouse/first finger), swipes, taps
   math/       ExactCover: Knuth's Algorithm X with Dancing Links (exact cover search, counting, hints);
               BitGrid<W,H> (bitboards: a grid as 64-bit words, fits = one AND); game_search.h (Minimax with
@@ -190,8 +190,10 @@ vcpkg/ + vcpkg.json     desktop deps (glm, glfw3). Android fetches glm via Fetch
     and GLSL ES 3.00 (no `texture2D`, no `gl_FragColor`, no desktop-only built-ins).
   - Texture uploads use sized internal formats (`GL_RGB8`, `GL_RGBA8`, `GL_R8`).
   - No desktop-only GL calls (`glPolygonMode`, `GL_QUADS`, double-precision functions, ...).
-- **Logging:** use `WLW_LOG_INFO/WARN/ERROR`, not `std::cout`, which goes nowhere on Android.
-  Android logcat tag: `WLW`.
+- **Logging:** use `WLW_LOG(LogRender, Warning, "fmt", ...)` with the system's category (`WLW_LOG_INFO/WARN/ERROR` =
+  category General, fine for games), not `std::cout`, which goes nowhere on Android. Android logcat tag: `WLW`.
+  Checks: `WLW_ASSERT` for programmer errors (gone in release), `if (!WLW_VERIFY(cond, "fmt", ...)) return ...;` for
+  failures the code handles. Formats are printf-style string literals (the compiler checks them).
 - **Files and assets:** read through `platform::ReadFile()`, because Android assets live inside the APK.
 - **GPU resource destructors** must check `platform::HasCurrentGLContext()` before calling GL.
 - **New source files** must be added to the explicit list in `engine/CMakeLists.txt`.

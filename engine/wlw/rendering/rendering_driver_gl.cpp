@@ -10,7 +10,7 @@
 
 #include "wlw/rendering/gl.h"
 
-#include "wlw/core/logger.h"
+#include "wlw/core/assert.h"
 #include "wlw/platform/platform.h"
 #include "rendering_driver.h"
 #include "wlw/rendering/frame_uniforms.h"
@@ -58,21 +58,21 @@ public:
     // The platform layer creates the OS window and its GL context (GLFW on desktop, EGL on
     // Android); the renderer only needs a current context and loaded GL functions.
     if (!platform::Init()) {
-      WLW_LOG_ERROR("Platform initialization failed");
+      WLW_LOG(LogRender, Error, "Platform initialization failed");
       return false;
     }
     if (!window->Initialize()) {
-      WLW_LOG_ERROR("Window / GL context creation failed");
+      WLW_LOG(LogRender, Error, "Window / GL context creation failed");
       return false;
     }
     window->MakeContextCurrent();
     if (!platform::LoadGLFunctions()) {
-      WLW_LOG_ERROR("Failed to load OpenGL functions");
+      WLW_LOG(LogRender, Error, "Failed to load OpenGL functions");
       return false;
     }
 
     gpu_name_ = reinterpret_cast<const char*>(glGetString(GL_RENDERER));
-    WLW_LOG_INFO("--- OpenGL renderer initialized ---\n  Vendor:   %s\n  Renderer: %s\n  Version:  %s",
+    WLW_LOG(LogRender, Info, "--- OpenGL renderer initialized ---\n  Vendor:   %s\n  Renderer: %s\n  Version:  %s",
                  reinterpret_cast<const char*>(glGetString(GL_VENDOR)),
                  reinterpret_cast<const char*>(glGetString(GL_RENDERER)),
                  reinterpret_cast<const char*>(glGetString(GL_VERSION)));
@@ -126,7 +126,7 @@ public:
   }
 
   void AttachWindow(std::shared_ptr<scene::Window> window) override {
-    if (FAIL_IF(main_window_ == nullptr, "null window, did u forgot to initialise the rendering driver ? ")) {
+    if (!WLW_VERIFY(main_window_ != nullptr, "AttachWindow before Initialize: the rendering driver has no main window")) {
       return;
     }
     window->Initialize(main_window_.get());  // shares GPU resources with the main window
@@ -280,7 +280,7 @@ public:
     const int custom = PrepareAliveResources();
     warmed_up_ = true;
     const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
-    WLW_LOG_INFO("Shader warm-up: %zu mesh variant(s) + %d game shader(s) compiled in %.1f ms",
+    WLW_LOG(LogRender, Info, "Shader warm-up: %zu mesh variant(s) + %d game shader(s) compiled in %.1f ms",
                  mesh_programs_.size() - before, custom, ms);
   }
 
@@ -544,7 +544,7 @@ public:
     for (const scene::LightNode* light : frame.lights) {
       if (!light->CastsShadows()) continue;
       if (light->GetType() != scene::LightNode::Type::Directional) {
-        if (!warned_shadow_type_) WLW_LOG_WARN("Only directional lights cast shadows (for now): ignoring the others");
+        if (!warned_shadow_type_) WLW_LOG(LogRender, Warning, "Only directional lights cast shadows (for now): ignoring the others");
         warned_shadow_type_ = true;
         continue;
       }
@@ -924,7 +924,7 @@ public:
     glUniform1i(glGetUniformLocation(program.id, "uShadowMap"), 1);
     if (warmed_up_) {  // not prepared by WarmUp: it costs a frame now (worth knowing on phones)
       const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
-      WLW_LOG_INFO("Shader variant compiled during play (%.1f ms):%s", ms, VariantName(key).c_str());
+      WLW_LOG(LogRender, Info, "Shader variant compiled during play (%.1f ms):%s", ms, VariantName(key).c_str());
     }
     return program;
   }
@@ -955,7 +955,7 @@ public:
     }
     if (warmed_up_) {
       const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
-      WLW_LOG_INFO("Sprite shader compiled during play (%.1f ms)%s", ms, textured ? ": TEXTURED" : "");
+      WLW_LOG(LogRender, Info, "Sprite shader compiled during play (%.1f ms)%s", ms, textured ? ": TEXTURED" : "");
     }
     return program;
   }
@@ -998,13 +998,13 @@ public:
     const bool complete = glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
     glBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(previous_framebuffer));
     if (!complete) {
-      WLW_LOG_ERROR("Shadow map framebuffer incomplete: shadows are off");
+      WLW_LOG(LogRender, Error, "Shadow map framebuffer incomplete: shadows are off");
       DeleteShadowMap();
       shadow_failed_ = true;
       return false;
     }
     shadow_map_size_ = map_size;
-    WLW_LOG_INFO("Shadow map: %d x %d", map_size, map_size);
+    WLW_LOG(LogRender, Info, "Shadow map: %d x %d", map_size, map_size);
     return true;
   }
 

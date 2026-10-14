@@ -4,6 +4,7 @@
 
 #include "json.hpp"
 #include "wlw/core/log.h"
+#include "wlw/kit/kit_log.h"
 #include "wlw/platform/bridge.h"
 
 namespace wlw::kit {
@@ -71,7 +72,7 @@ class BridgeAds : public Ads {
     } else if (event == "interstitial_done") {
       Finish(interstitial_done_);
     } else if (event == "error") {
-      WLW_LOG_WARN("Ads: %s", text.c_str());
+      WLW_LOG(LogKit, Warning, "Ads: %s", text.c_str());
       // A show that failed on the Kotlin side still has to answer the game.
       const std::string method = json.is_object() ? json.value("method", std::string()) : std::string();
       if (method == "show_rewarded") Finish(rewarded_done_, false);

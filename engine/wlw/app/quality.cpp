@@ -37,7 +37,7 @@ void Quality::Configure(const QualitySettings& settings) {
   int level = settings_.start >= 0 ? settings_.start : saved;
   if (level < 0) level = settings_.levels - 1;
   level_ = std::min(level, settings_.levels - 1);
-  WLW_LOG_INFO("Quality: level %d of 0..%d%s", level_, settings_.levels - 1, saved >= 0 ? " (saved)" : "");
+  WLW_LOG(LogApp, Info, "Quality: level %d of 0..%d%s", level_, settings_.levels - 1, saved >= 0 ? " (saved)" : "");
   Settle();
   if (on_change_) on_change_(level_);
 }
@@ -110,12 +110,12 @@ bool Quality::Update(float dt, float gpu_ms, float frame_ms) {
   if (over_ >= settings_.down_seconds && level_ > 0) {
     int& failures = failures_[static_cast<size_t>(level_)];
     failures = std::min(failures + 1, 30);
-    WLW_LOG_INFO("Quality: %d -> %d (GPU %.1f ms, frame %.1f ms)", level_, level_ - 1, gpu_ms_, frame_ms_);
+    WLW_LOG(LogApp, Info, "Quality: %d -> %d (GPU %.1f ms, frame %.1f ms)", level_, level_ - 1, gpu_ms_, frame_ms_);
     SetLevel(level_ - 1);
     return true;
   }
   if (level_ + 1 < settings_.levels && under_ >= UpWait(level_ + 1)) {
-    WLW_LOG_INFO("Quality: %d -> %d (GPU %.1f ms, frame %.1f ms)", level_, level_ + 1, gpu_ms_, frame_ms_);
+    WLW_LOG(LogApp, Info, "Quality: %d -> %d (GPU %.1f ms, frame %.1f ms)", level_, level_ + 1, gpu_ms_, frame_ms_);
     SetLevel(level_ + 1);
     return true;
   }
@@ -133,7 +133,7 @@ void Quality::Save() const {
   if (save_file_.empty()) return;
   const std::string text = std::to_string(level_);
   if (!platform::WriteFileAtomic(save_file_, std::vector<uint8_t>(text.begin(), text.end()))) {
-    WLW_LOG_WARN("Quality: couldn't save the level to %s", save_file_.c_str());
+    WLW_LOG(LogApp, Warning, "Quality: couldn't save the level to %s", save_file_.c_str());
   }
 }
 

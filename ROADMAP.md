@@ -5,14 +5,14 @@ first (Android, iOS, web), with desktop as a full target. This plan came out of 
 architecture review. Work goes one step at a time, in order. Step ids are stable: commits name
 them ("Roadmap 4.3b: ...").
 
-**Current step:** 0.4 Logging and asserts (not started) · **Updated:** 2026-10-14
+**Current step:** 0.5 CVars and console (not started) · **Updated:** 2026-10-14
 
-**Next session:** start 0.4 with its concept and plan. Notes: CI is green on main (Windows, Linux clang
+**Next session:** start 0.5 with its concept and plan (it builds on 0.4: the console reads RecentLogs and AddLogSink, log filters become a cvar). Notes: CI is green on main (Windows, Linux clang
 ASan+UBSan with the golden images on llvmpipe, Android). The GitHub CLI is installed and logged in
 (`C:\Program Files\GitHub CLI\gh.exe`, not on the bash PATH): `gh run list`, `gh run watch`,
 `gh run download <id> --name gpu-output`. A rendering change that changes pictures on purpose gets new references
 from CI's `gpu-output` artifact (llvmpipe), reviewed like code; they're plain git, not LFS. Tests: `wlw_tests` +
-`snake_game_tests` (173 cases) + `wlw_gpu_tests` (7, label gpu); cases run in parallel processes, so no shared
+`snake_game_tests` (188 cases) + `wlw_gpu_tests` (7, label gpu); cases run in parallel processes, so no shared
 temp files. Bluzzle and Threadlock still pin the engine submodule from before 0.1. Locally use `build/win-debug`
 (`build/windows-debug` is stale); the Android preset builds with
 `ANDROID_NDK_HOME=%LOCALAPPDATA%\Android\Sdk\ndk\30.0.16248370`. WSL Ubuntu has no compilers.
@@ -95,7 +95,7 @@ libunibreak (zlib), msdfgen (MIT), Jolt (MIT), Box2D v3 (MIT), ImGuizmo (MIT), F
   instancing, sprites, post chain, canvas text) rendered offscreen and compared with PNG references
   (tolerance, diff images on failure, `--update`); references from llvmpipe under xvfb in CI; the
   real GPU locally with a looser threshold.
-- [ ] **0.4 Logging and asserts.** Levels (Verbose to Fatal), categories, compile-time stripping,
+- [x] **0.4 Logging and asserts.** *(done 2026-10-14, commit "Roadmap 0.4: logging and asserts"; file log in debug builds only, logger.h deleted)* Levels (Verbose to Fatal), categories, compile-time stripping,
   runtime filters, sinks (console/logcat, file, an in-memory ring for the console, callbacks for
   crash breadcrumbs), thread ids and timestamps. `WLW_ASSERT`, `WLW_VERIFY` and `WLW_UNREACHABLE`
   replace `FAIL_IF`.

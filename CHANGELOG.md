@@ -4,6 +4,31 @@ Steps refer to ROADMAP.md. Breaking changes come with migration notes.
 
 ## Unreleased
 
+### Logging and asserts (Roadmap 0.4)
+- `WLW_LOG(Category, Level, "fmt", ...)`: levels Verbose, Debug, Info, Warning, Error, Fatal; engine categories
+  `LogCore`, `LogApp`, `LogRender`, `LogShader`, `LogAudio`, `LogPlatform`, `LogUI`, `LogFX` (kit: `LogKit`); games
+  declare their own with `WLW_LOG_CATEGORY(LogMyGame)`. Every engine message now has its category.
+- Levels below `WLW_LOG_COMPILE_LEVEL` (Debug in debug builds, Info in release) compile to nothing.
+- Runtime filters: `SetLogFilter("Render=Verbose,Audio=Warning,*=Info")`, `SetLogLevel`; on desktop the
+  `WLW_LOG` environment variable sets one at startup.
+- Records carry time, thread id (`T0` = main), category, level and file:line. Desktop lines read
+  `[12.345][T0][Render][warning] text`; logcat gets `[Render] text` with the matching priority.
+- Sinks: the platform output, an in-memory history of the last 512 records (`RecentLogs`), a log file
+  (`StartLogFile`, flushed every line; debug builds write `<save dir>/log.txt` and keep the run before as
+  `log.txt.prev`), and `AddLogSink` callbacks. Any thread may log. A Fatal record stops the program after
+  it's written everywhere.
+- `wlw/core/assert.h`: `WLW_ASSERT` (debug builds; release with the CMake option `WLW_ENABLE_ASSERTS`),
+  `WLW_VERIFY` (always evaluated: logs an Error and returns false), `WLW_UNREACHABLE`, and
+  `SetAssertHandler` for tests. A debugger, if attached, breaks on failures.
+- Platform: `platform::WriteLog(const LogRecord&)`, `IsDebuggerAttached()`, `BreakIntoDebugger()`.
+- Removed `wlw/core/logger.h` (`FAIL_IF`).
+
+Migration:
+- `WLW_LOG_INFO/WARN/ERROR` and `wlw::Log` still work (category General).
+- `if (FAIL_IF(bad, "msg " << x)) return;` becomes `if (!WLW_VERIFY(!bad, "msg %s", x)) return;`. The condition
+  is inverted (VERIFY states what must hold), and the message is printf-style. Include `wlw/core/assert.h`.
+- Code that got `<sstream>` through `wlw/scene/node.h` (it included `logger.h`) must include it itself.
+
 ### Golden images (Roadmap 0.3)
 - `tests/gpu`: a new test binary `wlw_gpu_tests` (CTest label `gpu`) draws 7 fixed scenes (lit cubes, shadows,
   transparency, instancing, sprites, bloom, canvas shapes + text + images) into an offscreen viewport of a

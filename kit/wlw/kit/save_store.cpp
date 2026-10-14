@@ -4,6 +4,7 @@
 #include <optional>
 
 #include "wlw/core/log.h"
+#include "wlw/kit/kit_log.h"
 #include "wlw/platform/platform.h"
 
 namespace wlw::kit {
@@ -50,7 +51,7 @@ SaveStore::LoadResult SaveStore::Load() {
   // Upgrade old formats one version at a time.
   int file_version = document->value("version", 1);
   if (file_version > version_) {
-    WLW_LOG_WARN("%s is from a newer version (%d > %d); reading it as is", path_.c_str(), file_version, version_);
+    WLW_LOG(LogKit, Warning, "%s is from a newer version (%d > %d); reading it as is", path_.c_str(), file_version, version_);
   }
   for (; file_version < version_; ++file_version) {
     if (auto it = migrations_.find(file_version); it != migrations_.end()) it->second(data_);
@@ -69,7 +70,7 @@ bool SaveStore::Save() {
     platform::WriteFileAtomic(path_ + ".bak", *previous);
   }
   if (!platform::WriteFileAtomic(path_, ToBytes(document.dump(2)))) {
-    WLW_LOG_ERROR("Couldn't save %s", path_.c_str());
+    WLW_LOG(LogKit, Error, "Couldn't save %s", path_.c_str());
     return false;
   }
   dirty_ = false;

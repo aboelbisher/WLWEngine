@@ -53,9 +53,10 @@ add_library(wlw STATIC
   wlw/core/color.h
   wlw/core/fixed_timestep.h
   wlw/core/time_scale.h
+  wlw/core/assert.cpp
+  wlw/core/assert.h
   wlw/core/log.cpp
   wlw/core/log.h
-  wlw/core/logger.h
   wlw/core/mesh.h
   wlw/core/random.h
   wlw/core/model.h
@@ -198,7 +199,7 @@ target_link_libraries(wlw
 if(WLW_PLATFORM STREQUAL "glfw")
   # Desktop: GLFW window + OpenGL 3.3 core loaded by glad.
   find_package(glfw3 CONFIG REQUIRED)
-  target_sources(wlw PRIVATE wlw/platform/glfw/glfw_platform.cpp)
+  target_sources(wlw PRIVATE wlw/platform/glfw/glfw_platform.cpp wlw/platform/glfw/glfw_debugger.cpp)
   target_compile_definitions(wlw PUBLIC WLW_PLATFORM_GLFW GLFW_INCLUDE_NONE)
   target_link_libraries(wlw PUBLIC wlw_glad PRIVATE glfw)
   if(WIN32)
@@ -221,6 +222,14 @@ elseif(WLW_PLATFORM STREQUAL "android")
   target_compile_definitions(wlw PUBLIC WLW_PLATFORM_ANDROID WLW_GLES)
   target_link_libraries(wlw PUBLIC wlw_native_app_glue EGL GLESv3 android log)
   target_link_libraries(wlw PRIVATE dl)  # miniaudio loads AAudio / OpenSL ES at runtime
+endif()
+
+# ---- Asserts (core/assert.h) ----
+# WLW_ASSERT is on in debug builds and compiled out in release; this keeps it in release builds too
+# (e.g. a test build for testers).
+option(WLW_ENABLE_ASSERTS "Keep WLW_ASSERT in release builds" OFF)
+if(WLW_ENABLE_ASSERTS)
+  target_compile_definitions(wlw PUBLIC WLW_ENABLE_ASSERTS)
 endif()
 
 # ---- Debug UI (Dear ImGui) ----

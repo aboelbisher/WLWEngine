@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
-#include "wlw/core/logger.h"
+#include "wlw/core/assert.h"
 
 namespace wlw::fx {
 
@@ -32,7 +32,7 @@ int FlowParticles::AddPath(std::span<const glm::vec2> points, const FlowPathSett
   std::vector<float> along(points.size(), 0.0f);
   for (size_t i = 1; i < points.size(); ++i) along[i] = along[i - 1] + glm::length(points[i] - points[i - 1]);
   path.length = points.empty() ? 0.0f : along.back();
-  if (FAIL_IF(points.size() < 2 || path.length <= 0.0f, "a flow path needs 2+ points and some length")) {
+  if (!WLW_VERIFY(points.size() >= 2 && path.length > 0.0f, "a flow path needs 2+ points and some length")) {
     path.points = {points.empty() ? glm::vec2(0.0f) : points[0]};
     path.points.push_back(path.points[0]);
     path.normals = {glm::vec2(0.0f, 1.0f), glm::vec2(0.0f, 1.0f)};

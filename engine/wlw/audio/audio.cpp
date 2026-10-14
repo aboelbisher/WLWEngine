@@ -108,18 +108,18 @@ Audio::Audio() {
   // The mixer must exist before the callback can run, and it needs the rate: open the device,
   // read its rate, create the mixer, hand it over, and only then start the device.
   if (ma_device_init(nullptr, &config, &device->device) != MA_SUCCESS) {
-    WLW_LOG_WARN("No audio device: the game runs without sound");
+    WLW_LOG(LogAudio, Warning, "No audio device: the game runs without sound");
     mixer_ = std::make_unique<Mixer>(kFallbackSampleRate);
     return;
   }
   mixer_ = std::make_unique<Mixer>(device->device.sampleRate);
   device->device.pUserData = mixer_.get();
   if (ma_device_start(&device->device) != MA_SUCCESS) {
-    WLW_LOG_WARN("Audio device failed to start: no sound");
+    WLW_LOG(LogAudio, Warning, "Audio device failed to start: no sound");
     ma_device_uninit(&device->device);
     return;
   }
-  WLW_LOG_INFO("Audio: %s, %u Hz", ma_get_backend_name(device->device.pContext->backend), device->device.sampleRate);
+  WLW_LOG(LogAudio, Info, "Audio: %s, %u Hz", ma_get_backend_name(device->device.pContext->backend), device->device.sampleRate);
   device_ = std::move(device);
 }
 
@@ -133,12 +133,12 @@ Audio::~Audio() {
 Audio::SoundId Audio::Load(const std::string& path) {
   const std::optional<std::vector<uint8_t>> bytes = platform::ReadFile(path);
   if (!bytes) {
-    WLW_LOG_ERROR("Sound not found: %s", path.c_str());
+    WLW_LOG(LogAudio, Error, "Sound not found: %s", path.c_str());
     return kNoSound;
   }
   std::optional<SoundData> data = Decode(bytes->data(), bytes->size(), mixer_->SampleRate());
   if (!data) {
-    WLW_LOG_ERROR("Can't decode sound: %s", path.c_str());
+    WLW_LOG(LogAudio, Error, "Can't decode sound: %s", path.c_str());
     return kNoSound;
   }
   return mixer_->AddSound(std::move(*data));
@@ -150,7 +150,7 @@ bool Audio::PlayMusic(const std::string& path, float fade_seconds) {
   if (it == music_.end()) {
     std::optional<std::vector<uint8_t>> bytes = platform::ReadFile(path);
     if (!bytes) {
-      WLW_LOG_ERROR("Music not found: %s", path.c_str());
+      WLW_LOG(LogAudio, Error, "Music not found: %s", path.c_str());
       return false;
     }
     auto stream = std::make_unique<MusicStream>();
@@ -158,7 +158,7 @@ bool Audio::PlayMusic(const std::string& path, float fade_seconds) {
     // Decoded straight to what the mixer wants: float, stereo, the device's rate (resampled).
     const ma_decoder_config config = ma_decoder_config_init(ma_format_f32, 2, mixer_->SampleRate());
     if (ma_decoder_init_memory(stream->bytes.data(), stream->bytes.size(), &config, &stream->decoder) != MA_SUCCESS) {
-      WLW_LOG_ERROR("Can't decode music: %s", path.c_str());
+      WLW_LOG(LogAudio, Error, "Can't decode music: %s", path.c_str());
       return false;
     }
     stream->ready = true;

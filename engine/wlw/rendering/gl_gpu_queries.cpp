@@ -73,12 +73,12 @@ class GLGpuQueries : public GpuQueries {
 std::unique_ptr<GpuQueries> CreateGLGpuQueries() {
 #if defined(WLW_GLES)
   if (!HasGLExtension("GL_EXT_disjoint_timer_query")) {
-    WLW_LOG_INFO("GPU timing: not supported on this GPU (no EXT_disjoint_timer_query)");
+    WLW_LOG(LogRender, Info, "GPU timing: not supported on this GPU (no EXT_disjoint_timer_query)");
     return nullptr;
   }
   auto get_result = reinterpret_cast<GetQueryObjectui64v>(platform::GetGLProcAddress("glGetQueryObjectui64vEXT"));
   if (!get_result) {
-    WLW_LOG_INFO("GPU timing: not supported (glGetQueryObjectui64vEXT missing)");
+    WLW_LOG(LogRender, Info, "GPU timing: not supported (glGetQueryObjectui64vEXT missing)");
     return nullptr;
   }
   return std::make_unique<GLGpuQueries>(get_result);
