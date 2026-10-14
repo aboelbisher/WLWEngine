@@ -5,13 +5,16 @@ first (Android, iOS, web), with desktop as a full target. This plan came out of 
 architecture review. Work goes one step at a time, in order. Step ids are stable: commits name
 them ("Roadmap 4.3b: ...").
 
-**Current step:** 0.2 CI (not started) · **Updated:** 2026-10-14
+**Current step:** 0.3 Golden images (not started) · **Updated:** 2026-10-14
 
-**Next session:** start 0.2 with its concept and plan. Notes from 0.1: tests are one doctest binary
-(`wlw_tests`) plus `snake_game_tests`, 166 cases, each its own CTest test, so CI runs `ctest -j`. Cases run
-in parallel processes, so tests must not share temp files. Bluzzle and Threadlock still pin the engine
-submodule from before 0.1, so they have not built against it yet. Locally, `build/windows-debug` was configured
-from an old path (`Desktop/WLWengine`) and fails to configure; the current build is in `build/win-debug`.
+**Next session:** first check the CI runs of 0.2 (Actions tab, or `gh run list` once the GitHub CLI is
+installed and logged in): Linux clang + ASan/UBSan had never been built before, so fix whatever it finds.
+Then start 0.3 with its concept and plan. Notes: tests are one doctest binary (`wlw_tests`) plus
+`snake_game_tests`, 166 cases, each its own CTest test; cases run in parallel processes, so tests must not share
+temp files. Bluzzle and Threadlock still pin the engine submodule from before 0.1. Locally, `build/windows-debug`
+was configured from an old path (`Desktop/WLWengine`) and fails to configure; use `build/win-debug`. The Android
+preset builds locally with `ANDROID_NDK_HOME=%LOCALAPPDATA%\Android\Sdk\ndk\30.0.16248370`. WSL Ubuntu has no
+compilers.
 
 ## How a step runs
 1. Concept and plan in chat: why it exists, the trade-offs, how the big engines do it, exactly
@@ -84,7 +87,7 @@ libunibreak (zlib), msdfgen (MIT), Jolt (MIT), Box2D v3 (MIT), ImGuizmo (MIT), F
 - [x] **0.1 doctest.** *(done 2026-10-14, commit "Roadmap 0.1: doctest"; the CHANGELOG has the details)* The 24 suites move to doctest: one `TEST_CASE` per behaviour, the same
   assertions (compound conditions in doctest's double parentheses), a shared test main, cases
   discovered by CTest. Snake's tests too.
-- [ ] **0.2 CI.** GitHub Actions: Windows MSVC Debug + Release, Linux clang with ASan + UBSan,
+- [x] **0.2 CI.** *(done 2026-10-14, commit "Roadmap 0.2: CI"; the first runs were not checked yet: no `gh` on the dev machine)* GitHub Actions: Windows MSVC Debug + Release, Linux clang with ASan + UBSan,
   Android NDK arm64 build of engine + Snake; dependency caching; every test. Later phases add TSan,
   web, macOS and iOS jobs.
 - [ ] **0.3 Golden images.** `tests/gpu`: reference scenes (lit cubes, shadows, transparency,

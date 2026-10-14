@@ -199,6 +199,12 @@ ctest --test-dir build\windows-debug --output-on-failure -j8
 ctest --test-dir build\windows-debug -R tween                 # cases whose name matches
 .\build\windows-debug\tests\wlw_tests.exe -ts=anim            # one suite (-tc="tween*" = cases)
 ```
+CI (`.github/workflows/ci.yml`, GitHub Actions on every push) runs the same presets; reproduce a job with
+`cmake --preset <name>` + `cmake --build --preset <name>` + `ctest --preset <name>`:
+`windows-debug` / `windows-release` (Release only on main), `linux-asan` (clang, ASan + UBSan via
+`WLW_SANITIZE`), `android-arm64` (build only: set `ANDROID_NDK_HOME` to NDK 30.0.16248370, the games' version).
+New code must pass all of them: no MSVC-only includes, no UB, no leaks.
+
 **Don't add features to the samples** (owner's rule): engine features are shown and verified
 through Bluzzle and the engine tests. Snake only has to keep compiling.
 Samples build only when the engine is the top-level project (`WLW_BUILD_SAMPLES`), so a game

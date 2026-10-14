@@ -203,6 +203,10 @@ if(WLW_PLATFORM STREQUAL "glfw")
   target_link_libraries(wlw PUBLIC wlw_glad PRIVATE glfw)
   if(WIN32)
     target_link_libraries(wlw PUBLIC opengl32)
+  elseif(UNIX AND NOT APPLE)
+    # Linux: miniaudio loads ALSA / PulseAudio at runtime and runs its own thread
+    find_package(Threads REQUIRED)
+    target_link_libraries(wlw PRIVATE Threads::Threads ${CMAKE_DL_LIBS} m)
   endif()
 
 elseif(WLW_PLATFORM STREQUAL "android")
