@@ -201,7 +201,10 @@ input::Key MapKey(int key) {
 
 class GlfwWindow : public Window {
  public:
-  GlfwWindow(const core::Vector2& size, const std::string& title) : title_(title) { size_ = size; }
+  GlfwWindow(const core::Vector2& size, const std::string& title, const WindowOptions& options)
+      : title_(title), options_(options) {
+    size_ = size;
+  }
 
   ~GlfwWindow() override {
     // If the platform was already shut down, glfwTerminate() destroyed this window for us.
@@ -217,7 +220,9 @@ class GlfwWindow : public Window {
       return true;
     }
     GLFWwindow* share = share_with ? static_cast<GlfwWindow*>(share_with)->window_ : nullptr;
+    glfwWindowHint(GLFW_VISIBLE, options_.visible ? GLFW_TRUE : GLFW_FALSE);
     window_ = glfwCreateWindow((int)size_.x, (int)size_.y, title_.c_str(), nullptr, share);
+    glfwWindowHint(GLFW_VISIBLE, GLFW_TRUE);
     if (window_ == nullptr) {
       WLW_LOG_ERROR("Failed to create GLFW window '%s'", title_.c_str());
       return false;
@@ -236,7 +241,7 @@ class GlfwWindow : public Window {
     UpdateInputSurface();
 
     glfwMakeContextCurrent(window_);
-    glfwSwapInterval(1);  // vsync
+    glfwSwapInterval(options_.visible ? 1 : 0);  // vsync; a hidden window never waits for the screen
     return true;
   }
 
@@ -297,12 +302,14 @@ class GlfwWindow : public Window {
 
   GLFWwindow* window_ = nullptr;
   std::string title_;
+  WindowOptions options_;
 };
 
 }  // namespace
 
-std::unique_ptr<Window> Window::Create(const core::Vector2& size, const std::string& title) {
-  return std::make_unique<GlfwWindow>(size, title);
+std::unique_ptr<Window> Window::Create(const core::Vector2& size, const std::string& title,
+                                       const WindowOptions& options) {
+  return std::make_unique<GlfwWindow>(size, title, options);
 }
 
 }  // namespace wlw::scene

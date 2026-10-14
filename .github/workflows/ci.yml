@@ -1,11 +1,13 @@
 # CI: every push builds the engine and runs every test. Jobs mirror the CMake presets, so each one can be
 # reproduced locally with `cmake --preset <name>` / `cmake --build --preset <name>` / `ctest --preset <name>`.
 # The repo is private (Actions minutes are billed, Windows at 2x), so Windows Release runs only on main and
-# on manual runs; the other jobs run on every branch.
+# on manual runs; the other jobs run on every branch. GPU tests (golden images, label "gpu") run on Linux only:
+# Windows runners have no OpenGL 3.3; Linux draws them with Mesa llvmpipe (software) under xvfb.
 name: CI
 
 on:
   push:
+    paths-ignore: ["**.md"]  # docs only: nothing to build
   workflow_dispatch:
 
 # A newer push to the same branch cancels the older run.
@@ -47,7 +49,7 @@ jobs:
       - name: Build
         run: cmake --build --preset windows-${{ matrix.config }}
       - name: Test
-        run: ctest --preset windows-${{ matrix.config }} -j4
+        run: ctest --preset windows-${{ matrix.config }} -j4 -LE gpu
       - name: Upload the test log
         if: failure()
         uses: actions/upload-artifact@v4
@@ -73,7 +75,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends ninja-build ccache pkg-config \
             libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev \
-            libwayland-dev libxkbcommon-dev wayland-protocols libgl-dev
+            libwayland-dev libxkbcommon-dev wayland-protocols libgl-dev \
+            xvfb xauth libgl1-mesa-dri
       - name: Make the vcpkg cache folder
         shell: bash
         run: |
@@ -92,7 +95,22 @@ jobs:
       - name: Build
         run: cmake --build --preset linux-asan
       - name: Test
-        run: ctest --preset linux-asan -j4
+        run: ctest --preset linux-asan -j4 -LE gpu
+      - name: GPU tests (golden images on llvmpipe)
+        if: '!cancelled()'
+        env:
+          LIBGL_ALWAYS_SOFTWARE: "1"
+          GALLIUM_DRIVER: llvmpipe
+          # Mesa and X11 keep allocations until exit that LeakSanitizer would report; leaks are checked above.
+          ASAN_OPTIONS: detect_leaks=0:abort_on_error=1
+        run: xvfb-run -a -s "-screen 0 1024x768x24" ctest --preset linux-asan -j4 -L gpu
+      - name: Upload the golden-image output
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gpu-output
+          path: build/linux-asan/tests/gpu/gpu_output
+          if-no-files-found: ignore
       - name: Upload the test log
         if: failure()
         uses: actions/upload-artifact@v4

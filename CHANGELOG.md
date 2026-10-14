@@ -4,6 +4,22 @@ Steps refer to ROADMAP.md. Breaking changes come with migration notes.
 
 ## Unreleased
 
+### Golden images (Roadmap 0.3)
+- `tests/gpu`: a new test binary `wlw_gpu_tests` (CTest label `gpu`) draws 7 fixed scenes (lit cubes, shadows,
+  transparency, instancing, sprites, bloom, canvas shapes + text + images) into an offscreen viewport of a
+  hidden window and compares them with `tests/gpu/references/*.png`. On a mismatch the actual picture and a
+  diff (bad pixels in red) go to `build/<preset>/tests/gpu/gpu_output/`; `wlw_gpu_tests --update` rewrites
+  the references. References come from Mesa llvmpipe (strict); a real GPU compares more loosely.
+- CI runs them on Linux under xvfb with llvmpipe and uploads the output when they fail. Windows CI skips them.
+  CI no longer runs for pushes that change only Markdown files.
+- `tests/support` (`wlw_test_support`): PNG load/save and image comparison, unit-tested in `wlw_tests`.
+- Engine: `Window::Create(size, title, WindowOptions{.visible = false})` makes a hidden window (desktop);
+  `RenderingDriver::ReadPixels(RenderTarget&)` reads a target back as RGBA8, top row first;
+  `RenderingDriver::GpuName()`.
+
+Migration: none; `Window::Create`'s new argument has a default. Code that implements `RenderingDriver` (only
+the engine's GL driver does) must add `ReadPixels` and `GpuName`.
+
 ### CI (Roadmap 0.2)
 - GitHub Actions (`.github/workflows/ci.yml`) on every push: Windows MSVC Debug (Release too on `main` and
   manual runs), Linux clang Debug with ASan + UBSan, Android arm64 (NDK 30, API 24: engine, kit and Snake).

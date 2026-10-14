@@ -71,6 +71,7 @@ public:
       return false;
     }
 
+    gpu_name_ = reinterpret_cast<const char*>(glGetString(GL_RENDERER));
     WLW_LOG_INFO("--- OpenGL renderer initialized ---\n  Vendor:   %s\n  Renderer: %s\n  Version:  %s",
                  reinterpret_cast<const char*>(glGetString(GL_VENDOR)),
                  reinterpret_cast<const char*>(glGetString(GL_RENDERER)),
@@ -129,6 +130,37 @@ public:
       return;
     }
     window->Initialize(main_window_.get());  // shares GPU resources with the main window
+  }
+
+  std::string GpuName() const override { return gpu_name_; }
+
+  std::vector<uint8_t> ReadPixels(RenderTarget& target) override {
+    if (target.Gpu() == nullptr) return {};  // never drawn into
+    const int width = target.Width(), height = target.Height();
+    const size_t texels = static_cast<size_t>(width) * height;
+    std::vector<uint8_t> pixels(texels * 4);
+    GLint previous = 0;
+    glGetIntegerv(GL_FRAMEBUFFER_BINDING, &previous);
+    glBindFramebuffer(GL_FRAMEBUFFER, GLFramebuffer(target));
+    glPixelStorei(GL_PACK_ALIGNMENT, 1);
+    const TextureFormat format = target.Settings().format;
+    if (format == TextureFormat::R16F || format == TextureFormat::RGBA16F) {
+      // Float targets read back as floats (the pair GLES guarantees for them).
+      std::vector<float> values(texels * 4);
+      glReadPixels(0, 0, width, height, GL_RGBA, GL_FLOAT, values.data());
+      for (size_t i = 0; i < values.size(); ++i) {
+        pixels[i] = static_cast<uint8_t>(std::lround(std::clamp(values[i], 0.0f, 1.0f) * 255.0f));
+      }
+    } else {
+      glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+    }
+    glBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(previous));
+    // GL's row 0 is the bottom of the picture; images start at the top.
+    const size_t row = static_cast<size_t>(width) * 4;
+    for (int y = 0; y < height / 2; ++y) {
+      std::swap_ranges(pixels.begin() + y * row, pixels.begin() + (y + 1) * row, pixels.begin() + (height - 1 - y) * row);
+    }
+    return pixels;
   }
 
   void SetViewport(int x, int y, int width, int height) override { glViewport(x, y, width, height); }
@@ -1025,6 +1057,7 @@ public:
 
 private:
   RenderDevice* device_;
+  std::string gpu_name_;  // GL_RENDERER
   std::shared_ptr<scene::Window> main_window_;
   std::unique_ptr<ui::UIRenderer> ui_renderer_;
 

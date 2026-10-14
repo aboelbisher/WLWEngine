@@ -11,6 +11,12 @@
 
 namespace wlw::scene {
 
+struct WindowOptions {
+	// false: never shown (desktop), just a GL context to draw offscreen viewports with, e.g. the
+	// golden-image tests (tests/gpu). Phones always show their one full-screen surface.
+	bool visible = true;
+};
+
 // A drawable surface (the OS window / the phone's screen) + its input + what it shows: the
 // screen viewport (GetScreen(): a Scene seen through a camera, with the game's UI canvas over
 // it) and any offscreen viewports, drawn into their textures before the screen (AddViewport).
@@ -144,7 +150,8 @@ protected:
 
 public:
 
-	static std::unique_ptr<Window> Create(const core::Vector2& size, const std::string& title);
+	static std::unique_ptr<Window> Create(const core::Vector2& size, const std::string& title,
+	                                      const WindowOptions& options = {});
 };
 
 } // namespace wlw::scene

@@ -612,7 +612,8 @@ void RunAndroidApp(android_app* app, std::unique_ptr<::wlw::app::Application> (*
 }  // namespace wlw::platform
 
 namespace wlw::scene {
-std::unique_ptr<Window> Window::Create(const core::Vector2& /*size*/, const std::string& /*title*/) {
+std::unique_ptr<Window> Window::Create(const core::Vector2& /*size*/, const std::string& /*title*/,
+                                       const WindowOptions& /*options*/) {
   return std::make_unique<platform::AndroidWindow>();  // full screen; size comes from the surface
 }
 }  // namespace wlw::scene

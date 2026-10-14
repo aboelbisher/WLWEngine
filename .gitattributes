@@ -15,3 +15,6 @@
 *.jpg   filter=lfs diff=lfs merge=lfs -text
 *.jpeg  filter=lfs diff=lfs merge=lfs -text
 *.lib   filter=lfs diff=lfs merge=lfs -text
+
+# Golden-image references: small, and CI reads them without LFS (see tests/gpu/golden.h)
+tests/gpu/references/*.png -filter -diff -merge binary

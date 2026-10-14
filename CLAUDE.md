@@ -125,7 +125,10 @@ engine/wlw/
               SetSize; UpdateMode Always / Once / Disabled. Several viewports may share a Scene.
               Window = surface + input + GetScreen() (its root viewport: scene, camera, the game UI canvas) +
               AddViewport (offscreen, drawn before the screen in the order added) + overlays (debug UI).
+              Window::Create(size, title, {.visible = false}) = a hidden window (desktop): just a GL context.
               The driver: DrawWindow -> DrawViewport(each) -> gather, shadow pass, main pass, post passes, canvas.
+              RenderingDriver::ReadPixels(target) = a target's picture as RGBA8, top row first (stalls: tests,
+              screenshots); GpuName() = GL_RENDERER.
               cameras (FollowCamera = perspective, OrthographicCamera = parallel/top-down;
               Camera3D::ScreenPointToRay for picking, fed with Input::SurfaceSize()).
               Lights are nodes (light.h: DirectionalLight / PointLight / SpotLight, added with AddNode); nodes opt in to
@@ -162,7 +165,15 @@ samples/      small games, built only when the engine is the top-level project (
 tests/        engine unit tests (no window/GPU: quality levels (down/up, back-off, settle, frame-time-only, lock, saved), draw order (sort keys), shader system (preprocessor, embedded files in every variant, std140 layout, lights, variants, UI kinds), systems (order, starting, Back), blending (depth-write rule, canvas batches, images, falloff texture), resources (made without a GPU, updates, alive list), post passes (planning, ping-pong, named inputs, chain targets, effects), viewports (scenes, sizes, update modes), anim, audio, core (random, atomic files, bridge queue), exact cover, search (bitboards, minimax, expectimax), gf2 (Lights Out), shader text splitting, lighting (light nodes, shadow-box fitting), fx, input, kit, picking, primitives, ui (canvas, safe area, widgets), screens). doctest: one binary wlw_tests, a TEST_SUITE per file, shared main test_main.cpp,
               test_helpers.h (Near = absolute tolerance); compound checks in double parentheses CHECK((a && b));
               each TEST_CASE is its own CTest test (cases run in parallel processes: no shared temp files);
-              test data in tests/data/, also top-level only
+              test data in tests/data/, also top-level only. tests/support/ = wlw_test_support (image_compare.h: PNG
+              load/save, CompareImages with a channel tolerance + allowed bad fraction + diff image).
+              GOLDEN IMAGES (tests/gpu, binary wlw_gpu_tests, CTest label "gpu", names "gpu: <case>"): each case builds a
+              fixed scene in an offscreen 256x256 viewport of a hidden window (golden.h MakeViewport / CheckGolden) and
+              compares it with tests/gpu/references/<name>.png. References come from Mesa llvmpipe (CI, Linux, xvfb):
+              strict there (tolerance 2, 0.1% of pixels); real GPUs get 16 / 0.5%. Failures write <name>.actual.png +
+              .diff.png to build/<preset>/tests/gpu/gpu_output/ (CI: the gpu-output artifact). wlw_gpu_tests --update
+              rewrites references from this GPU: only commit llvmpipe ones. A rendering change that changes pictures
+              on purpose = new references from CI's artifact, reviewed like code. Windows CI skips them (-LE gpu).
 third_party/  glad (desktop only), stb, tinygltf + nlohmann json (also its own target wlw_json), miniaudio 0.11.25, stb_vorbis, Dear ImGui 1.92.9b,
               doctest 2.4.12 (vendored; versions and licences in third_party/README.md)
 cmake/WLWHelpers.cmake  wlw_add_game(), wlw_add_assets(), wlw_set_warnings()
