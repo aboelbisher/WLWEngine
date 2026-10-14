@@ -1,0 +1,71 @@
+{
+  "platform": "windows",
+  "build": "Release",
+  "compiler": "msvc 195136260",
+  "results": {
+    "audio/mix 24 voices": {
+      "us": 35.221,
+      "error_pct": 1.5
+    },
+    "fx/flow update 20k": {
+      "us": 20.366,
+      "error_pct": 2.0
+    },
+    "fx/flow write 20k": {
+      "us": 79.016,
+      "error_pct": 1.6
+    },
+    "fx/particles update 5k": {
+      "us": 30.912,
+      "error_pct": 1.8
+    },
+    "fx/particles instances 5k": {
+      "us": 303.193,
+      "error_pct": 0.5
+    },
+    "render/gather 1k": {
+      "us": 46.844,
+      "error_pct": 1.5
+    },
+    "render/cull 1k": {
+      "us": 4.922,
+      "error_pct": 2.2
+    },
+    "render/sort 1k": {
+      "us": 0.475,
+      "error_pct": 1.8
+    },
+    "render/gather 10k": {
+      "us": 564.368,
+      "error_pct": 1.2
+    },
+    "render/cull 10k": {
+      "us": 43.795,
+      "error_pct": 1.2
+    },
+    "render/sort 10k": {
+      "us": 6.582,
+      "error_pct": 2.3
+    },
+    "transform/move flat 1k": {
+      "us": 81.607,
+      "error_pct": 1.6
+    },
+    "transform/move nested 1k": {
+      "us": 24.452,
+      "error_pct": 0.6
+    },
+    "transform/move flat 10k": {
+      "us": 744.626,
+      "error_pct": 1.0
+    },
+    "transform/move nested 10k": {
+      "us": 271.62,
+      "error_pct": 1.0
+    },
+    "ui/text 1k glyphs": {
+      "us": 82.616,
+      "error_pct": 0.7
+    }
+  }
+}

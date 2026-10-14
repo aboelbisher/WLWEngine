@@ -5,12 +5,12 @@ first (Android, iOS, web), with desktop as a full target. This plan came out of 
 architecture review. Work goes one step at a time, in order. Step ids are stable: commits name
 them ("Roadmap 4.3b: ...").
 
-**Current step:** 0.7 Benchmarks (not started) · **Updated:** 2026-10-14
+**Current step:** 0.8 Build hygiene (not started) · **Updated:** 2026-10-14
 
-**Next session:** start 0.7 (benchmarks) with its concept and plan; wait for the owner's OK before any code.
+**Next session:** start 0.8 (build hygiene) with its concept and plan; wait for the owner's OK before any code.
 
 Where things stand (end of 2026-10-14):
-- Done: 0.1 doctest, 0.2 CI, 0.3 golden images, 0.4 logging and asserts, 0.5 cvars and console, 0.6 Tracy. Each is one
+- Done: 0.1 doctest, 0.2 CI, 0.3 golden images, 0.4 logging and asserts, 0.5 cvars and console, 0.6 Tracy, 0.7 benchmarks. Each is one
   squashed commit on main named "Roadmap 0.x: ...", with details in CHANGELOG.md.
 - How the owner works: the plan goes in chat first; code only after an OK. Work on a branch (`<topic>/setup`)
   pushed to GitHub so CI checks it, then show the result and squash-merge to main only on approval. Delete the
@@ -23,12 +23,18 @@ Where things stand (end of 2026-10-14):
   its full path). `gh run list/watch/view --log-failed`, `gh run download <id> --name gpu-output`.
 - Golden images: a rendering change that changes pictures on purpose gets new references from CI's `gpu-output`
   artifact (llvmpipe), looked at and reviewed like code. They're plain git, not LFS (a .gitattributes rule).
-- Tests: `wlw_tests` + `snake_game_tests` (210 cases) + `wlw_gpu_tests` (7, label gpu) = 217 CTest tests. Cases
+- Tests: `wlw_tests` + `snake_game_tests` (220 cases) + `wlw_gpu_tests` (7, label gpu) + `bench: smoke` = 228 CTest tests. Cases
   run in parallel processes (no shared temp files); global state (log filters, cvars) is restored per case, and
   test cvars are static with unique "test.<case>.*" names.
-- For 0.7: the profile presets (`windows-profile`, `android-arm64-profile`) are the optimized builds to measure
-  with; Tracy zones (`core/profile.h`) already sit on gather / sort / particles / mixer, so a benchmark and a trace
-  can be compared. Tracy tools for Windows (capture, csvexport) come from its v0.14.1 GitHub release.
+- Benchmarks (from 0.7): `wlw_benchmarks` + baselines in `benchmarks/baselines/` (windows-local, pixel4, linux-ci);
+  CLAUDE.md "Benchmarks" has the commands. Performance steps run it before and after with `--baseline`. Pixel 4
+  runs must be pinned (`taskset 80`, prime core): unpinned runs jump ~17% between cores. `bench.yml` runs on
+  main, manual runs and `bench/**` branches (name a perf work branch `bench/...` to get CI numbers). Known hot
+  spots: render/gather 10k = 1.86 ms on the Pixel 4 (GetAABB + world matrices recomputed per node: Phases 2.2,
+  4.5), fx/particles instances 5k = 440 us (1.6), transform/move flat 10k = 1.3 ms (2.2).
+- For 0.8: the warnings that will fail with warnings-as-errors already show in MSVC builds (`audio.cpp` C4805,
+  `utils/primitives.h` C4244 double->float) and clang (`scene/post_effects.cpp` missing designated initializers).
+  Node.js 20 deprecation annotations on actions/checkout@v4, cache@v4, ccache-action, msvc-dev-cmd: bump them.
 - From 0.6: on desktop NVIDIA the frame's first glGet waits for the driver thread (frame pacing). The renderer
   calls `glGetIntegerv(GL_FRAMEBUFFER_BINDING)` every frame; caching it would stop that wait landing in our code
   (it moves, it isn't removed: worth checking in Phase 4). Tracy in a phone game needs the INTERNET permission
@@ -131,7 +137,7 @@ libunibreak (zlib), msdfgen (MIT), Jolt (MIT), Box2D v3 (MIT), ImGuizmo (MIT), F
 - [x] **0.6 Tracy.** *(done 2026-10-14, commit "Roadmap 0.6: Tracy"; Tracy 0.14.1, TRACY_ON_DEMAND, off unless `WLW_PROFILE`; profile presets; GPU zones via Tracy's OpenGL timestamps (GLES: EXT_disjoint_timer_query); Pixel 4 run pending)* `WLW_PROFILE_*` macros (zones, frame marks, plots, thread names, GPU zones
   where supported), ATrace on Android, compiled out of shipping builds; zones on every Application
   phase and renderer stage.
-- [ ] **0.7 Benchmarks.** nanobench target: gather/cull/sort at 1k and 10k nodes, transform updates,
+- [x] **0.7 Benchmarks.** *(done 2026-10-14, commit "Roadmap 0.7: benchmarks"; nanobench 4.3.11; gather/cull moved to GL-free `rendering/scene_gather.h`; CI reports, warns at +25%, never fails; Pixel 4 baseline pinned to the prime core)* nanobench target: gather/cull/sort at 1k and 10k nodes, transform updates,
   FlowParticles 20k, ParticleSystem 5k, canvas text 1k glyphs, mixer 24 voices; baselines committed;
   CI reports them.
 - [ ] **0.8 Build hygiene.** `WLW_OPTIMIZE_ENGINE_IN_DEBUG` (engine and third_party at -O2 with debug

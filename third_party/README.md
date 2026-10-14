@@ -7,6 +7,7 @@ Update one library at a time: replace its files, bump the version here, note it 
 |---|---|---|---|
 | doctest (`doctest/`) | 2.4.12 | MIT | unit tests (`doctest.h`; `doctest.cmake` + `doctestAddTests.cmake` = CTest discovery) |
 | Dear ImGui (`imgui/`) | 1.92.9b | MIT | debug UI |
+| nanobench (`nanobench/`) | 4.3.11 | MIT | microbenchmarks (`benchmarks/`; `nanobench.h` + LICENSE) |
 | miniaudio (`miniaudio/`) | 0.11.25 | public domain / MIT-0 | audio device and decoding |
 | stb_image, stb_image_write, stb_truetype, stb_vorbis (`stb/`) | 2.30, 1.16, 1.26, 1.22 | public domain / MIT | images, fonts, Ogg Vorbis |
 | Tracy (`tracy/`) | 0.14.1 | BSD-3-Clause | profiler client (the `public/` folder + LICENSE); only with `WLW_PROFILE` |

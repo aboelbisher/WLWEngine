@@ -4,6 +4,29 @@ Steps refer to ROADMAP.md. Breaking changes come with migration notes.
 
 ## Unreleased
 
+### Benchmarks (Roadmap 0.7)
+- `benchmarks/`: `wlw_benchmarks`, engine microbenchmarks on nanobench 4.3.11 (vendored in `third_party/nanobench`,
+  MIT). No window, no GPU, fixed seeds; one op = one frame's worth of the work. Covered so far: `render/gather`,
+  `render/cull` and `render/sort` at 1k and 10k nodes, `transform/move flat|nested` at 1k and 10k,
+  `fx/flow update|write 20k`, `fx/particles update|instances 5k`, `ui/text 1k glyphs`, `audio/mix 24 voices`.
+  A file adds a group with `WLW_BENCHMARK("group") { ctx.Run("group/name", [&] { ... }); }`.
+- `wlw_benchmarks [filter] --out run.json --baseline base.json [--markdown file] [--threshold 25]` writes the
+  results as JSON and compares them with a baseline (baseline, now, % change). A regression past the threshold
+  is a warning, never a failure. `--smoke` runs each benchmark a few times without measuring: the CTest test
+  `bench: smoke` (label `bench`) does that in every test run.
+- Baselines in `benchmarks/baselines/`: `windows-local.json` (Ryzen 7 9800X3D, MSVC Release), `pixel4.json`
+  (Pixel 4, NDK clang Release, pinned to the prime core with `taskset 80`), `linux-ci.json` (GitHub runner,
+  clang Release).
+- CI: a new workflow `bench.yml` (Linux clang Release) runs the benchmarks on main, on manual runs and on
+  `bench/**` branches. It puts the comparison in the job summary and uploads the JSON as the `bench-linux-ci` artifact.
+- Android: `wlw_benchmarks` builds as an arm64 executable, to run over `adb push` + `adb shell`.
+- Renderer: the GL-free part of drawing a viewport moved out of the GL driver into
+  `wlw/rendering/scene_gather.h`. `GatherScene` walks the scene (lights, drawables with world boxes, sprite
+  batches, shadow caster / receiver boxes). `CullScene` does frustum culling, model and normal matrices, and view
+  depths. The driver keeps the program and texture lookups. Pictures are unchanged (golden images).
+
+Migration: none needed.
+
 ### Tracy profiler (Roadmap 0.6)
 - `wlw/core/profile.h`: `WLW_PROFILE_SCOPE("name")`, `WLW_PROFILE_FUNCTION()`, `WLW_PROFILE_SCOPE_DYNAMIC(name)`,
   `WLW_PROFILE_TEXT`, `WLW_PROFILE_FRAME`, `WLW_PROFILE_PLOT`, `WLW_PROFILE_THREAD_NAME`, `WLW_PROFILE_MESSAGE`.

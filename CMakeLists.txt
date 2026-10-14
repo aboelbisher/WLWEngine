@@ -35,3 +35,9 @@ endif()
 if(WLW_BUILD_SAMPLES)
   add_subdirectory(samples)
 endif()
+
+# Microbenchmarks (benchmarks/, nanobench): desktop and Android (an executable run over adb).
+option(WLW_BUILD_BENCHMARKS "Build the engine microbenchmarks (wlw_benchmarks)" ${PROJECT_IS_TOP_LEVEL})
+if(WLW_BUILD_BENCHMARKS)
+  add_subdirectory(benchmarks)
+endif()

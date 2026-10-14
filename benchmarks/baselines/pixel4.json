@@ -1,0 +1,71 @@
+{
+  "platform": "android",
+  "build": "Release",
+  "compiler": "clang 21.0.0 (https://android.googlesource.com/toolchain/llvm-project 9f872551d3c681d06fd303b36f16ed5c274735eb)",
+  "results": {
+    "audio/mix 24 voices": {
+      "us": 57.1,
+      "error_pct": 0.7
+    },
+    "fx/flow update 20k": {
+      "us": 37.021,
+      "error_pct": 0.0
+    },
+    "fx/flow write 20k": {
+      "us": 244.837,
+      "error_pct": 0.2
+    },
+    "fx/particles update 5k": {
+      "us": 77.998,
+      "error_pct": 0.1
+    },
+    "fx/particles instances 5k": {
+      "us": 439.541,
+      "error_pct": 0.0
+    },
+    "render/gather 1k": {
+      "us": 120.813,
+      "error_pct": 0.1
+    },
+    "render/cull 1k": {
+      "us": 15.989,
+      "error_pct": 0.1
+    },
+    "render/sort 1k": {
+      "us": 1.078,
+      "error_pct": 0.0
+    },
+    "render/gather 10k": {
+      "us": 1858.221,
+      "error_pct": 0.8
+    },
+    "render/cull 10k": {
+      "us": 141.471,
+      "error_pct": 0.1
+    },
+    "render/sort 10k": {
+      "us": 17.016,
+      "error_pct": 3.0
+    },
+    "transform/move flat 1k": {
+      "us": 145.296,
+      "error_pct": 0.2
+    },
+    "transform/move nested 1k": {
+      "us": 40.735,
+      "error_pct": 0.3
+    },
+    "transform/move flat 10k": {
+      "us": 1323.242,
+      "error_pct": 0.1
+    },
+    "transform/move nested 10k": {
+      "us": 474.037,
+      "error_pct": 1.1
+    },
+    "ui/text 1k glyphs": {
+      "us": 170.908,
+      "error_pct": 0.2
+    }
+  }
+}

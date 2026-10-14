@@ -55,3 +55,7 @@ if(WLW_PROFILE)
     target_link_libraries(wlw_tracy PUBLIC log)
   endif()
 endif()
+
+# ---- nanobench v4.3.11 (MIT): microbenchmarks (benchmarks/; header-only, compiled once in bench_main.cpp) ----
+add_library(wlw_nanobench INTERFACE)
+target_include_directories(wlw_nanobench SYSTEM INTERFACE nanobench)

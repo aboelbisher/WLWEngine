@@ -1,0 +1,66 @@
+# Benchmarks: builds wlw_benchmarks optimized (Linux clang Release) and compares a run with the committed
+# baseline (benchmarks/baselines/linux-ci.json). The table goes to the job summary and the JSON is an artifact
+# (download it to refresh the baseline). Shared runners are noisy (other jobs on the same host, different CPUs
+# between runs), so a regression past the threshold is a ::warning::, never a failure.
+# Runs on main, on manual runs and on bench/** branches only: the repo is private and minutes count.
+name: Benchmarks
+
+on:
+  push:
+    branches: [main, "bench/**"]
+    paths-ignore: ["**.md"]
+  workflow_dispatch:
+
+concurrency:
+  group: bench-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/.vcpkg-cache
+
+jobs:
+  linux-bench:
+    name: Linux clang Release benchmarks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Install packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ninja-build ccache pkg-config \
+            libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev \
+            libwayland-dev libxkbcommon-dev wayland-protocols libgl-dev
+      - name: Make the vcpkg cache folder
+        shell: bash
+        run: |
+          mkdir -p "$VCPKG_DEFAULT_BINARY_CACHE"
+          echo "VCPKG_COMMIT=$(git rev-parse HEAD:vcpkg)" >> "$GITHUB_ENV"
+      - uses: actions/cache@v4
+        with:
+          path: ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
+          key: vcpkg-linux-${{ hashFiles('vcpkg.json') }}-${{ env.VCPKG_COMMIT }}
+          restore-keys: vcpkg-linux-
+      - uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: linux-bench
+      - name: Configure
+        run: >
+          cmake --preset release -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
+          -DWLW_BUILD_SAMPLES=OFF -DWLW_BUILD_TESTS=OFF
+          -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+      - name: Build
+        run: cmake --build --preset release --target wlw_benchmarks
+      - name: Run and compare
+        run: >
+          ./build/release/benchmarks/wlw_benchmarks --out bench-linux-ci.json
+          --baseline benchmarks/baselines/linux-ci.json --markdown "$GITHUB_STEP_SUMMARY"
+      - name: Upload the results
+        if: '!cancelled()'
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-linux-ci
+          path: bench-linux-ci.json
+          if-no-files-found: ignore

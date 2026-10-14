@@ -126,6 +126,8 @@ add_library(wlw STATIC
   wlw/rendering/render_target.h
   wlw/rendering/rendering_driver.h
   wlw/rendering/rendering_driver_gl.cpp
+  wlw/rendering/scene_gather.cpp
+  wlw/rendering/scene_gather.h
   wlw/rendering/shader.cpp
   wlw/rendering/shader.h
   wlw/rendering/shader_library.cpp

@@ -32,6 +32,7 @@ add_executable(wlw_tests
   quality_tests.cpp
   render_list_tests.cpp
   resource_tests.cpp
+  scene_gather_tests.cpp
   screen_tests.cpp
   search_tests.cpp
   shader_system_tests.cpp

@@ -1,0 +1,71 @@
+{
+  "platform": "linux",
+  "build": "Release",
+  "compiler": "clang 18.1.3 (1ubuntu1)",
+  "results": {
+    "audio/mix 24 voices": {
+      "us": 28.512,
+      "error_pct": 0.2
+    },
+    "fx/flow update 20k": {
+      "us": 22.913,
+      "error_pct": 0.6
+    },
+    "fx/flow write 20k": {
+      "us": 99.348,
+      "error_pct": 0.1
+    },
+    "fx/particles update 5k": {
+      "us": 118.086,
+      "error_pct": 0.8
+    },
+    "fx/particles instances 5k": {
+      "us": 197.854,
+      "error_pct": 0.1
+    },
+    "render/gather 1k": {
+      "us": 42.846,
+      "error_pct": 0.4
+    },
+    "render/cull 1k": {
+      "us": 7.815,
+      "error_pct": 0.4
+    },
+    "render/sort 1k": {
+      "us": 0.85,
+      "error_pct": 0.4
+    },
+    "render/gather 10k": {
+      "us": 462.438,
+      "error_pct": 0.4
+    },
+    "render/cull 10k": {
+      "us": 71.84,
+      "error_pct": 0.3
+    },
+    "render/sort 10k": {
+      "us": 9.556,
+      "error_pct": 0.1
+    },
+    "transform/move flat 1k": {
+      "us": 70.883,
+      "error_pct": 0.1
+    },
+    "transform/move nested 1k": {
+      "us": 25.084,
+      "error_pct": 0.1
+    },
+    "transform/move flat 10k": {
+      "us": 653.377,
+      "error_pct": 0.1
+    },
+    "transform/move nested 10k": {
+      "us": 280.875,
+      "error_pct": 0.3
+    },
+    "ui/text 1k glyphs": {
+      "us": 89.825,
+      "error_pct": 0.2
+    }
+  }
+}

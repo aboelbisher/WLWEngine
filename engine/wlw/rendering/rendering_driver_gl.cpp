@@ -30,6 +30,7 @@
 #include "wlw/rendering/shader_library.h"
 #include "wlw/rendering/render_device.h"
 #include "wlw/rendering/render_list.h"
+#include "wlw/rendering/scene_gather.h"
 #include "wlw/rendering/gl_state_cache.h"
 #include "wlw/scene/light.h"
 #include "wlw/scene/shadow_map.h"
@@ -175,30 +176,15 @@ public:
   }
 
   // What one viewport draws, gathered from its scene before any drawing starts.
-  struct Frame {
-    std::vector<const scene::LightNode*> lights;  // visible light nodes (the block takes kMaxLightsPerType of each type)
-    struct Drawable {
-      scene::Node3D* node;
-      scene::AABB box;  // world bounds, computed once per frame (GetAABB walks every mesh / copy)
-    };
-    std::vector<Drawable> drawables;               // visible nodes with something to draw
-    struct Sprites {
-      scene::SpriteBatch* batch;
-      scene::AABB box;  // world bounds (its SetBounds box through its transform)
-    };
-    std::vector<Sprites> sprites;                  // visible sprite batches with dots (no shadows)
-    scene::AABB casters{}, receivers{};            // around every shadow caster / receiver
-    bool has_casters = false, has_receivers = false;
+  // The scene part (lights, drawables, sprites, shadow boxes) is GL-free: scene_gather.h.
+  struct Frame : SceneGather {
     const scene::LightNode* shadow_light = nullptr;  // the directional light that casts shadows, if any
     bool shadow_active = false;                      // a shadow map is drawn this frame
     scene::ShadowFrustum shadow_frustum;
 
     // Empties it for the next viewport, keeping the lists' memory (no allocations per frame).
     void Clear() {
-      lights.clear();
-      drawables.clear();
-      sprites.clear();
-      has_casters = has_receivers = false;
+      SceneGather::Clear();
       shadow_light = nullptr;
       shadow_active = false;
     }
@@ -558,24 +544,7 @@ public:
 
   // --- 1. GATHER: lights, things to draw, and the bounds of everything shadows involve ---
   void GatherScene(const scene::Scene& scene, Frame& frame) {
-    scene.IterateOverNodes([&frame](const std::shared_ptr<scene::Node3D>& node) {
-      if (!node->IsVisibleInHierarchy()) return;
-      if (scene::SpriteBatch* sprites = node->AsSpriteBatch()) {
-        if (!sprites->Empty()) frame.sprites.push_back({sprites, sprites->WorldBounds()});
-        return;
-      }
-      if (const scene::LightNode* light = node->AsLight()) {
-        frame.lights.push_back(light);
-        return;
-      }
-      auto model = node->GetModel();
-      if (model == nullptr || model->meshes.empty()) return;
-      if (node->IsInstanced() && node->GetInstances().empty()) return;  // instanced with zero copies
-      const scene::AABB box = node->GetAABB();
-      frame.drawables.push_back({node.get(), box});
-      if (node->CastsShadow()) Grow(frame.casters, frame.has_casters, box);
-      if (node->ReceivesShadow()) Grow(frame.receivers, frame.has_receivers, box);
-    });
+    rendering::GatherScene(scene, frame);  // the scene walk (scene_gather.h)
 
     // The shadow light: the first directional light that casts shadows.
     for (const scene::LightNode* light : frame.lights) {
@@ -633,24 +602,15 @@ public:
 
   // --- 3. DRAW LIST: one item per visible mesh, each with its sort key (render_list.h) ---
   void BuildDrawList(const Frame& frame, scene::RenderStats& stats) {
-    const scene::Frustum frustum = scene::Frustum::FromMatrix(scene_view_projection_);
-    for (const Frame::Drawable& drawable : frame.drawables) {
-      scene::Node3D* node = drawable.node;
-      const scene::AABB& box = drawable.box;
-      if (!frustum.TestAABB(box)) {
-        ++stats.culled_nodes;
-        continue;
-      }
-      // Distance in front of the camera along its view direction (right for both camera kinds).
-      const glm::vec3 center((box.min.x + box.max.x) * 0.5f, (box.min.y + box.max.y) * 0.5f,
-                             (box.min.z + box.max.z) * 0.5f);
-      const float depth = -(scene_view_ * glm::vec4(center, 1.0f)).z;
-      const bool instanced = node->IsInstanced();
+    // Culling, depths and matrices: GL-free (scene_gather.h).
+    CullScene(frame, scene_view_, scene_view_projection_, visible_);
+    stats.culled_nodes += visible_.culled;
+    for (const VisibleSet::Node& visible : visible_.nodes) {
+      scene::Node3D* node = visible.node;
+      const float depth = visible.depth;
       const auto slot = static_cast<uint32_t>(node_slots_.size());
-      // Normals: transpose(inverse(model)), once per node on the CPU (instanced copies do it per vertex).
-      const glm::mat4 model = node->GetModelMatrix();
-      node_slots_.push_back({node, model, instanced ? glm::mat3(1.0f) : glm::mat3(glm::transpose(glm::inverse(model))),
-                             nullptr});  // instance data goes to the GPU after sorting (DrawViewport)
+      // Instance data goes to the GPU after sorting (DrawViewport).
+      node_slots_.push_back({node, visible.model, visible.normal_matrix, nullptr});
 
       for (const auto& mesh : node->GetModel()->meshes) {
         DrawItem item;
@@ -684,16 +644,9 @@ public:
     }
 
     // Sprite batches: one item each (one instanced call for all its dots), the engine's sprite program.
-    for (const Frame::Sprites& sprites : frame.sprites) {
+    for (const VisibleSet::Sprites& sprites : visible_.sprites) {
       scene::SpriteBatch* batch = sprites.batch;
-      if (!frustum.TestAABB(sprites.box)) {
-        ++stats.culled_nodes;
-        continue;
-      }
-      const scene::AABB& box = sprites.box;
-      const glm::vec3 center((box.min.x + box.max.x) * 0.5f, (box.min.y + box.max.y) * 0.5f,
-                             (box.min.z + box.max.z) * 0.5f);
-      const float depth = -(scene_view_ * glm::vec4(center, 1.0f)).z;
+      const float depth = sprites.depth;
       const WTexture* texture = SpriteTexture(*batch);
       const SpriteProgram& program = SpriteProgramFor(texture != nullptr);
       if (program.id == 0) continue;  // didn't compile (logged)
@@ -703,7 +656,7 @@ public:
       item.sprites = batch;
       item.sprite_program = &program;
       item.node_slot = static_cast<uint32_t>(node_slots_.size());
-      node_slots_.push_back({batch, batch->GetModelMatrix(), glm::mat3(1.0f), nullptr});
+      node_slots_.push_back({batch, sprites.model, glm::mat3(1.0f), nullptr});
       item.material = batch->GetMaterial().get();
       item.blend = item.material ? item.material->blend : BlendMode::Additive;
       item.depth_write = item.material ? item.material->DepthWrite() : false;
@@ -1057,16 +1010,6 @@ public:
     shadow_map_size_ = 0;
   }
 
-  static void Grow(scene::AABB& box, bool& has_box, const scene::AABB& add) {
-    if (!has_box) {
-      box = add;
-      has_box = true;
-      return;
-    }
-    box.min = {std::min(box.min.x, add.min.x), std::min(box.min.y, add.min.y), std::min(box.min.z, add.min.z)};
-    box.max = {std::max(box.max.x, add.max.x), std::max(box.max.y, add.max.y), std::max(box.max.z, add.max.z)};
-  }
-
   ~GLRenderingDriver() override {
     if (!platform::IsAlive()) return;
     // Free our GL objects while the main window's context still exists...
@@ -1122,6 +1065,7 @@ private:
   Frame frame_;
   std::vector<DrawItem> draw_items_;
   std::vector<NodeSlot> node_slots_;
+  VisibleSet visible_;  // CullScene's output, reused every viewport
   std::vector<DrawOrder> draw_order_;
   bool warmed_up_ = false;
 

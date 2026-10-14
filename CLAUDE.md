@@ -72,6 +72,8 @@ engine/wlw/
               + services; games subclass it and add its java dir to their Gradle sourceSets).
   rendering/  RenderingDriver/RenderDevice interfaces + one GL backend for GL 3.3 core AND GLES 3.0. Per viewport: gather lights +
               drawables, upload the per-frame block, shadow pass (depth from the shadow light), main pass (PCF shadows).
+              Scene pass without GL (scene_gather.h, benchmarked): GatherScene = one scene walk (lights, drawables + world
+              boxes, sprite batches, shadow boxes), CullScene = frustum test + model/normal matrices + view depth per node.
               Draw order (render_list.h): BuildDrawList makes one DrawItem per visible mesh (each node culled once, its world
               box and model matrix computed once) with a 64-bit sort key: opaque = program, texture, depth front to back;
               transparent = depth back to front (Ericson's "Order your graphics draw calls around!"); one SortDrawOrder.
@@ -174,7 +176,7 @@ kit/wlw/kit/  wlw::kit: game-level building blocks shared by games (separate tar
               (UMP consent, load/show/retry); games add that dir to their sourceSets and depend on play-services-ads + UMP
 samples/      small games, built only when the engine is the top-level project (desktop):
               snake/ (Snake + its rules tests)
-tests/        engine unit tests (no window/GPU: quality levels (down/up, back-off, settle, frame-time-only, lock, saved), draw order (sort keys), shader system (preprocessor, embedded files in every variant, std140 layout, lights, variants, UI kinds), systems (order, starting, Back), blending (depth-write rule, canvas batches, images, falloff texture), resources (made without a GPU, updates, alive list), post passes (planning, ping-pong, named inputs, chain targets, effects), viewports (scenes, sizes, update modes), anim, audio, core (random, atomic files, bridge queue), exact cover, search (bitboards, minimax, expectimax), gf2 (Lights Out), shader text splitting, lighting (light nodes, shadow-box fitting), fx, input, kit, picking, primitives, ui (canvas, safe area, widgets), screens, profile macros + TypeName). doctest: one binary wlw_tests, a TEST_SUITE per file, shared main test_main.cpp,
+tests/        engine unit tests (no window/GPU: quality levels (down/up, back-off, settle, frame-time-only, lock, saved), draw order (sort keys), scene gather + cull, shader system (preprocessor, embedded files in every variant, std140 layout, lights, variants, UI kinds), systems (order, starting, Back), blending (depth-write rule, canvas batches, images, falloff texture), resources (made without a GPU, updates, alive list), post passes (planning, ping-pong, named inputs, chain targets, effects), viewports (scenes, sizes, update modes), anim, audio, core (random, atomic files, bridge queue), exact cover, search (bitboards, minimax, expectimax), gf2 (Lights Out), shader text splitting, lighting (light nodes, shadow-box fitting), fx, input, kit, picking, primitives, ui (canvas, safe area, widgets), screens, profile macros + TypeName). doctest: one binary wlw_tests, a TEST_SUITE per file, shared main test_main.cpp,
               test_helpers.h (Near = absolute tolerance); compound checks in double parentheses CHECK((a && b));
               each TEST_CASE is its own CTest test (cases run in parallel processes: no shared temp files);
               test data in tests/data/, also top-level only. tests/support/ = wlw_test_support (image_compare.h: PNG
@@ -186,8 +188,15 @@ tests/        engine unit tests (no window/GPU: quality levels (down/up, back-of
               .diff.png to build/<preset>/tests/gpu/gpu_output/ (CI: the gpu-output artifact). wlw_gpu_tests --update
               rewrites references from this GPU: only commit llvmpipe ones. A rendering change that changes pictures
               on purpose = new references from CI's artifact, reviewed like code. Windows CI skips them (-LE gpu).
+benchmarks/   wlw_benchmarks (nanobench; top-level only, desktop + Android executable): no window/GPU, fixed seeds, one op =
+              one frame's work. Groups: render (gather/cull/sort 1k, 10k), transform (flat/nested 1k, 10k), fx (flow 20k,
+              particles 5k), ui (text 1k glyphs), audio (mix 24 voices). Add: WLW_BENCHMARK("group") { ctx.Run("group/name",
+              [&] { ... }); } (names are stable: baselines match by name). --out JSON, --baseline compare (warning past
+              --threshold %, never a failure), --smoke = CTest "bench: smoke" (label bench). Baselines in
+              benchmarks/baselines/: windows-local (owner's Ryzen 7 9800X3D, MSVC Release), pixel4 (Release, taskset 80 =
+              prime core: unpinned runs jump ~17% between big and prime cores), linux-ci (bench.yml artifact).
 third_party/  glad (desktop only), stb, tinygltf + nlohmann json (also its own target wlw_json), miniaudio 0.11.25, stb_vorbis, Dear ImGui 1.92.9b,
-              doctest 2.4.12, Tracy 0.14.1 client (target wlw_tracy, only with WLW_PROFILE) (vendored; versions and licences in third_party/README.md)
+              doctest 2.4.12, nanobench 4.3.11 (wlw_nanobench), Tracy 0.14.1 client (target wlw_tracy, only with WLW_PROFILE) (vendored; versions and licences in third_party/README.md)
 cmake/WLWHelpers.cmake  wlw_add_game(), wlw_add_assets(), wlw_set_warnings()
 vcpkg/ + vcpkg.json     desktop deps (glm, glfw3). Android fetches glm via FetchContent instead.
 ```
@@ -229,6 +238,19 @@ CI (`.github/workflows/ci.yml`, GitHub Actions on every push) runs the same pres
 `windows-debug` / `windows-release` (Release only on main), `linux-asan` (clang, ASan + UBSan via
 `WLW_SANITIZE`), `android-arm64` (build only: set `ANDROID_NDK_HOME` to NDK 30.0.16248370, the games' version).
 New code must pass all of them: no MSVC-only includes, no UB, no leaks. The Android job also turns on `WLW_PROFILE`.
+
+## Benchmarks
+Numbers only from optimized builds (a Debug run prints a warning). `.github/workflows/bench.yml` runs them on Linux
+clang Release on main, manual runs and `bench/**` branches (summary table + `bench-linux-ci` artifact; refresh
+`linux-ci.json` from that artifact). Performance work: run before and after, compare with `--baseline`.
+```
+cmake --preset windows-release -B buildwin-release ; cmake --build buildwin-release --target wlw_benchmarks
+.uildwin-releaseenchmarkswlw_benchmarks.exe [filter] --baseline benchmarksaselineswindows-local.json [--out run.json]
+```
+Pixel 4: `cmake --preset android-arm64 -B buildandroid-release -DCMAKE_BUILD_TYPE=Release`, build `wlw_benchmarks`, then
+`adb push` it and `tests/data/LilitaOne-Regular.ttf` to `/data/local/tmp/wlw/` and
+`adb shell "cd /data/local/tmp/wlw && taskset 80 ./wlw_benchmarks --data . --baseline pixel4.json"` (push the baseline too;
+Git Bash needs `MSYS_NO_PATHCONV=1` for adb paths).
 
 ## Profiling
 Build with a profile preset: `windows-profile` or `android-arm64-profile` (RelWithDebInfo = optimized with symbols,
