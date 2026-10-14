@@ -5,13 +5,13 @@ first (Android, iOS, web), with desktop as a full target. This plan came out of 
 architecture review. Work goes one step at a time, in order. Step ids are stable: commits name
 them ("Roadmap 4.3b: ...").
 
-**Current step:** 0.9 Versioning (not started) · **Updated:** 2026-10-15
+**Current step:** 1.1 Frame pacing (not started) · **Updated:** 2026-10-15
 
-**Next session:** start 0.9 (versioning) with its concept and plan; wait for the owner's OK before any code.
+**Next session:** start 1.1 (frame pacing) with its concept and plan; wait for the owner's OK before any code.
 
 Where things stand (2026-10-15):
 - Done: 0.1 doctest, 0.2 CI, 0.3 golden images, 0.4 logging and asserts, 0.5 cvars and console, 0.6 Tracy, 0.7 benchmarks,
-  0.8 build hygiene. Each is one squashed commit on main named "Roadmap 0.x: ...", with details in CHANGELOG.md
+  0.8 build hygiene, 0.9 versioning (Phase 0 = engine v0.1.0, tagged). Each is one squashed commit on main named "Roadmap 0.x: ...", with details in CHANGELOG.md
   (0.8 also has a separate reformat commit, listed in `.git-blame-ignore-revs`).
 - How the owner works: the plan goes in chat first; code only after an OK. Work on a branch (`<topic>/setup`)
   pushed to GitHub so CI checks it, then show the result and squash-merge to main only on approval. Delete the
@@ -27,7 +27,7 @@ Where things stand (2026-10-15):
   its full path). `gh run list/watch/view --log-failed`, `gh run download <id> --name gpu-output`.
 - Golden images: a rendering change that changes pictures on purpose gets new references from CI's `gpu-output`
   artifact (llvmpipe), looked at and reviewed like code. They're plain git, not LFS (a .gitattributes rule).
-- Tests: `wlw_tests` + `snake_game_tests` (220 cases) + `wlw_gpu_tests` (7, label gpu) + `bench: smoke` = 228 CTest tests. Cases
+- Tests: `wlw_tests` + `snake_game_tests` (227 cases) + `wlw_gpu_tests` (7, label gpu) + `bench: smoke` + 5 `deprecations` (the script and its tests) = 240 CTest tests. Cases
   run in parallel processes (no shared temp files); global state (log filters, cvars) is restored per case, and
   test cvars are static with unique "test.<case>.*" names.
 - Benchmarks (from 0.7): `wlw_benchmarks` + baselines in `benchmarks/baselines/` (windows-local, pixel4, linux-ci);
@@ -72,7 +72,8 @@ Where things stand (2026-10-15):
   compiles.
 - CLAUDE.md and CHANGELOG.md updated; breaking changes come with migration notes.
 - Whatever a step replaces is deleted within the same phase (file deletions confirmed with the
-  owner first).
+  owner first). A renamed public API may keep a thin `WLW_DEPRECATED` forwarding shim through one
+  release (CLAUDE.md "Versioning"); the CTest test `deprecations` makes sure it goes after that.
 
 ## Principles
 - Hot paths are data-oriented: dense arrays, handles, no per-frame allocations, no virtual call
@@ -122,7 +123,8 @@ libunibreak (zlib), msdfgen (MIT), Jolt (MIT), Box2D v3 (MIT), ImGuizmo (MIT), F
 - Devices: development isn't tied to any phone the owner has. Phone checks use whatever Android
   device is at hand (a Pixel 4 / Adreno 640 was used so far); Firebase Test Lab (6.6) for a matrix
   (Adreno, Mali, low end) without owning them.
-- Bluzzle is live in testing: its releases pin a tagged engine version (0.9).
+- Bluzzle is live in testing: its releases pin a tagged engine version (from v0.1.0; one minor
+  version per phase, CLAUDE.md "Versioning").
 
 ## Phase 0: Safety net and tooling
 - [x] **0.1 doctest.** *(done 2026-10-14, commit "Roadmap 0.1: doctest"; the CHANGELOG has the details)* The 24 suites move to doctest: one `TEST_CASE` per behaviour, the same
@@ -151,7 +153,7 @@ libunibreak (zlib), msdfgen (MIT), Jolt (MIT), Box2D v3 (MIT), ImGuizmo (MIT), F
 - [x] **0.8 Build hygiene.** *(done 2026-10-15, commit "Roadmap 0.8: build hygiene" + a reformat commit; engine-in-Debug 10-35x faster; PCH -33% clean build; glm vendored; clang-format 23.1.3 pinned via its PyPI wheel; C4100 and missing-field-initializers stay off)* `WLW_OPTIMIZE_ENGINE_IN_DEBUG` (engine and third_party at -O2 with debug
   info, game code at -O0); `/W4 /permissive-` and `-Wall -Wextra -Wshadow`; warnings as errors in
   CI; precompiled headers; dependencies vendored per D13; clang-format check.
-- [ ] **0.9 Versioning.** `wlw/version.h` from `project(VERSION)`, CHANGELOG.md, `WLW_DEPRECATED`
+- [x] **0.9 Versioning.** *(done 2026-10-15, commit "Roadmap 0.9: versioning"; tag v0.1.0; one minor version per phase; git commit in BuildInfo; shims checked by the CTest test `deprecations`)* `wlw/version.h` from `project(VERSION)`, CHANGELOG.md, `WLW_DEPRECATED`
   shims kept for one minor version, a tag per milestone.
 
 ## Phase 1: Quick mobile wins on the current renderer

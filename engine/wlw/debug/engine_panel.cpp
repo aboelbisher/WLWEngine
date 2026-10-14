@@ -9,6 +9,7 @@
 #include "imgui.h"
 #include "wlw/app/application.h"
 #include "wlw/app/engine_cvars.h"
+#include "wlw/core/build_info.h"
 #include "wlw/core/profile.h"
 
 namespace wlw::debug {
@@ -18,6 +19,8 @@ void EnginePanel::OnDebugUI() {
   ImGui::SetNextWindowCollapsed(true, ImGuiCond_FirstUseEver);
   ImGui::SetNextWindowPos(ImVec2(8.0f, 8.0f), ImGuiCond_FirstUseEver);
   ImGui::Begin("Engine");
+  static const std::string build = core::BuildInfoText();  // never changes
+  ImGui::TextDisabled("%s", build.c_str());
   ImGui::Text("%.0f fps, %.2f ms", App().Time().Fps(), App().Time().FrameMs());
   if constexpr (profile::kEnabled) {  // profile builds (core/profile.h)
     if (profile::Connected()) {

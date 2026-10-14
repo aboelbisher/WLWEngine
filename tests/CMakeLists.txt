@@ -39,11 +39,23 @@ add_executable(wlw_tests
   shader_tests.cpp
   system_tests.cpp
   ui_tests.cpp
+  version_tests.cpp
   viewport_tests.cpp)
 target_link_libraries(wlw_tests PRIVATE wlw::wlw wlw::kit wlw_doctest wlw_test_support)
 target_compile_definitions(wlw_tests PRIVATE WLW_TEST_FONT="${CMAKE_CURRENT_SOURCE_DIR}/data/LilitaOne-Regular.ttf")
 wlw_set_warnings(wlw_tests)
 doctest_discover_tests(wlw_tests)
+
+# cmake/CheckDeprecations.cmake: the engine's WLW_DEPRECATED shims are within one release; then the script itself on
+# tests/data/deprecations (a shim marked 0.2) against engine versions before, at, after and too far before it.
+set(_wlw_check_deprecations "${CMAKE_CURRENT_SOURCE_DIR}/../cmake/CheckDeprecations.cmake")
+set(_wlw_deprecation_data "-DDIRS=${CMAKE_CURRENT_SOURCE_DIR}/data/deprecations")
+add_test(NAME "deprecations" COMMAND "${CMAKE_COMMAND}" -P "${_wlw_check_deprecations}")
+add_test(NAME "deprecations: next release" COMMAND "${CMAKE_COMMAND}" "${_wlw_deprecation_data}" -DVERSION=0.1.0 -P "${_wlw_check_deprecations}")
+add_test(NAME "deprecations: its release" COMMAND "${CMAKE_COMMAND}" "${_wlw_deprecation_data}" -DVERSION=0.2.0 -P "${_wlw_check_deprecations}")
+add_test(NAME "deprecations: past its release" COMMAND "${CMAKE_COMMAND}" "${_wlw_deprecation_data}" -DVERSION=0.3.0 -P "${_wlw_check_deprecations}")
+add_test(NAME "deprecations: too far ahead" COMMAND "${CMAKE_COMMAND}" "${_wlw_deprecation_data}" -DVERSION=0.0.5 -P "${_wlw_check_deprecations}")
+set_tests_properties("deprecations: past its release" "deprecations: too far ahead" PROPERTIES WILL_FAIL TRUE)
 
 # Golden-image tests (tests/gpu): they need a GL 3.3 context, so they're their own binary, labelled "gpu".
 # Windows CI has no GL 3.3 and skips them (ctest -LE gpu); Linux CI runs them on llvmpipe under xvfb.

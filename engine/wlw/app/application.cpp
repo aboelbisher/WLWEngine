@@ -1,6 +1,7 @@
 #include "wlw/app/application.h"
 
 #include "wlw/app/engine_cvars.h"
+#include "wlw/core/build_info.h"
 #include "wlw/core/log.h"
 #include "wlw/core/profile.h"
 #include "wlw/audio/audio.h"
@@ -54,6 +55,7 @@ Application::Application(AppConfig config)
     StartLogFile(folder + "/log.txt");
 #endif
   }
+  WLW_LOG(LogApp, Info, "%s", core::BuildInfoText().c_str());  // which build a log came from
   quit_command_ = std::make_unique<ConsoleCommand>("quit", "Quits the game", [this](const ConsoleArgs&) { Quit(); });
 #if WLW_DEBUG_UI
   AddSystem<debug::EnginePanel>();  // the engine's own debug windows, first of the debug panels

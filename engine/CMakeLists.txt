@@ -13,6 +13,7 @@ message(STATUS "WLWengine platform: ${WLW_PLATFORM}")
 add_library(wlw STATIC
   wlw/wlw.h
   wlw/wlw.cpp
+  wlw/version.h.in
 
   wlw/anim/ease.h
   wlw/anim/shake.h
@@ -41,11 +42,15 @@ add_library(wlw STATIC
   wlw/core/type_name.h
   wlw/core/assert.cpp
   wlw/core/assert.h
+  wlw/core/build_info.cpp
+  wlw/core/build_info.h
   wlw/app/engine_cvars.h
   wlw/core/console.cpp
   wlw/core/console.h
   wlw/core/cvar.cpp
   wlw/core/cvar.h
+  wlw/core/deprecated.h
+  wlw/core/git_info.h
   wlw/core/log.cpp
   wlw/core/log.h
   wlw/core/mesh.h
@@ -182,6 +187,39 @@ add_custom_command(
   VERBATIM)
 set_source_files_properties(${_wlw_shader_files} PROPERTIES HEADER_FILE_ONLY TRUE)
 target_sources(wlw PRIVATE "${_wlw_shaders_cpp}" ${_wlw_shader_files})
+
+# ---- Version (wlw/version.h) and build info (core/build_info.h) ----
+# version.h comes from project(VERSION) in the top-level CMakeLists.txt; minor and patch stay below 100
+# (WLW_VERSION packs them into one number).
+if(WLWengine_VERSION_MINOR GREATER 99 OR WLWengine_VERSION_PATCH GREATER 99)
+  message(FATAL_ERROR "WLWengine: minor and patch versions must stay below 100 (${WLWengine_VERSION})")
+endif()
+set(_wlw_generated_include "${CMAKE_CURRENT_BINARY_DIR}/generated/include")
+configure_file(wlw/version.h.in "${_wlw_generated_include}/wlw/version.h" @ONLY)
+set_source_files_properties(wlw/version.h.in PROPERTIES HEADER_FILE_ONLY TRUE)
+target_include_directories(wlw PUBLIC "${_wlw_generated_include}")
+message(STATUS "WLWengine version: ${WLWengine_VERSION}")
+
+# The git commit is read on every build (a commit made after configuring still shows), but the generated source
+# only changes when the commit or the dirty flag does. Also run once now, so the file exists for IDEs.
+find_package(Git QUIET)
+set(_wlw_git_info_cpp "${CMAKE_CURRENT_BINARY_DIR}/generated/wlw_git_info.cpp")
+set(_wlw_git_info_args "-DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/.." "-DOUTPUT=${_wlw_git_info_cpp}"
+  "-DGIT_EXECUTABLE=${GIT_EXECUTABLE}")
+execute_process(COMMAND "${CMAKE_COMMAND}" ${_wlw_git_info_args} "-DBUILD_TYPE=${CMAKE_BUILD_TYPE}"
+  -P "${CMAKE_CURRENT_SOURCE_DIR}/../cmake/GitInfo.cmake")
+add_custom_target(wlw_git_info
+  COMMAND "${CMAKE_COMMAND}" ${_wlw_git_info_args} "-DBUILD_TYPE=$<CONFIG>"
+          -P "${CMAKE_CURRENT_SOURCE_DIR}/../cmake/GitInfo.cmake"
+  BYPRODUCTS "${_wlw_git_info_cpp}"
+  COMMENT "Reading the engine's git commit"
+  VERBATIM)
+add_dependencies(wlw wlw_git_info)
+target_sources(wlw PRIVATE "${_wlw_git_info_cpp}")
+
+# Deprecated shims (core/deprecated.h): ON compiles them all out, to check a game no longer uses any.
+option(WLW_NO_DEPRECATED "Compile out the engine's deprecated API shims" OFF)
+target_compile_definitions(wlw PUBLIC "WLW_NO_DEPRECATED=$<BOOL:${WLW_NO_DEPRECATED}>")
 
 # Games include engine headers as "wlw/scene/window.h" etc.
 target_include_directories(wlw PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")

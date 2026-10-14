@@ -2,7 +2,43 @@
 
 Steps refer to ROADMAP.md. Breaking changes come with migration notes.
 
+Versions follow SemVer below 1.0: a minor version may break the API, a patch only fixes. One minor version per
+finished roadmap phase, each tagged `vX.Y.Z` on `main` with a GitHub Release; games pin their engine submodule
+to a tag. Renamed or replaced APIs keep a `WLW_DEPRECATED` shim for one release (listed under **Deprecated**),
+then it's deleted (listed under **Removed**).
+
 ## Unreleased
+
+## 0.1.0 (2026-10-15): Phase 0, safety net and tooling
+
+The first tagged version: tests (doctest, golden images, benchmarks), CI on Windows, Linux and Android, logging,
+asserts, cvars and a console, the Tracy profiler, build hygiene (warnings, optimized engine in Debug, PCH,
+vendored dependencies, clang-format) and versioning. Details per step below.
+
+- **Breaking** (migration notes in the steps): `wlw/core/logger.h` and `FAIL_IF` removed (0.4); `tests/check.h`
+  removed (0.1). Code that got `<sstream>` through `wlw/scene/node.h` includes it itself (0.4).
+- **Deprecated:** nothing yet.
+
+### Versioning (Roadmap 0.9)
+- `wlw/version.h`, generated from `project(VERSION)` in the top-level `CMakeLists.txt` (template
+  `engine/wlw/version.h.in`): `WLW_VERSION_MAJOR/MINOR/PATCH`, `WLW_VERSION_STRING`, `WLW_VERSION` (one comparable
+  number: major * 10000 + minor * 100 + patch), `WLW_MAKE_VERSION` and `WLW_VERSION_AT_LEAST(major, minor, patch)`
+  for game code that has to build against two engine versions.
+- `wlw/core/build_info.h`: `GetBuildInfo()` (version, git commit, dirty flag, build type) and `BuildInfoText()`
+  ("WLWengine 0.1.0 (dfda300c49-dirty, Debug)"). The git commit is read on every build by `cmake/GitInfo.cmake`
+  (target `wlw_git_info`), which rewrites its generated source only when the commit or dirty flag changes, so an
+  unchanged tree rebuilds nothing. "unknown" without git. The application logs it at startup (first line of a
+  debug build's `log.txt`); the engine panel shows it.
+- `wlw/core/deprecated.h`: `WLW_DEPRECATED(0.3, "Use X()")` (a `[[deprecated]]` naming the version and the
+  replacement), `WLW_DISABLE_DEPRECATION_WARNINGS_BEGIN/END` for code that must still use a shim (its tests), and
+  the CMake option `WLW_NO_DEPRECATED` (off) that compiles every shim out, so a game can check it has migrated.
+- `cmake/CheckDeprecations.cmake` (CTest test `deprecations`, plus tests of the script itself): every shim in
+  `engine/` and `kit/` must name the current or the next minor version, so a shim ships in exactly one release
+  and has to be deleted before the one after.
+- Fixed (on `main` before this step): MSVC Release warning C4723 in `IntersectPlane` broke the Windows Release
+  CI job since 0.8.
+
+Migration: none needed.
 
 ### Build hygiene (Roadmap 0.8)
 - Warnings: `wlw_set_warnings` (engine, kit, tests, benchmarks, and games through `wlw_add_game`) is now MSVC
