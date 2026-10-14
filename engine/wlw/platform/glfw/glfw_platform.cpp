@@ -2,6 +2,7 @@
 // glad for loading OpenGL 3.3 core functions.
 #ifdef WLW_PLATFORM_GLFW
 
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
@@ -23,6 +24,7 @@
 #include <unistd.h>  // fsync
 #endif
 
+#include "wlw/core/frame_pacing.h"
 #include "wlw/core/profile.h"
 #include "wlw/platform/bridge.h"
 #include "wlw/platform/platform.h"
@@ -252,6 +254,7 @@ class GlfwWindow : public Window {
     glfwSetMouseButtonCallback(window_, &GlfwWindow::OnMouseButton);
     glfwSetCursorPosCallback(window_, &GlfwWindow::OnCursorPos);
     glfwSetFramebufferSizeCallback(window_, &GlfwWindow::OnFramebufferSize);
+    glfwSetWindowPosCallback(window_, &GlfwWindow::OnWindowPos);
 
     int fb_w = 0, fb_h = 0;
     glfwGetFramebufferSize(window_, &fb_w, &fb_h);  // pixels (can differ from size_ on HiDPI)
@@ -259,7 +262,7 @@ class GlfwWindow : public Window {
     UpdateInputSurface();
 
     glfwMakeContextCurrent(window_);
-    glfwSwapInterval(options_.visible ? 1 : 0);  // vsync; a hidden window never waits for the screen
+    ApplyPacing();
     return true;
   }
 
@@ -270,8 +273,26 @@ class GlfwWindow : public Window {
   void ProcessEvents() override { glfwPollEvents(); }
 
   void SwapBuffers() override {
-    if (window_) glfwSwapBuffers(window_);
+    if (!window_) return;
+    glfwSwapBuffers(window_);
+    if (limiter_.Period() > 0.0) {
+      const double now = std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
+      if (const double wait = limiter_.Next(now); wait > 0.0) {
+        WLW_PROFILE_SCOPE("Frame limiter");
+        platform::PreciseSleep(wait);
+      }
+    }
   }
+
+  // ---- Frame pacing ----
+  void SetTargetFps(int fps) override {
+    if (fps == target_fps_) return;
+    target_fps_ = fps;
+    ApplyPacing();
+  }
+  float RefreshRate() const override { return refresh_hz_; }
+  float PacedFps() const override { return static_cast<float>(plan_.fps); }
+  std::string PacingMethod() const override { return core::PacingPlanName(plan_); }
 
   bool ShouldClose() const override { return window_ == nullptr || glfwWindowShouldClose(window_); }
 
@@ -322,9 +343,58 @@ class GlfwWindow : public Window {
     input_.SetSurfaceSize((float)w, (float)h);
   }
 
+  // Moved, maybe to a monitor with another refresh rate.
+  static void OnWindowPos(GLFWwindow* w, int /*x*/, int /*y*/) {
+    GlfwWindow* self = From(w);
+    if (self->FindRefreshRate() != self->refresh_hz_) self->ApplyPacing();
+  }
+
+  // The refresh rate of the monitor showing the window (the one its centre is on), 0 if unknown.
+  float FindRefreshRate() const {
+    GLFWmonitor* monitor = glfwGetWindowMonitor(window_);  // set when full screen
+    if (monitor == nullptr) {
+      int x = 0, y = 0, w = 0, h = 0;
+      glfwGetWindowPos(window_, &x, &y);
+      glfwGetWindowSize(window_, &w, &h);
+      const int cx = x + w / 2, cy = y + h / 2;
+      int count = 0;
+      GLFWmonitor** monitors = glfwGetMonitors(&count);
+      for (int i = 0; i < count && monitor == nullptr; ++i) {
+        int mx = 0, my = 0;
+        glfwGetMonitorPos(monitors[i], &mx, &my);
+        const GLFWvidmode* mode = glfwGetVideoMode(monitors[i]);
+        if (mode && cx >= mx && cx < mx + mode->width && cy >= my && cy < my + mode->height) monitor = monitors[i];
+      }
+      if (monitor == nullptr) monitor = glfwGetPrimaryMonitor();
+    }
+    const GLFWvidmode* mode = monitor ? glfwGetVideoMode(monitor) : nullptr;
+    return mode ? static_cast<float>(mode->refreshRate) : 0.0f;
+  }
+
+  // The target on this monitor: a vsync interval, or vsync off + the limiter. A hidden window never
+  // waits for a screen.
+  void ApplyPacing() {
+    if (window_ == nullptr) return;
+    refresh_hz_ = FindRefreshRate();
+    plan_ = options_.visible ? core::PlanPacing(target_fps_, refresh_hz_)
+                             : core::PacingPlan{.swap_interval = 0, .limit_seconds = 0.0, .fps = 0.0};
+    GLFWwindow* previous = glfwGetCurrentContext();
+    if (previous != window_) glfwMakeContextCurrent(window_);  // the swap interval belongs to the context
+    glfwSwapInterval(plan_.swap_interval);
+    if (previous != window_ && previous != nullptr) glfwMakeContextCurrent(previous);
+    limiter_.SetPeriod(plan_.limit_seconds);
+    if (options_.visible) {
+      WLW_LOG(LogPlatform, Info, "Frame pacing: target %s fps, display %.0f Hz -> %s (%.1f fps)",
+              core::TargetFpsName(target_fps_).c_str(), refresh_hz_, core::PacingPlanName(plan_).c_str(), plan_.fps);
+    }
+  }
+
   GLFWwindow* window_ = nullptr;
   std::string title_;
   WindowOptions options_;
+  float refresh_hz_ = 0.0f;
+  core::PacingPlan plan_;
+  core::FrameLimiter limiter_;
 };
 
 }  // namespace

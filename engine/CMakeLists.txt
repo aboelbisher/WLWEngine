@@ -38,6 +38,8 @@ add_library(wlw STATIC
   wlw/core/collision.h
   wlw/core/color.h
   wlw/core/fixed_timestep.h
+  wlw/core/frame_pacing.cpp
+  wlw/core/frame_pacing.h
   wlw/core/time_scale.h
   wlw/core/type_name.h
   wlw/core/assert.cpp
@@ -235,7 +237,8 @@ target_link_libraries(wlw
 if(WLW_PLATFORM STREQUAL "glfw")
   # Desktop: GLFW window + OpenGL 3.3 core loaded by glad.
   find_package(glfw3 CONFIG REQUIRED)
-  target_sources(wlw PRIVATE wlw/platform/glfw/glfw_platform.cpp wlw/platform/glfw/glfw_debugger.cpp)
+  target_sources(wlw PRIVATE wlw/platform/glfw/glfw_platform.cpp wlw/platform/glfw/glfw_debugger.cpp
+                             wlw/platform/glfw/glfw_sleep.cpp)
   target_compile_definitions(wlw PUBLIC WLW_PLATFORM_GLFW GLFW_INCLUDE_NONE)
   target_link_libraries(wlw PUBLIC wlw_glad PRIVATE glfw)
   if(WIN32)
@@ -257,6 +260,7 @@ elseif(WLW_PLATFORM STREQUAL "android")
   target_sources(wlw PRIVATE wlw/platform/android/android_platform.cpp)
   target_compile_definitions(wlw PUBLIC WLW_PLATFORM_ANDROID WLW_GLES)
   target_link_libraries(wlw PUBLIC wlw_native_app_glue EGL GLESv3 android log)
+  target_link_libraries(wlw PRIVATE wlw_swappy)  # frame pacing (third_party/swappy)
   target_link_libraries(wlw PRIVATE dl)  # miniaudio loads AAudio / OpenSL ES at runtime
 endif()
 

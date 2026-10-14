@@ -24,7 +24,7 @@ namespace wlw::app {
 struct QualitySettings {
   int levels = 3;               // 0 = the lowest
   int start = -1;               // the level before anything is measured: -1 = the saved one, else the highest
-  float budget_ms = 16.6f;      // the frame time to fit in (16.6 = 60 fps)
+  float budget_ms = 0.0f;       // the frame time to fit in; 0 = the frame-rate target's (16.7 at 60 fps)
   float down_at = 0.85f;        // GPU time above budget x this ...
   float slow_frame_at = 1.25f;  // ... or frames longer than budget x this (missing vsync) ...
   float down_seconds = 2.0f;    // ... for this long: one level down
@@ -52,9 +52,15 @@ class Quality {
   void Unlock();
   bool Locked() const { return locked_; }
 
+  // The frame time it fits in: settings' budget_ms, else the frame-rate target's (SetTargetFrameMs).
+  float BudgetMs() const { return settings_.budget_ms > 0.0f ? settings_.budget_ms : target_frame_ms_; }
+
   // ---- For the Application (and tests) ----
   // Where the level is kept between launches (empty: nowhere). Set before Configure.
   void SetSaveFile(std::string path) { save_file_ = std::move(path); }
+  // The frame time of the rate frames are paced to (the Application keeps it in step with the
+  // window). A change while it is the budget restarts the readings (Settle).
+  void SetTargetFrameMs(float ms);
   // Fed once per frame.
   // `dt` seconds of real time; `gpu_ms` the GPU's time for the frame (< 0: not measured);
   // `frame_ms` the time between frames. Returns true when the level changed (the callback has run).
@@ -79,6 +85,7 @@ class Quality {
   bool configured_ = false;
   bool locked_ = false;
   int level_ = 0;
+  float target_frame_ms_ = 1000.0f / 60.0f;
   float settle_ = 0.0f;
   float gpu_ms_ = -1.0f;
   float frame_ms_ = -1.0f;

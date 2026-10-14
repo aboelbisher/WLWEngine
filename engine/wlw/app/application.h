@@ -38,7 +38,11 @@ struct AppConfig {
   core::Vector2 window_size = {1280, 720};
   float fixed_timestep = 1.0f / 60.0f;  // simulation rate: 60 steps per second
   float max_frame_time = 0.25f;         // longer frames are clamped (see FixedTimestep)
-  bool show_stats_in_title = true;      // "title | 60 fps | 16.7 ms" (desktop)
+  // Frames per second the screen gets (core/frame_pacing.h): 30/60/90/120..., core::kTargetDisplayRate
+  // (0) = the display's own rate, core::kTargetUncapped (-1) = no limit (desktop profiling). Phones
+  // can't go past the display's rate. Change it later with Application::SetTargetFps.
+  int target_fps = 60;
+  bool show_stats_in_title = true;  // "title | 60 fps | 16.7 ms" (desktop)
   // The UI's virtual resolution: the Canvas is scaled so this area fits on any screen.
   core::Vector2 ui_reference_size = {640, 360};
 };
@@ -94,6 +98,12 @@ class Application final {
   // Runs until Quit() is called or the window is closed. Returns the process exit code.
   int Run();
   void Quit() { quit_requested_ = true; }
+
+  // ---- Frame pacing ----
+  // The frame-rate target (see AppConfig::target_fps), e.g. from a settings menu: 30 saves battery.
+  // The same as the cvar r.target_fps. Quality's budget follows the rate frames are paced to.
+  void SetTargetFps(int fps);
+  int TargetFps() const;
 
   // ---- Services ----
   scene::Window& Window() { return *window_; }

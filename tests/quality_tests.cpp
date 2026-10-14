@@ -103,6 +103,30 @@ TEST_CASE("without gpu timing only steps down") {
   CHECK((Run(quality, 2.5f, -1.0f, 33.0f) == 1 && quality.Level() == 0));
 }
 
+TEST_CASE("the budget follows the frame-rate target") {
+  Quality quality;
+  quality.Configure({.levels = 3, .settle_seconds = 1.0f});
+  CHECK(Near(quality.BudgetMs(), 1000.0f / 60.0f));  // 60 fps until told otherwise
+  Run(quality, 1.5f, 10.0f);
+  // 30 fps (a battery saver): 33.3 ms to fit in; the readings so far meant nothing, so it settles again.
+  quality.SetTargetFrameMs(1000.0f / 30.0f);
+  CHECK(Near(quality.BudgetMs(), 1000.0f / 30.0f));
+  CHECK((Run(quality, 0.9f, 30.0f, 33.3f) == 0 && quality.SecondsOver() == 0.0f));  // settling
+  // 25 ms of GPU work: too much for 60 fps, plenty of time at 30.
+  CHECK((Run(quality, 5.0f, 25.0f, 33.3f) == 0 && quality.Level() == 2));
+  // 120 fps: 8.3 ms. The same work is now far over it: down after settling (1 s) + 2 s of it. The
+  // same rate again on the way (float noise) doesn't restart the readings.
+  quality.SetTargetFrameMs(1000.0f / 120.0f);
+  CHECK(Run(quality, 1.5f, 25.0f, 8.3f) == 0);
+  quality.SetTargetFrameMs(1000.0f / 120.0f + 0.001f);
+  CHECK((Run(quality, 2.0f, 25.0f, 8.3f) == 1 && quality.Level() == 1));
+  // A game's own budget_ms wins over the target.
+  Quality own;
+  own.Configure({.levels = 3, .budget_ms = 11.1f});
+  own.SetTargetFrameMs(1000.0f / 30.0f);
+  CHECK(Near(own.BudgetMs(), 11.1f));
+}
+
 TEST_CASE("lock") {
   Quality quality;
   std::vector<int> seen;

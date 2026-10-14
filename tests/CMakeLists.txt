@@ -17,6 +17,7 @@ add_executable(wlw_tests
   core_tests.cpp
   cvar_tests.cpp
   exact_cover_tests.cpp
+  frame_pacing_tests.cpp
   fx_tests.cpp
   gf2_tests.cpp
   gpu_timer_tests.cpp

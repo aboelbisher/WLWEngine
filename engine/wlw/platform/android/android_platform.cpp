@@ -17,9 +17,13 @@
 #include <iterator>
 #include <memory>
 
+#include <chrono>
+#include <cmath>
 #include <csignal>  // raise(SIGTRAP)
 #include <cstdlib>
 #include <string>
+#include <thread>
+#include <dlfcn.h>   // ANativeWindow_setFrameRate (API 30) looked up at run time
 #include <unistd.h>  // fsync
 
 #include <EGL/egl.h>
@@ -30,9 +34,12 @@
 #include <android/log.h>
 #include <android/native_window.h>
 #include <android_native_app_glue.h>
+#include <swappy/swappyGL.h>
+#include <swappy/swappyGL_extra.h>
 
 #include "wlw/app/application.h"
 #include "wlw/core/cvar.h"
+#include "wlw/core/frame_pacing.h"
 #include "wlw/core/profile.h"
 #include "wlw/platform/bridge.h"
 #include "wlw/platform/platform.h"
@@ -84,6 +91,42 @@ input::Key MapKey(int32_t keycode) {
   }
 }
 
+// The display's refresh rate from Java (activity.getWindowManager().getDefaultDisplay().getRefreshRate()),
+// 0 if unavailable. For pacing without Swappy (Swappy tracks it itself).
+float QueryRefreshRate() {
+  if (!g_app) return 0.0f;
+  JNIEnv* env = nullptr;
+  if (g_app->activity->vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) != JNI_OK) return 0.0f;
+  env->PushLocalFrame(8);
+  float rate = 0.0f;
+  jobject activity = g_app->activity->clazz;
+  jmethodID get_window_manager =
+      env->GetMethodID(env->GetObjectClass(activity), "getWindowManager", "()Landroid/view/WindowManager;");
+  jobject window_manager = get_window_manager ? env->CallObjectMethod(activity, get_window_manager) : nullptr;
+  if (window_manager && !env->ExceptionCheck()) {
+    jmethodID get_display =
+        env->GetMethodID(env->GetObjectClass(window_manager), "getDefaultDisplay", "()Landroid/view/Display;");
+    jobject display = env->CallObjectMethod(window_manager, get_display);
+    if (display && !env->ExceptionCheck()) {
+      rate = env->CallFloatMethod(display, env->GetMethodID(env->GetObjectClass(display), "getRefreshRate", "()F"));
+    }
+  }
+  if (env->ExceptionCheck()) {
+    env->ExceptionClear();
+    rate = 0.0f;
+  }
+  env->PopLocalFrame(nullptr);
+  return rate;
+}
+
+// ANativeWindow_setFrameRate (Android 11+; minSdk is 24, so looked up at run time): tells the system the
+// rate we draw at, so it can switch the display to a mode that fits (a 90 Hz phone to 60 Hz for 60 fps).
+void SetWindowFrameRate(ANativeWindow* window, float fps) {
+  using SetFrameRate = int32_t (*)(ANativeWindow*, float, int8_t);
+  static const auto set_frame_rate = reinterpret_cast<SetFrameRate>(dlsym(RTLD_DEFAULT, "ANativeWindow_setFrameRate"));
+  if (set_frame_rate && window) set_frame_rate(window, fps, 0);  // 0 = ANATIVEWINDOW_FRAME_RATE_COMPATIBILITY_DEFAULT
+}
+
 class AndroidWindow;
 AndroidWindow* g_window = nullptr;  // Android apps have exactly one window
 
@@ -124,7 +167,12 @@ class AndroidWindow : public scene::Window {
 
   void SwapBuffers() override {
     if (surface_ == EGL_NO_SURFACE) return;
-    if (eglSwapBuffers(g_display, surface_) == EGL_TRUE) return;
+    // Swappy presents at the right vsync and waits for it; without it, vsync + the limiter.
+    const bool swapped = swappy_ ? SwappyGL_swap(g_display, surface_) : eglSwapBuffers(g_display, surface_) == EGL_TRUE;
+    if (swapped) {
+      if (!swappy_) LimitFrame();
+      return;
+    }
     const EGLint error = eglGetError();
     if (error == EGL_BAD_SURFACE || error == EGL_BAD_NATIVE_WINDOW) {
       DestroySurface();  // recreated on the next APP_CMD_INIT_WINDOW
@@ -132,6 +180,28 @@ class AndroidWindow : public scene::Window {
       WLW_LOG(LogPlatform, Error, "eglSwapBuffers failed: 0x%x", error);
     }
   }
+
+  // ---- Frame pacing ----
+  void SetTargetFps(int fps) override {
+    if (fps == target_fps_) return;
+    target_fps_ = fps;
+    ApplyPacing();
+  }
+  void SetAutoSwapInterval(bool on) override {
+    auto_swap_interval_ = on;
+    if (swappy_) SwappyGL_setAutoSwapInterval(on);
+  }
+  float RefreshRate() const override {
+    if (!swappy_) return refresh_hz_;
+    const uint64_t period = SwappyGL_getRefreshPeriodNanos();
+    return period > 0 ? static_cast<float>(1e9 / static_cast<double>(period)) : 0.0f;
+  }
+  float PacedFps() const override {
+    if (!swappy_) return static_cast<float>(plan_.fps);
+    const uint64_t interval = SwappyGL_getSwapIntervalNS();
+    return interval > 0 ? static_cast<float>(1e9 / static_cast<double>(interval)) : 0.0f;
+  }
+  std::string PacingMethod() const override { return swappy_ ? "Swappy" : core::PacingPlanName(plan_); }
 
   bool HasSurface() const override { return surface_ != EGL_NO_SURFACE; }
   bool ShouldClose() const override { return close_requested_ || g_app->destroyRequested; }
@@ -203,12 +273,17 @@ class AndroidWindow : public scene::Window {
 
   void DestroySurface() {
     if (surface_ == EGL_NO_SURFACE) return;
+    if (swappy_) SwappyGL_setWindow(nullptr);  // it lets go of the window the OS is taking away
     eglMakeCurrent(g_display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
     eglDestroySurface(g_display, surface_);
     surface_ = EGL_NO_SURFACE;
   }
 
   void DestroyContext() {
+    if (swappy_started_) {
+      SwappyGL_destroy();
+      swappy_started_ = swappy_ = false;
+    }
     if (context_ == EGL_NO_CONTEXT) return;
     eglMakeCurrent(g_display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
     eglDestroyContext(g_display, context_);
@@ -252,7 +327,75 @@ class AndroidWindow : public scene::Window {
       WLW_LOG(LogPlatform, Error, "eglCreateContext failed: 0x%x", eglGetError());
       return false;
     }
+    StartSwappy();
     return true;
+  }
+
+  // Swappy (third_party/swappy, AGDK frame pacing): presents each frame at the vsync it belongs to (no
+  // 16/33/16 ms stutter from the GPU queue), and picks the display mode for the target. It needs
+  // EGL_ANDROID_presentation_time; without it (some emulators) frames are paced by vsync + the limiter.
+  void StartSwappy() {
+    if (swappy_started_) return;
+    JNIEnv* env = nullptr;
+    if (g_app->activity->vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) != JNI_OK) return;
+    swappy_started_ = true;
+    swappy_ = SwappyGL_init(env, g_app->activity->clazz) && SwappyGL_isEnabled();
+    if (!swappy_) {
+      WLW_LOG(LogPlatform, Warning, "Swappy isn't available on this device: frames paced by vsync + a limiter");
+      SwappyGL_destroy();
+      swappy_started_ = false;
+      return;
+    }
+    SwappyGL_setAutoSwapInterval(auto_swap_interval_);
+    SwappyGL_setAutoPipelineMode(true);  // its default: the CPU may run a frame ahead when the GPU is the bottleneck
+    WLW_LOG(LogPlatform, Info, "Swappy %s", Swappy_versionString());
+  }
+
+  // The target to Swappy (a swap interval; it chooses the display mode), or to vsync + the limiter.
+  void ApplyPacing() {
+    if (swappy_) {
+      SwappyGL_setSwapIntervalNS(SwappyIntervalNs());
+      WLW_LOG(LogPlatform, Info, "Frame pacing: target %s fps -> Swappy, swap interval %.2f ms",
+              core::TargetFpsName(target_fps_).c_str(), static_cast<double>(SwappyIntervalNs()) / 1e6);
+      return;
+    }
+    if (surface_ == EGL_NO_SURFACE) return;  // applied when the surface comes
+    refresh_hz_ = QueryRefreshRate();
+    plan_ = core::PlanPacing(std::max(target_fps_, core::kTargetDisplayRate), refresh_hz_);  // phones: never uncapped
+    eglSwapInterval(g_display, std::max(plan_.swap_interval, 1));  // a limited rate still waits for vsync (no tearing)
+    limiter_.SetPeriod(plan_.limit_seconds);
+    SetWindowFrameRate(g_app->window, target_fps_ > 0 ? static_cast<float>(target_fps_) : 0.0f);
+    WLW_LOG(LogPlatform, Info, "Frame pacing: target %s fps, display %.0f Hz -> %s (%.1f fps)",
+            core::TargetFpsName(target_fps_).c_str(), refresh_hz_, core::PacingPlanName(plan_).c_str(), plan_.fps);
+  }
+
+  // The target as a swap interval; the display's own rate = its fastest mode.
+  uint64_t SwappyIntervalNs() const {
+    if (target_fps_ > 0) return static_cast<uint64_t>(1e9 / target_fps_);
+    uint64_t fastest = SwappyGL_getRefreshPeriodNanos();
+    uint64_t periods[16] = {};
+    const int count = SwappyGL_getSupportedRefreshPeriodsNS(periods, 16);
+    for (int i = 0; i < std::min(count, 16); ++i) {
+      if (periods[i] > 0 && (fastest == 0 || periods[i] < fastest)) fastest = periods[i];
+    }
+    return fastest > 0 ? fastest : static_cast<uint64_t>(1e9 / 60);
+  }
+
+  // Without Swappy: the limiter's wait, and a new plan when the display changed its mode (after
+  // SetWindowFrameRate, or the system's own choice). Checked about once a second (a JNI call).
+  void LimitFrame() {
+    if (++frames_since_refresh_check_ >= 60) {
+      frames_since_refresh_check_ = 0;
+      if (const float refresh = QueryRefreshRate(); refresh > 0.0f && std::abs(refresh - refresh_hz_) > 0.5f) {
+        ApplyPacing();
+      }
+    }
+    if (limiter_.Period() <= 0.0) return;
+    const double now = std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
+    if (const double wait = limiter_.Next(now); wait > 0.0) {
+      WLW_PROFILE_SCOPE("Frame limiter");
+      PreciseSleep(wait);
+    }
   }
 
   bool CreateSurface() {
@@ -266,7 +409,8 @@ class AndroidWindow : public scene::Window {
       return false;
     }
     eglMakeCurrent(g_display, surface_, surface_, context_);
-    eglSwapInterval(g_display, 1);  // vsync
+    if (swappy_) SwappyGL_setWindow(g_app->window);
+    ApplyPacing();
     UpdateSize();
     return true;
   }
@@ -288,6 +432,12 @@ class AndroidWindow : public scene::Window {
   bool paused_event_ = false;  // APP_CMD_PAUSE seen, not yet reported to the game
   bool was_suspended_ = false;
   bool close_requested_ = false;
+  bool swappy_started_ = false;  // SwappyGL_init called (SwappyGL_destroy owed)
+  bool swappy_ = false;          // ... and pacing with it
+  float refresh_hz_ = 0.0f;      // without Swappy
+  core::PacingPlan plan_;
+  core::FrameLimiter limiter_;
+  int frames_since_refresh_check_ = 0;
 };
 
 void OnAppCmd(android_app* /*app*/, int32_t cmd) {
@@ -441,6 +591,16 @@ bool MoveToBackground() {
   env->DeleteLocalRef(activity_class);
   if (attached_here) vm->DetachCurrentThread();
   return moved;
+}
+
+void PreciseSleep(double seconds) {
+  if (seconds <= 0.0) return;
+  using Clock = std::chrono::steady_clock;
+  const Clock::time_point end =
+      Clock::now() + std::chrono::duration_cast<Clock::duration>(std::chrono::duration<double>(seconds));
+  constexpr double kSpinSeconds = 0.001;  // nanosleep wakes up a little late: spin the last millisecond
+  if (seconds > kSpinSeconds) std::this_thread::sleep_for(std::chrono::duration<double>(seconds - kSpinSeconds));
+  while (Clock::now() < end) std::this_thread::yield();
 }
 
 void Vibrate(int milliseconds, float strength) {

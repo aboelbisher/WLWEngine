@@ -47,6 +47,7 @@ Application::Application(AppConfig config)
     WLW_LOG(LogApp, Warning, "WLW_LOG=\"%s\": some parts aren't category=level", filter);
   }
   time_.fixed_step_ = config_.fixed_timestep;
+  cv_target_fps.Set(config_.target_fps);  // the game's choice; wlw.cfg and the command line may override it
   if (const std::string folder = platform::GetSaveDirectory(config_.title); !folder.empty()) {
     quality_.SetSaveFile(folder + "/quality.txt");
     cvar_file_ = folder + "/cvars.cfg";
@@ -290,8 +291,16 @@ void Application::BuildUI() {
   }
 }
 
+void Application::SetTargetFps(int fps) { cv_target_fps.Set(fps); }  // its OnChange tells the window
+
+int Application::TargetFps() const { return window_->TargetFps(); }
+
 void Application::UpdateQuality(double frame_seconds) {
   if (!quality_.Configured()) return;
+  // The budget is the frame time of the rate frames are paced to (Swappy or the display may change it).
+  float paced_fps = window_->PacedFps();
+  if (paced_fps <= 0.0f) paced_fps = window_->RefreshRate();  // uncapped: measured against the display
+  if (paced_fps > 0.0f) quality_.SetTargetFrameMs(1000.0f / paced_fps);
   if (!quality_timing_) {  // it decides from the GPU's time where the GPU can measure it
     quality_timing_ = true;
     if (window_->GpuTimingSupported()) cv_gpu_timing.Set(true);
@@ -329,6 +338,8 @@ void Application::ApplyStartupCVars() {
   WatchCVar(cv_gpu_timing, [this] { window_->SetGpuTiming(cv_gpu_timing.Get()); });
   WatchCVar(cv_invalidate_framebuffers,
             [this] { window_->SetInvalidateFramebuffers(cv_invalidate_framebuffers.Get()); });
+  WatchCVar(cv_target_fps, [this] { window_->SetTargetFps(cv_target_fps.Get()); });
+  WatchCVar(cv_pacing_auto_interval, [this] { window_->SetAutoSwapInterval(cv_pacing_auto_interval.Get()); });
   cvar_callbacks_.emplace_back(&cv_quality_lock, cv_quality_lock.OnChange([this] {
     if (!quality_.Configured()) return;
     if (cv_quality_lock.Get() < 0) {

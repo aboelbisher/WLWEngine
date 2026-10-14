@@ -41,7 +41,7 @@ engine/wlw/
               text input the game's keyboard is blocked. Off in release builds
   app/        Application (final: owns the services and runs the loop; see the frame in application.h): Window(),
               Input(), Audio(), Screens(), Time(), Config(). engine_cvars.h: log.filter, r.gpu_timing,
-              r.invalidate_framebuffers, quality.lock (Run applies the cvar sources first, wires these to the window /
+              r.invalidate_framebuffers, r.target_fps, r.pacing.auto_interval, quality.lock (Run applies the cvar sources first, wires these to the window /
               log / quality, saves changed Saved cvars at the end of a frame). Games add Systems (system.h: always running,
               like Unreal subsystems / Godot autoloads; hooks OnStart/OnFixedUpdate/OnUpdate/OnRender/OnRenderUI/
               OnDebugUI/OnBack/OnAppPaused/OnAppResumed/OnShutdown, run in the order added, then the screens'; App()
@@ -54,10 +54,15 @@ engine/wlw/
               (timer queries, turned on by Configure) or late frames > budget x down_at / slow_frame_at for 2 s = down,
               GPU < budget x up_at for 10 s = up (wait doubles per failure of that level, max 8x), 3 s settle after a
               change/resume, readings smoothed ~0.5 s and clamped at 2 budgets; no GPU timer = down only; level saved
-              in <save dir>/quality.txt. Fed by Application after each frame (UpdateQuality). Engine panel: level, -/+/Auto
+              in <save dir>/quality.txt. Fed by Application after each frame (UpdateQuality). Engine panel: level, -/+/Auto.
+              Budget (BudgetMs) = settings' budget_ms, or 0 (default) = the frame time of the paced rate (SetTargetFrameMs)
+              Frame pacing: AppConfig::target_fps (60; 0 = display rate, -1 = uncapped) / App().SetTargetFps / cvar
+              r.target_fps -> Window::SetTargetFps (platform: Swappy on Android, vsync interval or limiter on desktop;
+              core/frame_pacing.h). Window: PacedFps, RefreshRate, PacingMethod (engine panel: target buttons + these)
   version.h   GENERATED from project(VERSION) (template version.h.in): WLW_VERSION_MAJOR/MINOR/PATCH, WLW_VERSION_STRING,
               WLW_VERSION (major*10000+minor*100+patch), WLW_VERSION_AT_LEAST(maj, min, patch)
-  core/       math types, FixedTimestep, Random (SplitMix64: deterministic everywhere, state saveable), log.h (WLW_LOG(Category, Level, fmt...): levels Verbose..Fatal, categories LogCore/App/Render/Shader/Audio/Platform/UI/FX (+ kit LogKit, games WLW_LOG_CATEGORY), compile-time stripping, SetLogFilter("Render=Verbose,*=Warning") / env WLW_LOG, sinks: platform, RecentLogs ring (512), StartLogFile (debug builds: <save dir>/log.txt, previous run log.txt.prev), AddLogSink; LogThreadId), assert.h (WLW_ASSERT debug-only fatal, WLW_VERIFY always evaluated: logs + returns false, WLW_UNREACHABLE; SetAssertHandler for tests), cvar.h (CVar<bool/int/float/std::string>{"r.name", default, help, flags Saved/ReadOnly/Cheat, range}: dotted lowercase names; sources in order code default < wlw.cfg (assets) < <save dir>/cvars.cfg (Saved, written when changed) < command line +name value / Android --es wlw "a=1;b=2" < console; unknown names wait for registration; OnChange; game thread), console.h (ConsoleCommand RAII, ExecuteConsoleLine, built-ins help/find/set/reset/exec (+quit from Application), CompleteConsoleName, ConsoleModel), profile.h (WLW_PROFILE_SCOPE/FUNCTION/SCOPE_DYNAMIC/TEXT/FRAME/PLOT/THREAD_NAME/MESSAGE -> Tracy + Android ATrace; only with the CMake option WLW_PROFILE, else empty with unevaluated arguments; one zone per scope; see "Profiling"), type_name.h (TypeName<T>() at compile time: "wlw::app::System"; System::Name() for zones), build_info.h (GetBuildInfo: version, git commit + dirty, build type; BuildInfoText logged at startup and in the engine panel; cmake/GitInfo.cmake), deprecated.h (WLW_DEPRECATED(0.3, "Use X") shims, WLW_DISABLE_DEPRECATION_WARNINGS_BEGIN/END, option WLW_NO_DEPRECATED; see "Versioning"), mesh/model, collision.h (AABB, Ray, Plane, IntersectPlane)
+  core/       math types, FixedTimestep, frame_pacing.h (PlanPacing(target, refresh) = vsync interval or limiter,
+              2% tolerance; FrameLimiter = fixed schedule, exact average, restarts after a stall), Random (SplitMix64: deterministic everywhere, state saveable), log.h (WLW_LOG(Category, Level, fmt...): levels Verbose..Fatal, categories LogCore/App/Render/Shader/Audio/Platform/UI/FX (+ kit LogKit, games WLW_LOG_CATEGORY), compile-time stripping, SetLogFilter("Render=Verbose,*=Warning") / env WLW_LOG, sinks: platform, RecentLogs ring (512), StartLogFile (debug builds: <save dir>/log.txt, previous run log.txt.prev), AddLogSink; LogThreadId), assert.h (WLW_ASSERT debug-only fatal, WLW_VERIFY always evaluated: logs + returns false, WLW_UNREACHABLE; SetAssertHandler for tests), cvar.h (CVar<bool/int/float/std::string>{"r.name", default, help, flags Saved/ReadOnly/Cheat, range}: dotted lowercase names; sources in order code default < wlw.cfg (assets) < <save dir>/cvars.cfg (Saved, written when changed) < command line +name value / Android --es wlw "a=1;b=2" < console; unknown names wait for registration; OnChange; game thread), console.h (ConsoleCommand RAII, ExecuteConsoleLine, built-ins help/find/set/reset/exec (+quit from Application), CompleteConsoleName, ConsoleModel), profile.h (WLW_PROFILE_SCOPE/FUNCTION/SCOPE_DYNAMIC/TEXT/FRAME/PLOT/THREAD_NAME/MESSAGE -> Tracy + Android ATrace; only with the CMake option WLW_PROFILE, else empty with unevaluated arguments; one zone per scope; see "Profiling"), type_name.h (TypeName<T>() at compile time: "wlw::app::System"; System::Name() for zones), build_info.h (GetBuildInfo: version, git commit + dirty, build type; BuildInfoText logged at startup and in the engine panel; cmake/GitInfo.cmake), deprecated.h (WLW_DEPRECATED(0.3, "Use X") shims, WLW_DISABLE_DEPRECATION_WARNINGS_BEGIN/END, option WLW_NO_DEPRECATED; see "Versioning"), mesh/model, collision.h (AABB, Ray, Plane, IntersectPlane)
   input/      Input: keys (pressed vs held; text-editing keys + Grave), Text() (typed code points), pointer (mouse/first
               finger), swipes, taps; pointer and keyboard can be blocked (debug UI), Raw* queries ignore that
   math/       ExactCover: Knuth's Algorithm X with Dancing Links (exact cover search, counting, hints);
@@ -68,6 +73,14 @@ engine/wlw/
   platform/   THE ONLY PER-OS CODE: platform.h interface + glfw/glfw_platform.cpp (desktop)
               + android/android_platform.cpp (NativeActivity + EGL). Also save files: GetSaveDirectory, WriteFileAtomic, ReadLocalFile. iOS goes here later.
               LaunchArguments() (launch_arguments.cpp; desktop argv via WLW_MAIN, Android the intent's "wlw" extra).
+              Frame pacing: desktop = vsync interval when the target divides the monitor's refresh (the monitor the
+              window's centre is on, re-checked on moves), else vsync off + FrameLimiter + PreciseSleep (glfw_sleep.cpp:
+              high-resolution waitable timer, then a 1 ms spin); hidden windows unpaced. Android = Swappy
+              (third_party/swappy: SwappyGL_swap, swap interval = 1e9/target, auto swap interval off unless
+              r.pacing.auto_interval, auto pipelining on); without EGL_ANDROID_presentation_time: vsync +
+              ANativeWindow_setFrameRate (dlsym, API 30) + the limiter, re-planned when the display's mode changes.
+              Swappy's Java classes (third_party/swappy/java) go in each game's Gradle java.srcDirs + R8 keep rule
+              (-keep class com.google.androidgamesdk.** { *; }); without them Swappy can't start on Android 9+.
               Native bridge (bridge.h/.cpp): BridgeCall(service, method, json) C++ -> Kotlin; Kotlin posts back
               (WlwBridge.post) -> queue -> SetBridgeHandler callbacks on the GAME thread (Application dispatches
               once per frame). Kotlin side: android/java/com/wlw/ (WlwBridge, WlwService, WlwActivity = NativeActivity
@@ -178,7 +191,8 @@ kit/wlw/kit/  wlw::kit: game-level building blocks shared by games (separate tar
               (UMP consent, load/show/retry); games add that dir to their sourceSets and depend on play-services-ads + UMP
 samples/      small games, built only when the engine is the top-level project (desktop):
               snake/ (Snake + its rules tests)
-tests/        engine unit tests (no window/GPU: quality levels (down/up, back-off, settle, frame-time-only, lock, saved), draw order (sort keys), scene gather + cull, shader system (preprocessor, embedded files in every variant, std140 layout, lights, variants, UI kinds), systems (order, starting, Back), blending (depth-write rule, canvas batches, images, falloff texture), resources (made without a GPU, updates, alive list), post passes (planning, ping-pong, named inputs, chain targets, effects), viewports (scenes, sizes, update modes), anim, audio, core (random, atomic files, bridge queue), exact cover, search (bitboards, minimax, expectimax), gf2 (Lights Out), shader text splitting, lighting (light nodes, shadow-box fitting), fx, input, kit, picking, primitives, ui (canvas, safe area, widgets), screens, profile macros + TypeName, version macros + build info + deprecated shims; CTest "deprecations" runs cmake/CheckDeprecations.cmake). doctest: one binary wlw_tests, a TEST_SUITE per file, shared main test_main.cpp,
+tests/        engine unit tests (no window/GPU: quality levels (down/up, back-off, settle, frame-time-only, lock, saved,
+              budget from the target), frame pacing (plans per target/refresh, limiter schedule), draw order (sort keys), scene gather + cull, shader system (preprocessor, embedded files in every variant, std140 layout, lights, variants, UI kinds), systems (order, starting, Back), blending (depth-write rule, canvas batches, images, falloff texture), resources (made without a GPU, updates, alive list), post passes (planning, ping-pong, named inputs, chain targets, effects), viewports (scenes, sizes, update modes), anim, audio, core (random, atomic files, bridge queue), exact cover, search (bitboards, minimax, expectimax), gf2 (Lights Out), shader text splitting, lighting (light nodes, shadow-box fitting), fx, input, kit, picking, primitives, ui (canvas, safe area, widgets), screens, profile macros + TypeName, version macros + build info + deprecated shims; CTest "deprecations" runs cmake/CheckDeprecations.cmake). doctest: one binary wlw_tests, a TEST_SUITE per file, shared main test_main.cpp,
               test_helpers.h (Near = absolute tolerance); compound checks in double parentheses CHECK((a && b));
               each TEST_CASE is its own CTest test (cases run in parallel processes: no shared temp files);
               test data in tests/data/, also top-level only. tests/support/ = wlw_test_support (image_compare.h: PNG
@@ -198,7 +212,8 @@ benchmarks/   wlw_benchmarks (nanobench; top-level only, desktop + Android execu
               benchmarks/baselines/: windows-local (owner's Ryzen 7 9800X3D, MSVC Release), linux-ci (bench.yml
               artifact), optional per-phone ones (<device>.json, e.g. pixel4; see "Benchmarks" below).
 third_party/  glm 1.0.1 (wlw_glm, public through wlw::wlw), glad (desktop only), stb, tinygltf + nlohmann json (also its own target wlw_json), miniaudio 0.11.25, stb_vorbis, Dear ImGui 1.92.9b,
-              doctest 2.4.12, nanobench 4.3.11 (wlw_nanobench), Tracy 0.14.1 client (target wlw_tracy, only with WLW_PROFILE) (vendored; versions and licences in third_party/README.md)
+              doctest 2.4.12, nanobench 4.3.11 (wlw_nanobench), Tracy 0.14.1 client (target wlw_tracy, only with WLW_PROFILE),
+              Swappy 2.3.0-alpha01 (wlw_swappy, Android only; one local patch, see its README row) (vendored; versions and licences in third_party/README.md)
 cmake/WLWHelpers.cmake  wlw_add_game(), wlw_add_assets(), wlw_set_warnings(), wlw_optimize_debug_flags()
 cmake/ClangFormat.cmake the format check / fix (pinned clang-format, see "Building")
 vcpkg/ + vcpkg.json     GLFW only (desktop); everything else is vendored in third_party/ (D13)
@@ -328,5 +343,5 @@ changes didn't break anything; keep it building when the engine API changes.
   clocks scale with load (DVFS): light frames read slower, so compare GPU ms between levels only roughly.
   2D is post-processed only in Picture canvas layers.
 - Quality: no thermal input yet (AThermal_getThermalHeadroom, API 31+). Without a GPU timer it only steps down
-  (vsync hides headroom), and that saved level never goes back up. Default budget is 60 fps (90/120 Hz games set budget_ms).
+  (vsync hides headroom), and that saved level never goes back up. The budget follows the frame-rate target (Swappy's swap interval on Android).
 - Textures free their CPU pixels once uploaded, so a lost GL context (if the platform ever loses it) can't re-upload.

@@ -5,14 +5,15 @@ first (Android, iOS, web), with desktop as a full target. This plan came out of 
 architecture review. Work goes one step at a time, in order. Step ids are stable: commits name
 them ("Roadmap 4.3b: ...").
 
-**Current step:** 1.1 Frame pacing (not started) · **Updated:** 2026-10-15
+**Current step:** 1.2 Render scale (not started) · **Updated:** 2026-10-15
 
-**Next session:** start 1.1 (frame pacing) with its concept and plan; wait for the owner's OK before any code.
+**Next session:** start 1.2 (render scale) with its concept and plan; wait for the owner's OK before any code.
 
 Where things stand (2026-10-15):
 - Done: 0.1 doctest, 0.2 CI, 0.3 golden images, 0.4 logging and asserts, 0.5 cvars and console, 0.6 Tracy, 0.7 benchmarks,
   0.8 build hygiene, 0.9 versioning (Phase 0 = engine v0.1.0, tagged). Each is one squashed commit on main named "Roadmap 0.x: ...", with details in CHANGELOG.md
-  (0.8 also has a separate reformat commit, listed in `.git-blame-ignore-revs`).
+  (0.8 also has a separate reformat commit, listed in `.git-blame-ignore-revs`). Phase 1: 1.1 frame pacing (Swappy vendored in
+  `third_party/swappy`; games must add its Java dir + an R8 keep rule when they move to the next engine version).
 - How the owner works: the plan goes in chat first; code only after an OK. Work on a branch (`<topic>/setup`)
   pushed to GitHub so CI checks it, then show the result and squash-merge to main only on approval. Delete the
   work branch after. Ask before deleting files.
@@ -27,7 +28,7 @@ Where things stand (2026-10-15):
   its full path). `gh run list/watch/view --log-failed`, `gh run download <id> --name gpu-output`.
 - Golden images: a rendering change that changes pictures on purpose gets new references from CI's `gpu-output`
   artifact (llvmpipe), looked at and reviewed like code. They're plain git, not LFS (a .gitattributes rule).
-- Tests: `wlw_tests` + `snake_game_tests` (227 cases) + `wlw_gpu_tests` (7, label gpu) + `bench: smoke` + 5 `deprecations` (the script and its tests) = 240 CTest tests. Cases
+- Tests: `wlw_tests` + `snake_game_tests` (239 cases) + `wlw_gpu_tests` (7, label gpu) + `bench: smoke` + 5 `deprecations` (the script and its tests) = 252 CTest tests. Cases
   run in parallel processes (no shared temp files); global state (log filters, cvars) is restored per case, and
   test cvars are static with unique "test.<case>.*" names.
 - Benchmarks (from 0.7): `wlw_benchmarks` + baselines in `benchmarks/baselines/` (windows-local, pixel4, linux-ci);
@@ -156,7 +157,7 @@ libunibreak (zlib), msdfgen (MIT), Jolt (MIT), Box2D v3 (MIT), ImGuizmo (MIT), F
   shims kept for one minor version, a tag per milestone.
 
 ## Phase 1: Quick mobile wins on the current renderer
-- [ ] **1.1 Frame pacing.** `AppConfig::target_fps` (30/60/90/120/display) with a runtime setter.
+- [x] **1.1 Frame pacing.** *(done 2026-10-15, commit "Roadmap 1.1: frame pacing"; Swappy 2.3.0-alpha01 vendored (AGDK archived its repo in 2025); default 60 fps; auto swap interval off; desktop 240 Hz: 60 fps sd 0.12 ms, limiter 100 fps sd < 0.02 ms)* `AppConfig::target_fps` (30/60/90/120/display) with a runtime setter.
   Android: Swappy (GL) for pacing and refresh-rate choice, `ANativeWindow_setFrameRate` as fallback.
   Desktop: vsync plus a precise limiter. Quality's budget follows the target.
 - [ ] **1.2 Render scale.** `Viewport::SetRenderScale` for the 3D picture (UI stays native),

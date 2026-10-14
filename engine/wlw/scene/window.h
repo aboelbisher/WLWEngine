@@ -126,6 +126,23 @@ class Window {
   void SetInvalidateFramebuffers(bool on) { invalidate_framebuffers_ = on; }
   bool InvalidateFramebuffers() const { return invalidate_framebuffers_; }
 
+  // ---- Frame pacing (core/frame_pacing.h) ----
+  // How fast frames are presented: frames per second, core::kTargetDisplayRate (the display's own
+  // rate) or core::kTargetUncapped. Games set it with Application::SetTargetFps (cvar r.target_fps).
+  // Android: Swappy (vsync + the limiter where it isn't available); desktop: a vsync interval, or
+  // vsync off + a precise limiter. A hidden window is never paced. Game thread.
+  virtual void SetTargetFps(int fps) { target_fps_ = fps; }
+  int TargetFps() const { return target_fps_; }
+  // Android (Swappy): lower the rate on its own (60 -> 30) while frames don't fit. Off by default:
+  // Quality lowers the game's detail instead. Cvar r.pacing.auto_interval.
+  virtual void SetAutoSwapInterval(bool on) { auto_swap_interval_ = on; }
+  // The display's refresh rate in Hz (0: unknown).
+  virtual float RefreshRate() const { return 0.0f; }
+  // The rate frames are paced to (the target, or the display's rate when that is lower); 0 = no pacing.
+  virtual float PacedFps() const { return 0.0f; }
+  // How, for the engine panel and logs: "Swappy", "vsync", "vsync / 2", "limiter", "none".
+  virtual std::string PacingMethod() const { return "none"; }
+
  protected:
   core::Vector2 size_;  // drawable size in pixels (updated by the platform on resize)
   input::Input input_;
@@ -144,6 +161,8 @@ class Window {
   bool gpu_timing_supported_ = false;
   float gpu_frame_ms_ = -1.0f;
   bool invalidate_framebuffers_ = true;
+  int target_fps_ = 60;
+  bool auto_swap_interval_ = false;
 
  public:
   static std::unique_ptr<Window> Create(const core::Vector2& size, const std::string& title,

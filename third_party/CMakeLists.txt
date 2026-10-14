@@ -63,3 +63,31 @@ endif()
 # ---- nanobench v4.3.11 (MIT): microbenchmarks (benchmarks/; header-only, compiled once in bench_main.cpp) ----
 add_library(wlw_nanobench INTERFACE)
 target_include_directories(wlw_nanobench SYSTEM INTERFACE nanobench)
+
+# ---- Swappy 2.3.0-alpha01 (Apache-2.0; AGDK games-frame-pacing, OpenGL part): Android frame pacing ----
+# Sources from AGDK's last commit (gamesdk main 044fd03, March 2025; the repo is archived since). The Java
+# classes it calls (java/com/google/androidgamesdk) are compiled by the game's Gradle build from its source
+# set, not embedded as a dex: ANDROIDGAMESDK_NO_BINARY_DEX_LINKAGE.
+if(ANDROID)
+  add_library(wlw_swappy STATIC
+    swappy/src/common/ChoreographerFilter.cpp
+    swappy/src/common/ChoreographerThread.cpp
+    swappy/src/common/CpuInfo.cpp
+    swappy/src/common/CPUTracer.cpp
+    swappy/src/common/FrameStatistics.cpp
+    swappy/src/common/Settings.cpp
+    swappy/src/common/swappy_c.cpp
+    swappy/src/common/SwappyCommon.cpp
+    swappy/src/common/SwappyDisplayManager.cpp
+    swappy/src/common/Thread.cpp
+    swappy/src/opengl/EGL.cpp
+    swappy/src/opengl/FrameStatisticsGL.cpp
+    swappy/src/opengl/SwappyGL.cpp
+    swappy/src/opengl/swappyGL_c.cpp
+    swappy/src/gamesdk/system_utils.cpp)
+  target_include_directories(wlw_swappy SYSTEM PUBLIC swappy/include)
+  target_include_directories(wlw_swappy PRIVATE swappy/src/common swappy/src/opengl swappy/src/gamesdk)
+  target_compile_definitions(wlw_swappy PRIVATE ANDROIDGAMESDK_NO_BINARY_DEX_LINKAGE)
+  set_target_properties(wlw_swappy PROPERTIES FOLDER "third_party" POSITION_INDEPENDENT_CODE ON)
+  target_link_libraries(wlw_swappy PUBLIC android EGL GLESv3 log)
+endif()

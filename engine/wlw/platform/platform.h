@@ -71,6 +71,10 @@ bool MoveToBackground();
 // manifest. No-op on desktop.
 void Vibrate(int milliseconds, float strength = 1.0f);
 
+// Waits `seconds` to within ~0.1 ms (the frame limiter, core/frame_pacing.h): the OS sleeps until about
+// 1 ms before the end (Windows: a high-resolution waitable timer), then a short spin.
+void PreciseSleep(double seconds);
+
 // The program's launch arguments, for cvars ("+r.shadows 0", core/cvar.h): desktop = argv without the
 // program's name; Android = the launch intent's "wlw" extra ("r.shadows=0;log.filter=Render=Verbose"),
 // one "+name=value" per setting. Stored by the entry point before the game's MakeApp runs.

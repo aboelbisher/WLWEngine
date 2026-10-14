@@ -75,6 +75,12 @@ float Quality::UpWait(int level) const {
   return settings_.up_seconds * static_cast<float>(backoff);
 }
 
+void Quality::SetTargetFrameMs(float ms) {
+  if (ms <= 0.0f || std::abs(ms - target_frame_ms_) < 0.01f) return;  // the same rate (float noise)
+  target_frame_ms_ = ms;
+  if (configured_ && settings_.budget_ms <= 0.0f) Settle();  // readings against the old budget mean nothing now
+}
+
 bool Quality::Update(float dt, float gpu_ms, float frame_ms) {
   if (!configured_ || locked_ || dt <= 0.0f) return false;
   if (settle_ > 0.0f) {
@@ -83,7 +89,7 @@ bool Quality::Update(float dt, float gpu_ms, float frame_ms) {
   }
 
   // Smoothed over about half a second; a hitch (a level loading) counts as at most two budgets.
-  const float budget = settings_.budget_ms;
+  const float budget = BudgetMs();
   const float blend = 1.0f - std::exp(-dt / 0.5f);
   auto smooth = [budget, blend](float& average, float sample) {
     sample = std::min(sample, 2.0f * budget);

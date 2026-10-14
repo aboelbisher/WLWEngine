@@ -9,6 +9,38 @@ then it's deleted (listed under **Removed**).
 
 ## Unreleased
 
+### Frame pacing (Roadmap 1.1)
+- `AppConfig::target_fps` (default 60): frames per second the screen gets; `core::kTargetDisplayRate` (0) = the
+  display's own rate, `core::kTargetUncapped` (-1) = no limit (desktop profiling). Changed at runtime with
+  `Application::SetTargetFps` (a settings menu: 30 saves battery) or the cvar `r.target_fps`; the engine panel has
+  buttons for it and shows the rate frames are paced to, how, and the display's refresh rate.
+- Android: **Swappy** (AGDK games-frame-pacing 2.3.0-alpha01, the last source before AGDK's repo was archived;
+  vendored in `third_party/swappy`, OpenGL part, Apache-2.0) presents each frame at the vsync it belongs to and
+  picks the display mode for the target (a 90 Hz phone switches to 60 Hz for 60 fps). Its auto swap interval is
+  off (`r.pacing.auto_interval` turns it on): Quality lowers detail instead of halving the rate. Where Swappy
+  isn't available (no `EGL_ANDROID_presentation_time`): vsync + `ANativeWindow_setFrameRate` (Android 11+) +
+  the limiter, re-planned when the display changes mode.
+- Desktop: a target that divides the monitor's refresh rate uses a vsync interval (60 fps on 240 Hz = every 4th
+  refresh); any other target turns vsync off and uses a precise limiter (`platform::PreciseSleep`: a
+  high-resolution waitable timer on Windows, then a spin for the last millisecond). The monitor is the one the
+  window is on, checked again when the window moves. Measured on a 240 Hz monitor (Snake, Release): 60 fps =
+  16.667 ms per frame, standard deviation 0.12 ms; 100 fps (limiter) = 10.000 ms, 0.006-0.017 ms; 30 fps =
+  33.32 ms, 0.27 ms. Before this step the game ran at the monitor's 240 fps.
+- `core/frame_pacing.h` (tested without a window): `PlanPacing(target, refresh)` (vsync interval or limiter,
+  2% tolerance for displays that report 59.94 Hz as 59) and `FrameLimiter` (fixed schedule with an exact
+  average; restarts after a stall instead of rushing frames).
+- Quality: `QualitySettings::budget_ms` now defaults to 0 = the frame time of the rate frames are paced to
+  (`Quality::BudgetMs()`, kept in step by the Application; a change settles the readings). A game that set
+  `budget_ms` keeps it.
+- `scene::Window`: `SetTargetFps`, `TargetFps`, `SetAutoSwapInterval`, `RefreshRate`, `PacedFps`, `PacingMethod`.
+- **Games on Android** add Swappy's Java classes (it calls them over JNI) to their Gradle source set and keep
+  them from R8 (see CLAUDE.md "Layout", platform/):
+  `java.srcDirs(..., "../../external/WLWengine/third_party/swappy/java")` and, in `proguard-rules.pro`,
+  `-keep class com.google.androidgamesdk.** { *; }`. Without them Swappy can't start on Android 9+ (it
+  needs its `SwappyDisplayManager`) and the engine falls back to vsync + the limiter (logged as a warning).
+- **Behaviour change:** games now run at 60 fps by default instead of the display's rate (120 Hz phones, fast
+  desktop monitors). Set `target_fps = 0` for the old behaviour.
+
 ## 0.1.0 (2026-10-15): Phase 0, safety net and tooling
 
 The first tagged version: tests (doctest, golden images, benchmarks), CI on Windows, Linux and Android, logging,

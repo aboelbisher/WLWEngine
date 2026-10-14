@@ -10,6 +10,7 @@
 #include "wlw/app/application.h"
 #include "wlw/app/engine_cvars.h"
 #include "wlw/core/build_info.h"
+#include "wlw/core/frame_pacing.h"
 #include "wlw/core/profile.h"
 
 namespace wlw::debug {
@@ -22,6 +23,17 @@ void EnginePanel::OnDebugUI() {
   static const std::string build = core::BuildInfoText();  // never changes
   ImGui::TextDisabled("%s", build.c_str());
   ImGui::Text("%.0f fps, %.2f ms", App().Time().Fps(), App().Time().FrameMs());
+  // Frame pacing (core/frame_pacing.h): the target, through the r.target_fps cvar like the console.
+  ImGui::Text("Target");
+  for (const int fps : {30, 60, 90, 120, core::kTargetDisplayRate, core::kTargetUncapped}) {
+    ImGui::SameLine();
+    const std::string label = core::TargetFpsName(fps);
+    if (ImGui::RadioButton(label.c_str(), app::cv_target_fps.Get() == fps)) {
+      app::cv_target_fps.Set(fps, CVarSource::Console);
+    }
+  }
+  ImGui::Text("  paced to %.1f fps by %s; display %.1f Hz", window.PacedFps(), window.PacingMethod().c_str(),
+              window.RefreshRate());
   if constexpr (profile::kEnabled) {  // profile builds (core/profile.h)
     if (profile::Connected()) {
       ImGui::Text("Profiler: Tracy connected");
@@ -59,9 +71,9 @@ void EnginePanel::OnDebugUI() {
       ImGui::SameLine();
       if (ImGui::SmallButton("Auto")) app::cv_quality_lock.Set(-1, CVarSource::Console);
     }
-    ImGui::Text("  reads GPU %.1f ms, frame %.1f ms; over %.1f s, under %.1f s (up after %.0f s)",
-                quality.SmoothedGpuMs(), quality.SmoothedFrameMs(), quality.SecondsOver(), quality.SecondsUnder(),
-                quality.UpWait(quality.Level() + 1));
+    ImGui::Text("  budget %.1f ms; reads GPU %.1f ms, frame %.1f ms; over %.1f s, under %.1f s (up after %.0f s)",
+                quality.BudgetMs(), quality.SmoothedGpuMs(), quality.SmoothedFrameMs(), quality.SecondsOver(),
+                quality.SecondsUnder(), quality.UpWait(quality.Level() + 1));
   }
   auto gpu_line = [](const char* name, const scene::Viewport& viewport) {
     const scene::GpuStats& gpu = viewport.GetGpuStats();
