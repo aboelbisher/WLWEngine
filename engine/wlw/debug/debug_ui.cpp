@@ -61,16 +61,28 @@ void DebugUI::BeginFrame(float dt) {
   ImGui_ImplOpenGL3_NewFrame();
   ImGui::NewFrame();
 
-  if (window_.GetInput().WasKeyPressed(input::Key::F1)) open_ = !open_;
+  const input::Input& input = window_.GetInput();
+  if (input.RawKeyPressed(input::Key::F1)) open_ = !open_;
+  if (input.RawKeyPressed(input::Key::Grave)) {  // the console: opens the debug UI with it
+    console_.open = !console_.open || !open_;
+    if (console_.open) {
+      open_ = true;
+      console_.FocusInput();
+    }
+  }
   if (hidden_for_ > 0.0f) {
     hidden_for_ -= dt;  // hidden (HideFor): no button, F1 still works
   } else {
     DrawToggleButton();
   }
 
+  if (open_ && console_.open) console_.Draw(!input.IsTouchScreen());
+
   // Who owns the pointer this frame: if it's over (or dragging) an ImGui window, the game
   // doesn't see it. ImGui decides this in NewFrame from the current position and buttons.
   window_.GetInput().SetPointerBlocked(ImGui::GetIO().WantCaptureMouse);
+  // And the keyboard, while a text field (the console's input line) has it.
+  window_.GetInput().SetKeyboardBlocked(ImGui::GetIO().WantTextInput);
 }
 
 void DebugUI::EndFrame() { ImGui::Render(); }
@@ -79,6 +91,8 @@ void DebugUI::FeedInput(float dt) {
   ImGuiIO& io = ImGui::GetIO();
   input::Input& input = window_.GetInput();
   input.SetPointerBlocked(false);  // decided again below, after ImGui has seen this frame
+  input.SetKeyboardBlocked(false);
+  FeedKeyboard();
 
   io.DeltaTime = dt > 0.0f ? dt : 1.0f / 60.0f;
   // ImGui works in pointer units; the framebuffer may have more pixels (HiDPI desktops).
@@ -110,6 +124,38 @@ void DebugUI::FeedInput(float dt) {
   }
 }
 
+void DebugUI::FeedKeyboard() {
+  struct Mapping {
+    input::Key key;
+    ImGuiKey imgui;
+  };
+  static constexpr Mapping kKeys[] = {
+      {input::Key::Up, ImGuiKey_UpArrow},       {input::Key::Down, ImGuiKey_DownArrow},
+      {input::Key::Left, ImGuiKey_LeftArrow},   {input::Key::Right, ImGuiKey_RightArrow},
+      {input::Key::Enter, ImGuiKey_Enter},      {input::Key::Escape, ImGuiKey_Escape},
+      {input::Key::Space, ImGuiKey_Space},      {input::Key::Tab, ImGuiKey_Tab},
+      {input::Key::Backspace, ImGuiKey_Backspace}, {input::Key::Delete, ImGuiKey_Delete},
+      {input::Key::Home, ImGuiKey_Home},        {input::Key::End, ImGuiKey_End},
+      {input::Key::PageUp, ImGuiKey_PageUp},    {input::Key::PageDown, ImGuiKey_PageDown},
+      {input::Key::A, ImGuiKey_A},              {input::Key::Control, ImGuiMod_Ctrl},
+      {input::Key::Shift, ImGuiMod_Shift},
+  };
+  ImGuiIO& io = ImGui::GetIO();
+  const input::Input& input = window_.GetInput();
+  // Presses and releases in order (a quick tap inside one frame: down, then up).
+  for (const Mapping& mapping : kKeys) {
+    if (input.RawKeyPressed(mapping.key)) io.AddKeyEvent(mapping.imgui, true);
+    if (input.RawKeyReleased(mapping.key) || (input.RawKeyPressed(mapping.key) && !input.RawKeyDown(mapping.key))) {
+      io.AddKeyEvent(mapping.imgui, false);
+    }
+  }
+  const bool toggled_console = input.RawKeyPressed(input::Key::Grave);
+  for (const uint32_t codepoint : input.RawText()) {
+    if (toggled_console && (codepoint == '`' || codepoint == '~')) continue;  // the toggle isn't typed
+    io.AddInputCharacter(codepoint);
+  }
+}
+
 void DebugUI::DrawToggleButton() {
   const ImGuiIO& io = ImGui::GetIO();
   const float margin = 8.0f * ImGui::GetStyle().FontScaleDpi;
@@ -120,6 +166,10 @@ void DebugUI::DrawToggleButton() {
                                       ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoMove;
   ImGui::Begin("##wlw_debug_toggle", nullptr, kFlags);
   if (ImGui::Button(open_ ? "Close debug" : "Debug")) open_ = !open_;
+  if (open_) {
+    ImGui::SameLine();
+    if (ImGui::Button(console_.open ? "Hide console" : "Console")) console_.open = !console_.open;
+  }
   ImGui::End();
 }
 

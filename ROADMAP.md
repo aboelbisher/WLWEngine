@@ -5,17 +5,38 @@ first (Android, iOS, web), with desktop as a full target. This plan came out of 
 architecture review. Work goes one step at a time, in order. Step ids are stable: commits name
 them ("Roadmap 4.3b: ...").
 
-**Current step:** 0.5 CVars and console (not started) · **Updated:** 2026-10-14
+**Current step:** 0.6 Tracy (not started) · **Updated:** 2026-10-14
 
-**Next session:** start 0.5 with its concept and plan (it builds on 0.4: the console reads RecentLogs and AddLogSink, log filters become a cvar). Notes: CI is green on main (Windows, Linux clang
-ASan+UBSan with the golden images on llvmpipe, Android). The GitHub CLI is installed and logged in
-(`C:\Program Files\GitHub CLI\gh.exe`, not on the bash PATH): `gh run list`, `gh run watch`,
-`gh run download <id> --name gpu-output`. A rendering change that changes pictures on purpose gets new references
-from CI's `gpu-output` artifact (llvmpipe), reviewed like code; they're plain git, not LFS. Tests: `wlw_tests` +
-`snake_game_tests` (188 cases) + `wlw_gpu_tests` (7, label gpu); cases run in parallel processes, so no shared
-temp files. Bluzzle and Threadlock still pin the engine submodule from before 0.1. Locally use `build/win-debug`
-(`build/windows-debug` is stale); the Android preset builds with
-`ANDROID_NDK_HOME=%LOCALAPPDATA%\Android\Sdk\ndk\30.0.16248370`. WSL Ubuntu has no compilers.
+**Next session:** start 0.6 (Tracy) with its concept and plan; wait for the owner's OK before any code.
+
+Where things stand (end of 2026-10-14):
+- Done: 0.1 doctest, 0.2 CI, 0.3 golden images, 0.4 logging and asserts, 0.5 cvars and console. Each is one
+  squashed commit on main named "Roadmap 0.x: ...", with details in CHANGELOG.md.
+- How the owner works: the plan goes in chat first; code only after an OK. Work on a branch (`<topic>/setup`)
+  pushed to GitHub so CI checks it, then show the result and squash-merge to main only on approval. Delete the
+  work branch after. Ask before deleting files.
+- CI: GitHub Actions (`.github/workflows/ci.yml`). Every push runs Windows MSVC Debug, Linux clang ASan+UBSan
+  (+ golden images on llvmpipe under xvfb) and Android arm64 (NDK 30, builds engine + Snake). Windows Release
+  runs only on main and manual runs (private repo: the owner wants zero cost; GitHub stops at the free minutes).
+  Markdown-only pushes don't run CI.
+- GitHub CLI: installed and logged in (`C:\Program Files\GitHub CLI\gh.exe`, not on the bash PATH: call it by
+  its full path). `gh run list/watch/view --log-failed`, `gh run download <id> --name gpu-output`.
+- Golden images: a rendering change that changes pictures on purpose gets new references from CI's `gpu-output`
+  artifact (llvmpipe), looked at and reviewed like code. They're plain git, not LFS (a .gitattributes rule).
+- Tests: `wlw_tests` + `snake_game_tests` (210 cases) + `wlw_gpu_tests` (7, label gpu) = 217 CTest tests. Cases
+  run in parallel processes (no shared temp files); global state (log filters, cvars) is restored per case, and
+  test cvars are static with unique "test.<case>.*" names.
+- For 0.6: profiler switches can be cvars (`core/cvar.h`); zones go on the Application phases and renderer
+  stages (the frame is described in `app/application.h`); log categories (`core/log.h`) give zone names.
+- Open items: Bluzzle and Threadlock still pin the engine submodule from before 0.1; moving them up needs no
+  code changes (checked: they don't rely on `<sstream>` coming through `node.h`). Typing in the console on
+  phones waits for GameTextInput (D9). Pre-existing clang warnings in `scene/post_effects.cpp` (missing
+  designated initializers) belong to 0.8. Nobody has typed into the new console yet: the owner was asked to
+  try ` in Snake.
+- Local machine: use `build/win-debug` and `build/win-release` (`build/windows-debug` is stale), from a VS 18
+  dev shell. The Android preset builds locally with
+  `ANDROID_NDK_HOME=%LOCALAPPDATA%\Android\Sdk\ndk\30.0.16248370`. WSL Ubuntu has no compilers: Linux is checked
+  by CI only.
 
 ## How a step runs
 1. Concept and plan in chat: why it exists, the trade-offs, how the big engines do it, exactly
@@ -99,7 +120,7 @@ libunibreak (zlib), msdfgen (MIT), Jolt (MIT), Box2D v3 (MIT), ImGuizmo (MIT), F
   runtime filters, sinks (console/logcat, file, an in-memory ring for the console, callbacks for
   crash breadcrumbs), thread ids and timestamps. `WLW_ASSERT`, `WLW_VERIFY` and `WLW_UNREACHABLE`
   replace `FAIL_IF`.
-- [ ] **0.5 CVars and console.** Typed console variables (name, default, help, flags) set from
+- [x] **0.5 CVars and console.** *(done 2026-10-14, commit "Roadmap 0.5: cvars and console"; dotted lowercase names; command line and adb work in release except Cheat cvars; typing in the console on phones waits for GameTextInput, D9)* Typed console variables (name, default, help, flags) set from
   code, a config file and the command line (adb intent extras on Android); a debug-UI panel listing
   them; an ImGui console with log, commands and completion.
 - [ ] **0.6 Tracy.** `WLW_PROFILE_*` macros (zones, frame marks, plots, thread names, GPU zones

@@ -33,10 +33,18 @@ void RunAndroidApp(android_app* app, std::unique_ptr<::wlw::app::Application> (*
 
 #else
 
-#define WLW_MAIN(make_app)                                          \
-  int main() {                                                      \
-    std::unique_ptr<::wlw::app::Application> app = make_app();      \
-    return app ? app->Run() : 1;                                    \
+#include <string>
+#include <vector>
+
+namespace wlw::platform {
+void SetLaunchArguments(std::vector<std::string> arguments);
+}
+
+#define WLW_MAIN(make_app)                                                                   \
+  int main(int argc, char** argv) {                                                          \
+    ::wlw::platform::SetLaunchArguments(std::vector<std::string>(argv + (argc > 0 ? 1 : 0), argv + argc)); \
+    std::unique_ptr<::wlw::app::Application> app = make_app();                               \
+    return app ? app->Run() : 1;                                                             \
   }
 
 #endif

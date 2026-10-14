@@ -1,5 +1,6 @@
 #include "wlw/app/application.h"
 
+#include "wlw/app/engine_cvars.h"
 #include "wlw/core/log.h"
 #include "wlw/audio/audio.h"
 #include "wlw/platform/bridge.h"
@@ -8,6 +9,7 @@
 #include "wlw/ui/ui_context.h"
 #if WLW_DEBUG_UI
 #include "wlw/debug/debug_ui.h"
+#include "wlw/debug/cvar_panel.h"
 #include "wlw/debug/engine_panel.h"
 #endif
 
@@ -31,19 +33,25 @@ Application::Application(AppConfig config)
   time_.fixed_step_ = config_.fixed_timestep;
   if (const std::string folder = platform::GetSaveDirectory(config_.title); !folder.empty()) {
     quality_.SetSaveFile(folder + "/quality.txt");
+    cvar_file_ = folder + "/cvars.cfg";
 #ifndef NDEBUG
     // Debug builds keep a log file (the run before as log.txt.prev); release builds don't write one.
     StartLogFile(folder + "/log.txt");
 #endif
   }
+  quit_command_ = std::make_unique<ConsoleCommand>("quit", "Quits the game", [this](const ConsoleArgs&) { Quit(); });
 #if WLW_DEBUG_UI
-  AddSystem<debug::EnginePanel>();  // the engine's own debug window, first of the debug panels
+  AddSystem<debug::EnginePanel>();  // the engine's own debug windows, first of the debug panels
+  AddSystem<debug::CVarPanel>();
 #endif
 }
 
-Application::~Application() = default;
+Application::~Application() {
+  for (const auto& [cvar, id] : cvar_callbacks_) cvar->RemoveOnChange(id);
+}
 
 int Application::Run() {
+  ApplyStartupCVars();
   if (!engine_->Start(window_)) {
     WLW_LOG(LogApp, Error, "Engine failed to start");
     return 1;
@@ -74,6 +82,10 @@ int Application::Run() {
   systems_.StartPending();  // the systems added before Run, in order
   // The scenes they built: compile the shader variants they need now, not during the first frames.
   engine_->GetRenderingDriver()->WarmUp(*window_);
+  // The game has started: ReadOnly cvars keep their values from now on. A quality lock from a config
+  // file or the command line applies now that OnStart configured the levels.
+  CVarBase::SetStarted(true);
+  if (quality_.Configured() && cv_quality_lock.Get() >= 0) quality_.Lock(cv_quality_lock.Get());
 
   // steady_clock: monotonic (never jumps when the system clock changes), available on every platform.
   using Clock = std::chrono::steady_clock;
@@ -159,6 +171,7 @@ int Application::Run() {
     screens_.EndFrame(time_.real_delta_);
     UpdateStats(frame_seconds);
     UpdateQuality(frame_seconds);
+    if (ConsumeSavedCVarsChanged()) SaveCVars();  // rare: a setting the player changed
   }
 
   platform::SetBridgeHandler("audio", nullptr);
@@ -209,10 +222,61 @@ void Application::UpdateQuality(double frame_seconds) {
   if (!quality_.Configured()) return;
   if (!quality_timing_) {  // it decides from the GPU's time where the GPU can measure it
     quality_timing_ = true;
-    if (window_->GpuTimingSupported()) window_->SetGpuTiming(true);
+    if (window_->GpuTimingSupported()) cv_gpu_timing.Set(true);
   }
   const float gpu_ms = window_->GpuTiming() ? window_->GpuFrameMs() : -1.0f;
   quality_.Update(static_cast<float>(frame_seconds), gpu_ms, static_cast<float>(frame_seconds * 1000.0));
+}
+
+void Application::ApplyStartupCVars() {
+  // Later sources win: shipped settings, the player's, then the command line / adb.
+  ApplyCVarFile("wlw.cfg", CVarSource::ConfigFile);
+  if (!cvar_file_.empty()) {
+    if (const auto data = platform::ReadLocalFile(cvar_file_)) {
+      ApplyCVarText({reinterpret_cast<const char*>(data->data()), data->size()}, CVarSource::UserFile, cvar_file_);
+    }
+  }
+  for (const auto& [name, value] : ParseCVarArguments(platform::LaunchArguments())) {
+    const bool known = FindCVar(name) != nullptr;  // engine and game cvars exist by now: unknown = a typo, usually
+    const CVarSetResult result = SetCVar(name, value, CVarSource::CommandLine);
+    if (result == CVarSetResult::Ok && !known) {
+      WLW_LOG(LogApp, Warning, "Command line: no cvar is called %s (kept in case one registers later)", name.c_str());
+    } else if (result == CVarSetResult::Ok) {
+      WLW_LOG(LogApp, Info, "Command line: %s = %s", name.c_str(), value.c_str());
+    } else {
+      WLW_LOG(LogApp, Warning, "Command line: %s = %s: %s", name.c_str(), value.c_str(), CVarSetResultText(result));
+    }
+  }
+
+  // The engine's own cvars drive the window, the log and the quality levels.
+  if (!cv_log_filter.Get().empty()) SetLogFilter(cv_log_filter.Get());
+  cvar_callbacks_.emplace_back(&cv_log_filter, cv_log_filter.OnChange([] {
+    SetLogLevel(LogLevel::Info);  // a new filter replaces the old one
+    if (!SetLogFilter(cv_log_filter.Get())) WLW_LOG(LogApp, Warning, "log.filter: some parts aren't category=level");
+  }));
+  WatchCVar(cv_gpu_timing, [this] { window_->SetGpuTiming(cv_gpu_timing.Get()); });
+  WatchCVar(cv_invalidate_framebuffers, [this] { window_->SetInvalidateFramebuffers(cv_invalidate_framebuffers.Get()); });
+  cvar_callbacks_.emplace_back(&cv_quality_lock, cv_quality_lock.OnChange([this] {
+    if (!quality_.Configured()) return;
+    if (cv_quality_lock.Get() < 0) {
+      quality_.Unlock();
+    } else {
+      quality_.Lock(cv_quality_lock.Get());
+    }
+  }));
+}
+
+void Application::WatchCVar(CVarBase& cvar, std::function<void()> apply) {
+  apply();  // the value it has now
+  cvar_callbacks_.emplace_back(&cvar, cvar.OnChange(std::move(apply)));
+}
+
+void Application::SaveCVars() {
+  if (cvar_file_.empty()) return;
+  const std::string text = SavedCVarText();
+  if (!platform::WriteFileAtomic(cvar_file_, {text.begin(), text.end()})) {
+    WLW_LOG(LogApp, Warning, "Couldn't save %s", cvar_file_.c_str());
+  }
 }
 
 void Application::UpdateStats(double frame_seconds) {

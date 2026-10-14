@@ -12,6 +12,7 @@ void Input::BeginFrame() {
   pointer_released_ = false;
   swipes_.clear();
   tapped_ = false;
+  text_.clear();
 }
 
 void Input::OnKey(Key key, bool down) {
@@ -21,6 +22,8 @@ void Input::OnKey(Key key, bool down) {
   if (!down && keys_down_[i]) keys_released_[i] = true;
   keys_down_[i] = down;
 }
+
+void Input::OnText(uint32_t codepoint) { text_.push_back(codepoint); }
 
 void Input::OnPointerDown(float x, float y) {
   pointer_down_ = true;

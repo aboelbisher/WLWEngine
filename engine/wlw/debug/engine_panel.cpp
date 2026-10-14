@@ -8,6 +8,7 @@
 
 #include "imgui.h"
 #include "wlw/app/application.h"
+#include "wlw/app/engine_cvars.h"
 
 namespace wlw::debug {
 
@@ -21,26 +22,31 @@ void EnginePanel::OnDebugUI() {
   if (!window.GpuTimingSupported()) {
     ImGui::TextDisabled("GPU timing: not supported on this GPU");
   } else {
-    bool timing = window.GpuTiming();
-    if (ImGui::Checkbox("GPU timing", &timing)) window.SetGpuTiming(timing);
+    bool timing = app::cv_gpu_timing.Get();
+    if (ImGui::Checkbox("GPU timing", &timing)) app::cv_gpu_timing.Set(timing, CVarSource::Console);
     if (timing && window.GpuFrameMs() >= 0.0f) {
       ImGui::SameLine();
       ImGui::Text("GPU %.2f ms / frame", window.GpuFrameMs());
     }
   }
-  bool invalidate = window.InvalidateFramebuffers();  // phones: compare the GPU time with it off
-  if (ImGui::Checkbox("Invalidate framebuffers", &invalidate)) window.SetInvalidateFramebuffers(invalidate);
+  bool invalidate = app::cv_invalidate_framebuffers.Get();  // phones: compare the GPU time with it off
+  if (ImGui::Checkbox("Invalidate framebuffers", &invalidate)) {
+    app::cv_invalidate_framebuffers.Set(invalidate, CVarSource::Console);
+  }
   // Quality levels (app/quality.h): which one runs, what it reads, and a lock to try each.
   if (app::Quality& quality = App().Quality(); quality.Configured()) {
     ImGui::Text("Quality %d of 0..%d%s", quality.Level(), quality.Settings().levels - 1,
                 quality.Locked() ? " (locked)" : "");
     ImGui::SameLine();
-    if (ImGui::SmallButton("-")) quality.Lock(std::max(quality.Level() - 1, 0));
+    // Through the quality.lock cvar, so the console and the CVars panel agree.
+    if (ImGui::SmallButton("-")) app::cv_quality_lock.Set(std::max(quality.Level() - 1, 0), CVarSource::Console);
     ImGui::SameLine();
-    if (ImGui::SmallButton("+")) quality.Lock(quality.Level() + 1);
+    if (ImGui::SmallButton("+")) {
+      app::cv_quality_lock.Set(std::min(quality.Level() + 1, quality.Settings().levels - 1), CVarSource::Console);
+    }
     if (quality.Locked()) {
       ImGui::SameLine();
-      if (ImGui::SmallButton("Auto")) quality.Unlock();
+      if (ImGui::SmallButton("Auto")) app::cv_quality_lock.Set(-1, CVarSource::Console);
     }
     ImGui::Text("  reads GPU %.1f ms, frame %.1f ms; over %.1f s, under %.1f s (up after %.0f s)",
                 quality.SmoothedGpuMs(), quality.SmoothedFrameMs(), quality.SecondsOver(), quality.SecondsUnder(),

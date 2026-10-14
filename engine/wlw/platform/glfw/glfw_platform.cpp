@@ -196,6 +196,18 @@ input::Key MapKey(int key) {
     case GLFW_KEY_I: return input::Key::I;
     case GLFW_KEY_P: return input::Key::P;
     case GLFW_KEY_F1: return input::Key::F1;
+    case GLFW_KEY_TAB: return input::Key::Tab;
+    case GLFW_KEY_BACKSPACE: return input::Key::Backspace;
+    case GLFW_KEY_DELETE: return input::Key::Delete;
+    case GLFW_KEY_HOME: return input::Key::Home;
+    case GLFW_KEY_END: return input::Key::End;
+    case GLFW_KEY_PAGE_UP: return input::Key::PageUp;
+    case GLFW_KEY_PAGE_DOWN: return input::Key::PageDown;
+    case GLFW_KEY_LEFT_CONTROL:
+    case GLFW_KEY_RIGHT_CONTROL: return input::Key::Control;
+    case GLFW_KEY_LEFT_SHIFT:
+    case GLFW_KEY_RIGHT_SHIFT: return input::Key::Shift;
+    case GLFW_KEY_GRAVE_ACCENT: return input::Key::Grave;
     default: return input::Key::Unknown;
   }
 }
@@ -232,6 +244,7 @@ class GlfwWindow : public Window {
     // Route GLFW callbacks to this object.
     glfwSetWindowUserPointer(window_, this);
     glfwSetKeyCallback(window_, &GlfwWindow::OnKey);
+    glfwSetCharCallback(window_, &GlfwWindow::OnChar);
     glfwSetMouseButtonCallback(window_, &GlfwWindow::OnMouseButton);
     glfwSetCursorPosCallback(window_, &GlfwWindow::OnCursorPos);
     glfwSetFramebufferSizeCallback(window_, &GlfwWindow::OnFramebufferSize);
@@ -273,6 +286,8 @@ class GlfwWindow : public Window {
     if (action == GLFW_REPEAT) return;
     From(w)->input_.OnKey(MapKey(key), action == GLFW_PRESS);
   }
+
+  static void OnChar(GLFWwindow* w, unsigned int codepoint) { From(w)->input_.OnText(codepoint); }
 
   static void OnMouseButton(GLFWwindow* w, int button, int action, int /*mods*/) {
     if (button != GLFW_MOUSE_BUTTON_LEFT) return;

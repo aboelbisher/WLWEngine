@@ -71,6 +71,12 @@ bool MoveToBackground();
 // manifest. No-op on desktop.
 void Vibrate(int milliseconds, float strength = 1.0f);
 
+// The program's launch arguments, for cvars ("+r.shadows 0", core/cvar.h): desktop = argv without the
+// program's name; Android = the launch intent's "wlw" extra ("r.shadows=0;log.filter=Render=Verbose"),
+// one "+name=value" per setting. Stored by the entry point before the game's MakeApp runs.
+void SetLaunchArguments(std::vector<std::string> arguments);
+const std::vector<std::string>& LaunchArguments();
+
 // The platform's log output (core/log.h's default sink): stdout/stderr with time, thread and category on
 // desktop; logcat (tag WLW, "[Category] message") on Android. Called under the log's lock.
 void WriteLog(const LogRecord& record);

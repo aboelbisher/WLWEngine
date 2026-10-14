@@ -4,6 +4,32 @@ Steps refer to ROADMAP.md. Breaking changes come with migration notes.
 
 ## Unreleased
 
+### Console variables and console (Roadmap 0.5)
+- `wlw/core/cvar.h`: `CVar<bool|int|float|std::string>{"r.name", default, "help", flags, range}`, with dotted
+  lowercase names. Flags: `Saved` (kept in `<save dir>/cvars.cfg`), `ReadOnly` (only before the game starts),
+  `Cheat` (changeable from outside the code only in debug builds). `Get`, `Set`, `Reset`, `OnChange`;
+  `FindCVar`, `AllCVars`, `SetCVar`.
+- Where values come from, later ones winning: the code default, `wlw.cfg` in the game's assets, the player's
+  `cvars.cfg`, the command line (`game.exe +r.name 0 +log.filter=Render=Verbose`) or, on Android,
+  `adb shell am start -n <package>/<activity> --es wlw "r.name=0;log.filter=Render=Verbose"`, then the console.
+  A value for a name that doesn't exist yet waits for it; at startup an unknown name is logged as a warning.
+- `wlw/core/console.h`: `ConsoleCommand` (registered while it exists), `ExecuteConsoleLine` (a command,
+  `cvar`, `cvar value`, `cvar = value`), built-in `help`, `find`, `set`, `reset`, `exec`, and `quit` from
+  the Application. Command output goes to the log (category Console).
+- Engine cvars (`wlw/app/engine_cvars.h`): `log.filter`, `r.gpu_timing`, `r.invalidate_framebuffers`,
+  `quality.lock`. The Engine panel's checkboxes and quality buttons now set them.
+- Debug UI: a console window (the ` key or the "Console" button) with the log, level and text filters, and
+  an input line with history and Tab completion. A "CVars" panel lists every cvar by prefix, with widgets
+  for its type and a reset button. ImGui now gets the keyboard and typed text. On phones the console only
+  shows the log; typing there needs GameTextInput (roadmap D9).
+- Input: new keys `Tab`, `Backspace`, `Delete`, `Home`, `End`, `PageUp`, `PageDown`, `Control`, `Shift`,
+  `Grave`; `Text()` (typed characters); `SetKeyboardBlocked` and `Raw*` key queries (the game's keys are
+  blocked while the console has the keyboard).
+- Platform: `LaunchArguments()` (desktop `argv`; Android the launch intent's `wlw` extra). `WLW_MAIN`'s
+  `main` now takes `argc` and `argv`.
+
+Migration: none needed. Code that switches over `input::Key` without a `default` gets new cases to handle.
+
 ### Logging and asserts (Roadmap 0.4)
 - `WLW_LOG(Category, Level, "fmt", ...)`: levels Verbose, Debug, Info, Warning, Error, Fatal; engine categories
   `LogCore`, `LogApp`, `LogRender`, `LogShader`, `LogAudio`, `LogPlatform`, `LogUI`, `LogFX` (kit: `LogKit`); games

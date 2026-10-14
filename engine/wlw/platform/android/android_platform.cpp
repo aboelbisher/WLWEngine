@@ -32,6 +32,7 @@
 #include <android_native_app_glue.h>
 
 #include "wlw/app/application.h"
+#include "wlw/core/cvar.h"
 #include "wlw/platform/bridge.h"
 #include "wlw/platform/platform.h"
 #include "wlw/scene/window.h"
@@ -602,6 +603,26 @@ bool BridgeCall(const std::string& service, const std::string& method, const std
   return !failed;
 }
 
+// The launch intent's "wlw" extra as cvar arguments ("r.shadows=0;a.b=1" -> "+r.shadows=0", "+a.b=1"):
+//   adb shell am start -n <package>/<activity> --es wlw "r.shadows=0;log.filter=Render=Verbose"
+std::vector<std::string> IntentCVarArguments(JNIEnv* env, jobject activity) {
+  std::vector<std::string> arguments;
+  env->PushLocalFrame(8);
+  jmethodID get_intent = env->GetMethodID(env->GetObjectClass(activity), "getIntent", "()Landroid/content/Intent;");
+  jobject intent = get_intent ? env->CallObjectMethod(activity, get_intent) : nullptr;
+  if (intent && !env->ExceptionCheck()) {
+    jmethodID get_extra = env->GetMethodID(env->GetObjectClass(intent), "getStringExtra",
+                                           "(Ljava/lang/String;)Ljava/lang/String;");
+    auto extra = static_cast<jstring>(env->CallObjectMethod(intent, get_extra, env->NewStringUTF("wlw")));
+    if (extra && !env->ExceptionCheck()) {
+      for (const auto& [name, value] : ParseCVarList(ToString(env, extra))) arguments.push_back("+" + name + "=" + value);
+    }
+  }
+  if (env->ExceptionCheck()) env->ExceptionClear();
+  env->PopLocalFrame(nullptr);
+  return arguments;
+}
+
 // ---- entry point (app/entry_point.h) ----
 void RunAndroidApp(android_app* app, std::unique_ptr<::wlw::app::Application> (*create_app)()) {
   g_app = app;
@@ -613,6 +634,7 @@ void RunAndroidApp(android_app* app, std::unique_ptr<::wlw::app::Application> (*
   app->onAppCmd = OnAppCmd;
   app->onInputEvent = OnInputEvent;
 
+  SetLaunchArguments(IntentCVarArguments(env, app->activity->clazz));
   {
     std::unique_ptr<::wlw::app::Application> game = create_app();
     if (game) game->Run();

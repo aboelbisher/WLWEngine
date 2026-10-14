@@ -34,9 +34,15 @@ engine/wlw/
               Update ~30 us, WriteTo ~95 us; Pixel 4 (-O2): Update ~195 us, WriteTo ~950 us (the phone's real cost)
   debug/      DebugUI: Dear ImGui (third_party/imgui) fed from Input, drawn via Window::SetOverlay; games add
               panels in System::OnDebugUI() (#if WLW_DEBUG_UI); the engine's own window is debug::EnginePanel (a
-              System the Application adds first). F1 / "Debug" button. Off in release builds
+              System the Application adds first) then debug::CVarPanel (every cvar by prefix, typed widgets, reset).
+              F1 / "Debug" button. Console (console_window.h, owned by DebugUI): ` key / "Console" button: the log
+              (level + text filters), an input line with history and Tab completion (ConsoleModel = the testable
+              logic); phones: no typing yet (GameTextInput, D9). ImGui gets keys + text from Input; while it wants
+              text input the game's keyboard is blocked. Off in release builds
   app/        Application (final: owns the services and runs the loop; see the frame in application.h): Window(),
-              Input(), Audio(), Screens(), Time(), Config(). Games add Systems (system.h: always running,
+              Input(), Audio(), Screens(), Time(), Config(). engine_cvars.h: log.filter, r.gpu_timing,
+              r.invalidate_framebuffers, quality.lock (Run applies the cvar sources first, wires these to the window /
+              log / quality, saves changed Saved cvars at the end of a frame). Games add Systems (system.h: always running,
               like Unreal subsystems / Godot autoloads; hooks OnStart/OnFixedUpdate/OnUpdate/OnRender/OnRenderUI/
               OnDebugUI/OnBack/OnAppPaused/OnAppResumed/OnShutdown, run in the order added, then the screens'; App()
               = the services) and push Screens. SystemList = the testable dispatch. Time (time.h): Delta, RealDelta,
@@ -49,8 +55,9 @@ engine/wlw/
               GPU < budget x up_at for 10 s = up (wait doubles per failure of that level, max 8x), 3 s settle after a
               change/resume, readings smoothed ~0.5 s and clamped at 2 budgets; no GPU timer = down only; level saved
               in <save dir>/quality.txt. Fed by Application after each frame (UpdateQuality). Engine panel: level, -/+/Auto
-  core/       math types, FixedTimestep, Random (SplitMix64: deterministic everywhere, state saveable), log.h (WLW_LOG(Category, Level, fmt...): levels Verbose..Fatal, categories LogCore/App/Render/Shader/Audio/Platform/UI/FX (+ kit LogKit, games WLW_LOG_CATEGORY), compile-time stripping, SetLogFilter("Render=Verbose,*=Warning") / env WLW_LOG, sinks: platform, RecentLogs ring (512), StartLogFile (debug builds: <save dir>/log.txt, previous run log.txt.prev), AddLogSink; LogThreadId), assert.h (WLW_ASSERT debug-only fatal, WLW_VERIFY always evaluated: logs + returns false, WLW_UNREACHABLE; SetAssertHandler for tests), mesh/model, collision.h (AABB, Ray, Plane, IntersectPlane)
-  input/      Input: keys (pressed vs held), pointer (mouse/first finger), swipes, taps
+  core/       math types, FixedTimestep, Random (SplitMix64: deterministic everywhere, state saveable), log.h (WLW_LOG(Category, Level, fmt...): levels Verbose..Fatal, categories LogCore/App/Render/Shader/Audio/Platform/UI/FX (+ kit LogKit, games WLW_LOG_CATEGORY), compile-time stripping, SetLogFilter("Render=Verbose,*=Warning") / env WLW_LOG, sinks: platform, RecentLogs ring (512), StartLogFile (debug builds: <save dir>/log.txt, previous run log.txt.prev), AddLogSink; LogThreadId), assert.h (WLW_ASSERT debug-only fatal, WLW_VERIFY always evaluated: logs + returns false, WLW_UNREACHABLE; SetAssertHandler for tests), cvar.h (CVar<bool/int/float/std::string>{"r.name", default, help, flags Saved/ReadOnly/Cheat, range}: dotted lowercase names; sources in order code default < wlw.cfg (assets) < <save dir>/cvars.cfg (Saved, written when changed) < command line +name value / Android --es wlw "a=1;b=2" < console; unknown names wait for registration; OnChange; game thread), console.h (ConsoleCommand RAII, ExecuteConsoleLine, built-ins help/find/set/reset/exec (+quit from Application), CompleteConsoleName, ConsoleModel), mesh/model, collision.h (AABB, Ray, Plane, IntersectPlane)
+  input/      Input: keys (pressed vs held; text-editing keys + Grave), Text() (typed code points), pointer (mouse/first
+              finger), swipes, taps; pointer and keyboard can be blocked (debug UI), Raw* queries ignore that
   math/       ExactCover: Knuth's Algorithm X with Dancing Links (exact cover search, counting, hints);
               BitGrid<W,H> (bitboards: a grid as 64-bit words, fits = one AND); game_search.h (Minimax with
               alpha-beta, BestMove, Expectimax; a game = small class with Moves/Apply/Evaluate/MaxToMove);
@@ -58,6 +65,7 @@ engine/wlw/
               LightestSolution: Lights Out-style "which toggles clear it" problems)
   platform/   THE ONLY PER-OS CODE: platform.h interface + glfw/glfw_platform.cpp (desktop)
               + android/android_platform.cpp (NativeActivity + EGL). Also save files: GetSaveDirectory, WriteFileAtomic, ReadLocalFile. iOS goes here later.
+              LaunchArguments() (launch_arguments.cpp; desktop argv via WLW_MAIN, Android the intent's "wlw" extra).
               Native bridge (bridge.h/.cpp): BridgeCall(service, method, json) C++ -> Kotlin; Kotlin posts back
               (WlwBridge.post) -> queue -> SetBridgeHandler callbacks on the GAME thread (Application dispatches
               once per frame). Kotlin side: android/java/com/wlw/ (WlwBridge, WlwService, WlwActivity = NativeActivity

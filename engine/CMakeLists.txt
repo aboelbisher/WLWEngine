@@ -55,6 +55,11 @@ add_library(wlw STATIC
   wlw/core/time_scale.h
   wlw/core/assert.cpp
   wlw/core/assert.h
+  wlw/app/engine_cvars.h
+  wlw/core/console.cpp
+  wlw/core/console.h
+  wlw/core/cvar.cpp
+  wlw/core/cvar.h
   wlw/core/log.cpp
   wlw/core/log.h
   wlw/core/mesh.h
@@ -82,6 +87,7 @@ add_library(wlw STATIC
 
   wlw/platform/bridge.h
   wlw/platform/bridge.cpp
+  wlw/platform/launch_arguments.cpp
   wlw/platform/platform.h
 
   wlw/rendering/blend_mode.h
@@ -242,6 +248,10 @@ endif()
 option(WLW_DEBUG_UI "Build the in-game debug UI (Dear ImGui)" ${_wlw_debug_ui_default})
 if(WLW_DEBUG_UI)
   target_sources(wlw PRIVATE
+    wlw/debug/console_window.cpp
+    wlw/debug/console_window.h
+    wlw/debug/cvar_panel.cpp
+    wlw/debug/cvar_panel.h
     wlw/debug/debug_ui.cpp
     wlw/debug/debug_ui.h
     wlw/debug/engine_panel.cpp

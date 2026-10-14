@@ -2,12 +2,16 @@
 
 #include <memory>
 #include <string>
+#include <functional>
 #include <utility>
+#include <vector>
 
 #include "wlw/app/quality.h"
 #include "wlw/app/screen.h"
 #include "wlw/app/system.h"
 #include "wlw/app/time.h"
+#include "wlw/core/console.h"
+#include "wlw/core/cvar.h"
 #include "wlw/core/fixed_timestep.h"
 #include "wlw/core/vector2.h"
 #include "wlw/input/input.h"
@@ -105,6 +109,10 @@ class Application final {
   void BuildUI();  // phase 8: canvases, pointer, safe area, OnRenderUI, screens, fades
   void UpdateStats(double frame_seconds);
   void UpdateQuality(double frame_seconds);
+  // Cvars (core/cvar.h): wlw.cfg, the player's saved ones, the command line; then the engine's own wired up.
+  void ApplyStartupCVars();
+  void WatchCVar(CVarBase& cvar, std::function<void()> apply);
+  void SaveCVars();
 
   AppConfig config_;
   // Destroyed in reverse order: screens and systems first (they may hold GPU resources and
@@ -124,6 +132,9 @@ class Application final {
   app::Quality quality_;
   bool quality_timing_ = false;  // GPU timing turned on for it (once: the debug panel may turn it off)
   bool quit_requested_ = false;
+  std::string cvar_file_;  // <save dir>/cvars.cfg: the player's Saved cvars
+  std::vector<std::pair<CVarBase*, int>> cvar_callbacks_;  // removed in the destructor
+  std::unique_ptr<ConsoleCommand> quit_command_;
 
   // Stats accumulators, folded into time_ twice a second.
   int stats_frames_ = 0;

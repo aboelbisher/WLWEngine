@@ -13,7 +13,9 @@ add_executable(wlw_tests
   anim_tests.cpp
   audio_tests.cpp
   blend_tests.cpp
+  console_tests.cpp
   core_tests.cpp
+  cvar_tests.cpp
   exact_cover_tests.cpp
   fx_tests.cpp
   gf2_tests.cpp

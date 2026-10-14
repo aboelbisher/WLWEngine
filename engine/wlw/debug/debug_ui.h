@@ -1,5 +1,6 @@
 #pragma once
 
+#include "wlw/debug/console_window.h"
 #include "wlw/scene/window.h"
 
 namespace wlw::debug {
@@ -17,7 +18,9 @@ namespace wlw::debug {
 //   ...game update; Application::OnDebugUI() builds panels when the UI is open...
 //   EndFrame()      finish; the window's overlay draws it on top of the scene
 //
-// Toggle: F1, or the small "Debug" button in the top-right corner (for touch screens).
+// Toggle: F1, or the small "Debug" button in the top-right corner (for touch screens). The console: the `
+// key (opens the debug UI too) or the "Console" button next to it. While an ImGui text field has the
+// keyboard (typing in the console), the game's keyboard queries are blocked.
 class DebugUI {
  public:
   explicit DebugUI(scene::Window& window);  // the window's GL context must be current
@@ -39,6 +42,7 @@ class DebugUI {
 
  private:
   void FeedInput(float dt);
+  void FeedKeyboard();
   void DrawToggleButton();
 
   scene::Window& window_;
@@ -46,6 +50,7 @@ class DebugUI {
   float hidden_for_ = 0.0f;  // seconds left with the toggle button hidden
   bool imgui_pointer_down_ = false;  // the button state ImGui has been told about
   int overlay_id_ = -1;
+  ConsoleWindow console_;
 };
 
 }  // namespace wlw::debug
