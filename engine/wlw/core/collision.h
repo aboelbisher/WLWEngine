@@ -1,4 +1,5 @@
 #pragma once
+#include <algorithm>
 #include <cmath>
 #include <optional>
 
@@ -33,9 +34,13 @@ struct Plane {
 // Derivation: put origin + t * direction into the plane equation and solve for t:
 //   dot(n, o + t d) + dist = 0   =>   t = -(dot(n, o) + dist) / dot(n, d)
 inline std::optional<glm::vec3> IntersectPlane(const Ray& ray, const Plane& plane) {
+  constexpr float kParallel = 1e-6f;
   const float facing = glm::dot(plane.normal, ray.direction);
-  if (std::abs(facing) < 1e-6f) return std::nullopt;  // parallel: no hit (or the ray lies in it)
-  const float t = -plane.GetDistanceToPoint(ray.origin) / facing;
+  if (std::abs(facing) < kParallel) return std::nullopt;  // parallel: no hit (or the ray lies in it)
+  // Same value as `facing` here, but never 0 even in code the early return skips: MSVC's C4723 ("potential
+  // divide by 0") fires on an inlined constant-0 `facing` despite the return above.
+  const float divisor = std::copysign(std::max(std::abs(facing), kParallel), facing);
+  const float t = -plane.GetDistanceToPoint(ray.origin) / divisor;
   if (t < 0.0f) return std::nullopt;  // the plane is behind the ray's start
   return ray.At(t);
 }
