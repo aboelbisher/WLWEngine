@@ -25,6 +25,12 @@ inline CVar<int> cv_target_fps{"r.target_fps", 60, "Frames per second: 30/60/90/
 inline CVar<bool> cv_pacing_auto_interval{"r.pacing.auto_interval", false,
                                           "Swappy may lower the frame rate when frames don't fit (Android)"};
 
+// The screen's render scale (Viewport::SetRenderScale: the 3D drawn smaller and stretched, the UI
+// sharp), over the game's and the quality level's; 0 = theirs. Like Unreal's r.ScreenPercentage.
+inline CVar<float> cv_render_scale{"r.render_scale", 0.0f,
+                                   "The screen's 3D resolution scale, 0.25-2 (0 = the game's / quality level's)",
+                                   CVarFlags::None, CVar<float>::Range{0.0f, 2.0f}};
+
 // A fixed quality level (app/quality.h), or -1 to let the engine choose.
 inline CVar<int> cv_quality_lock{"quality.lock", -1, "Fixed quality level, -1 = automatic", CVarFlags::None,
                                  CVar<int>::Range{-1, 15}};

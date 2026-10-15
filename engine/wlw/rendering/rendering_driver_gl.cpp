@@ -105,6 +105,12 @@ class GLRenderingDriver : public RenderingDriver {
     glBindVertexArray(0);
     glGenVertexArrays(1, &post_vao_);  // GL 3.3 core draws need a vertex array, even an empty one
     CopyShader();                      // made now, so the warm-up compiles it
+    // The largest picture it can draw into (a colour texture + a depth renderbuffer): render
+    // scales above 1 stop there.
+    GLint max_texture = 0, max_renderbuffer = 0;
+    glGetIntegerv(GL_MAX_TEXTURE_SIZE, &max_texture);
+    glGetIntegerv(GL_MAX_RENDERBUFFER_SIZE, &max_renderbuffer);
+    max_target_size_ = std::min(max_texture, max_renderbuffer);
 
     // The per-frame uniform block's buffer: every program reads it at kFrameBlockBinding.
     glGenBuffers(1, &frame_ubo_);
@@ -287,7 +293,9 @@ class GLRenderingDriver : public RenderingDriver {
 
   // One viewport into `destination` (the screen's framebuffer or its target's): its scene through
   // its camera, its post passes if it has any (the scene then goes into the scene picture first,
-  // and the last pass writes `destination`), then its canvas over it.
+  // and the last pass writes `destination`), then its canvas over it. A render scale other than 1
+  // draws the 3D and Picture layers into the scene picture at the render size too; the passes, or
+  // a copy without them, stretch it to `destination`.
   void DrawViewport(scene::Viewport& viewport, glm::ivec2 pixels, GLuint destination, bool has_depth) {
     WLW_PROFILE_SCOPE("Viewport");
 #if WLW_PROFILE
@@ -297,12 +305,14 @@ class GLRenderingDriver : public RenderingDriver {
     WLW_PROFILE_TEXT(label, static_cast<size_t>(label_size));
 #endif
     using Clock = std::chrono::steady_clock;
-    // With post passes the 3D goes into the scene picture, a target of the viewport's own format.
+    const glm::ivec2 render = FitRenderSize(viewport.RenderSize(pixels));  // == pixels at render scale 1
+    // With post passes or a render scale the 3D goes into the scene picture, a target of the
+    // viewport's own format, at the render size.
     const PostPlan* post = nullptr;
     GLuint scene_framebuffer = destination;
-    if (!viewport.Post().Empty() && pixels.x > 0 && pixels.y > 0) {
+    if ((!viewport.Post().Empty() || render != pixels) && pixels.x > 0 && pixels.y > 0) {
       const scene::ViewportSettings& settings = viewport.Settings();
-      post = &viewport.Post().Prepare(pixels, {settings.format, settings.smooth, settings.depth});
+      post = &viewport.Post().Prepare(pixels, {settings.format, settings.smooth, settings.depth}, render);
       scene_framebuffer = GLFramebuffer(viewport.Post().SceneTarget());
       has_depth = settings.depth;
     }
@@ -322,6 +332,7 @@ class GLRenderingDriver : public RenderingDriver {
     const auto start = Clock::now();
     if (draw_scene) {
       WLW_PROFILE_SCOPE("Gather");
+      // The viewport's shape, not the render size: a scaled picture is stretched back to it.
       if (pixels.x > 0 && pixels.y > 0) {  // a minimized window has no size
         camera->UpdateSize({static_cast<float>(pixels.x), static_cast<float>(pixels.y)});
       }
@@ -348,7 +359,7 @@ class GLRenderingDriver : public RenderingDriver {
       if (frame_.shadow_active) DrawShadowMap(frame_);
     }
 
-    SetViewport(0, 0, pixels.x, pixels.y);
+    SetViewport(0, 0, render.x, render.y);
     state_.SetDepthWrite(true);
     GLbitfield clear_bits = has_depth ? GL_DEPTH_BUFFER_BIT : 0;
     if (const auto& color = viewport.GetClearColor()) {
@@ -367,22 +378,25 @@ class GLRenderingDriver : public RenderingDriver {
     stats.program_changes = state_.ProgramChanges();
     stats.texture_binds = state_.TextureBinds();
     stats.state_calls_skipped = state_.Skipped();
+    stats.render_width = render.x;
+    stats.render_height = render.y;
 
-    // 2D: Picture layers into the picture (before the passes), Overlay layers on top after them.
-    const glm::vec2 canvas_pixels{static_cast<float>(pixels.x), static_cast<float>(pixels.y)};
-    auto draw_layers = [&](scene::CanvasMode mode) {
+    // 2D: Picture layers into the picture (before the passes, at its render size), Overlay layers
+    // on top after them (full size: the UI stays sharp at any render scale).
+    auto draw_layers = [&](scene::CanvasMode mode, glm::ivec2 size) {
       bool timed = false;
+      const glm::vec2 layer_pixels{static_cast<float>(size.x), static_cast<float>(size.y)};
       viewport.ForEachCanvasLayer(mode, [&](const ui::Canvas& canvas) {
         if (canvas.QuadCount() == 0) return;
         if (!timed) TimeSection(viewport.Id(), GpuSection::Kind::Canvas);
         timed = true;
         WLW_PROFILE_SCOPE("Canvas");
         WLW_PROFILE_GPU_ZONE("Canvas");
-        ui_renderer_->Draw(canvas, canvas_pixels);
+        ui_renderer_->Draw(canvas, layer_pixels);
       });
       if (timed && timing_) gpu_timer_->End();
     };
-    draw_layers(scene::CanvasMode::Picture);
+    draw_layers(scene::CanvasMode::Picture, render);
     state_.Reset();  // the UI renderer changed program, blend and textures behind the cache's back
 
     if (post) {
@@ -394,13 +408,28 @@ class GLRenderingDriver : public RenderingDriver {
       stats.post_targets = viewport.Post().TargetCount();
       stats.post_us = micros(Clock::now() - post_start);
     }
-    draw_layers(scene::CanvasMode::Overlay);
+    draw_layers(scene::CanvasMode::Overlay, pixels);
     // An offscreen viewport's depth isn't needed after it's drawn (the screen's: after the frame).
     if (!post && has_depth && !viewport.IsScreen()) {
       glBindFramebuffer(GL_FRAMEBUFFER, destination);
       stats.invalidations += Invalidate(destination, /*color=*/false, /*depth=*/true);
     }
     viewport.SetRenderStats(stats);
+  }
+
+  // A render size the GPU can draw into: past its largest texture (a big render scale on a big
+  // screen), scaled down to fit, keeping its shape.
+  glm::ivec2 FitRenderSize(glm::ivec2 size) {
+    const int largest = std::max(size.x, size.y);
+    if (max_target_size_ <= 0 || largest <= max_target_size_) return size;
+    if (!warned_render_size_) {
+      WLW_LOG(LogRender, Warning, "Render size %d x %d is more than this GPU draws into (%d): made smaller", size.x,
+              size.y, max_target_size_);
+      warned_render_size_ = true;
+    }
+    const double fit = static_cast<double>(max_target_size_) / largest;
+    return {std::clamp(static_cast<int>(size.x * fit), 1, max_target_size_),
+            std::clamp(static_cast<int>(size.y * fit), 1, max_target_size_)};
   }
 
   // --- FRAMEBUFFER INVALIDATION: what a tiled GPU needn't load or store ---
@@ -480,11 +509,13 @@ class GLRenderingDriver : public RenderingDriver {
     state_.SetBlendMode(BlendMode::Opaque);  // each pass replaces its output's pixels
     glBindVertexArray(post_vao_);            // no attributes: post.vert makes the triangle from gl_VertexID
     const std::vector<PostPass>& passes = chain.Passes();
-    for (const PostStep& step : plan.steps) {
-      const PostPass& pass = passes[static_cast<size_t>(step.pass)];
+    for (size_t index = 0; index < plan.steps.size(); ++index) {
+      const PostStep& step = plan.steps[index];
+      // A scaled viewport without passes: the step that stretches its picture (no material: a copy).
+      const PostPass& pass = step.pass == kUpscalePass ? upscale_pass_ : passes[static_cast<size_t>(step.pass)];
       WLW_PROFILE_SCOPE_DYNAMIC(pass.name.empty() ? "Post pass" : pass.name.c_str());
       WLW_PROFILE_GPU_ZONE_DYNAMIC(pass.name.empty() ? "Post pass" : pass.name.c_str());
-      TimeSection(viewport_id, GpuSection::Kind::PostPass, step.pass);
+      TimeSection(viewport_id, GpuSection::Kind::PostPass, static_cast<int>(index));
       const GLuint output = step.output == kDestination ? destination : GLFramebuffer(chain.Target(step.output));
       glBindFramebuffer(GL_FRAMEBUFFER, output);
       glViewport(0, 0, step.size.x, step.size.y);
@@ -1049,8 +1080,11 @@ class GLRenderingDriver : public RenderingDriver {
   GLuint skybox_program_ = 0;
   GLuint skybox_vao_ = 0;
   GLuint skybox_vbo_ = 0;
-  GLuint post_vao_ = 0;                  // empty: post passes draw a triangle made in the shader
-  std::shared_ptr<Shader> copy_shader_;  // a post pass without a usable shader
+  GLuint post_vao_ = 0;                       // empty: post passes draw a triangle made in the shader
+  std::shared_ptr<Shader> copy_shader_;       // a post pass without a usable shader
+  PostPass upscale_pass_{.name = "Upscale"};  // kUpscalePass: no material, so a copy
+  int max_target_size_ = 0;                   // the largest side the GPU draws into (0: not known)
+  bool warned_render_size_ = false;
   std::unique_ptr<GpuTimer> gpu_timer_;  // null: this GPU can't time
   bool invalidate_ = true;               // Window::InvalidateFramebuffers, for this frame
   bool timing_ = false;                  // timing this frame

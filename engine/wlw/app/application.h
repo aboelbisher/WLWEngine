@@ -73,7 +73,8 @@ struct AppConfig {
 //    8. OnRenderUI      canvases begun by the engine    <- 2D UI over the scene, then screen fades
 //    9. OnDebugUI       WLW_DEBUG_UI builds, while open <- ImGui panels (the engine's first)
 //   10. draw + present, then poll input; apply queued screen changes; Quality() reads the frame's
-//       times (its OnChange runs here, so a new level shows from the next frame)
+//       times (its OnChange runs here, so a new level shows from the next frame; so does its
+//       render scale, QualitySettings::render_scales, set on the screen just before drawing)
 class Application final {
  public:
   explicit Application(AppConfig config = {});
@@ -122,6 +123,7 @@ class Application final {
   void UpdateStats(double frame_seconds);
   void PlotFrame(double frame_seconds);
   void UpdateQuality(double frame_seconds);
+  void ApplyQualityRenderScale();  // the level's render scale (QualitySettings::render_scales) -> the screen
   // Cvars (core/cvar.h): wlw.cfg, the player's saved ones, the command line; then the engine's own wired up.
   void ApplyStartupCVars();
   void WatchCVar(CVarBase& cvar, std::function<void()> apply);
@@ -143,7 +145,8 @@ class Application final {
   core::FixedTimestep timestep_;
   app::Time time_;
   app::Quality quality_;
-  bool quality_timing_ = false;  // GPU timing turned on for it (once: the debug panel may turn it off)
+  bool quality_timing_ = false;        // GPU timing turned on for it (once: the debug panel may turn it off)
+  float quality_render_scale_ = 0.0f;  // the last one applied to the screen (0: none yet)
   bool quit_requested_ = false;
   std::string cvar_file_;                                  // <save dir>/cvars.cfg: the player's Saved cvars
   std::vector<std::pair<CVarBase*, int>> cvar_callbacks_;  // removed in the destructor

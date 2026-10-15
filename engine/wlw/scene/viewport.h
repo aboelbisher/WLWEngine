@@ -27,6 +27,9 @@ struct RenderStats {
   int instances = 0;               // copies drawn by instanced calls (sprite batches' dots too)
   int instance_bytes = 0;          // per-copy data uploaded to the GPU this frame (only what changed)
   int culled_nodes = 0;            // skipped by frustum culling
+  // The size its 3D was drawn at (RenderSize: smaller than the viewport below render scale 1).
+  int render_width = 0;
+  int render_height = 0;
   // GPU state work (main pass + shadow pass): what changed, and what the state cache saved.
   int program_changes = 0;
   int texture_binds = 0;
@@ -35,7 +38,8 @@ struct RenderStats {
   float gather_us = 0.0f;  // walking the scene, culling, building the draw list
   float sort_us = 0.0f;    // sorting the draw list
   float submit_us = 0.0f;  // shadow + main pass: GL calls
-  // Post passes (the 3D went into the scene picture first; see post_pass.h).
+  // Post passes (the 3D went into the scene picture first; see post_pass.h). A scaled viewport
+  // without passes has one: the copy that stretches its picture (kUpscalePass).
   int post_passes = 0;
   int post_targets = 0;   // textures the passes before the last write into
   float post_us = 0.0f;   // their GL calls
@@ -48,7 +52,7 @@ struct GpuStats {
   float scene_ms = -1.0f;      // 3D: shadow + main pass
   float post_ms = -1.0f;       // all its post passes
   float canvas_ms = -1.0f;     // its 2D canvas
-  std::vector<float> pass_ms;  // each post pass
+  std::vector<float> pass_ms;  // each post pass (scaled without passes: [0] = the upscale copy)
 };
 
 // Where a canvas layer's 2D goes (like a Unity Canvas's render mode).
@@ -168,6 +172,34 @@ class Viewport {
             std::max(1, static_cast<int>(std::lround(screen_pixels.y * scale)))};
   }
 
+  // ---- Render scale (like Unity URP's renderScale, Godot's scaling_3d_scale) ----
+  // Its 3D (and Picture canvas layers) drawn at a fraction of its size, then stretched to fill it
+  // with a bilinear filter (nearest if the viewport isn't `smooth`); Overlay layers (the game UI)
+  // are drawn after that at full size, so they stay sharp. Below 1 the GPU colours fewer pixels
+  // (0.75 = 56% of them; phones are mostly limited by that) and the 3D gets softer; above 1 =
+  // supersampling (screenshots). Post passes keep their sizes (fractions of the viewport's, so an
+  // effect looks the same at every scale): the first reads the smaller picture, and the last
+  // writes the full-size one anyway, so with passes the stretch costs nothing extra (without, one
+  // copy). The screen's: the game's, QualitySettings::render_scales, or the r.render_scale cvar.
+  static constexpr float kMinRenderScale = 0.25f;
+  static constexpr float kMaxRenderScale = 2.0f;
+  void SetRenderScale(float scale) { render_scale_ = ClampRenderScale(scale); }
+  float GetRenderScale() const { return render_scale_; }
+  // A scale that wins over SetRenderScale's while it is set (the r.render_scale cvar sets the
+  // screen's); 0 = none.
+  void SetRenderScaleOverride(float scale) { render_scale_override_ = scale > 0.0f ? ClampRenderScale(scale) : 0.0f; }
+  float GetRenderScaleOverride() const { return render_scale_override_; }
+  // The scale it is drawn at: the override if one is set, else its own.
+  float EffectiveRenderScale() const { return render_scale_override_ > 0.0f ? render_scale_override_ : render_scale_; }
+  // The size its 3D is drawn at when the viewport is `pixels` big (PixelSize): `pixels` x the
+  // scale, rounded, at least 1 x 1 (`pixels` itself at scale 1, or while it has no size).
+  glm::ivec2 RenderSize(glm::ivec2 pixels) const {
+    const float scale = EffectiveRenderScale();
+    if (scale == 1.0f || pixels.x <= 0 || pixels.y <= 0) return pixels;
+    return {std::max(1, static_cast<int>(std::lround(static_cast<float>(pixels.x) * scale))),
+            std::max(1, static_cast<int>(std::lround(static_cast<float>(pixels.y) * scale)))};
+  }
+
   void SetUpdateMode(UpdateMode mode) { update_mode_ = mode; }
   UpdateMode GetUpdateMode() const { return update_mode_; }
   void SetClearColor(std::optional<core::Color> color) { settings_.clear = color; }
@@ -229,6 +261,11 @@ class Viewport {
   }
   std::optional<glm::ivec2> fixed_size_;
   std::optional<float> screen_scale_;
+  float render_scale_ = 1.0f;
+  float render_scale_override_ = 0.0f;  // 0 = none
+  static float ClampRenderScale(float scale) {
+    return std::isfinite(scale) ? std::clamp(scale, kMinRenderScale, kMaxRenderScale) : 1.0f;
+  }
   UpdateMode update_mode_ = UpdateMode::Always;
   glm::ivec2 last_size_{0, 0};
   bool has_picture_ = false;

@@ -1,6 +1,6 @@
 // Tests for post passes (rendering/post_pass.h: planning which texture each pass reads and writes,
-// the chain's targets) and the ready-made effects (scene/post_effects.h). CPU only: materials,
-// shaders and targets are made without a GPU.
+// the chain's targets, the upscale of a render-scaled picture) and the ready-made effects (scene/post_effects.h). CPU
+// only: materials, shaders and targets are made without a GPU.
 #include <memory>
 #include <regex>
 #include <set>
@@ -167,6 +167,36 @@ TEST_CASE("chain targets") {
 
   chain.Clear();
   CHECK(chain.Empty());
+}
+
+TEST_CASE("render scale upscale") {
+  // A scene picture drawn smaller (Viewport::SetRenderScale) without passes: one copy stretches it.
+  const PostPlan upscale = rendering::PlanPostChain({}, kPhone, {810, 1800});
+  REQUIRE(upscale.steps.size() == 1);
+  const rendering::PostStep& copy = upscale.steps[0];
+  CHECK((copy.pass == rendering::kUpscalePass && copy.source == kSceneTarget && copy.output == kDestination));
+  CHECK((copy.size == kPhone && upscale.targets.empty()));
+  CHECK(rendering::PlanPostChain({}, kPhone, kPhone).steps.empty());  // the same size: nothing to do
+
+  // With passes, their sizes stay fractions of the viewport's (an effect looks the same at any
+  // render scale) and the last one writes the full-size picture: no extra step.
+  const std::vector<PostPass> passes{Pass(0.25f), Pass(0.25f), Pass(1.0f), Pass()};
+  const PostPlan full = rendering::PlanPostChain(passes, kPhone);
+  const PostPlan scaled = rendering::PlanPostChain(passes, kPhone, {540, 1200});
+  REQUIRE(scaled.steps.size() == full.steps.size());
+  for (size_t i = 0; i < full.steps.size(); ++i) CHECK(scaled.steps[i].size == full.steps[i].size);
+  CHECK(scaled.steps.back().size == kPhone);
+  CheckPlanIsSafe(passes, scaled);
+
+  // The chain: the scene picture at the render size, re-planned when it changes.
+  rendering::PostChain chain;
+  const rendering::RenderTargetSettings scene{TextureFormat::RGBA8, true, /*depth=*/true};
+  const PostPlan& plan = chain.Prepare({200, 100}, scene, {100, 50});
+  CHECK((plan.steps.size() == 1 && plan.steps[0].pass == rendering::kUpscalePass));
+  CHECK((chain.SceneTarget().Width() == 100 && chain.SceneTarget().Height() == 50 && chain.TargetCount() == 0));
+  const rendering::RenderTarget* scene_target = &chain.SceneTarget();
+  CHECK(chain.Prepare({200, 100}, scene).steps.empty());                                // back to scale 1: no copy
+  CHECK((&chain.SceneTarget() == scene_target && chain.SceneTarget().Width() == 200));  // the same texture, resized
 }
 
 TEST_CASE("post shaders") {

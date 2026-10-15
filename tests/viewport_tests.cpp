@@ -1,5 +1,7 @@
 // Tests for scenes and viewports (scene/scene.h, scene/viewport.h, Window's viewport list): what is
-// shown where, sizes, update modes. CPU only: no GL context (viewports and their targets are made without one).
+// shown where, sizes, render scale, update modes. CPU only: no GL context (viewports and their targets are made without
+// one).
+#include <cmath>
 #include <memory>
 #include <string>
 #include <vector>
@@ -93,6 +95,39 @@ TEST_CASE("viewport size") {
   CHECK(view->PixelSize({0.0f, 0.0f}) == glm::ivec2(256, 128));  // fixed sizes don't depend on the screen
   view->SetSize(0, -3);
   CHECK(view->PixelSize({}) == glm::ivec2(1, 1));
+}
+
+TEST_CASE("render scale sizes") {
+  auto view = Offscreen();
+  // 1 by default: the 3D at the viewport's own size.
+  CHECK(view->GetRenderScale() == 1.0f);
+  CHECK(view->RenderSize({1080, 2400}) == glm::ivec2(1080, 2400));
+  view->SetRenderScale(0.75f);
+  CHECK(view->RenderSize({1080, 2400}) == glm::ivec2(810, 1800));
+  view->SetRenderScale(0.5f);
+  CHECK(view->RenderSize({1081, 2400}) == glm::ivec2(541, 1200));  // rounded
+  CHECK(view->RenderSize({0, 0}) == glm::ivec2(0, 0));             // no size (minimized): nothing to draw
+  CHECK(view->RenderSize({1, 1}) == glm::ivec2(1, 1));             // never below a pixel
+  // Clamped to 0.25..2 (above 1 = supersampling); not a number = 1.
+  view->SetRenderScale(0.1f);
+  CHECK(view->GetRenderScale() == scene::Viewport::kMinRenderScale);
+  view->SetRenderScale(5.0f);
+  CHECK(view->GetRenderScale() == scene::Viewport::kMaxRenderScale);
+  CHECK(view->RenderSize({100, 50}) == glm::ivec2(200, 100));
+  view->SetRenderScale(std::nanf(""));
+  CHECK(view->GetRenderScale() == 1.0f);
+
+  // An override (the r.render_scale cvar sets the screen's) wins while it is set; 0 = none.
+  view->SetRenderScale(0.8f);
+  view->SetRenderScaleOverride(0.5f);
+  CHECK((view->EffectiveRenderScale() == 0.5f && view->GetRenderScale() == 0.8f));
+  CHECK(view->RenderSize({200, 100}) == glm::ivec2(100, 50));
+  view->SetRenderScale(0.9f);  // the game changes its own: still overridden
+  CHECK(view->EffectiveRenderScale() == 0.5f);
+  view->SetRenderScaleOverride(0.0f);
+  CHECK((view->GetRenderScaleOverride() == 0.0f && view->EffectiveRenderScale() == 0.9f));  // the game's again
+  view->SetRenderScaleOverride(9.0f);
+  CHECK(view->EffectiveRenderScale() == scene::Viewport::kMaxRenderScale);  // clamped too
 }
 
 TEST_CASE("update modes") {

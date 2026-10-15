@@ -41,7 +41,7 @@ engine/wlw/
               text input the game's keyboard is blocked. Off in release builds
   app/        Application (final: owns the services and runs the loop; see the frame in application.h): Window(),
               Input(), Audio(), Screens(), Time(), Config(). engine_cvars.h: log.filter, r.gpu_timing,
-              r.invalidate_framebuffers, r.target_fps, r.pacing.auto_interval, quality.lock (Run applies the cvar sources first, wires these to the window /
+              r.invalidate_framebuffers, r.target_fps, r.pacing.auto_interval, r.render_scale, quality.lock (Run applies the cvar sources first, wires these to the window /
               log / quality, saves changed Saved cvars at the end of a frame). Games add Systems (system.h: always running,
               like Unreal subsystems / Godot autoloads; hooks OnStart/OnFixedUpdate/OnUpdate/OnRender/OnRenderUI/
               OnDebugUI/OnBack/OnAppPaused/OnAppResumed/OnShutdown, run in the order added, then the screens'; App()
@@ -55,7 +55,9 @@ engine/wlw/
               GPU < budget x up_at for 10 s = up (wait doubles per failure of that level, max 8x), 3 s settle after a
               change/resume, readings smoothed ~0.5 s and clamped at 2 budgets; no GPU timer = down only; level saved
               in <save dir>/quality.txt. Fed by Application after each frame (UpdateQuality). Engine panel: level, -/+/Auto.
-              Budget (BudgetMs) = settings' budget_ms, or 0 (default) = the frame time of the paced rate (SetTargetFrameMs)
+              Budget (BudgetMs) = settings' budget_ms, or 0 (default) = the frame time of the paced rate (SetTargetFrameMs).
+              QualitySettings::render_scales = the screen's render scale per level (Quality::RenderScale; the Application
+              sets it on the screen when it changes, just before drawing; empty = left to the game)
               Frame pacing: AppConfig::target_fps (60; 0 = display rate, -1 = uncapped) / App().SetTargetFps / cvar
               r.target_fps -> Window::SetTargetFps (platform: Swappy on Android, vsync interval or limiter on desktop;
               core/frame_pacing.h). Window: PacedFps, RefreshRate, PacingMethod (engine panel: target buttons + these)
@@ -119,6 +121,14 @@ engine/wlw/
               solid shapes coloured rgb/a: soft additive dots -> AddBlur -> AddThreshold = metaballs/liquid; keep the
               viewport AND the blur RGBA16F, RGBA8 clips colour x density and the middles go white). Bloom/Blur::SetScale +
               PostChain::SetScale change resolution at runtime (passes found by material; re-planned, targets resized).
+              Render scale (Viewport::SetRenderScale 0.25-2, like Unity URP renderScale / Godot scaling_3d_scale): the 3D +
+              Picture layers go into the scene picture at RenderSize (viewport size x scale), stretched bilinearly to the
+              destination by the last post pass (free) or, without passes, one copy step (kUpscalePass in PlanPostChain);
+              Overlay layers after that at full size (UI sharp). Pass sizes stay fractions of the VIEWPORT's size (an effect
+              looks the same at every scale: our blur kernels are in texels); the camera's aspect = the viewport's; capped
+              at GL_MAX_TEXTURE_SIZE. Screen: QualitySettings::render_scales, cvar r.render_scale = SetRenderScaleOverride
+              (wins while > 0), engine panel buttons. RenderStats::render_width/height. RTX 5080, 2560x1440, 24 blended
+              lit layers: 3D 2.20 ms at 1, 1.21 at 0.75, 0.53 at 0.5 (= the pixel count); the upscale copy 0.017 ms.
               Framebuffer invalidation (GLES glInvalidateFramebuffer, nothing on desktop GL 3.3): depth after the 3D,
               each post output before it's drawn (DONT_CARE load), the screen's depth/stencil before swap;
               Window::SetInvalidateFramebuffers (panel checkbox), RenderStats::invalidations. Pixel 4: no measurable GPU ms
@@ -192,7 +202,7 @@ kit/wlw/kit/  wlw::kit: game-level building blocks shared by games (separate tar
 samples/      small games, built only when the engine is the top-level project (desktop):
               snake/ (Snake + its rules tests)
 tests/        engine unit tests (no window/GPU: quality levels (down/up, back-off, settle, frame-time-only, lock, saved,
-              budget from the target), frame pacing (plans per target/refresh, limiter schedule), draw order (sort keys), scene gather + cull, shader system (preprocessor, embedded files in every variant, std140 layout, lights, variants, UI kinds), systems (order, starting, Back), blending (depth-write rule, canvas batches, images, falloff texture), resources (made without a GPU, updates, alive list), post passes (planning, ping-pong, named inputs, chain targets, effects), viewports (scenes, sizes, update modes), anim, audio, core (random, atomic files, bridge queue), exact cover, search (bitboards, minimax, expectimax), gf2 (Lights Out), shader text splitting, lighting (light nodes, shadow-box fitting), fx, input, kit, picking, primitives, ui (canvas, safe area, widgets), screens, profile macros + TypeName, version macros + build info + deprecated shims; CTest "deprecations" runs cmake/CheckDeprecations.cmake). doctest: one binary wlw_tests, a TEST_SUITE per file, shared main test_main.cpp,
+              budget from the target, render scales), frame pacing (plans per target/refresh, limiter schedule), draw order (sort keys), scene gather + cull, shader system (preprocessor, embedded files in every variant, std140 layout, lights, variants, UI kinds), systems (order, starting, Back), blending (depth-write rule, canvas batches, images, falloff texture), resources (made without a GPU, updates, alive list), post passes (planning, ping-pong, named inputs, chain targets, effects, render-scale upscale), viewports (scenes, sizes, render scale, update modes), anim, audio, core (random, atomic files, bridge queue), exact cover, search (bitboards, minimax, expectimax), gf2 (Lights Out), shader text splitting, lighting (light nodes, shadow-box fitting), fx, input, kit, picking, primitives, ui (canvas, safe area, widgets), screens, profile macros + TypeName, version macros + build info + deprecated shims; CTest "deprecations" runs cmake/CheckDeprecations.cmake). doctest: one binary wlw_tests, a TEST_SUITE per file, shared main test_main.cpp,
               test_helpers.h (Near = absolute tolerance); compound checks in double parentheses CHECK((a && b));
               each TEST_CASE is its own CTest test (cases run in parallel processes: no shared temp files);
               test data in tests/data/, also top-level only. tests/support/ = wlw_test_support (image_compare.h: PNG

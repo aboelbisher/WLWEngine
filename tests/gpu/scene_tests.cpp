@@ -83,24 +83,73 @@ std::shared_ptr<scene::DirectionalLight> AddSun(scene::Viewport& viewport, float
 
 std::shared_ptr<rendering::Material> Opaque() { return rendering::Material::Create(); }
 
-}  // namespace
-
-TEST_CASE("lit cubes") {
-  auto viewport = MakeViewport();
-  viewport->SetCamera(std::make_shared<FixedCamera>(core::Vector3{0, 3, 7}, core::Vector3{0, 0, 0}));
-  AddSun(*viewport);
+// A cube, a bevelled cube and a sphere under a sun and an orange point light.
+void AddLitCubes(scene::Viewport& viewport) {
+  viewport.SetCamera(std::make_shared<FixedCamera>(core::Vector3{0, 3, 7}, core::Vector3{0, 0, 0}));
+  AddSun(viewport);
   auto point = std::make_shared<scene::PointLight>();
   point->SetPosition({2.0f, 1.5f, 2.0f});
   point->SetColor({1.0f, 0.6f, 0.2f});
   point->SetRange(6.0f);
-  viewport->GetScene()->AddNode(point);
+  viewport.GetScene()->AddNode(point);
   auto material = Opaque();
   material->shininess = 32.0f;
-  AddMesh(*viewport, utils::createCubeWithNormals(1.2f, Color{0.9f, 0.3f, 0.3f, 1.0f}), material, {-1.8f, 0, 0})
+  AddMesh(viewport, utils::createCubeWithNormals(1.2f, Color{0.9f, 0.3f, 0.3f, 1.0f}), material, {-1.8f, 0, 0})
       ->SetRotation({0, 30, 0});
-  AddMesh(*viewport, utils::createBeveledCubeWithNormals(), material, {0, 0, 0})->SetRotation({20, 45, 0});
-  AddMesh(*viewport, utils::createSphereWithNormals(0.7f, 16, 32), material, {1.8f, 0, 0});
+  AddMesh(viewport, utils::createBeveledCubeWithNormals(), material, {0, 0, 0})->SetRotation({20, 45, 0});
+  AddMesh(viewport, utils::createSphereWithNormals(0.7f, 16, 32), material, {1.8f, 0, 0});
+}
+
+// White text and a thin line along the bottom: what stays sharp at any render scale (Overlay).
+// The canvas keeps a pointer to `font` until it's drawn: the caller keeps it alive.
+void AddSharpLabel(ui::Canvas& canvas, const ui::Font& font, const char* text) {
+  canvas.Line({16, 236}, {240, 236}, 1.5f, Color{1.0f, 1.0f, 1.0f, 1.0f});
+  canvas.Text(font, text, {128, 222}, 26, ui::Align::Center, {.color = {1, 1, 1, 1}});
+}
+
+}  // namespace
+
+TEST_CASE("lit cubes") {
+  auto viewport = MakeViewport();
+  AddLitCubes(*viewport);
   CheckGolden("lit_cubes", viewport);
+}
+
+TEST_CASE("render scale") {
+  // The lit cubes drawn at half size (128 x 128) and stretched back with a bilinear copy: softer
+  // edges. The Overlay canvas is drawn after the stretch, at full size: sharp.
+  auto viewport = MakeViewport();
+  AddLitCubes(*viewport);
+  viewport->SetRenderScale(0.5f);
+  const float size = gpu_tests::kSize;
+  viewport->BeginCanvases({size, size}, {size, size});
+  const auto font = ui::Font::Load(WLW_TEST_FONT);
+  REQUIRE(font != nullptr);
+  AddSharpLabel(viewport->GetCanvas(), *font, "x0.5");
+  CheckGolden("render_scale", viewport);
+  CHECK((viewport->GetRenderStats().render_width == 128 && viewport->GetRenderStats().post_passes == 1));
+}
+
+TEST_CASE("render scale with post") {
+  // Bloom on a picture drawn at 0.5: its passes keep their sizes (a quarter of the viewport's) and
+  // the last one writes the full-size picture (no extra copy). A Picture layer is drawn into the
+  // small picture (bloomed, soft); the Overlay layer stays sharp.
+  auto viewport = MakeViewport();
+  viewport->SetCamera(std::make_shared<FixedCamera>(core::Vector3{0, 2, 6}, core::Vector3{0, 0, 0}));
+  AddSun(*viewport, 0.9f);
+  AddMesh(*viewport, utils::createCubeWithNormals(1.0f, Color{1.0f, 1.0f, 1.0f, 1.0f}), Opaque(), {-1.2f, 0, 0});
+  AddMesh(*viewport, utils::createCubeWithNormals(1.0f, Color{0.2f, 0.25f, 0.6f, 1.0f}), Opaque(), {1.2f, 0, 0});
+  scene::AddBloom(*viewport, {.threshold = 0.7f, .strength = 1.0f});
+  viewport->SetRenderScale(0.5f);
+  ui::Canvas& picture = viewport->AddCanvasLayer({.mode = scene::CanvasMode::Picture});
+  const float size = gpu_tests::kSize;
+  viewport->BeginCanvases({size, size}, {size, size});
+  picture.Circle({128, 52}, 18, Color{1.0f, 0.95f, 0.6f, 1.0f});
+  const auto font = ui::Font::Load(WLW_TEST_FONT);
+  REQUIRE(font != nullptr);
+  AddSharpLabel(viewport->GetCanvas(), *font, "bloom x0.5");
+  CheckGolden("render_scale_post", viewport);
+  CHECK((viewport->GetRenderStats().render_width == 128 && viewport->GetRenderStats().post_passes == 6));
 }
 
 TEST_CASE("shadows") {

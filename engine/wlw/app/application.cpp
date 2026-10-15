@@ -224,6 +224,7 @@ int Application::Run() {
 
     // 10. Draw + present every window, then poll input; screen changes requested this frame
     // happen now, between frames.
+    ApplyQualityRenderScale();  // a level chosen since the last frame (or at start) draws this one
     engine_->Iterate();
     WLW_PROFILE_FRAME();  // presented: one frame on the profiler's timeline
     {
@@ -309,6 +310,15 @@ void Application::UpdateQuality(double frame_seconds) {
   quality_.Update(static_cast<float>(frame_seconds), gpu_ms, static_cast<float>(frame_seconds * 1000.0));
 }
 
+void Application::ApplyQualityRenderScale() {
+  // Only when it changes: in between, the game may set the screen's scale itself. (The
+  // r.render_scale cvar is an override on top: SetRenderScaleOverride.)
+  const float scale = quality_.RenderScale();
+  if (scale <= 0.0f || scale == quality_render_scale_) return;
+  quality_render_scale_ = scale;
+  window_->GetScreen().SetRenderScale(scale);
+}
+
 void Application::ApplyStartupCVars() {
   // Later sources win: shipped settings, the player's, then the command line / adb.
   ApplyCVarFile("wlw.cfg", CVarSource::ConfigFile);
@@ -340,6 +350,7 @@ void Application::ApplyStartupCVars() {
             [this] { window_->SetInvalidateFramebuffers(cv_invalidate_framebuffers.Get()); });
   WatchCVar(cv_target_fps, [this] { window_->SetTargetFps(cv_target_fps.Get()); });
   WatchCVar(cv_pacing_auto_interval, [this] { window_->SetAutoSwapInterval(cv_pacing_auto_interval.Get()); });
+  WatchCVar(cv_render_scale, [this] { window_->GetScreen().SetRenderScaleOverride(cv_render_scale.Get()); });
   cvar_callbacks_.emplace_back(&cv_quality_lock, cv_quality_lock.OnChange([this] {
     if (!quality_.Configured()) return;
     if (cv_quality_lock.Get() < 0) {

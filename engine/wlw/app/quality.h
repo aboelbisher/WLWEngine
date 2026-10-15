@@ -4,6 +4,7 @@
 #include <functional>
 #include <string>
 #include <utility>
+#include <vector>
 
 // Quality levels picked from what the device can do, like Unity's QualitySettings + Adaptive
 // Performance: the GAME says what each level means (how many particles, how big the buffers),
@@ -13,6 +14,9 @@
 //
 //   App().Quality().Configure({.levels = 3});
 //   App().Quality().OnChange([this](int level) { ApplyTier(kTiers[level]); });  // also called now
+//
+// The engine can apply one thing itself: the screen's render scale per level
+// (Configure({.levels = 3, .render_scales = {0.7f, 0.85f, 1.0f}})).
 //
 // Without GPU timing (some drivers, the emulator) the frame time is all there is, and vsync hides
 // any room left (a fast frame still takes 16.7 ms): it then only steps down.
@@ -31,6 +35,10 @@ struct QualitySettings {
   float up_at = 0.55f;          // GPU time below budget x this (and frames on time) ...
   float up_seconds = 10.0f;     // ... for this long: one level up; doubled each time that level failed
   float settle_seconds = 3.0f;  // readings ignored after a change or a resume (new buffers, warm-up)
+  // The screen's render scale per level, lowest level first (Viewport::SetRenderScale: the 3D
+  // drawn smaller and stretched, the UI sharp). The Application applies it whenever the level
+  // changes; levels past the list's end use its last one. Empty: the engine leaves it to the game.
+  std::vector<float> render_scales;
 };
 
 class Quality {
@@ -44,6 +52,9 @@ class Quality {
   const QualitySettings& Settings() const { return settings_; }
 
   int Level() const { return level_; }
+  // The screen's render scale for the current level (QualitySettings::render_scales); 0 = none
+  // given (or not configured).
+  float RenderScale() const;
   // Called with the level when it changes, and once at once (with the current one) if configured.
   void OnChange(std::function<void(int)> callback);
 

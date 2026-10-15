@@ -41,6 +41,28 @@ then it's deleted (listed under **Removed**).
 - **Behaviour change:** games now run at 60 fps by default instead of the display's rate (120 Hz phones, fast
   desktop monitors). Set `target_fps = 0` for the old behaviour.
 
+### Render scale (Roadmap 1.2)
+- `Viewport::SetRenderScale(scale)` (0.25-2, default 1; like Unity URP's renderScale, Godot's scaling_3d_scale):
+  the viewport's 3D and its Picture canvas layers are drawn at `RenderSize()` (its size x the scale), then
+  stretched to fill it with a bilinear filter (nearest if the viewport isn't `smooth`). Overlay layers, the game
+  UI included, are drawn after the stretch at full size and stay sharp. Below 1 the GPU colours fewer pixels
+  (0.75 = 56% of them) and the 3D gets softer; above 1 = supersampling. The camera keeps the viewport's shape.
+- Post passes keep their sizes (fractions of the viewport's size), so an effect looks the same at every render
+  scale. The first pass reads the smaller picture and the last one writes the full-size picture, so with passes
+  the stretch costs nothing extra; without passes one copy does it (`rendering::kUpscalePass` in the plan).
+- Measured on an RTX 5080 (2560 x 1440, 24 blended lit layers): the 3D's GPU time is 2.20 ms at 1, 1.21 ms at
+  0.75, 0.53 ms at 0.5 (the pixel count: 56% and 25%); the upscale copy 0.017 ms. Phones: not measured yet.
+- Quality hook: `QualitySettings::render_scales`, one per level, lowest first (levels past the end use the last
+  one). The Application sets the screen's render scale when the level changes, just before drawing
+  (`Quality::RenderScale()`). Empty (the default) = the engine leaves the scale to the game.
+- Cvar `r.render_scale`: 0 (default) = the game's / the quality level's; anything else forces the screen's scale
+  (`Viewport::SetRenderScaleOverride`, `EffectiveRenderScale()`), like Unreal's `r.ScreenPercentage`. The engine
+  panel has 0.5 / 0.75 / 1 / Auto buttons for it and shows where the scale comes from and the 3D's size;
+  offscreen viewports show theirs, and the upscale copy is listed with its GPU time.
+- `RenderStats::render_width/height`. `PlanPostChain` and `PostChain::Prepare` take the scene picture's size as
+  an optional last argument (existing calls are unchanged). The renderer never makes a scene picture larger than
+  the GPU's largest texture (a warning, then scaled down to fit).
+
 ## 0.1.0 (2026-10-15): Phase 0, safety net and tooling
 
 The first tagged version: tests (doctest, golden images, benchmarks), CI on Windows, Linux and Android, logging,

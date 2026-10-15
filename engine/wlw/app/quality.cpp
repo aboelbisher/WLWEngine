@@ -42,6 +42,12 @@ void Quality::Configure(const QualitySettings& settings) {
   if (on_change_) on_change_(level_);
 }
 
+float Quality::RenderScale() const {
+  const std::vector<float>& scales = settings_.render_scales;
+  if (!configured_ || scales.empty()) return 0.0f;
+  return scales[std::min(static_cast<size_t>(std::max(level_, 0)), scales.size() - 1)];
+}
+
 void Quality::OnChange(std::function<void(int)> callback) {
   on_change_ = std::move(callback);
   if (on_change_ && configured_) on_change_(level_);

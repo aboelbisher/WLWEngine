@@ -56,6 +56,27 @@ void EnginePanel::OnDebugUI() {
   if (ImGui::Checkbox("Invalidate framebuffers", &invalidate)) {
     app::cv_invalidate_framebuffers.Set(invalidate, CVarSource::Console);
   }
+  // Render scale (Viewport::SetRenderScale): the screen's 3D resolution, through the r.render_scale
+  // cvar like the console ("Auto" = 0: the game's or the quality level's).
+  {
+    const float forced = app::cv_render_scale.Get();
+    ImGui::Text("Render scale");
+    for (const float scale : {0.5f, 0.75f, 1.0f}) {
+      ImGui::SameLine();
+      char label[16];
+      std::snprintf(label, sizeof(label), "%g", scale);
+      if (ImGui::RadioButton(label, forced == scale)) app::cv_render_scale.Set(scale, CVarSource::Console);
+    }
+    ImGui::SameLine();
+    if (ImGui::RadioButton("Auto##render_scale", forced <= 0.0f)) app::cv_render_scale.Set(0.0f, CVarSource::Console);
+    const scene::Viewport& screen = window.GetScreen();
+    const char* from = forced > 0.0f                          ? "r.render_scale"
+                       : App().Quality().RenderScale() > 0.0f ? "the quality level"
+                                                              : "the game";
+    const scene::RenderStats& drawn = screen.GetRenderStats();
+    ImGui::Text("  %.2f from %s: 3D %d x %d of %.0f x %.0f", screen.EffectiveRenderScale(), from, drawn.render_width,
+                drawn.render_height, window.GetSize().x, window.GetSize().y);
+  }
   // Quality levels (app/quality.h): which one runs, what it reads, and a lock to try each.
   if (app::Quality& quality = App().Quality(); quality.Configured()) {
     ImGui::Text("Quality %d of 0..%d%s", quality.Level(), quality.Settings().levels - 1,
@@ -95,12 +116,20 @@ void EnginePanel::OnDebugUI() {
                 s.invalidations, s.post_us);
     const rendering::PostChain& chain = viewport.Post();
     const std::vector<float>& gpu_ms = viewport.GetGpuStats().pass_ms;
+    auto gpu_text = [&gpu_ms](size_t i, char (&text)[32]) {
+      text[0] = '\0';
+      if (i < gpu_ms.size() && gpu_ms[i] >= 0.0f) std::snprintf(text, sizeof(text), ", GPU %.2f ms", gpu_ms[i]);
+    };
+    char gpu[32];
+    if (chain.Empty()) {  // a scaled viewport without passes: the copy that stretches its picture
+      gpu_text(0, gpu);
+      ImGui::BulletText("upscale (copy)%s", gpu);
+    }
     for (size_t i = 0; i < chain.Passes().size(); ++i) {
       const auto& pass = chain.Passes()[i];
       const bool has_shader = pass.material && pass.material->GetShader();
       const std::string shader = has_shader ? pass.material->GetShader()->Name() : "copy";
-      char gpu[32] = "";
-      if (i < gpu_ms.size() && gpu_ms[i] >= 0.0f) std::snprintf(gpu, sizeof(gpu), ", GPU %.2f ms", gpu_ms[i]);
+      gpu_text(i, gpu);
       ImGui::BulletText("%s x%.2f%s%s%s", shader.c_str(), pass.scale, pass.name.empty() ? "" : " as ",
                         pass.name.c_str(), gpu);
     }
@@ -122,6 +151,10 @@ void EnginePanel::OnDebugUI() {
     ImGui::Text("%s: %d x %d %s, %s, %.1f MB, %d draws", viewport->Settings().name.c_str(), target->Width(),
                 target->Height(), half_float ? "16F" : "8-bit", kModes[static_cast<int>(viewport->GetUpdateMode())],
                 megabytes, viewport->GetRenderStats().draw_calls);
+    if (const scene::RenderStats& drawn = viewport->GetRenderStats(); viewport->EffectiveRenderScale() != 1.0f) {
+      ImGui::Text("  render scale %.2f: 3D %d x %d", viewport->EffectiveRenderScale(), drawn.render_width,
+                  drawn.render_height);
+    }
     gpu_line(viewport->Settings().name.c_str(), *viewport);
     post_line(viewport->Settings().name.c_str(), *viewport);
   }

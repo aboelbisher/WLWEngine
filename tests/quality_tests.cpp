@@ -1,6 +1,6 @@
 // Tests for quality levels (app/quality.h): stepping down when frames don't fit, up when there's
 // room (slowly, longer after a level failed), settling after a change, the frame-time-only mode
-// (no GPU timing: down only), locking, and the level kept between launches.
+// (no GPU timing: down only), locking, render scales per level, and the level kept between launches.
 #include <cstdio>
 #include <filesystem>
 #include <string>
@@ -140,6 +140,26 @@ TEST_CASE("lock") {
   quality.Unlock();
   CHECK((!quality.Locked() && Run(quality, 2.9f, 30.0f) == 0));  // settles first (1 s), then 2 s of it
   CHECK((Run(quality, 2.5f, 30.0f) == 1 && quality.Level() == 1));
+}
+
+TEST_CASE("render scales per level") {
+  // The screen's render scale for the level (the Application sets it); none given: 0 (the game's).
+  Quality quality;
+  CHECK(quality.RenderScale() == 0.0f);  // not configured
+  quality.Configure({.levels = 3});
+  CHECK(quality.RenderScale() == 0.0f);
+  quality.Configure({.levels = 3, .settle_seconds = 0.0f, .render_scales = {0.6f, 0.8f, 1.0f}});
+  CHECK(quality.RenderScale() == 1.0f);  // the highest level
+  CHECK((Run(quality, 2.5f, 30.0f) == 1 && quality.Level() == 1 && quality.RenderScale() == 0.8f));
+  quality.Lock(0);
+  CHECK(quality.RenderScale() == 0.6f);
+
+  // Fewer scales than levels: the levels past the end use the last one.
+  Quality short_list;
+  short_list.Configure({.levels = 4, .render_scales = {0.5f, 0.75f}});
+  CHECK((short_list.Level() == 3 && short_list.RenderScale() == 0.75f));
+  short_list.Lock(0);
+  CHECK(short_list.RenderScale() == 0.5f);
 }
 
 TEST_CASE("saved between launches") {

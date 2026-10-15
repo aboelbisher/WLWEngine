@@ -18,10 +18,13 @@
 //
 //   viewport.AddPostPass({.material = my_material});   // a material with a `shader_type post;` shader
 //
-// The order of a frame, per viewport: its 3D into a texture of its own (the "scene picture"), the
-// passes in the order added, the LAST one writing where the viewport's picture goes (the screen or
-// the viewport's texture), then its 2D canvas on top (the UI stays sharp). The passes before the
-// last write into textures the viewport keeps for them (a small pool, reused every frame).
+// The order of a frame, per viewport: its 3D into a texture of its own (the "scene picture", at the
+// viewport's render size: Viewport::SetRenderScale), the passes in the order added, the LAST one
+// writing where the viewport's picture goes (the screen or the viewport's texture), then its 2D
+// canvas on top (the UI stays sharp). The passes before the last write into textures the viewport
+// keeps for them (a small pool, reused every frame). Pass sizes are fractions of the viewport's
+// size, whatever its render scale: passes read their inputs with linear filtering, so a smaller
+// scene picture is stretched by the first pass that reads it.
 namespace wlw::rendering {
 
 // The name an input uses for the scene picture (the viewport's 3D before any pass).
@@ -47,6 +50,8 @@ struct PostPass {
 
 inline constexpr int kSceneTarget = -1;  // the scene picture
 inline constexpr int kDestination = -2;  // where the viewport's picture goes (the last pass's output)
+inline constexpr int kUpscalePass = -1;  // PostStep::pass of the copy that stretches a scaled scene
+                                         // picture to the destination (a viewport without passes)
 
 struct PostTargetSpec {
   glm::ivec2 size{1, 1};
@@ -54,7 +59,7 @@ struct PostTargetSpec {
 };
 
 struct PostStep {
-  int pass = 0;                                     // index into the passes
+  int pass = 0;                                     // index into the passes, or kUpscalePass
   int source = kSceneTarget;                        // read as uSource: kSceneTarget or a target index
   int output = kDestination;                        // written: kDestination or a target index
   glm::ivec2 size{1, 1};                            // the output's size in pixels
@@ -67,10 +72,12 @@ struct PostPlan {
   std::vector<std::string> errors;      // unknown input names, repeated names (those inputs are skipped)
 };
 
-// Plans the passes for a viewport of `pixels`. Targets are shared as much as possible: a pass
-// writes into a target of its size and format that no later pass still has to read (passes
-// ping-pong between two), and never into the one it reads.
-PostPlan PlanPostChain(std::span<const PostPass> passes, glm::ivec2 pixels);
+// Plans the passes for a viewport of `pixels` whose scene picture is `scene_pixels` big (its render
+// size; {0, 0} = `pixels`). Targets are shared as much as possible: a pass writes into a target of
+// its size and format that no later pass still has to read (passes ping-pong between two), and
+// never into the one it reads. Without passes, a scene picture of another size gets one step: a
+// copy (kUpscalePass) that stretches it to `pixels`.
+PostPlan PlanPostChain(std::span<const PostPass> passes, glm::ivec2 pixels, glm::ivec2 scene_pixels = {0, 0});
 
 // A viewport's passes and the textures they use (owned by scene::Viewport).
 class PostChain {
@@ -102,9 +109,9 @@ class PostChain {
 
   // ---- For the renderer ----
   // The plan for a viewport of `pixels`, and the textures it needs at their sizes (re-planned only
-  // when the passes or the size changed; errors are logged then). The scene picture's target gets
-  // `scene` (format, smooth, depth).
-  const PostPlan& Prepare(glm::ivec2 pixels, const RenderTargetSettings& scene);
+  // when the passes or a size changed; errors are logged then). The scene picture's target gets
+  // `scene` (format, smooth, depth) and `scene_pixels` (the render size; {0, 0} = `pixels`).
+  const PostPlan& Prepare(glm::ivec2 pixels, const RenderTargetSettings& scene, glm::ivec2 scene_pixels = {0, 0});
   RenderTarget& SceneTarget() { return *scene_target_; }
   RenderTarget& Target(int index) { return *targets_[static_cast<size_t>(index)]; }
   // A step's texture: the scene picture or a target.
@@ -118,6 +125,7 @@ class PostChain {
   PostPlan plan_;
   bool planned_ = false;
   glm::ivec2 planned_pixels_{0, 0};
+  glm::ivec2 planned_scene_pixels_{0, 0};
   std::shared_ptr<RenderTarget> scene_target_;
   RenderTargetSettings scene_settings_;  // as asked for (the GPU may fall back)
   std::vector<std::shared_ptr<RenderTarget>> targets_;

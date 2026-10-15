@@ -18,11 +18,18 @@ glm::ivec2 ScaledSize(glm::ivec2 pixels, float scale) {
 
 }  // namespace
 
-PostPlan PlanPostChain(std::span<const PostPass> passes, glm::ivec2 pixels) {
+PostPlan PlanPostChain(std::span<const PostPass> passes, glm::ivec2 pixels, glm::ivec2 scene_pixels) {
   PostPlan plan;
-  const int count = static_cast<int>(passes.size());
-  if (count == 0) return plan;
   pixels = glm::max(pixels, glm::ivec2(1));
+  if (scene_pixels.x <= 0 || scene_pixels.y <= 0) scene_pixels = pixels;
+  const int count = static_cast<int>(passes.size());
+  if (count == 0) {
+    // A scene picture drawn at another size (render scale): a copy stretches it to the destination.
+    if (scene_pixels != pixels) {
+      plan.steps.push_back({.pass = kUpscalePass, .source = kSceneTarget, .output = kDestination, .size = pixels});
+    }
+    return plan;
+  }
 
   // Which earlier pass each input means (-1: the scene picture), resolved in order: a name means
   // the latest pass before the reader that has it.
@@ -99,12 +106,14 @@ PostPlan PlanPostChain(std::span<const PostPass> passes, glm::ivec2 pixels) {
   return plan;
 }
 
-const PostPlan& PostChain::Prepare(glm::ivec2 pixels, const RenderTargetSettings& scene) {
-  if (!planned_ || pixels != planned_pixels_) {
-    plan_ = PlanPostChain(passes_, pixels);
+const PostPlan& PostChain::Prepare(glm::ivec2 pixels, const RenderTargetSettings& scene, glm::ivec2 scene_pixels) {
+  if (scene_pixels.x <= 0 || scene_pixels.y <= 0) scene_pixels = pixels;
+  if (!planned_ || pixels != planned_pixels_ || scene_pixels != planned_scene_pixels_) {
+    plan_ = PlanPostChain(passes_, pixels, scene_pixels);
     for (const std::string& error : plan_.errors) WLW_LOG(LogRender, Warning, "%s", error.c_str());
     planned_ = true;
     planned_pixels_ = pixels;
+    planned_scene_pixels_ = scene_pixels;
     // The targets, at the plan's sizes: kept and reused from frame to frame (a resize only
     // changes their size).
     // (Compared with the formats asked for: the GPU may have fallen back to RGBA8.)
@@ -124,7 +133,7 @@ const PostPlan& PostChain::Prepare(glm::ivec2 pixels, const RenderTargetSettings
     scene_target_ = RenderTarget::Create(scene);
     scene_settings_ = scene;
   }
-  scene_target_->SetSize(pixels.x, pixels.y);
+  scene_target_->SetSize(scene_pixels.x, scene_pixels.y);
   return plan_;
 }
 
