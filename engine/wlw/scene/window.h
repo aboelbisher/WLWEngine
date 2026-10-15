@@ -15,6 +15,10 @@ struct WindowOptions {
   // false: never shown (desktop), just a GL context to draw offscreen viewports with, e.g. the
   // golden-image tests (tests/gpu). Phones always show their one full-screen surface.
   bool visible = true;
+  // false: the screen surface has no depth buffer (saves its memory: ~17 MB on a 1440p phone). The
+  // screen then always draws its 3D into its scene picture (its own depth) and copies it out, even
+  // at render scale 1: for games whose screen is post-processed or render-scaled anyway.
+  bool depth = true;
 };
 
 // A drawable surface (the OS window / the phone's screen) + its input + what it shows: the
@@ -104,6 +108,10 @@ class Window {
     for (const auto& [_, draw] : overlays_) draw();
   }
 
+  // Whether the screen surface has a depth buffer (WindowOptions::depth).
+  bool ScreenHasDepth() const { return screen_depth_; }
+  void SetScreenHasDepth(bool has) { screen_depth_ = has; }  // for the platform
+
   // ---- GPU timing (rendering/gpu_timer.h) ----
   // Measures the GPU's time per viewport (Viewport::GetGpuStats) and per frame. On in debug
   // builds (the engine panel shows it), off in release builds unless turned on.
@@ -157,6 +165,7 @@ class Window {
   int next_viewport_id_ = 0;
   std::vector<std::pair<int, std::function<void()>>> overlays_;
   int next_overlay_id_ = 0;
+  bool screen_depth_ = true;
   bool gpu_timing_ = WLW_DEBUG_UI != 0;
   bool gpu_timing_supported_ = false;
   float gpu_frame_ms_ = -1.0f;

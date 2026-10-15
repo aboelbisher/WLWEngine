@@ -84,7 +84,7 @@ class GLUIRenderer : public UIRenderer {
     for (const UIBatch& batch : canvas.Batches()) {
       rendering::ApplyBlendMode(batch.blend);  // premultiplied output (see blend_mode.h)
       if (batch.material) {
-        DrawShaderRect(canvas, batch);
+        DrawShaderRect(canvas, batch, framebuffer_pixels);
         continue;
       }
       // The run's one texture on unit 0: a font atlas, an image, or (rectangles only) a white texel.
@@ -109,14 +109,17 @@ class GLUIRenderer : public UIRenderer {
   }
 
   // A Canvas::ShaderRect: its quad with the material's canvas shader, then back to the UI's.
-  void DrawShaderRect(const Canvas& canvas, const UIBatch& batch) {
+  void DrawShaderRect(const Canvas& canvas, const UIBatch& batch, glm::vec2 framebuffer_pixels) {
     const rendering::ShaderMaterial& material = *batch.material;
     if (!material.IsValid() || material.GetShader()->GetTarget() != rendering::Shader::Target::Canvas) return;
     const rendering::GLShader* program = rendering::GLShaderFor(*material.GetShader());  // compiled once
     if (!program) return;
     const rendering::GLShader& shader = *program;
     const UIVertex* corners = &canvas.Vertices()[batch.first_quad * 4];  // top left, ..., bottom right = [2]
-    const glm::vec2 size = (corners[2].position - corners[0].position) * canvas.PixelsPerUnit();
+    // In the pixels it is drawn at: a Picture layer of a render-scaled viewport is drawn smaller than
+    // the canvas was sized for (its PixelsPerUnit).
+    const glm::vec2 pixels_per_unit = framebuffer_pixels / glm::max(canvas.Size(), glm::vec2(1e-4f));
+    const glm::vec2 size = (corners[2].position - corners[0].position) * pixels_per_unit;
     glUseProgram(shader.Program());
     glUniformMatrix4fv(shader.Location("uProjection"), 1, GL_FALSE, glm::value_ptr(canvas.Projection()));
     glUniform2f(shader.Location("uSize"), size.x, size.y);

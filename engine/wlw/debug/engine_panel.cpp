@@ -76,6 +76,7 @@ void EnginePanel::OnDebugUI() {
     const scene::RenderStats& drawn = screen.GetRenderStats();
     ImGui::Text("  %.2f from %s: 3D %d x %d of %.0f x %.0f", screen.EffectiveRenderScale(), from, drawn.render_width,
                 drawn.render_height, window.GetSize().x, window.GetSize().y);
+    if (!window.ScreenHasDepth()) ImGui::TextDisabled("  screen without a depth buffer: 3D through its scene picture");
   }
   // Quality levels (app/quality.h): which one runs, what it reads, and a lock to try each.
   if (app::Quality& quality = App().Quality(); quality.Configured()) {

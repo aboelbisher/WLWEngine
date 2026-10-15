@@ -195,7 +195,11 @@ TEST_CASE("render scale upscale") {
   CHECK((plan.steps.size() == 1 && plan.steps[0].pass == rendering::kUpscalePass));
   CHECK((chain.SceneTarget().Width() == 100 && chain.SceneTarget().Height() == 50 && chain.TargetCount() == 0));
   const rendering::RenderTarget* scene_target = &chain.SceneTarget();
-  CHECK(chain.Prepare({200, 100}, scene).steps.empty());                                // back to scale 1: no copy
+  // Asked for at the same size (a screen without a depth buffer draws through its picture): still
+  // one copy, since the picture must reach the destination.
+  const PostPlan& same = chain.Prepare({200, 100}, scene);
+  CHECK((same.steps.size() == 1 && same.steps[0].pass == rendering::kUpscalePass &&
+         same.steps[0].size == glm::ivec2(200, 100)));
   CHECK((&chain.SceneTarget() == scene_target && chain.SceneTarget().Width() == 200));  // the same texture, resized
 }
 

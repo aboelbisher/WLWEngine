@@ -36,6 +36,9 @@ namespace app {
 struct AppConfig {
   std::string title = "WLWengine";
   core::Vector2 window_size = {1280, 720};
+  // false: the screen surface gets no depth buffer (scene::WindowOptions::depth): saves its memory
+  // for a game whose screen always has post passes or a render scale below 1 (else it costs a copy).
+  bool screen_depth = true;
   float fixed_timestep = 1.0f / 60.0f;  // simulation rate: 60 steps per second
   float max_frame_time = 0.25f;         // longer frames are clamped (see FixedTimestep)
   // Frames per second the screen gets (core/frame_pacing.h): 30/60/90/120..., core::kTargetDisplayRate

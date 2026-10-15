@@ -35,7 +35,9 @@ struct GlyphQuad {
 // Sizes are "line heights": the distance from the highest ascender to the lowest descender, in
 // whatever units the caller uses (Canvas units for the UI). Covers printable ASCII (32..126);
 // other characters draw as '?'. CPU only: the UI renderer uploads the atlas.
-class Font {
+// Always owned by a shared_ptr (Load / FromMemory): a Canvas keeps the fonts it was given alive
+// until it's drawn, so text works even if the caller lets go of its font first.
+class Font : public std::enable_shared_from_this<Font> {
  public:
   struct Atlas {
     int width = 0;

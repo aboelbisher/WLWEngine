@@ -132,7 +132,10 @@ AndroidWindow* g_window = nullptr;  // Android apps have exactly one window
 
 class AndroidWindow : public scene::Window {
  public:
-  AndroidWindow() { g_window = this; }
+  explicit AndroidWindow(bool depth) : depth_(depth) {
+    g_window = this;
+    SetScreenHasDepth(depth);
+  }
 
   ~AndroidWindow() override {
     DestroySurface();
@@ -302,7 +305,8 @@ class AndroidWindow : public scene::Window {
         return false;
       }
     }
-    // An RGB888 window surface with a 24-bit depth buffer that supports OpenGL ES 3.
+    // An RGB888 window surface that supports OpenGL ES 3, with a 24-bit depth buffer unless the game
+    // asked for none (WindowOptions::depth; EGL sorts the smallest depth first, so 0 gets none).
     const EGLint config_attribs[] = {EGL_RENDERABLE_TYPE,
                                      EGL_OPENGL_ES3_BIT,
                                      EGL_SURFACE_TYPE,
@@ -314,11 +318,11 @@ class AndroidWindow : public scene::Window {
                                      EGL_BLUE_SIZE,
                                      8,
                                      EGL_DEPTH_SIZE,
-                                     24,
+                                     depth_ ? 24 : 0,
                                      EGL_NONE};
     EGLint num_configs = 0;
     if (eglChooseConfig(g_display, config_attribs, &config_, 1, &num_configs) != EGL_TRUE || num_configs == 0) {
-      WLW_LOG(LogPlatform, Error, "No EGL config with OpenGL ES 3 + 24-bit depth");
+      WLW_LOG(LogPlatform, Error, "No EGL config with OpenGL ES 3 (depth %d)", depth_ ? 24 : 0);
       return false;
     }
     const EGLint context_attribs[] = {EGL_CONTEXT_CLIENT_VERSION, 3, EGL_NONE};
@@ -426,6 +430,7 @@ class AndroidWindow : public scene::Window {
   }
 
   EGLConfig config_ = nullptr;
+  bool depth_ = true;  // WindowOptions::depth: the surface gets a depth buffer
   EGLContext context_ = EGL_NO_CONTEXT;
   EGLSurface surface_ = EGL_NO_SURFACE;
   bool resumed_ = true;        // the activity is starting; APP_CMD_PAUSE flips this
@@ -822,8 +827,8 @@ void RunAndroidApp(android_app* app, std::unique_ptr<::wlw::app::Application> (*
 
 namespace wlw::scene {
 std::unique_ptr<Window> Window::Create(const core::Vector2& /*size*/, const std::string& /*title*/,
-                                       const WindowOptions& /*options*/) {
-  return std::make_unique<platform::AndroidWindow>();  // full screen; size comes from the surface
+                                       const WindowOptions& options) {
+  return std::make_unique<platform::AndroidWindow>(options.depth);  // full screen; size comes from the surface
 }
 }  // namespace wlw::scene
 

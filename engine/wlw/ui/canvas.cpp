@@ -53,15 +53,15 @@ UIBatch& Canvas::BatchFor(const Font* font, const std::shared_ptr<rendering::WTe
   if (!batches_.empty()) {
     UIBatch& last = batches_.back();
     const bool last_samples = last.font != nullptr || last.texture != nullptr;
-    const bool same_texture = last.font == font && last.texture.get() == image;
+    const bool same_texture = last.font.get() == font && last.texture.get() == image;
     if (!last.material && last.blend == blend && (!samples || !last_samples || same_texture)) {
-      if (font) last.font = font;                           // a run of rectangles becomes a text run...
-      if (image && !last.texture) last.texture = *texture;  // ...or an image run
+      if (font && !last.font) last.font = font->shared_from_this();  // a run of rectangles becomes a text run...
+      if (image && !last.texture) last.texture = *texture;           // ...or an image run
       return last;
     }
   }
   UIBatch batch;
-  batch.font = font;
+  if (font) batch.font = font->shared_from_this();  // the caller may drop its font before the draw
   if (image) batch.texture = *texture;
   batch.first_quad = QuadCount();
   batch.blend = blend;

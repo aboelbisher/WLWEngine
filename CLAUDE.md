@@ -129,6 +129,8 @@ engine/wlw/
               at GL_MAX_TEXTURE_SIZE. Screen: QualitySettings::render_scales, cvar r.render_scale = SetRenderScaleOverride
               (wins while > 0), engine panel buttons. RenderStats::render_width/height. RTX 5080, 2560x1440, 24 blended
               lit layers: 3D 2.20 ms at 1, 1.21 at 0.75, 0.53 at 0.5 (= the pixel count); the upscale copy 0.017 ms.
+              AppConfig::screen_depth / WindowOptions::depth = false: no depth buffer on the screen surface (memory saved
+              when the screen is always scaled / post-processed); the screen then always draws through its scene picture.
               Framebuffer invalidation (GLES glInvalidateFramebuffer, nothing on desktop GL 3.3): depth after the 3D,
               each post output before it's drawn (DONT_CARE load), the screen's depth/stencil before swap;
               Window::SetInvalidateFramebuffers (panel checkbox), RenderStats::invalidations. Pixel 4: no measurable GPU ms
@@ -174,7 +176,7 @@ engine/wlw/
               SetCastsShadow / SetReceivesShadow; shadow_map.h fits the light's box to the casters (texel-snapped)
   ui/         Two layers, like the big engines (Godot RenderingServer canvas vs Control nodes, Slate draw elements vs UMG):
               A. Canvas = the 2D DRAW LIST only: virtual units (reference size fits the screen), FillRect (rounded), Line,
-                 Text (Font: TTF -> SDF atlas), Image(rect, texture, ImageStyle{tint, uv, blend}) = sprites, ShaderRect (a
+                 Text (Font: TTF -> SDF atlas; batches hold the Font's shared_ptr until drawn), Image(rect, texture, ImageStyle{tint, uv, blend}) = sprites, ShaderRect (a
                  rect drawn by a material's shader). Batched by texture + blend (1000s of sprites = 1 draw call); UIRenderer
                  (GL) draws it. Blending belongs to what you draw with: Image's style, ShaderRect's material (canvas shaders
                  default Alpha, mesh shaders Opaque), UI shapes Alpha. No widgets, input or screen geometry in it.

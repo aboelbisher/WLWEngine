@@ -129,6 +129,22 @@ TEST_CASE("canvas text and batches") {
       (rect.params.x == 2.0f && Near(rect.params.y, 20.0f) && Near(rect.params.z, 5.0f) && Near(rect.params.w, 5.0f)));
 }
 
+TEST_CASE("canvas keeps its fonts alive") {
+  // Text from a font the caller lets go of before the frame is drawn still has its atlas.
+  Canvas canvas;
+  canvas.BeginFrame({800.0f, 600.0f}, {800.0f, 600.0f});
+  std::weak_ptr<Font> watch;
+  {
+    auto font = Font::Load(WLW_TEST_FONT);
+    REQUIRE(font != nullptr);
+    watch = font;
+    canvas.Text(*font, "kept", {10.0f, 10.0f}, 20.0f);
+  }
+  CHECK((!watch.expired() && canvas.Batches().size() == 1 && canvas.Batches()[0].font == watch.lock()));
+  canvas.BeginFrame({800.0f, 600.0f}, {800.0f, 600.0f});  // the next frame lets it go
+  CHECK(watch.expired());
+}
+
 TEST_CASE("canvas line") {
   Canvas canvas;
   canvas.BeginFrame({400.0f, 800.0f}, {400.0f, 800.0f});

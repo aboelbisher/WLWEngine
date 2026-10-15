@@ -62,6 +62,15 @@ then it's deleted (listed under **Removed**).
 - `RenderStats::render_width/height`. `PlanPostChain` and `PostChain::Prepare` take the scene picture's size as
   an optional last argument (existing calls are unchanged). The renderer never makes a scene picture larger than
   the GPU's largest texture (a warning, then scaled down to fit).
+- `AppConfig::screen_depth` / `WindowOptions::depth` (default true): false creates the screen surface without a
+  depth buffer (EGL / GLFW), saving its memory (~17 MB on a 1440p phone) for games whose screen always has post
+  passes or a render scale below 1; such a screen draws its 3D through its scene picture, at scale 1 too (one
+  copy). `Window::ScreenHasDepth()`; the engine panel says so.
+- Fixed: `Canvas::Text` kept a raw pointer to its `Font` until the frame was drawn, so text from a font the caller
+  had let go of drew nothing (or read freed memory). `UIBatch::font` is now a `shared_ptr<const Font>` (`Font` is
+  `enable_shared_from_this`; fonts only exist in shared_ptrs) and the canvas keeps its fonts until the next frame.
+- Fixed: a canvas shader's `uSize` in a Picture layer of a render-scaled viewport was in full-size pixels; it is
+  now in the pixels the layer is drawn at.
 
 ## 0.1.0 (2026-10-15): Phase 0, safety net and tooling
 

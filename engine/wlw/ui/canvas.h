@@ -68,7 +68,7 @@ struct UIVertex {
 // A run of consecutive quads that can be drawn in one call: same blend mode, and at most one
 // texture they sample (a font's atlas or an image's texture; rectangles sample none).
 struct UIBatch {
-  const Font* font = nullptr;                      // text: this font's atlas
+  std::shared_ptr<const Font> font;                // text: this font's atlas (kept alive until drawn)
   std::shared_ptr<rendering::WTexture2D> texture;  // images: this texture (else null)
   size_t first_quad = 0;
   size_t quad_count = 0;

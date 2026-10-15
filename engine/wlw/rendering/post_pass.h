@@ -50,8 +50,8 @@ struct PostPass {
 
 inline constexpr int kSceneTarget = -1;  // the scene picture
 inline constexpr int kDestination = -2;  // where the viewport's picture goes (the last pass's output)
-inline constexpr int kUpscalePass = -1;  // PostStep::pass of the copy that stretches a scaled scene
-                                         // picture to the destination (a viewport without passes)
+inline constexpr int kUpscalePass = -1;  // PostStep::pass of the copy that brings the scene picture
+                                         // to the destination (stretched if scaled) without passes
 
 struct PostTargetSpec {
   glm::ivec2 size{1, 1};
@@ -110,7 +110,9 @@ class PostChain {
   // ---- For the renderer ----
   // The plan for a viewport of `pixels`, and the textures it needs at their sizes (re-planned only
   // when the passes or a size changed; errors are logged then). The scene picture's target gets
-  // `scene` (format, smooth, depth) and `scene_pixels` (the render size; {0, 0} = `pixels`).
+  // `scene` (format, smooth, depth) and `scene_pixels` (the render size; {0, 0} = `pixels`). The plan
+  // always reaches the destination: without passes it is one copy (kUpscalePass), even at the same
+  // size (the renderer asks then only for a screen without depth, which draws through the picture).
   const PostPlan& Prepare(glm::ivec2 pixels, const RenderTargetSettings& scene, glm::ivec2 scene_pixels = {0, 0});
   RenderTarget& SceneTarget() { return *scene_target_; }
   RenderTarget& Target(int index) { return *targets_[static_cast<size_t>(index)]; }

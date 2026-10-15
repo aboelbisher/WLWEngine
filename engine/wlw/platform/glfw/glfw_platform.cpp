@@ -240,8 +240,12 @@ class GlfwWindow : public Window {
     }
     GLFWwindow* share = share_with ? static_cast<GlfwWindow*>(share_with)->window_ : nullptr;
     glfwWindowHint(GLFW_VISIBLE, options_.visible ? GLFW_TRUE : GLFW_FALSE);
+    glfwWindowHint(GLFW_DEPTH_BITS, options_.depth ? 24 : 0);  // no depth: no stencil either
+    glfwWindowHint(GLFW_STENCIL_BITS, options_.depth ? 8 : 0);
     window_ = glfwCreateWindow((int)size_.x, (int)size_.y, title_.c_str(), nullptr, share);
     glfwWindowHint(GLFW_VISIBLE, GLFW_TRUE);
+    glfwWindowHint(GLFW_DEPTH_BITS, 24);
+    glfwWindowHint(GLFW_STENCIL_BITS, 8);
     if (window_ == nullptr) {
       WLW_LOG(LogPlatform, Error, "Failed to create GLFW window '%s'", title_.c_str());
       return false;
@@ -401,7 +405,9 @@ class GlfwWindow : public Window {
 
 std::unique_ptr<Window> Window::Create(const core::Vector2& size, const std::string& title,
                                        const WindowOptions& options) {
-  return std::make_unique<GlfwWindow>(size, title, options);
+  auto window = std::make_unique<GlfwWindow>(size, title, options);
+  window->SetScreenHasDepth(options.depth);
+  return window;
 }
 
 }  // namespace wlw::scene

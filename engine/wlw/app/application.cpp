@@ -38,7 +38,7 @@ void ForEachSystem(SystemList& systems, Hook&& hook) {
 Application::Application(AppConfig config)
     : config_(std::move(config)),
       engine_(WLWEngine::Create()),
-      window_(scene::Window::Create(config_.window_size, config_.title)),
+      window_(scene::Window::Create(config_.window_size, config_.title, {.depth = config_.screen_depth})),
       timestep_(config_.fixed_timestep, config_.max_frame_time) {
   LogThreadId();     // the main thread is T0 in log records
   profile::Start();  // names this thread "Game" in the profiler; log records go to its timeline

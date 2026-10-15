@@ -134,6 +134,11 @@ const PostPlan& PostChain::Prepare(glm::ivec2 pixels, const RenderTargetSettings
     scene_settings_ = scene;
   }
   scene_target_->SetSize(scene_pixels.x, scene_pixels.y);
+  // Asked for without passes at the same size (a screen without depth): the scene picture still has
+  // to reach the destination, so one copy.
+  if (plan_.steps.empty()) {
+    plan_.steps.push_back({.pass = kUpscalePass, .source = kSceneTarget, .output = kDestination, .size = pixels});
+  }
   return plan_;
 }
 

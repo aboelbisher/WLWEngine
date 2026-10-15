@@ -225,7 +225,7 @@ class GLRenderingDriver : public RenderingDriver {
     }
 
     DrawViewport(window->GetScreen(), {static_cast<int>(screen_pixels.x), static_cast<int>(screen_pixels.y)},
-                 static_cast<GLuint>(screen_framebuffer), /*has_depth=*/true);
+                 static_cast<GLuint>(screen_framebuffer), window->ScreenHasDepth());
     if (timing_) gpu_timer_->End();
     {
       WLW_PROFILE_SCOPE("Overlays");
@@ -234,7 +234,7 @@ class GLRenderingDriver : public RenderingDriver {
     }
     // The screen's depth (and stencil) end with the frame: not written back to memory.
     glBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(screen_framebuffer));
-    Invalidate(static_cast<GLuint>(screen_framebuffer), /*color=*/false, /*depth=*/true);
+    if (window->ScreenHasDepth()) Invalidate(static_cast<GLuint>(screen_framebuffer), /*color=*/false, /*depth=*/true);
 
     // Present the frame we just drew (previously the swap happened before drawing,
     // so every frame was shown one frame late).
@@ -307,10 +307,13 @@ class GLRenderingDriver : public RenderingDriver {
     using Clock = std::chrono::steady_clock;
     const glm::ivec2 render = FitRenderSize(viewport.RenderSize(pixels));  // == pixels at render scale 1
     // With post passes or a render scale the 3D goes into the scene picture, a target of the
-    // viewport's own format, at the render size.
+    // viewport's own format, at the render size; so does 3D that needs depth when the destination
+    // has none (a screen made without a depth buffer: WindowOptions::depth).
+    const bool needs_picture =
+        !viewport.Post().Empty() || render != pixels || (viewport.Settings().depth && !has_depth);
     const PostPlan* post = nullptr;
     GLuint scene_framebuffer = destination;
-    if ((!viewport.Post().Empty() || render != pixels) && pixels.x > 0 && pixels.y > 0) {
+    if (needs_picture && pixels.x > 0 && pixels.y > 0) {
       const scene::ViewportSettings& settings = viewport.Settings();
       post = &viewport.Post().Prepare(pixels, {settings.format, settings.smooth, settings.depth}, render);
       scene_framebuffer = GLFramebuffer(viewport.Post().SceneTarget());
