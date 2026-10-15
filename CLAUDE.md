@@ -183,7 +183,10 @@ engine/wlw/
                  rect drawn by a material's shader). Batched by texture + blend (1000s of sprites = 1 draw call); UIRenderer
                  (GL) draws it. Blending belongs to what you draw with: Image's style, ShaderRect's material (canvas shaders
                  default Alpha, mesh shaders Opaque), UI shapes Alpha. No widgets, input or screen geometry in it.
-                 Shapes: Circle, Triangle (edge distances interpolated, AA), Arc/Ring (sdArc), all in the one UI shader.
+                 Shapes: Circle, Triangle (edge distances interpolated, AA), Arc/Ring (sdArc), all in the one UI shader
+                 (ui.frag: each pixel computes only its quad's kind, a flat varying; AA widths from the uv's derivatives by
+                 the chain rule, text from the SDF's screen-pixel range = Font::DistanceRange in params.z; a new kind adds a
+                 branch, never per-pixel work for the others).
               C. The UI layer: UIContext (ui_context.h: canvas + pointer + safe_area + interactive + active widget + theme +
                  dt + Memory(id) = per-widget floats kept while asked for each frame (NewFrame drops the rest); Application
                  owns one and passes it to OnRenderUI(ui) / Screen::RenderUI(ui)), theme.h (Theme: font + colour roles +

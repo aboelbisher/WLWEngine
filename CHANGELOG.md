@@ -103,6 +103,27 @@ then it's deleted (listed under **Removed**).
   precision mismatch. `wlw_gpu_tests --dump-shaders <dir>` writes the final sources (`SetShaderSourceObserver`)
   for the Mali Offline Compiler.
 
+### Canvas shader (Roadmap 1.3b)
+- `ui.frag` computed all four coverage functions (text's texture read, rect, triangle, the arc with a `sin` and
+  `cos`) for every pixel of every quad, because each one called `fwidth()`. Now each pixel computes only its own
+  quad's kind: the kind is a flat varying, and each kind gets its anti-aliasing width from the uv's derivatives
+  through the chain rule (shapes: their distance's gradient; triangles: the nearest edge's derivatives). The
+  arc's `sin`/`cos` of its half sweep moved to `ui.vert` (flat). Derivatives and texture reads sit inside the
+  branches: a 2x2 pixel block always comes from one triangle, so all four of its pixels take the same branch
+  (quad-uniform, what Vulkan requires; GLSL's spec calls it undefined, every GPU handles it). The owner chose
+  this over `textureGrad` with derivatives before the branch (the plan): it makes images 4.7x cheaper on Mali.
+- Text: the anti-aliasing width comes from the distance field's range in screen pixels (the formula MSDF uses,
+  so 10.2 keeps it): `Font::DistanceRange()` (atlas pixels for the field's 0 -> 1, ~2 x padding) goes to the
+  shader in `UIVertex::params.z`, the atlas size from `textureSize`.
+- Mali Offline Compiler, arithmetic cycles before -> after (Mali-G78): longest path 2.62 -> 1.38, image 2.62 ->
+  0.16, text 1.25, rect 1.38, triangle 1.25, arc 1.62; work registers 28 -> 22. Mali-G52: longest 2.63 -> 2.08,
+  registers 31 -> 24. `ui.vert` writes two more varyings (G78 load/store 6 -> 7 cycles, 4 vertices per quad).
+- Pixel 4 (Adreno 640), Threadlock uncapped, alternating runs of engine main and this step (averages of 25
+  samples per run): canvas GPU time 4.96 -> 2.30 ms (-54%), GPU frame 7.08 -> 5.0 ms. Its post passes read
+  1.24 -> 1.56 ms although their shaders didn't change: the lighter frame lets the GPU clock down (DVFS).
+- Pictures: edges move by less than a pixel's shading (max 48/255 on 2% of the canvas golden image's pixels;
+  identical to the eye); new `canvas` golden reference from CI.
+
 ## 0.1.0 (2026-10-15): Phase 0, safety net and tooling
 
 The first tagged version: tests (doctest, golden images, benchmarks), CI on Windows, Linux and Android, logging,

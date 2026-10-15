@@ -61,7 +61,7 @@ struct UIVertex {
   glm::vec2 uv{0.0f};        // text: atlas coordinate; rect: position relative to the rect centre
   core::Color color{1.0f, 1.0f, 1.0f, 1.0f};
   glm::vec4 params{
-      0.0f};  // x = kind (QuadKind); text: y = SDF edge; rect: y,z = half size, w = radius;
+      0.0f};  // x = kind (QuadKind); text: y = SDF edge, z = Font::DistanceRange; rect: y,z = half size, w = radius;
               // triangle: uv.x, uv.y, y = distances to its 3 edges; arc: y = radius, z = half thickness, w = half sweep
 };
 

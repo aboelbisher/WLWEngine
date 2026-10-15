@@ -59,6 +59,9 @@ class Font : public std::enable_shared_from_this<Font> {
   // The SDF threshold that draws the glyph `width` (a fraction of the size) thicker: for
   // outlines. 0.5 = the normal edge. Limited by FontOptions::padding.
   float EdgeForOutline(float width) const;
+  // How many atlas pixels the distance field takes to go from 0 to 1 (about 2 x padding): the UI
+  // shader turns it into screen pixels to anti-alias the edge.
+  float DistanceRange() const { return 1.0f / distance_per_pixel_; }
 
   const Atlas& GetAtlas() const { return atlas_; }
   uint32_t Id() const { return id_; }  // unique per font: the renderer caches its texture by it

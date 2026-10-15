@@ -121,6 +121,9 @@ TEST_CASE("canvas text and batches") {
   CHECK(canvas.QuadCount() == 3);
   CHECK(canvas.Vertices()[0].params.y < 0.5f);   // shadow uses the outline's edge
   CHECK(canvas.Vertices()[8].params.y == 0.5f);  // fill: the normal edge
+  // The field's range in atlas pixels, for the shader's anti-aliasing: 0 -> 1 over ~2 x padding (6).
+  CHECK(canvas.Vertices()[8].params.z == font_a.DistanceRange());
+  CHECK(Near(font_a.DistanceRange(), 255.0f * 6.0f / 128.0f, 1e-3f));
 
   // Rounded rect: half size and a radius clamped to fit.
   canvas.FillRect({{0, 0}, {40, 10}}, {1, 1, 1, 1}, 50.0f);

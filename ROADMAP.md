@@ -5,14 +5,19 @@ first (Android, iOS, web), with desktop as a full target. This plan came out of 
 architecture review. Work goes one step at a time, in order. Step ids are stable: commits name
 them ("Roadmap 4.3b: ...").
 
-**Current step:** 1.3 Fragment precision (1.3a merged 2026-10-15 as "Roadmap 1.3a: fragment precision"; 1.3b next) · **Updated:** 2026-10-15
+**Current step:** 1.4 Cofactor normals (not planned yet) · **Updated:** 2026-10-15
 
-**Next session:** implement 1.3b ("Next session plan: 1.3" below, approved with 1.3) on a fresh `precision/setup` branch.
-1.3a (2026-10-15): verified on desktop (263 tests, golden images unchanged), CI (Mesa compiles every program as GLSL ES),
-Android build, Bluzzle desktop + emulator, Threadlock emulator, and the Pixel 4. The Pixel 4 (Adreno 640) changed the plan:
-a mediump fragment default made Bluzzle's lit 3D 8% slower, and the post effects' mediump opt-in 2% slower, so the owner
-chose (2026-10-15) highp by default with shaders opting in only where a phone measures a gain (none in the engine yet).
-Measurement method and numbers: CHANGELOG 1.3a. Threadlock's GPU frame is ~5 of 7 ms canvas: 1.3b matters.
+**Next session:** research and plan 1.4 (concept + exact plan in chat, wait for the OK), then implement it on a
+`<topic>/setup` branch. 1.3 is done: 1.3a and 1.3b merged 2026-10-15.
+1.3b (canvas shader): each pixel computes only its quad's kind. Mali-G78 longest path 2.62 -> 1.38 arithmetic cycles,
+images 0.16; Pixel 4 Threadlock canvas GPU 4.96 -> 2.30 ms (-54%), frame 7.08 -> 5.0 ms (CHANGELOG 1.3b). The owner
+chose derivatives + `texture()` inside the branches (quad-uniform flow) over the plan's `textureGrad`. Golden references
+canvas, render_scale and render_scale_post were renewed from CI. Verified: 263 tests, CI green, Bluzzle desktop UI, Threadlock
+on the Pixel 4. Not run: the emulator (see the next rule).
+New rule (owner, 2026-10-15): always ask before using the Android emulator (the owner may be playing a game on the PC
+and it can crash); the Pixel 4 is separate. Games are still on v0.1.0 and get Phase 1 with v0.2.0.
+1.3a (2026-10-15): the Pixel 4 (Adreno 640) reversed the mediump fragment default (Bluzzle's lit 3D 8% slower): GLES
+stays highp, shaders opt in only where a phone measures a gain (none in the engine yet). Numbers: CHANGELOG 1.3a.
 
 Where things stand (2026-10-15):
 - Done: 0.1 doctest, 0.2 CI, 0.3 golden images, 0.4 logging and asserts, 0.5 cvars and console, 0.6 Tracy, 0.7 benchmarks,
@@ -167,7 +172,10 @@ fragment precision", then "Roadmap 1.3b: canvas shader". Tick 1.3 when both are 
 
 **1.3b Canvas shader** (found in the 1.3 research): `ui.frag` computes all four coverage functions for every pixel of
 every quad (the text's texture read and `fwidth`, the rect, the triangle, the arc with a `sin` and `cos`), because
-`fwidth` needs all four pixels of a 2x2 block to run it. Make each pixel compute only its own kind:
+`fwidth` needs all four pixels of a 2x2 block to run it. Make each pixel compute only its own kind.
+*Outcome: done as below except the texture reads: the owner chose (2026-10-15) derivatives and `texture()` inside the
+branches (quad-uniform control flow: the kind is flat, a 2x2 block is one triangle), which made images 4.7x cheaper on
+Mali than `textureGrad`; the text gets the field range itself (`Font::DistanceRange`), not the padding. Numbers: CHANGELOG 1.3b.*
 - Take the derivatives once, in uniform control flow (`dFdx`/`dFdy` of `vUV` and of the triangle's third edge distance).
 - Per-quad constants (the kind; the arc's `sin`/`cos`, computed in `ui.vert`) become flat varyings.
 - Branch per kind; read textures only in the text and image branches (`textureGrad` with the derivatives taken
@@ -286,13 +294,13 @@ libunibreak (zlib), msdfgen (MIT), Jolt (MIT), Box2D v3 (MIT), ImGuizmo (MIT), F
   Desktop: vsync plus a precise limiter. Quality's budget follows the target.
 - [x] **1.2 Render scale.** *(done 2026-10-15, commit "Roadmap 1.2: render scale"; 0.25-2, Picture layers follow the scale, post pass sizes stay relative to the viewport (constant look), upscale free with passes / one copy without; cvar r.render_scale; RTX 5080 2560x1440: 3D 2.20 ms at 1, 1.21 at 0.75, 0.53 at 0.5)* `Viewport::SetRenderScale` for the 3D picture (UI stays native),
   bilinear upscale, a Quality hook, shown in the engine panel.
-- [ ] **1.3 Fragment precision.** *(planned and approved 2026-10-15: "Next session plan: 1.3" above; decision changed by
+- [x] **1.3 Fragment precision.** *(done 2026-10-15, commits "Roadmap 1.3a: fragment precision" + "Roadmap 1.3b: canvas shader"; planned and approved 2026-10-15: "Next session plan: 1.3" above; decision changed by
   the Pixel 4 measurements: GLES stays highp by default, shaders opt in to `mediump` where a phone measures a gain)*
   Explicit precisions: `highp` for positions, UVs, pixel and canvas coordinates, depth and shadow
   coordinates and the specular term; every uniform, block member and varying names its precision (GLSL ES needs both
   stages to agree); sampler defaults for every sampler type; game shaders highp unless they opt in; cvar `r.mediump`; a
   GLSL ES compile check in CI through a desktop ES context; Mali Offline Compiler numbers, GPU time on a real phone
-  when one is at hand (or Test Lab). Split: **1.3a** precision *(done 2026-10-15, commit "Roadmap 1.3a: fragment precision")*, **1.3b** canvas shader (each pixel computes only its
+  when one is at hand (or Test Lab). Split: **1.3a** precision *(done 2026-10-15, commit "Roadmap 1.3a: fragment precision")*, **1.3b** canvas shader *(done 2026-10-15, commit "Roadmap 1.3b: canvas shader"; Pixel 4 Threadlock canvas 4.96 -> 2.30 ms)* (each pixel computes only its
   own quad kind).
 - [ ] **1.4 Cofactor normals.** Replace the per-vertex `inverse()` and the CPU inverse; correct for
   mirrored transforms; tested against inverse-transpose.

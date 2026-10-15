@@ -169,7 +169,7 @@ void Canvas::AddText(const Font& font, std::string_view text, glm::vec2 pen, flo
   glyph_scratch_.clear();
   font.Layout(text, size, pen, glyph_scratch_);
   for (const GlyphQuad& q : glyph_scratch_) {
-    AddQuad(&font, q.min, q.max, q.uv_min, q.uv_max, color, {kKindText, edge, 0.0f, 0.0f});
+    AddQuad(&font, q.min, q.max, q.uv_min, q.uv_max, color, {kKindText, edge, font.DistanceRange(), 0.0f});
   }
 }
 
