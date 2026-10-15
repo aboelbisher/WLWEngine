@@ -123,6 +123,7 @@ TEST_CASE("cull normal matrices") {
   auto scaled = Cube({0, 0, 0});
   scaled->SetScale({2.0f, 1.0f, 1.0f});
   auto instanced = Cube({1, 0, 0});
+  instanced->SetScale({2.0f, 1.0f, 1.0f});
   instanced->SetInstances({rendering::InstanceData{}});
   scene.AddNode(scaled);
   scene.AddNode(instanced);
@@ -131,13 +132,11 @@ TEST_CASE("cull normal matrices") {
   VisibleSet visible;
   CullScene(gather, kView, kViewProjection, visible);
   REQUIRE(visible.nodes.size() == 2);
+  // core::NormalMatrix: det (2) x the inverse-transpose diag(0.5, 1, 1), the same directions. Instanced
+  // nodes get their own part too (each copy's part is added per vertex in the shader).
+  const glm::mat3 expected(glm::vec3(1, 0, 0), glm::vec3(0, 2, 0), glm::vec3(0, 0, 2));
   for (const VisibleSet::Node& node : visible.nodes) {
-    if (node.node == scaled.get()) {
-      CHECK(Near(node.normal_matrix[0][0], 0.5f));  // inverse-transpose of a scale of 2
-      CHECK(Near(node.normal_matrix[1][1], 1.0f));
-    } else {
-      CHECK(node.normal_matrix == glm::mat3(1.0f));  // instanced: per vertex in the shader
-    }
+    CHECK(node.normal_matrix == expected);
   }
 }
 

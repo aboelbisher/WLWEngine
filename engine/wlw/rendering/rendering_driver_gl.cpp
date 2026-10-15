@@ -766,14 +766,12 @@ class GLRenderingDriver : public RenderingDriver {
         continue;
       }
       if (item.custom) {
-        UseShaderMaterial(*item.custom, *item.custom_program, model, item.node->IsInstanced());
+        UseShaderMaterial(*item.custom, *item.custom_program, slot, item.node->IsInstanced());
       } else {
         const MeshProgram& program = *item.program;
         state_.UseProgram(program.id);
         glUniformMatrix4fv(program.model, 1, GL_FALSE, glm::value_ptr(model));
-        if (slot.instances == nullptr) {
-          glUniformMatrix3fv(program.normal_matrix, 1, GL_FALSE, glm::value_ptr(slot.normal_matrix));
-        }
+        glUniformMatrix3fv(program.normal_matrix, 1, GL_FALSE, glm::value_ptr(slot.normal_matrix));
         glUniform1f(program.shininess, item.material ? item.material->shininess : 32.0f);
         if (item.texture) state_.BindTexture0(item.texture);
       }
@@ -887,13 +885,14 @@ class GLRenderingDriver : public RenderingDriver {
     return shader_material;
   }
 
-  // A ShaderMaterial's shader with its model matrix and params (the camera and lights come from
-  // the frame block). Its textures start at unit 2: units 0-1 are the mesh texture and the
+  // A ShaderMaterial's shader with its node's matrices and its params (the camera and lights come
+  // from the frame block). Its textures start at unit 2: units 0-1 are the mesh texture and the
   // shadow map, which stay bound for the nodes drawn after.
-  void UseShaderMaterial(const ShaderMaterial& material, const GLShader& shader, const glm::mat4& model,
-                         bool instanced) {
+  struct NodeSlot;  // (below)
+  void UseShaderMaterial(const ShaderMaterial& material, const GLShader& shader, const NodeSlot& slot, bool instanced) {
     state_.UseProgram(shader.Program());
-    glUniformMatrix4fv(shader.Location("uModel"), 1, GL_FALSE, glm::value_ptr(model));
+    glUniformMatrix4fv(shader.Location("uModel"), 1, GL_FALSE, glm::value_ptr(slot.model));
+    glUniformMatrix3fv(shader.Location("uNormalMatrix"), 1, GL_FALSE, glm::value_ptr(slot.normal_matrix));
     glUniform1i(shader.Location("uInstanced"), instanced);
     shader.ApplyParams(material, 2);
   }
@@ -930,7 +929,7 @@ class GLRenderingDriver : public RenderingDriver {
   struct NodeSlot {
     scene::Node3D* node = nullptr;
     glm::mat4 model{1.0f};                  // world matrix (walks the parents once)
-    glm::mat3 normal_matrix{1.0f};          // plain nodes (instanced: per vertex)
+    glm::mat3 normal_matrix{1.0f};          // core::NormalMatrix(model) (instanced: the node's part)
     GLInstanceBuffer* instances = nullptr;  // instanced nodes (set just before drawing)
   };
 

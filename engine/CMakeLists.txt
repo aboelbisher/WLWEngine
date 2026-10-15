@@ -56,6 +56,7 @@ add_library(wlw STATIC
   wlw/core/log.cpp
   wlw/core/log.h
   wlw/core/mesh.h
+  wlw/core/normal_matrix.h
   wlw/core/random.h
   wlw/core/model.h
   wlw/core/profile.cpp

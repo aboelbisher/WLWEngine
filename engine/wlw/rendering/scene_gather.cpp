@@ -2,6 +2,7 @@
 
 #include <algorithm>
 
+#include "wlw/core/normal_matrix.h"
 #include "wlw/scene/camera_3d.h"
 #include "wlw/scene/light.h"
 #include "wlw/scene/scene.h"
@@ -68,10 +69,8 @@ void CullScene(const SceneGather& gather, const glm::mat4& view, const glm::mat4
     }
     scene::Node3D* node = drawable.node;
     const glm::mat4 model = node->GetModelMatrix();
-    // Normals: transpose(inverse(model)), once per node on the CPU (instanced copies do it per vertex).
-    const glm::mat3 normal_matrix =
-        node->IsInstanced() ? glm::mat3(1.0f) : glm::mat3(glm::transpose(glm::inverse(model)));
-    out.nodes.push_back({node, model, normal_matrix, ViewDepth(view, drawable.box)});
+    // Normals: the node's normal matrix, once per node (instanced copies add their own per vertex).
+    out.nodes.push_back({node, model, core::NormalMatrix(model), ViewDepth(view, drawable.box)});
   }
   for (const SceneGather::Sprites& sprites : gather.sprites) {
     if (!frustum.TestAABB(sprites.box)) {

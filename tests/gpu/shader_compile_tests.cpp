@@ -37,10 +37,10 @@ uniform vec4 uTint;
 uniform sampler2D uHeight;
 void vertex() {
   vec3 p = aPos + aNormal * (textureLod(uHeight, aUV, 0.0).r + sin(aPos.x + uWave) * 0.1);
-  vec4 world = (uInstanced ? uModel * aInstanceTransform : uModel) * vec4(p, 1.0);
+  vec4 world = WorldPosition(p);
   gl_Position = uViewProjection * world;
   vWorldPos = world.xyz;
-  vNormal = mat3(uModel) * aNormal;
+  vNormal = WorldNormal(aNormal);
   vUV = aUV;
   vColor = aColor * uTint;
 }
@@ -51,12 +51,13 @@ void fragment() {
 }
 )";
 
-// A mesh shader without vertex() (the engine's), uModel read in the fragment stage.
+// A mesh shader without vertex() (the engine's), uModel and uNormalMatrix read in the fragment stage.
 constexpr const char* kDefaultVertex = R"(shader_type mesh;
 uniform float uTime;
 void fragment() {
   vec3 local = (inverse(uModel) * vec4(vWorldPos, 1.0)).xyz;
-  FragColor = vec4(vColor.rgb * fract(local + uTime), 1.0);
+  vec3 up = normalize(uNormalMatrix * vec3(0.0, 1.0, 0.0));
+  FragColor = vec4(vColor.rgb * fract(local + uTime) * (0.5 + 0.5 * dot(normalize(vNormal), up)), 1.0);
 }
 )";
 

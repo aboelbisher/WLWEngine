@@ -10,9 +10,9 @@ uniform highp mat4 uModel;
 
 void main() {
 #ifdef INSTANCED
-  mat4 world = uModel * aInstanceTransform;
+  // Matrix-vector products only (multiplying the matrices would happen per vertex).
+  gl_Position = uLightSpace * (uModel * (aInstanceTransform * vec4(aPos, 1.0)));
 #else
-  mat4 world = uModel;
+  gl_Position = uLightSpace * uModel * vec4(aPos, 1.0);  // compilers hoist the uniform-only product
 #endif
-  gl_Position = uLightSpace * world * vec4(aPos, 1.0);
 }

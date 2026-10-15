@@ -10,6 +10,8 @@
 #include "golden.h"
 #include "wlw/rendering/instance_buffer.h"
 #include "wlw/rendering/material.h"
+#include "wlw/rendering/shader.h"
+#include "wlw/rendering/shader_material.h"
 #include "wlw/scene/camera_3d.h"
 #include "wlw/scene/light.h"
 #include "wlw/scene/node.h"
@@ -260,6 +262,115 @@ TEST_CASE("canvas") {
   canvas.Text(*font, "Golden 0.3", {128, 52}, 34, ui::Align::Center,
               {.color = {1, 1, 1, 1}, .outline = 0.06f, .shadow_offset = {2, 2}});
   CheckGolden("canvas", viewport);
+}
+
+namespace {
+
+// Nodes whose transforms turn normals in every way the renderer handles: an uneven scale, a mirror,
+// a parent's uneven scale under a child's rotation (shear), and instanced copies squashed and mirrored
+// under a scaled node. Returns the nodes that draw.
+std::vector<std::shared_ptr<scene::Node3D>> AddTransformedShapes(scene::Viewport& viewport,
+                                                                 const std::shared_ptr<rendering::Material>& material) {
+  std::vector<std::shared_ptr<scene::Node3D>> drawn;
+  auto add = [&](std::shared_ptr<core::Mesh<core::Vertex3D>> mesh, const core::Vector3& position,
+                 const core::Vector3& rotation, const core::Vector3& scale) {
+    auto node = AddMesh(viewport, std::move(mesh), material, position);
+    node->SetRotation(rotation);
+    node->SetScale(scale);
+    drawn.push_back(node);
+    return node;
+  };
+  add(utils::createSphereWithNormals(0.7f, 16, 32), {-1.5f, 1.1f, 0}, {0, 0, 25}, {1.6f, 0.6f, 1.0f});
+  add(utils::createBeveledCubeWithNormals(), {-1.5f, -1.1f, 0}, {20, 45, 10}, {-1.0f, 0.8f, 1.2f});
+
+  auto parent = std::make_shared<scene::Node3D>();
+  parent->SetPosition({1.5f, 1.1f, 0});
+  parent->SetRotation({0, 0, 40});
+  parent->SetScale({1.7f, 0.6f, 1.0f});
+  viewport.GetScene()->AddNode(parent);
+  auto child = std::make_shared<scene::Node3D>();
+  child->SetModel(MakeModel(utils::createCubeWithNormals(0.9f, Color{0.3f, 0.8f, 0.4f, 1.0f})));
+  child->SetMaterial(material);
+  child->SetRotation({30, 35, 0});
+  parent->AddNode(child);
+  drawn.push_back(child);
+
+  auto copies = add(utils::createSphereWithNormals(0.4f, 12, 24), {1.5f, -1.1f, 0}, {0, 0, 0}, {1.3f, 1.0f, 1.0f});
+  std::vector<rendering::InstanceData> instances(3);
+  instances[0].transform = glm::scale(glm::translate(glm::mat4(1.0f), {-0.7f, 0, 0}), {1.0f, 0.4f, 1.0f});
+  instances[1].transform = glm::scale(glm::rotate(glm::mat4(1.0f), 0.6f, {0, 0, 1}), {-0.8f, 1.2f, 1.0f});
+  instances[2].transform =
+      glm::scale(glm::rotate(glm::translate(glm::mat4(1.0f), {0.7f, 0, 0}), 0.9f, {1, 1, 0}), {0.5f, -1.0f, 1.5f});
+  copies->SetInstances(std::move(instances));
+  return drawn;
+}
+
+// The same shapes with every transform baked into the vertices on the CPU, normals with the textbook
+// transpose(inverse(m)): what the renderer's normals must match.
+void AddBakedShapes(scene::Viewport& viewport, const std::vector<std::shared_ptr<scene::Node3D>>& shapes) {
+  auto bake = [&](const core::Mesh<core::Vertex3D>& mesh, const std::shared_ptr<rendering::Material>& material,
+                  const glm::mat4& world) {
+    const glm::mat3 normal_matrix = glm::transpose(glm::inverse(glm::mat3(world)));
+    std::vector<core::Vertex3D> vertices = mesh.GetVertices();
+    for (core::Vertex3D& v : vertices) {
+      const glm::vec3 p = world * glm::vec4(v.position.x, v.position.y, v.position.z, 1.0f);
+      const glm::vec3 n = glm::normalize(normal_matrix * glm::vec3(v.normal.x, v.normal.y, v.normal.z));
+      v.position = {p.x, p.y, p.z};
+      v.normal = {n.x, n.y, n.z};
+    }
+    auto baked = std::make_shared<core::Mesh<core::Vertex3D>>();
+    baked->SetVertices(vertices);
+    baked->SetIndices(mesh.GetIndices());
+    AddMesh(viewport, baked, material, {0, 0, 0});
+  };
+  for (const auto& shape : shapes) {
+    const glm::mat4 world = shape->GetModelMatrix();
+    for (const auto& mesh : shape->GetModel()->meshes) {
+      if (!shape->IsInstanced()) bake(*mesh, shape->GetMaterial(), world);
+      for (const auto& copy : shape->GetInstances()) bake(*mesh, shape->GetMaterial(), world * copy.transform);
+    }
+  }
+}
+
+// Draws the shapes twice, moved by their transforms and baked, lit by a sun and a point light.
+void CheckNormalsMatchBaked(const std::string& name, const std::shared_ptr<rendering::Material>& material) {
+  auto light = [](scene::Viewport& viewport) {
+    viewport.SetCamera(std::make_shared<FixedCamera>(core::Vector3{0, 0.5f, 8}, core::Vector3{0, 0, 0}));
+    AddSun(viewport);
+    auto point = std::make_shared<scene::PointLight>();
+    point->SetPosition({0.0f, 0.0f, 2.5f});
+    point->SetColor({1.0f, 0.6f, 0.2f});
+    point->SetRange(6.0f);
+    viewport.GetScene()->AddNode(point);
+  };
+  auto transformed = MakeViewport();
+  light(*transformed);
+  const auto shapes = AddTransformedShapes(*transformed, material);
+  auto baked = MakeViewport();
+  light(*baked);
+  AddBakedShapes(*baked, shapes);
+  gpu_tests::CheckSamePictures(name, gpu_tests::Render(transformed), gpu_tests::Render(baked));
+}
+
+}  // namespace
+
+TEST_CASE("normals match inverse-transpose") {
+  // The renderer's normal matrices (core::NormalMatrix on the CPU, NormalMatrix() per instanced copy)
+  // light the shapes like the textbook transpose(inverse(m)) does. Mirrored ones too: a normal turned
+  // into the surface would light the wrong faces. No stored reference: both pictures come from this run.
+  auto lit = Opaque();
+  lit->shininess = 32.0f;
+  SUBCASE("engine shader") { CheckNormalsMatchBaked("normals_lit", lit); }
+  SUBCASE("game shader") {
+    // A mesh shader without vertex() (the engine's WorldNormal), showing the normal as a colour.
+    const auto shader = rendering::Shader::Create(R"(shader_type mesh;
+void fragment() {
+  FragColor = vec4(normalize(vNormal) * 0.5 + 0.5, 1.0);
+}
+)");
+    REQUIRE(shader->IsValid());
+    CheckNormalsMatchBaked("normals_game_shader", rendering::ShaderMaterial::Create(shader));
+  }
 }
 
 TEST_SUITE_END();

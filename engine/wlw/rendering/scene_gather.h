@@ -48,7 +48,7 @@ struct VisibleSet {
   struct Node {
     scene::Node3D* node;
     glm::mat4 model;          // world matrix (walks the parents once)
-    glm::mat3 normal_matrix;  // transpose(inverse(model)) for plain nodes; identity when instanced (per vertex)
+    glm::mat3 normal_matrix;  // core::NormalMatrix(model) (normal_matrix.h); instanced: the node's part
     float depth;              // box centre's distance in front of the camera, along its view direction
   };
   struct Sprites {

@@ -124,6 +124,38 @@ then it's deleted (listed under **Removed**).
 - Pictures: edges move by less than a pixel's shading (max 48/255 on 2% of the canvas golden image's pixels;
   identical to the eye); new `canvas` golden reference from CI.
 
+### Cofactor normals (Roadmap 1.4)
+- Normals are carried by the cofactor matrix instead of `transpose(inverse(m))`: three cross products of the
+  transform's columns, negated when the transform mirrors (det < 0). Same directions once normalized, but no
+  division by the determinant: a node scaled to 0 on an axis gets finite normals (the inverse gives inf / NaN), and
+  mirrored nodes are lit on their outside (the bare cofactor would point into them). Like Filament.
+  `core::NormalMatrix(mat3 / mat4)` (`core/normal_matrix.h`) and its GLSL twin `NormalMatrix()` in
+  `wlw/common.glsl` (with `SafeNormalize`). `NormalMatrix(a * b) == NormalMatrix(a) * NormalMatrix(b)`, so an
+  instanced draw gets the node's part from the CPU and multiplies in each copy's part per vertex.
+- CPU: `CullScene` computes it for every visible node (was a 4x4 `inverse` per plain node; MSVC 15.5 -> ~4 ns).
+  `render/cull` benchmark, Windows Release (Ryzen 7 9800X3D, alternating runs, medians of 3): 10k nodes 54.7 ->
+  39.5 us (-28%), 1k 6.0 -> 4.2 us (-30%). The benchmark's comment said the camera sees half the grid: it sees
+  about a tenth (917 of 10k).
+- GPU: `uNormalMatrix` is uploaded for every mesh draw. `mesh.vert` INSTANCED no longer inverts a 4x4 per vertex,
+  and positions go through two matrix-vector products instead of a per-vertex matrix product (`shadow.vert`
+  INSTANCED too). Mali Offline Compiler, varying variant arithmetic cycles / work registers (Mali-G78): instanced
+  mesh 6.50 -> 2.40 / 64 -> 32 (lit + shadows 6.97 -> 2.90), position variant 3.40 -> 1.90; instanced shadow
+  4.90 -> 1.90; plain mesh unchanged. Mali-G76: instanced mesh 8.08 -> 3.00 / 60 -> 30; instanced shadow 5.70
+  (arithmetic-bound) -> 1.87. 64 registers ran at half occupancy; 32 run at full.
+- Game mesh shaders: `uniform highp mat3 uNormalMatrix` in both stages; `vertex()` gets the helpers
+  `WorldPosition(local)` and `WorldNormal(normal)` (instancing included: what the engine's vertex stage does), and
+  the default vertex stage uses them. `vNormal` is unit length at the vertices. Mali-G78, default vertex stage:
+  arithmetic 6.31 -> 2.28 (plain path 4.31 -> 0.97), registers 64 -> 26 (full occupancy); load/store, the bound,
+  14 -> 16 cycles on the instanced path, 10 -> 11 on the plain one. A form with one branch over all of main()
+  keeps load/store at 14 but needs 48 registers (half occupancy).
+- glTF loading bakes node transforms into normals with `core::NormalMatrix` too.
+- Tests: `normal_matrix` suite (1000 random rotations x shears x scales, a quarter of the axes mirrored, against
+  double-precision inverse-transpose; mirrors point outward; flat transforms stay finite; the product rule);
+  `gpu: normals match inverse-transpose` draws unevenly scaled, mirrored, sheared (parent / child) and
+  instanced squashed + mirrored shapes with the engine's lit shader and a game shader, against the same shapes
+  baked on the CPU with inverse-transpose normals (no stored reference; turning off the mirror flip on the CPU or
+  in GLSL fails it with 3% of pixels). Golden references unchanged.
+
 ## 0.1.0 (2026-10-15): Phase 0, safety net and tooling
 
 The first tagged version: tests (doctest, golden images, benchmarks), CI on Windows, Linux and Android, logging,

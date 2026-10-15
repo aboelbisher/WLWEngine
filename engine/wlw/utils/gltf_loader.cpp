@@ -10,6 +10,7 @@
 #include "wlw/core/profile.h"
 #include "wlw/core/mesh.h"
 #include "wlw/core/model.h"
+#include "wlw/core/normal_matrix.h"
 #include "wlw/rendering/material.h"
 #include "wlw/rendering/texture.h"
 
@@ -81,7 +82,7 @@ const void* GetAttributePointer(const tinygltf::Model& model, const tinygltf::Pr
 void ProcessMesh(const tinygltf::Model& model, const tinygltf::Mesh& inputMesh, const std::string& nodeName,
                  const glm::mat4& transform, const std::vector<std::shared_ptr<rendering::Material>>& materials,
                  std::vector<core::Mesh3DShared>& out_meshes) {
-  glm::mat3 normalMatrix = glm::transpose(glm::inverse(glm::mat3(transform)));
+  const glm::mat3 normalMatrix = core::NormalMatrix(transform);
   for (const auto& primitive : inputMesh.primitives) {
     if (primitive.mode != TINYGLTF_MODE_TRIANGLES) continue;
     auto new_mesh = std::make_shared<core::Mesh<core::Vertex3D>>();

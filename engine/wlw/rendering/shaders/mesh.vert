@@ -4,6 +4,7 @@
 //   LIT        the scene has light nodes
 //   SHADOWS    receives the shadow light's shadow (LIT too)
 //   BLEND      the material blends (not Opaque)
+#include "wlw/common.glsl"
 #include "wlw/frame.glsl"
 #ifdef SHADOWS
 #include "wlw/shadows.glsl"
@@ -20,9 +21,7 @@ layout (location = 8) in vec4 aInstanceTint;
 #endif
 
 uniform highp mat4 uModel;
-#ifndef INSTANCED
-uniform highp mat3 uNormalMatrix;  // transpose(inverse(model)), computed once on the CPU
-#endif
+uniform highp mat3 uNormalMatrix;  // core::NormalMatrix(uModel), once per node on the CPU
 
 out mediump vec4 vColor;   // rgb + alpha (instanced: times the copy's tint)
 out mediump vec3 vNormal;  // world
@@ -34,17 +33,18 @@ out highp vec4 vLightSpacePos;  // where this vertex is in the shadow map
 
 void main() {
 #ifdef INSTANCED
-  mat4 world = uModel * aInstanceTransform;
-  mat3 normal_matrix = mat3(transpose(inverse(world)));  // per vertex: copies may be squashed
+  // The copy's transform, then the node's (matrix-vector products: cheaper than multiplying the
+  // matrices per vertex). The copy's part of the normal matrix per vertex: copies may be squashed or
+  // mirrored.
+  highp vec4 world_pos = uModel * (aInstanceTransform * vec4(aPos, 1.0));
+  highp vec3 normal = SafeNormalize(uNormalMatrix * (NormalMatrix(mat3(aInstanceTransform)) * aNormal));
   vColor = aColor * aInstanceTint;
 #else
-  mat4 world = uModel;
-  mat3 normal_matrix = uNormalMatrix;
+  highp vec4 world_pos = uModel * vec4(aPos, 1.0);
+  highp vec3 normal = SafeNormalize(uNormalMatrix * aNormal);
   vColor = aColor;
 #endif
-  vec4 world_pos = world * vec4(aPos, 1.0);
   vWorldPos = world_pos.xyz;
-  vec3 normal = normalize(normal_matrix * aNormal);
   vNormal = normal;
   vUV = aUV;
   gl_Position = uViewProjection * world_pos;

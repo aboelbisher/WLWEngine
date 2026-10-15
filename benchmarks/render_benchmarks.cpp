@@ -15,7 +15,7 @@ using namespace wlw;
 namespace {
 
 // `count` cubes on a square grid on the ground (y = 0), one in four casting shadows, plus a sun.
-// The camera (CameraMatrices) sees about half of them: culling has work both ways.
+// The camera (CameraMatrices) sees about a tenth of them (917 of 10k, 107 of 1k): culling has work both ways.
 std::shared_ptr<scene::Scene> GridScene(int count) {
   auto scene = scene::Scene::Create();
   auto model = std::make_shared<core::Model<core::Vertex3D>>();

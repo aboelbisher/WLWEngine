@@ -5,10 +5,11 @@ first (Android, iOS, web), with desktop as a full target. This plan came out of 
 architecture review. Work goes one step at a time, in order. Step ids are stable: commits name
 them ("Roadmap 4.3b: ...").
 
-**Current step:** 1.4 Cofactor normals (not planned yet) · **Updated:** 2026-10-15
+**Current step:** 1.5 Skybox after opaques (not planned yet) · **Updated:** 2026-10-16
 
-**Next session:** research and plan 1.4 (concept + exact plan in chat, wait for the OK), then implement it on a
-`<topic>/setup` branch. 1.3 is done: 1.3a and 1.3b merged 2026-10-15.
+**Next session:** research and plan 1.5 (concept + exact plan in chat, wait for the OK), then implement it on a
+branch. 1.4 is done: merged 2026-10-16 ("Next session plan: 1.4" below has its plan and outcome).
+1.3 is done: 1.3a and 1.3b merged 2026-10-15.
 1.3b (canvas shader): each pixel computes only its quad's kind. Mali-G78 longest path 2.62 -> 1.38 arithmetic cycles,
 images 0.16; Pixel 4 Threadlock canvas GPU 4.96 -> 2.30 ms (-54%), frame 7.08 -> 5.0 ms (CHANGELOG 1.3b). The owner
 chose derivatives + `texture()` inside the branches (quad-uniform flow) over the plan's `textureGrad`. Golden references
@@ -67,124 +68,40 @@ Where things stand (2026-10-15):
 - 1.3 was researched and planned on 2026-10-15 and the owner approved the plan with the recommended decisions (next
   section). Findings that belong to later steps are written into those steps: 3.6, 4.2, 6.6, 8.2, 10.2, 10.4.
 
-## Next session plan: 1.3 (approved 2026-10-15)
-*Outcome of 1.3a: the Pixel 4 reversed the mediump fragment default (see "Current step" above: GLES stays highp,
-shaders opt in where a phone measures a gain); everything else in 1.3a went as planned below.*
+## Next session plan: 1.4 (approved 2026-10-15)
+Branch `bench/normals` (so `bench.yml` runs), one squashed commit "Roadmap 1.4: cofactor normals". The owner took
+every recommended decision. *Outcome: done as below, merged 2026-10-16 (numbers: CHANGELOG 1.4). Verified: 269 tests, CI
+green with unchanged golden references, Bluzzle on the Pixel 4. Not done: a Bluzzle desktop screenshot (the capture
+came back blank).*
 
-Branch `precision/setup`, pushed so CI runs. Two sub-steps, each shown and squash-merged after approval: "Roadmap 1.3a:
-fragment precision", then "Roadmap 1.3b: canvas shader". Tick 1.3 when both are in.
+**Concept:** normals need `transpose(inverse(M3))`. Before 1.4: a 4x4 inverse on the CPU per visible plain node
+(`CullScene`), `inverse(uModel * aInstanceTransform)` per vertex in `mesh.vert` INSTANCED and in the game shaders'
+default vertex stage. The cofactor matrix (columns b×c, c×a, a×b) has the same directions with no division (finite
+when a scale is 0), negated when det < 0 so mirrored nodes stay lit outward (the bare cofactor points inward).
+Filament does the same; its prescale is skipped (we normalize per vertex in highp).
 
-**Decisions (the owner took the recommendations):**
-- Game shaders' own code stays highp unless the text opts in to mediump.
-- A GLSL ES compile check runs in CI through a desktop OpenGL ES context.
-- Arm Performance Studio (free; it contains the Mali Offline Compiler) is downloaded as its Linux archive and unpacked
-  into WSL, so nothing gets installed on Windows. If Arm's site wants an account, ask the owner to download it once.
+**Plan:**
+1. `core/normal_matrix.h`: `core::NormalMatrix(mat3)` + a mat4 overload.
+2. `CullScene`: `NormalMatrix(model)` for every visible node, instanced ones included (the node's part). The driver
+   uploads `uNormalMatrix` for every mesh draw, game shader materials too.
+3. Shaders: `wlw/common.glsl` gets `NormalMatrix(mat3)` (a `dot < 0 ? -1 : 1` sign, not `sign()`: det 0 must keep
+   the normal) and `SafeNormalize`. `mesh.vert`: `uNormalMatrix` in every variant; INSTANCED = node part x the
+   copy's `NormalMatrix()` per vertex, positions through matrix-vector products. `shadow.vert` INSTANCED the same
+   (the plain one stays: compilers hoist the uniform-only product). Game shaders: `uNormalMatrix` in both stages,
+   `WorldPosition()` / `WorldNormal()` helpers in `vertex()`, the default vertex stage uses them.
+4. `shader.h` docs (additive: no game has mesh shaders; all 5 game repos checked). glTF loader uses
+   `core::NormalMatrix`.
+5. Tests: `normal_matrix` suite against double-precision inverse-transpose (random transforms, mirrors, flat
+   transforms, product rule); `cull normal matrices` updated; GPU `normals match inverse-transpose` (transformed
+   vs CPU-baked pictures, engine shader + game shader; no stored reference); the shader compile test's game shader
+   uses the helpers. Existing golden references must not change.
+6. Measure: malioc before/after, `render/cull` before/after on Windows + Linux CI, Bluzzle desktop before/after,
+   Android build of Bluzzle + Threadlock (Pixel 4 if connected; ask before the emulator).
+7. Docs: CLAUDE.md, CHANGELOG, this file (notes for 1.5, 7.3, 8.2), the benchmark's wrong "sees about half".
 
-**Background (from the research):**
-- GLSL ES floats state their bits: `highp` = 32-bit, `mediump` = at least 16-bit, real fp16 on Mali, Adreno, PowerVR
-  and Apple GPUs (up to 2x the maths per cycle, half the registers, half the varying memory on Mali, less power). Today
-  the GLES header says `precision highp float` in both stages. Desktop GL ignores precision: no change and no gain there.
-- fp16 has 11 significant bits and tops out at 65504. Its steps: world positions at 32-64 units, 1/32 unit; UVs near 1,
-  1/2048 (a whole texel of a 2048 px texture; a 2560 px picture can't be read texel by texel); pixel coordinates at
-  2048-4096, 2 px; time after 17 minutes, 1 s (infinity after 18 hours); cos near 1, 0.0005 (banded specular). Depth
-  needs 24 bits.
-- GLSL ES 3.00: a uniform declared in both stages needs the same precision in both, and so do uniform-block members;
-  varyings may differ. The vertex default is highp, so a mediump fragment default makes every shared declaration
-  mismatch and strict drivers refuse to link: nothing draws. Mali's driver errors; Mesa's linker errors on default-block
-  uniforms and on structs inside blocks, but not on plain block members. Shared today: the `WlwFrame` block, `uModel` in
-  game mesh shaders, and any game uniform used in both `vertex()` and `fragment()`.
-- How others do it: Unreal runs mobile pixel shaders in half precision by default, with a per-material "Use Full
-  Precision" and a project-wide precision mode. Unity picks `float` or `half` per variable (half for everything but
-  positions and UVs). Godot 4 is highp unless a variable opts in (Godot 3's low-precision mobile default broke custom
-  shaders). Filament: mediump fragments, highp interpolants. The PowerVR and Arm guides: mediump except positions,
-  matrices, texture coordinates, depth samplers and complex functions on large values.
-- No software GPU has fp16 (llvmpipe runs mediump as fp32), so precision artifacts only show on phones. No phone was
-  connected on 2026-10-15. The emulator AVD `Medium_Phone_API_37.0` exists: it checks ES compile and link, but its
-  maths is fp32.
-
-**1.3a Fragment precision**
-1. Per-stage headers from a GL-free, unit-tested function (e.g. `rendering/glsl_header.h`; `kGLSLHeader` goes):
-   - GLES vertex: `precision highp float; precision highp int;`.
-   - GLES fragment: `precision mediump float; precision highp int;`. Integers stay 32-bit: hashes and bit tricks break
-     at 16 bits, and our fragment shaders barely use integers.
-   - Sampler defaults, identical in both stages (a sampler declared in both must match): `sampler2D`, `sampler3D`,
-     `samplerCube` and `sampler2DArray` mediump (fp16 holds RGBA8 and RGBA16F exactly); shadow samplers and integer
-     samplers highp. This also fixes two latent bugs. ES has no default for 3D, array, shadow or integer samplers, so a
-     game shader using one fails on phones only. And `sampler2D`'s ES default is lowp, whose spec range is +-2: HDR from
-     RGBA16F pictures (bloom, metaballs) may legally clip (real GPUs treat lowp as fp16, so it never showed).
-   - Desktop unchanged (`#version 330 core`).
-2. Every engine shader names the precision of each uniform, block/struct member and varying:
-   - highp: positions and matrices; texture coordinates (mesh `vUV`, skybox direction, font atlas, post `vUV`);
-     pixel and canvas coordinates (`uSize`, `uTexel`, `uOutputSize`, the UI's `vUV` and `vParams`: a 600-unit arc radius
-     would move in half-unit steps); shadow-map coordinates; distances and attenuation; spot-cone cosines; the specular
-     N·H and `pow`. The specular term is computed from mediump vectors through highp copies (`highp vec3 n = normal;
-     highp vec3 h = normalize(...)`), with no formula change. Bluzzle's blocks use shininess 64 (about 22 bands down to
-     half brightness in fp16) and its floor 1000 (anything within 0.00024 of 1 rounds to exactly 1: a full highlight
-     with rings).
-   - mediump: colours, normals, light colours and directions, ambient, coverage and anti-aliasing maths, sprite dots,
-     and the blur, bloom and threshold maths.
-   - An operation runs at the highest precision of its operands, so a highp input makes everything it touches highp.
-     Subtract positions in highp first (camera minus surface), then let the small result go mediump.
-   - Per file: `wlw/frame.glsl` (matrices, `uCameraPos`, `uShadowParams`, light positions, the spot direction and cone
-     highp; `uLightCounts` highp `ivec4`; light colours, directional directions, ambient, attenuation, `uOrthographic`,
-     `uViewForward`, `uShadowStrength` mediump); `lighting.glsl` (position parameters, offsets, distances, attenuation,
-     the spot's theta highp); `shadows.glsl` (the lookup position and `p` highp); `mesh.*` (`vWorldPos`, `vUV`,
-     `vLightSpacePos` highp; `vColor`, `vNormal` mediump); `sprite.*` (`vCorner`, `vColor` mediump); `skybox.*`
-     (`vDirection` highp); `ui.*` (`vUV`, `vParams` highp, `vColor` mediump; big subtractions stay highp inside the
-     coverage functions); `custom/*` (`vUV`, `uSize`, `uTexel`, `uOutputSize`, `vWorldPos` and `uModel` highp, `uModel`
-     in both stages; `vColor`, `vNormal` mediump); `post/*` (the engine's effects, written in the game format:
-     `precision mediump float;` after `shader_type`, `vUV` stays highp).
-   - Vertex shaders stay highp (positions dominate there). ImGui keeps its own shaders (already highp vertex and
-     mediump fragment).
-3. Game shaders (`Shader::Create`): their own code is highp unless the text says `precision mediump float;`. The custom
-   fragment preludes end with `precision highp float;`. `shader.h` gets a Precision section (what must stay highp, how to
-   opt in) and shows each input's precision. Example: Ripple's water shader (its own repo, not on this engine version
-   yet) would break under mediump: `vUV * uSize`, a `Hash` that multiplies by 456, `uTime`, `pow(glint, 2500.0)`.
-4. Cvar `r.mediump` (bool, default 1, ReadOnly, read when programs compile; defined in rendering, like
-   `profile.gpu_zones`): 0 makes the fragment default highp. One build can then A/B GPU time on a phone, and a suspected
-   precision artifact can be checked in seconds.
-5. On GLES, the startup log and the engine panel show the fragment mediump format (`glGetShaderPrecisionFormat`):
-   "16-bit", or "32-bit: no gain here". On desktop: "ignored".
-6. Tests:
-   - CPU (`shader_system_tests`): the header text per stage, dialect and cvar value; a precision lint over the engine's
-     shader files: every uniform, block/struct member and varying names highp or mediump (`.vert` and `*_vertex.glsl` =
-     vertex stage, their `in` attributes exempt; `.frag` and `*_fragment.glsl` = fragment stage, their `out` exempt;
-     files with `shader_type` exempt). Update the file's comment "(Compiling GLSL needs a GPU...)".
-   - GPU (`tests/gpu`; Linux CI on llvmpipe, and locally): compile and link every engine program (32 mesh variants,
-     shadow x2, sprite x2, skybox, UI), the post effects, and sample game shaders of each type (one with a uniform used
-     in `vertex()` and `fragment()`, one opting in to mediump, one using `sampler3D`, `sampler2DArray` and `isampler2D`),
-     twice: as GLSL 3.30, and as GLSL ES 3.00 in a desktop OpenGL ES 3.0 context. That context comes from a new
-     `WindowOptions::gles` (desktop only: GLFW `GLFW_OPENGL_ES_API` 3.0) plus a platform query the backend uses to pick
-     the ES header. If Mesa's GLX can't make an ES context under xvfb, use EGL (one more apt package). glad's GL loader
-     loads functions by the ES version number (ES 3.2 gives the GL 3.2 functions, enough to compile); if a driver
-     reports ES 3.0, load the uniform-block functions by name. `wlw_gpu_tests --dump-shaders <dir>` writes the final ES
-     sources.
-   - Golden images: unchanged, no new references (desktop ignores precision, and no formula changes).
-7. Measure:
-   - Mali Offline Compiler (`malioc --core <Mali-G78 / G57 / G76> <file>.frag` on the dumped ES sources): work
-     registers, 16-bit arithmetic %, cycles, before (main's shaders with the old header) and after. Anything that comes
-     out slower goes back to highp (converting between 16 and 32 bits costs cycles).
-   - A phone when one is at hand: Bluzzle's GPU ms with `r.mediump` 1 vs 0. Pending otherwise (Test Lab is 6.6).
-   - Desktop: nothing to measure (precision is ignored), and the CPU benchmarks don't touch shaders.
-8. Done when: CI is green; Bluzzle looks identical on desktop; Bluzzle and Threadlock run on the emulator with no
-   shader errors in logcat; Snake compiles; CLAUDE.md (GLES rules: the precision rule, `r.mediump`, the desktop ES
-   context), CHANGELOG and ROADMAP are updated. No game code changes: the games get it with v0.2.0.
-
-**1.3b Canvas shader** (found in the 1.3 research): `ui.frag` computes all four coverage functions for every pixel of
-every quad (the text's texture read and `fwidth`, the rect, the triangle, the arc with a `sin` and `cos`), because
-`fwidth` needs all four pixels of a 2x2 block to run it. Make each pixel compute only its own kind.
-*Outcome: done as below except the texture reads: the owner chose (2026-10-15) derivatives and `texture()` inside the
-branches (quad-uniform control flow: the kind is flat, a 2x2 block is one triangle), which made images 4.7x cheaper on
-Mali than `textureGrad`; the text gets the field range itself (`Font::DistanceRange`), not the padding. Numbers: CHANGELOG 1.3b.*
-- Take the derivatives once, in uniform control flow (`dFdx`/`dFdy` of `vUV` and of the triangle's third edge distance).
-- Per-quad constants (the kind; the arc's `sin`/`cos`, computed in `ui.vert`) become flat varyings.
-- Branch per kind; read textures only in the text and image branches (`textureGrad` with the derivatives taken
-  earlier: the same sampling as today).
-- Anti-aliasing widths from those derivatives: shapes through the chain rule with their distance gradient; text from
-  the distance field's screen-pixel range (the font's `padding` in the free `params.z`, the atlas size from
-  `textureSize`: the formula MSDF uses, so 10.2 keeps it).
-- Edges may move slightly: new canvas golden references from CI, reviewed. Measure `ui.frag` with `malioc` before and
-  after (and on a phone when one is at hand); check Threadlock (UI-heavy) and Bluzzle's UI.
+**Decisions after review (owner, 2026-10-16):** back-face culling stays with 8.2 (noted there). Game shaders' default
+vertex stage keeps the `WorldPosition` / `WorldNormal` helper form (Mali-G78: 26 registers, full occupancy, load/store
+14 -> 16 cycles) over one branch around all of `main()` (load/store 14, 48 registers, half occupancy).
 
 ## How a step runs
 1. Concept and plan in chat: why it exists, the trade-offs, how the big engines do it, exactly
@@ -302,9 +219,10 @@ libunibreak (zlib), msdfgen (MIT), Jolt (MIT), Box2D v3 (MIT), ImGuizmo (MIT), F
   GLSL ES compile check in CI through a desktop ES context; Mali Offline Compiler numbers, GPU time on a real phone
   when one is at hand (or Test Lab). Split: **1.3a** precision *(done 2026-10-15, commit "Roadmap 1.3a: fragment precision")*, **1.3b** canvas shader *(done 2026-10-15, commit "Roadmap 1.3b: canvas shader"; Pixel 4 Threadlock canvas 4.96 -> 2.30 ms)* (each pixel computes only its
   own quad kind).
-- [ ] **1.4 Cofactor normals.** Replace the per-vertex `inverse()` and the CPU inverse; correct for
+- [x] **1.4 Cofactor normals.** *(done 2026-10-16, commit "Roadmap 1.4: cofactor normals"; render/cull 10k 54.7 -> 39.5 us; Mali-G78 instanced mesh vertex 6.50 -> 2.40 arithmetic cycles, 64 -> 32 registers)* Replace the per-vertex `inverse()` and the CPU inverse; correct for
   mirrored transforms; tested against inverse-transpose.
-- [ ] **1.5 Skybox after opaques.** Depth test `LEQUAL`; golden image.
+- [ ] **1.5 Skybox after opaques.** Depth test `LEQUAL`; golden image. (From 1.4: `skybox.vert` multiplies
+  `uProjection * mat4(mat3(uView))` per vertex: one matrix-vector chain, or the product on the CPU, instead.)
 - [ ] **1.6 Instances.** 52-byte instances (3x4 matrix + RGBA8), instance bounds cached on change,
   a `WriteInstances(count)` span API; Bluzzle's particles use it.
 
@@ -453,7 +371,9 @@ libunibreak (zlib), msdfgen (MIT), Jolt (MIT), Box2D v3 (MIT), ImGuizmo (MIT), F
   vertex colours, tangents (MikkTSpace), skins, animations, morph targets, `KHR_lights_punctual`,
   `KHR_texture_transform`, `KHR_mesh_quantization`, `KHR_texture_basisu`, `EXT_meshopt_compression`.
   meshoptimizer for cache / fetch / overdraw order, quantization and LODs. Output: a binary
-  ModelAsset instantiated into nodes (this also fixes loading models from the APK).
+  ModelAsset instantiated into nodes (this also fixes loading models from the APK). (From 1.4: a glTF node
+  with a mirroring transform (det < 0) flips its triangles' winding; glTF says to reverse it when importing.
+  The baked normals already point out: `core::NormalMatrix`.)
 - [ ] **7.4 Fonts.** Cooked fonts: the TTF, prebaked MSDF atlas pages for chosen ranges, metrics.
 - [ ] **7.5 Audio.** Decode and resample at cook time; load types Decompress / CompressedInMemory /
   Streaming; PCM16 or ADPCM for effects, Vorbis for long clips; mono stays mono.
@@ -473,7 +393,9 @@ libunibreak (zlib), msdfgen (MIT), Jolt (MIT), Box2D v3 (MIT), ImGuizmo (MIT), F
   fp16 can't hold N·H near 1, so the specular terms stay highp or use Filament's form (1 - (N·H)²
   as |N×H|², exact in mediump); malioc checks the result. A way to turn specular off (a specular
   strength or colour, 0 = no highlight): Bluzzle's floor gets "no shine" from shininess 1000 today
-  and moves to it then.
+  and moves to it then. From 1.4: the engine never turns on back-face culling. Single-sided materials want it,
+  and a mirrored node (det < 0) then needs the front face flipped (`glFrontFace(GL_CW)`), and instanced copies
+  that mirror split into their own draw (Godot: `CULL_VARIANT_REVERSED`). Normals already stay outward.
 - [ ] **8.3 Environment lighting.** Skybox (cube, equirect), procedural sky, IBL (prefiltered
   specular, SH9 irradiance, BRDF LUT; cooked offline, computed at runtime for dynamic skies),
   reflection probes (baked, box-projected, blended).

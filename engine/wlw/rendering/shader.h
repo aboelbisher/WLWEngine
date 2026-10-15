@@ -53,12 +53,18 @@ namespace wlw::rendering {
 //   out vec4 FragColor;   // premultiplied alpha (rgb * a), like the rest of the UI
 //
 // Mesh shaders. Without vertex() the engine's does the usual transform (instancing included).
-//   Both stages:          uniform highp mat4 uModel; the frame block (wlw/frame.glsl): uView, uProjection,
-//                         uViewProjection, uCameraPos (highp vec3), the lights, the shadow light...
+//   Both stages:          uniform highp mat4 uModel; uniform highp mat3 uNormalMatrix (the node's normals
+//                         to world space, not unit length: core/normal_matrix.h); the frame block
+//                         (wlw/frame.glsl): uView, uProjection, uViewProjection, uCameraPos (highp vec3),
+//                         the lights, the shadow light...
 //   vertex() gets:        in aPos, aColor (vec4), aNormal, aUV; aInstanceTransform (mat4),
 //                         aInstanceTint (vec4); uniform bool uInstanced;
+//                         helpers WorldPosition(local) = vec4 in world space and WorldNormal(normal) =
+//                         unit world normal (instanced copies included; what the engine's vertex stage
+//                         does) and wlw/common.glsl (NormalMatrix(mat3), SafeNormalize);
 //                         sets gl_Position and out vWorldPos, vNormal, vUV, vColor.
-//   fragment() gets:      in highp vec3 vWorldPos; in mediump vec3 vNormal (world, not normalized);
+//   fragment() gets:      in highp vec3 vWorldPos; in mediump vec3 vNormal (world; unit length at the
+//                         vertices, not in between: normalize it);
 //                         in highp vec2 vUV; in mediump vec4 vColor; out vec4 FragColor;
 //                         FragColor is premultiplied alpha (rgb * a); it only blends if the
 //                         material's `blend` isn't Opaque (see blend_mode.h).

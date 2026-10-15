@@ -4,8 +4,9 @@
 #include "wlw/frame.glsl"
 
 uniform highp mat4 uModel;
+uniform highp mat3 uNormalMatrix;  // carries the node's normals to world space (not unit length)
 in highp vec3 vWorldPos;
-in mediump vec3 vNormal;  // world, not normalized
+in mediump vec3 vNormal;  // world; unit length at the vertices, not in between (normalize it)
 in highp vec2 vUV;
 in mediump vec4 vColor;
 out vec4 FragColor;       // premultiplied alpha

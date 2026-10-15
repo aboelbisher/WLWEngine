@@ -60,16 +60,39 @@ std::shared_ptr<scene::Viewport> MakeViewport() {
   return viewport;
 }
 
-void CheckGolden(const std::string& name, const std::shared_ptr<scene::Viewport>& viewport) {
+testing::Image Render(const std::shared_ptr<scene::Viewport>& viewport) {
   Gpu& gpu = GetGpu();
   REQUIRE_MESSAGE(gpu.ok, "no GL 3.3 context (on Linux CI: run under xvfb-run with Mesa)");
   rendering::RenderingDriver& driver = *gpu.engine->GetRenderingDriver();
 
   const int id = gpu.window->AddViewport(viewport);
   driver.DrawWindow(gpu.window);
-  testing::Image actual{kSize, kSize, driver.ReadPixels(*viewport->GetTarget())};
+  testing::Image picture{kSize, kSize, driver.ReadPixels(*viewport->GetTarget())};
   gpu.window->RemoveViewport(id);
-  REQUIRE_MESSAGE(actual.rgba.size() == size_t{kSize} * kSize * 4, "nothing was drawn into the viewport");
+  REQUIRE_MESSAGE(picture.rgba.size() == size_t{kSize} * kSize * 4, "nothing was drawn into the viewport");
+  return picture;
+}
+
+void CheckSamePictures(const std::string& name, const testing::Image& a, const testing::Image& b) {
+  // The same GPU drew both, so only rounding differs (e.g. edges where a vertex moved by an ulp).
+  const testing::CompareSettings settings{.channel_tolerance = 3, .max_bad_fraction = 0.002};
+  const testing::CompareResult result = testing::CompareImages(a, b, settings);
+  const std::filesystem::path output = WLW_GPU_OUTPUT;
+  if (!result.passed) {
+    std::filesystem::create_directories(output);
+    testing::SavePng((output / (name + ".a.png")).string(), a);
+    testing::SavePng((output / (name + ".b.png")).string(), b);
+    testing::SavePng((output / (name + ".diff.png")).string(), result.diff);
+  }
+  INFO(name << ": " << result.bad_pixels << " pixels differ by more than " << settings.channel_tolerance << " ("
+            << result.bad_fraction * 100.0 << "%, allowed " << settings.max_bad_fraction * 100.0
+            << "%), largest difference " << result.max_difference << "; pictures in " << output.string());
+  CHECK(result.passed);
+}
+
+void CheckGolden(const std::string& name, const std::shared_ptr<scene::Viewport>& viewport) {
+  const testing::Image actual = Render(viewport);
+  rendering::RenderingDriver& driver = *GetGpu().engine->GetRenderingDriver();
 
   const std::filesystem::path reference_path = std::filesystem::path(WLW_GPU_REFERENCES) / (name + ".png");
   const std::filesystem::path output = WLW_GPU_OUTPUT;
