@@ -1,8 +1,10 @@
 #include "golden.h"
 
 #include <filesystem>
+#include <utility>
 
 #include "support/image_compare.h"
+#include "wlw/platform/platform.h"
 #include "wlw/rendering/render_target.h"
 #include "wlw/scene/window.h"
 #include "wlw/wlw.h"
@@ -11,6 +13,7 @@ namespace wlw::gpu_tests {
 namespace {
 
 bool g_update = false;
+std::string g_dump_directory;
 
 // One engine and hidden window per process (ctest runs every case in its own process).
 struct Gpu {
@@ -40,6 +43,16 @@ testing::CompareSettings SettingsFor(const std::string& gpu_name) {
 }  // namespace
 
 void SetUpdateReferences(bool update) { g_update = update; }
+
+bool UseGpuContext() {
+  Gpu& gpu = GetGpu();
+  if (!gpu.ok) return false;
+  gpu.window->MakeContextCurrent();
+  return platform::LoadGLFunctions();
+}
+
+void SetShaderDumpDirectory(std::string directory) { g_dump_directory = std::move(directory); }
+const std::string& ShaderDumpDirectory() { return g_dump_directory; }
 
 std::shared_ptr<scene::Viewport> MakeViewport() {
   auto viewport = scene::Viewport::Create({.name = "golden", .clear = core::Color{0.08f, 0.09f, 0.14f, 1.0f}});

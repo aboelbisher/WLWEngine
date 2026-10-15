@@ -32,4 +32,12 @@ void CheckGolden(const std::string& name, const std::shared_ptr<scene::Viewport>
 // Set by main from --update.
 void SetUpdateReferences(bool update);
 
+// The golden tests' GL 3.3 context (the hidden window), made current with its GL functions loaded,
+// e.g. after another context was used. False if there is none.
+bool UseGpuContext();
+
+// Where --dump-shaders <dir> writes every compiled stage's final text (shader_compile_tests.cpp); empty = nowhere.
+void SetShaderDumpDirectory(std::string directory);
+const std::string& ShaderDumpDirectory();
+
 }  // namespace wlw::gpu_tests

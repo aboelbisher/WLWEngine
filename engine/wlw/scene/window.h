@@ -2,6 +2,7 @@
 #include <memory>
 #include <string>
 #include <functional>
+#include <utility>
 #include <vector>
 
 #include "wlw/core/color.h"
@@ -19,6 +20,10 @@ struct WindowOptions {
   // screen then always draws its 3D into its scene picture (its own depth) and copies it out, even
   // at render scale 1: for games whose screen is post-processed or render-scaled anyway.
   bool depth = true;
+  // Desktop only: an OpenGL ES 3.0 context instead of OpenGL 3.3 core, so shaders compile as GLSL ES
+  // like on phones (tests/gpu checks every shader that way). For compiling shaders, not for running
+  // a game: the renderer's desktop paths assume desktop GL. Phones are always ES.
+  bool gles = false;
 };
 
 // A drawable surface (the OS window / the phone's screen) + its input + what it shows: the
@@ -127,6 +132,11 @@ class Window {
   void SetGpuTimingSupported(bool supported) { gpu_timing_supported_ = supported; }
   void SetGpuFrameMs(float ms) { gpu_frame_ms_ = ms; }
 
+  // What fragment shaders' mediump floats are on this GPU (rendering/glsl_header.h): "16-bit",
+  // "32-bit: no gain here", "ignored (desktop GL)"; set by the renderer when it starts.
+  const std::string& FragmentPrecision() const { return fragment_precision_; }
+  void SetFragmentPrecision(std::string text) { fragment_precision_ = std::move(text); }  // for the renderer
+
   // ---- Framebuffer invalidation (GLES: glInvalidateFramebuffer) ----
   // Tells phone GPUs which pictures they needn't load before drawing or store after (depth after
   // the 3D, post textures about to be overwritten): memory bandwidth saved. On by default; the
@@ -168,6 +178,7 @@ class Window {
   bool screen_depth_ = true;
   bool gpu_timing_ = WLW_DEBUG_UI != 0;
   bool gpu_timing_supported_ = false;
+  std::string fragment_precision_;
   float gpu_frame_ms_ = -1.0f;
   bool invalidate_framebuffers_ = true;
   int target_fps_ = 60;

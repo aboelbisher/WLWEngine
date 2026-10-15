@@ -7,17 +7,17 @@
 #include "wlw/shadows.glsl"
 #endif
 
-in vec4 vColor;
-in vec3 vNormal;
-in vec3 vWorldPos;
-in vec2 vUV;
+in mediump vec4 vColor;
+in mediump vec3 vNormal;
+in highp vec3 vWorldPos;
+in highp vec2 vUV;
 #ifdef SHADOWS
-in vec4 vLightSpacePos;
+in highp vec4 vLightSpacePos;
 #endif
 
-uniform float uShininess;  // specular highlight sharpness
+uniform highp float uShininess;  // specular highlight sharpness
 #ifdef TEXTURED
-uniform sampler2D uTexture;  // texture unit 0; replaces the vertex colour (keeps its alpha)
+uniform mediump sampler2D uTexture;  // texture unit 0; replaces the vertex colour (keeps its alpha)
 #endif
 
 out vec4 FragColor;

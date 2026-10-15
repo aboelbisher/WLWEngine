@@ -72,6 +72,37 @@ then it's deleted (listed under **Removed**).
 - Fixed: a canvas shader's `uSize` in a Picture layer of a render-scaled viewport was in full-size pixels; it is
   now in the pixels the layer is drawn at.
 
+### Fragment precision (Roadmap 1.3a)
+- GLES shaders stay highp by default (floats and ints, both stages); a shader opts in to fp16 with its own
+  `precision mediump float;`. The plan was a mediump fragment default, and the Mali Offline Compiler favoured
+  it (lit meshes 44-48 -> 31 work registers on Mali-G76/G78), but the Pixel 4 (Adreno 640) measured it slower:
+  Bluzzle's lit 3D pass 6.21 ms vs 5.75 ms highp (+8%; its UI pass identical, so the clocks were equal), and
+  shaders that start mediump and switch back to highp were slower still (6.96 ms). Opting the post effects in
+  made Threadlock's blur + threshold 2% slower (1.27 vs 1.24 ms). So no engine shader opts in until a phone
+  shows a gain (a Mali phone or Test Lab, 6.6). Desktop GL ignores precision (golden images identical).
+- `rendering/glsl_header.h`: `GlslHeader(dialect, stage)` builds the text before every stage (GL-free, tested);
+  `kGLSLHeader` (gl.h) is gone. Every sampler type has a default precision, the same in both stages: sampler2D,
+  3D, Cube, 2DArray mediump; shadow and integer samplers highp. Fixed: a game shader using `sampler3D`,
+  `sampler2DArray`, a shadow or an integer sampler failed to compile on phones only (ES has no default for
+  them), and `sampler2D`'s ES default was lowp (spec range +-2: HDR reads from RGBA16F pictures could clip).
+- Every engine uniform, uniform-block member and varying names its precision (GLSL ES needs both stages to
+  agree, whatever default each uses): highp for positions, matrices, texture / pixel / canvas coordinates,
+  shadow coordinates, distances, attenuation, spot cones and the specular term; mediump for colours, normals
+  and light colours and directions. A test lints the shader files for it. `wlw/lighting.glsl` keeps its
+  positions, distances and specular highp inside, so a game shader that opts in still lights correctly.
+- **Games' shaders**: highp unless the text says `precision mediump float;` after `shader_type`; `shader.h` has
+  a Precision section (what fp16 can't hold, measure before keeping it). The preludes say each input's precision.
+- Cvar `r.mediump` (default 1, read-only after start): 0 turns every `precision mediump float;` opt-in into
+  highp (`ApplyMediumpSetting`), to A/B a phone's GPU time or check whether an artifact is a precision one. The
+  startup log and the engine panel show what mediump is on the GPU (`Window::FragmentPrecision()`: "16-bit",
+  "32-bit: no gain here", "ignored (desktop GL)").
+- `WindowOptions::gles` (desktop): an OpenGL ES 3.0 context, and `platform::CurrentContextIsES()`; the GPU tests
+  (`gpu: glsl 330`, `gpu: glsl es 300`) compile and link every engine program (32 mesh variants, shadow, sprite,
+  skybox, UI, post effects) and sample game shaders (a uniform and a sampler in both stages, a mediump opt-in,
+  3D / array / integer / shadow samplers) in both languages, on CI's Mesa too; both Mesa and NVIDIA refuse a
+  precision mismatch. `wlw_gpu_tests --dump-shaders <dir>` writes the final sources (`SetShaderSourceObserver`)
+  for the Mali Offline Compiler.
+
 ## 0.1.0 (2026-10-15): Phase 0, safety net and tooling
 
 The first tagged version: tests (doctest, golden images, benchmarks), CI on Windows, Linux and Android, logging,

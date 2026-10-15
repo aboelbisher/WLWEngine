@@ -9,10 +9,10 @@ layout (location = 3) in vec2 aUV;
 layout (location = 4) in mat4 aInstanceTransform;
 layout (location = 8) in vec4 aInstanceTint;
 
-uniform mat4 uModel;
+uniform highp mat4 uModel;
 uniform bool uInstanced;
 
-out vec3 vWorldPos;
-out vec3 vNormal;
-out vec2 vUV;
-out vec4 vColor;
+out highp vec3 vWorldPos;
+out mediump vec3 vNormal;
+out highp vec2 vUV;
+out mediump vec4 vColor;

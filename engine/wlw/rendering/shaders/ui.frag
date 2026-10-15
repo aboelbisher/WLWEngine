@@ -9,11 +9,11 @@
 #define KIND_TRIANGLE 5
 #define KIND_ARC 6
 
-in vec2 vUV;
-in vec4 vColor;
-in vec4 vParams;
+in highp vec2 vUV;
+in mediump vec4 vColor;
+in highp vec4 vParams;
 
-uniform sampler2D uTexture;  // unit 0: the run's font atlas, image, or a white texel
+uniform mediump sampler2D uTexture;  // unit 0: the run's font atlas, image, or a white texel
 
 out vec4 FragColor;
 
@@ -29,15 +29,15 @@ float TextCoverage() {
 // A rectangle with rounded corners: vUV = the position from its centre, vParams.yz = its half
 // size, vParams.w = the corner radius; the signed distance to a rounded box, anti-aliased.
 float RoundedRectCoverage() {
-  vec2 q = abs(vUV) - vParams.yz + vParams.w;
-  float d = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - vParams.w;
+  highp vec2 q = abs(vUV) - vParams.yz + vParams.w;
+  highp float d = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - vParams.w;
   return clamp(0.5 - d / max(fwidth(d), 1e-4), 0.0, 1.0);
 }
 
 // A triangle: vUV.x, vUV.y and vParams.y = the distances to its three edges (positive inside),
 // interpolated exactly because they're linear; the nearest edge decides.
 float TriangleCoverage() {
-  float d = min(min(vUV.x, vUV.y), vParams.y);
+  highp float d = min(min(vUV.x, vUV.y), vParams.y);
   return clamp(0.5 + d / max(fwidth(d), 1e-4), 0.0, 1.0);
 }
 
@@ -45,9 +45,9 @@ float TriangleCoverage() {
 // frame whose +y points at the middle of the arc; vParams.y = radius, z = half thickness, w = half
 // the sweep (pi = a whole ring).
 float ArcCoverage() {
-  vec2 p = vec2(abs(vUV.x), vUV.y);
-  vec2 sc = vec2(sin(vParams.w), cos(vParams.w));
-  float d = (sc.y * p.x > sc.x * p.y) ? length(p - sc * vParams.y) : abs(length(p) - vParams.y);
+  highp vec2 p = vec2(abs(vUV.x), vUV.y);
+  highp vec2 sc = vec2(sin(vParams.w), cos(vParams.w));
+  highp float d = (sc.y * p.x > sc.x * p.y) ? length(p - sc * vParams.y) : abs(length(p) - vParams.y);
   d -= vParams.z;
   return clamp(0.5 - d / max(fwidth(d), 1e-4), 0.0, 1.0);
 }

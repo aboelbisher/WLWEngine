@@ -106,6 +106,8 @@ add_library(wlw STATIC
   wlw/rendering/gl_shader.h
   wlw/rendering/gl_instance_buffer.h
   wlw/rendering/gl_vertex_buffer.h
+  wlw/rendering/glsl_header.cpp
+  wlw/rendering/glsl_header.h
   wlw/rendering/index_buffer.h
   wlw/rendering/instance_buffer.h
   wlw/rendering/material.h

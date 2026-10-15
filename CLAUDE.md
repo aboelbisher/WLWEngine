@@ -103,6 +103,9 @@ engine/wlw/
               cmake/EmbedShaders.cmake (shader_library.h: FindShaderFile, AddShaderFile for a game's own includes).
               shader_preprocessor.h: #include (once, cycles reported), #defines, #line + MapShaderLog (errors name file:line).
               gl_program.h: BuildProgram / BuildEngineProgram = the one way programs are made (binds the frame block).
+              glsl_header.h: GlslHeader(dialect, stage) = #version + GLES default precisions (highp floats; every sampler
+              type defaulted), ApplyMediumpSetting (cvar r.mediump 0 = shaders' `precision mediump float;` opt-ins
+              off), CurrentGlslDialect() from the context; Window::FragmentPrecision() (log + engine panel).
               Per-frame UBO WlwFrame (frame.glsl) <-> FrameUniforms (frame_uniforms.h, std140 offsets tested): camera,
               lights by type (up to 4 directional + 4 point + 4 spot; SetFrameLights), shadow params.
               Variants (mesh_variant.h): INSTANCED, TEXTURED, LIT, SHADOWS, BLEND as #defines, one cached program per
@@ -216,6 +219,11 @@ tests/        engine unit tests (no window/GPU: quality levels (down/up, back-of
               .diff.png to build/<preset>/tests/gpu/gpu_output/ (CI: the gpu-output artifact). wlw_gpu_tests --update
               rewrites references from this GPU: only commit llvmpipe ones. A rendering change that changes pictures
               on purpose = new references from CI's artifact, reviewed like code. Windows CI skips them (-LE gpu).
+              Same binary: shader_compile_tests.cpp ("gpu: glsl 330", "gpu: glsl es 300") compiles + links every engine
+              program and sample game shaders as GLSL 3.30 and in a desktop OpenGL ES 3.0 context (Mesa / NVIDIA both
+              refuse a precision mismatch); --dump-shaders <dir> writes the final sources. Mali Offline Compiler:
+              Arm Performance Studio's Linux archive is unpacked in WSL (~/arm/Arm_Performance_Studio_2026.5/
+              mali_offline_compiler/malioc --core Mali-G78 x.frag; from Git Bash with MSYS_NO_PATHCONV=1).
 benchmarks/   wlw_benchmarks (nanobench; top-level only, desktop + Android executable): no window/GPU, fixed seeds, one op =
               one frame's work. Groups: render (gather/cull/sort 1k, 10k), transform (flat/nested 1k, 10k), fx (flow 20k,
               particles 5k), ui (text 1k glyphs), audio (mix 24 voices). Add: WLW_BENCHMARK("group") { ctx.Run("group/name",
@@ -236,9 +244,20 @@ vcpkg/ + vcpkg.json     GLFW only (desktop); everything else is vendored in thir
   Android or other OS headers. Shared code talks to `platform.h`, `scene::Window` and `input::Input`.
 - **Keep everything GLES 3.0 compatible**, because one renderer serves desktop and mobile:
   - Include GL through `wlw/rendering/gl.h` only (never `<glad/glad.h>` or `<GLES3/gl3.h>` directly).
-  - Shader sources have **no `#version` line**. The driver prepends `kGLSLHeader`
-    (`#version 330 core` / `#version 300 es` + precision). They must compile as both GLSL 3.30
-    and GLSL ES 3.00 (no `texture2D`, no `gl_FragColor`, no desktop-only built-ins).
+  - Shader sources have **no `#version` line**. The driver prepends `GlslHeader` (rendering/glsl_header.h:
+    `#version 330 core` / `#version 300 es` + default precisions). They must compile as both GLSL 3.30
+    and GLSL ES 3.00 (no `texture2D`, no `gl_FragColor`, no desktop-only built-ins); the GPU tests
+    `gpu: glsl 330` / `gpu: glsl es 300` compile every program both ways (a desktop ES context, `WindowOptions::gles`).
+  - **Precision:** GLES floats and ints default to highp in both stages. A shader opts in to fp16 with its own
+    `precision mediump float;` only where a phone measured it faster: none in the engine yet (Adreno 640: a
+    mediump fragment default made Bluzzle's lit 3D 8% slower, the post effects' opt-in 2%; Mali unmeasured on a
+    phone). Cvar `r.mediump` 0 turns every opt-in off for A/B.
+    Every uniform, block/struct member and varying in an engine shader file
+    names `highp` or `mediump` (both stages must agree; the "precision lint" test checks): highp for positions,
+    matrices, texture/pixel/canvas coordinates, shadow coordinates, distances, cone cosines, specular; mediump for
+    colours, normals, coverage. Locals that hold those need `highp` too. Games' shaders are highp unless their
+    text says `precision mediump float;` (shader.h). Precision artifacts only show on phones (no desktop or
+    software GPU has fp16).
   - Texture uploads use sized internal formats (`GL_RGB8`, `GL_RGBA8`, `GL_R8`).
   - No desktop-only GL calls (`glPolygonMode`, `GL_QUADS`, double-precision functions, ...).
 - **Logging:** use `WLW_LOG(LogRender, Warning, "fmt", ...)` with the system's category (`WLW_LOG_INFO/WARN/ERROR` =

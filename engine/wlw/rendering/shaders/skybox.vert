@@ -3,7 +3,7 @@
 
 layout (location = 0) in vec3 aPos;
 
-out vec3 vDirection;
+out highp vec3 vDirection;
 
 void main() {
   vDirection = aPos;

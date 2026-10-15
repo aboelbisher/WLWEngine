@@ -80,6 +80,8 @@ class GLRenderingDriver : public RenderingDriver {
             reinterpret_cast<const char*>(glGetString(GL_VENDOR)),
             reinterpret_cast<const char*>(glGetString(GL_RENDERER)),
             reinterpret_cast<const char*>(glGetString(GL_VERSION)));
+    window->SetFragmentPrecision(DescribeFragmentPrecision());
+    WLW_LOG(LogRender, Info, "  Fragment mediump: %s", window->FragmentPrecision().c_str());
 
     skybox_program_ = BuildEngineProgram("skybox.vert", "skybox.frag");
     if (skybox_program_ == 0) return false;

@@ -3,9 +3,11 @@
 // surface with SceneLighting().
 #include "wlw/frame.glsl"
 
-uniform mat4 uModel;
-in vec3 vWorldPos;
-in vec3 vNormal;      // world, not normalized
-in vec2 vUV;
-in vec4 vColor;
-out vec4 FragColor;   // premultiplied alpha
+uniform highp mat4 uModel;
+in highp vec3 vWorldPos;
+in mediump vec3 vNormal;  // world, not normalized
+in highp vec2 vUV;
+in mediump vec4 vColor;
+out vec4 FragColor;       // premultiplied alpha
+// The game's text is highp unless it says `precision mediump float;` (rendering/shader.h).
+precision highp float;

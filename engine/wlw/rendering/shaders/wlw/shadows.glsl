@@ -15,10 +15,11 @@ uniform highp sampler2DShadow uShadowMap;  // texture unit 1
 // How much of the shadow light reaches this point (1 = all), with the shadow strength applied.
 // Each texture() on a sampler2DShadow compares our depth with the stored one (the GPU blends the
 // 4 nearest results); 9 taps around the point average into a soft edge (percentage-closer filtering).
-float ShadowVisibility(vec4 light_space_position) {
-  vec3 p = light_space_position.xyz / light_space_position.w * 0.5 + 0.5;
+// The lookup position stays highp: shadow-map coordinates and depth need more than fp16 has.
+float ShadowVisibility(highp vec4 light_space_position) {
+  highp vec3 p = light_space_position.xyz / light_space_position.w * 0.5 + 0.5;
   if (p.x < 0.0 || p.x > 1.0 || p.y < 0.0 || p.y > 1.0 || p.z > 1.0) return 1.0;  // outside the map
-  float radius = uShadowParams.x * uShadowParams.y;
+  highp float radius = uShadowParams.x * uShadowParams.y;
   float lit = 0.0;
   for (int x = -1; x <= 1; ++x) {
     for (int y = -1; y <= 1; ++y) {

@@ -6,10 +6,10 @@
 layout (location = 4) in vec3 aSprite;       // per dot: x, y (node units, on its z = 0 plane), size
 layout (location = 5) in vec4 aSpriteColor;  // per dot: RGBA8 read as 0..1
 
-uniform mat4 uModel;
+uniform highp mat4 uModel;
 
-out vec2 vCorner;  // -1..1 across the dot
-out vec4 vColor;
+out mediump vec2 vCorner;  // -1..1 across the dot
+out mediump vec4 vColor;
 
 void main() {
   // Strip order: (-1,-1), (1,-1), (-1,1), (1,1).

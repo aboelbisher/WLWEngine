@@ -1,8 +1,15 @@
 // Tests for the shader system's CPU side: the preprocessor (#include, #define, #line) and log
 // mapping, the embedded engine shader files (every stage preprocesses in every variant), the
-// per-frame block's std140 layout and light packing, mesh variant keys, and the UI quad kinds
-// agreeing with ui.frag. (Compiling GLSL needs a GPU: Snake and Bluzzle check that.)
+// per-frame block's std140 layout and light packing, mesh variant keys, the UI quad kinds agreeing
+// with ui.frag, the GLSL headers per stage and dialect, and the precision lint (every uniform, block
+// member and varying of the engine's files names its precision). Compiling the GLSL needs a GPU:
+// tests/gpu/shader_compile_tests.cpp, as GLSL 3.30 and as GLSL ES 3.00.
+#include <algorithm>
 #include <cstddef>
+#include <cstdio>
+#include <regex>
+#include <set>
+#include <sstream>
 #include <map>
 #include <memory>
 #include <string>
@@ -10,6 +17,7 @@
 
 #include "test_helpers.h"
 #include "wlw/rendering/frame_uniforms.h"
+#include "wlw/rendering/glsl_header.h"
 #include "wlw/rendering/mesh_variant.h"
 #include "wlw/rendering/shader_library.h"
 #include "wlw/rendering/shader_preprocessor.h"
@@ -243,6 +251,186 @@ TEST_CASE("ui kinds match the shader") {
   CHECK(Contains(ui, "#define KIND_IMAGE " + std::to_string(static_cast<int>(wlw::ui::QuadKind::Image)) + "\n"));
   CHECK(Contains(ui, "#define KIND_TRIANGLE " + std::to_string(static_cast<int>(wlw::ui::QuadKind::Triangle)) + "\n"));
   CHECK(Contains(ui, "#define KIND_ARC " + std::to_string(static_cast<int>(wlw::ui::QuadKind::Arc)) + "\n"));
+}
+
+TEST_CASE("glsl headers") {
+  for (const ShaderStage stage : {ShaderStage::Vertex, ShaderStage::Fragment}) {
+    CHECK(GlslHeader(GlslDialect::Glsl330, stage) == "#version 330 core\n");  // desktop ignores precision
+  }
+  // Both stages highp (a mediump fragment default made Bluzzle's lit 3D 8% slower on Adreno 640):
+  // shaders opt in to mediump themselves.
+  const std::string vertex = GlslHeader(GlslDialect::Essl300, ShaderStage::Vertex);
+  const std::string fragment = GlslHeader(GlslDialect::Essl300, ShaderStage::Fragment);
+  CHECK(vertex.rfind("#version 300 es\nprecision highp float;\nprecision highp int;\n", 0) == 0);
+  CHECK(fragment == vertex);
+  // Every sampler type has a default (ES has none for 3D, array, shadow and integer samplers), the
+  // same in both stages: a sampler declared in both must match.
+  for (const char* line :
+       {"precision mediump sampler2D;", "precision mediump sampler3D;", "precision mediump samplerCube;",
+        "precision mediump sampler2DArray;", "precision highp sampler2DShadow;", "precision highp samplerCubeShadow;",
+        "precision highp sampler2DArrayShadow;", "precision highp isampler2D;", "precision highp isampler3D;",
+        "precision highp isamplerCube;", "precision highp isampler2DArray;", "precision highp usampler2D;",
+        "precision highp usampler3D;", "precision highp usamplerCube;", "precision highp usampler2DArray;"}) {
+    CHECK(Contains(vertex, std::string(line) + "\n"));
+  }
+}
+
+TEST_CASE("mediump opt-ins") {
+  // r.mediump 0 turns a shader's own `precision mediump float;` into highp; single declarations keep theirs.
+  const std::string code =
+      "precision mediump float;\nin mediump vec4 vColor;\nvoid f() {}\nprecision  mediump   float ;\n// mediump\n";
+  CHECK(ApplyMediumpSetting(code, true) == code);
+  const std::string off = ApplyMediumpSetting(code, false);
+  CHECK(!Contains(off, "precision mediump"));
+  CHECK(!Contains(off, "mediump   float"));
+  CHECK(Contains(off, "precision highp float;\nin mediump vec4 vColor;"));
+  CHECK(std::count(off.begin(), off.end(), '\n') == std::count(code.begin(), code.end(), '\n'));  // lines kept
+  CHECK(ApplyMediumpSetting("precision mediump int;\n", false) == "precision mediump int;\n");    // floats only
+}
+
+namespace {
+
+// The text without comments and preprocessor lines (every #ifdef branch is checked at once).
+std::string CodeOnly(const std::string& text) {
+  std::string out;
+  bool in_comment = false;
+  std::istringstream lines(text);
+  for (std::string line; std::getline(lines, line);) {
+    std::string kept;
+    for (size_t i = 0; i < line.size(); ++i) {
+      if (in_comment) {
+        if (line.compare(i, 2, "*/") == 0) {
+          in_comment = false;
+          ++i;
+        }
+      } else if (line.compare(i, 2, "/*") == 0) {
+        in_comment = true;
+        ++i;
+      } else if (line.compare(i, 2, "//") == 0) {
+        break;
+      } else {
+        kept += line[i];
+      }
+    }
+    const size_t first = kept.find_first_not_of(" \t");
+    if (first != std::string::npos && kept[first] == '#') continue;
+    out += kept + "\n";
+  }
+  return out;
+}
+
+// A statement's words, without its layout(...).
+std::vector<std::string> Words(const std::string& statement) {
+  std::vector<std::string> words;
+  std::istringstream in(std::regex_replace(statement, std::regex(R"(layout\s*\([^)]*\))"), " "));
+  for (std::string word; in >> word;) words.push_back(word);
+  return words;
+}
+
+bool Has(const std::vector<std::string>& words, const char* word) {
+  return std::find(words.begin(), words.end(), word) != words.end();
+}
+
+// The declarations in a shader file that don't name their precision: uniforms, varyings, and the
+// members of structs and uniform blocks. `vertex` / `fragment` = which stage the file is: a vertex
+// stage's inputs are attributes and a fragment stage's output is the colour (no precision to
+// match). `declarations` counts what was checked.
+std::vector<std::string> UnqualifiedDeclarations(const std::string& text, bool vertex, bool fragment,
+                                                 int& declarations) {
+  const std::string code = CodeOnly(text);
+  std::set<std::string> structs;  // struct-typed members: their own members carry the precision
+  const std::regex struct_name(R"(\bstruct\s+(\w+))");
+  for (auto it = std::sregex_iterator(code.begin(), code.end(), struct_name); it != std::sregex_iterator(); ++it) {
+    structs.insert((*it)[1].str());
+  }
+  enum class Scope { Members, Code };
+  std::vector<Scope> scopes;
+  std::vector<std::string> missing;
+  std::string statement;
+  auto check = [&](bool member) {
+    const std::vector<std::string> words = Words(statement);
+    if (words.empty()) return;
+    if (!member) {
+      const bool in = Has(words, "in"), out = Has(words, "out");
+      if (!Has(words, "uniform") && !in && !out) return;  // functions, constants, precision statements
+      if ((in && vertex) || (out && fragment)) return;
+    }
+    ++declarations;
+    if (Has(words, "bool")) return;  // no precision
+    for (const std::string& word : words) {
+      if (structs.count(word) != 0) return;
+    }
+    if (!Has(words, "highp") && !Has(words, "mediump")) {
+      missing.push_back(std::regex_replace(statement, std::regex(R"(\s+)"), " "));
+    }
+  };
+  for (const char c : code) {
+    if (c == '{') {
+      const std::vector<std::string> words = Words(statement);
+      const bool members = !words.empty() && (words[0] == "struct" || words[0] == "uniform");
+      scopes.push_back(scopes.empty() && members ? Scope::Members : Scope::Code);
+      statement.clear();
+    } else if (c == '}') {
+      if (!scopes.empty()) scopes.pop_back();
+      statement.clear();
+    } else if (c == ';') {
+      if (scopes.empty()) {
+        check(false);
+      } else if (scopes.back() == Scope::Members) {
+        check(true);
+      }
+      statement.clear();
+    } else {
+      statement += c;
+    }
+  }
+  return missing;
+}
+
+bool EndsWith(const std::string& text, const std::string& end) {
+  return text.size() >= end.size() && text.compare(text.size() - end.size(), end.size(), end) == 0;
+}
+
+}  // namespace
+
+TEST_CASE("precision lint") {
+  // GLSL ES: a uniform or block member declared in both stages needs the same precision in both, and
+  // the stages' defaults differ (glsl_header.h), so every engine declaration names its own.
+  int files = 0, declarations = 0;
+  for (const EmbeddedShaderFile& file : EmbeddedShaderFiles()) {
+    const std::string name = file.name;
+    const std::string text = file.source;
+    if (Contains(text, "shader_type")) continue;  // game-format shaders (post/*): their preludes name theirs
+    const bool vertex = EndsWith(name, ".vert") || EndsWith(name, "_vertex.glsl");
+    const bool fragment = EndsWith(name, ".frag") || EndsWith(name, "_fragment.glsl");
+    ++files;
+    for (const std::string& declaration : UnqualifiedDeclarations(text, vertex, fragment, declarations)) {
+      FAIL_CHECK(name << ": no highp / mediump on '" << declaration << "'");
+    }
+  }
+  CHECK(files >= 20);
+  CHECK(declarations >= 60);  // it saw them: the frame block, the varyings, the uniforms
+
+  // The lint itself.
+  int count = 0;
+  CHECK(UnqualifiedDeclarations("uniform float a;\nuniform highp float b;\n", false, false, count).size() == 1);
+  CHECK(UnqualifiedDeclarations("in vec3 aPos;\nout vec2 vUV;\n", true, false, count).size() == 1);
+  CHECK(UnqualifiedDeclarations("in vec2 vUV;\nout vec4 FragColor;\n", false, true, count).size() == 1);
+  CHECK(UnqualifiedDeclarations("struct S {\n  vec4 a;\n};\nlayout(std140) uniform B {\n  S s[4];\n  mediump vec3 "
+                                "c;\n  mat4 m;\n};\nuniform bool uFlag;\n",
+                                false, false, count)
+            .size() == 2);  // S::a and B::m
+  CHECK(UnqualifiedDeclarations("void f() {\n  vec3 local = vec3(0.0);\n}\n// uniform float c;\n#define X 1\n", false,
+                                false, count)
+            .empty());
+
+  // A game's text after the preludes is highp unless it opts in (rendering/shader.h).
+  for (const char* prelude :
+       {"custom/canvas_fragment.glsl", "custom/mesh_fragment.glsl", "custom/post_fragment.glsl"}) {
+    std::string code = CodeOnly(*FindShaderFile(prelude));
+    code.erase(code.find_last_not_of("\n \t") + 1);
+    CHECK_MESSAGE(EndsWith(code, "precision highp float;"), prelude);
+  }
 }
 
 TEST_SUITE_END();

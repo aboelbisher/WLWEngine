@@ -32,6 +32,9 @@ bool HasCurrentGLContext();
 bool LoadGLFunctions();
 // A GL function by name (e.g. an extension's), or null. Needs a current context.
 void* GetGLProcAddress(const char* name);
+// Whether the current context is OpenGL ES (always on phones; on desktop only for a window made with
+// WindowOptions::gles, which the tests use to compile every shader as GLSL ES).
+bool CurrentContextIsES();
 
 // Reads a whole asset file. Desktop: a relative path is looked up in the working directory, then
 // next to the executable (where the build copies the assets). Android: path inside the APK's

@@ -4,7 +4,8 @@ add_executable(wlw_gpu_tests
   gpu_test_main.cpp
   golden.cpp
   golden.h
-  scene_tests.cpp)
+  scene_tests.cpp
+  shader_compile_tests.cpp)
 target_link_libraries(wlw_gpu_tests PRIVATE wlw::wlw wlw_doctest wlw_test_support)
 target_compile_definitions(wlw_gpu_tests PRIVATE
   WLW_GPU_REFERENCES="${CMAKE_CURRENT_SOURCE_DIR}/references"

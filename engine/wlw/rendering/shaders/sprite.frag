@@ -1,10 +1,10 @@
 // A SpriteBatch's dot (variants: see sprite.vert). Output: premultiplied alpha, like every shader,
 // so the same dot works Additive (glow, density for metaballs) and Alpha.
-in vec2 vCorner;
-in vec4 vColor;
+in mediump vec2 vCorner;
+in mediump vec4 vColor;
 
 #ifdef TEXTURED
-uniform sampler2D uTexture;  // texture unit 0: its alpha (x rgb) shapes the dot
+uniform mediump sampler2D uTexture;  // texture unit 0: its alpha (x rgb) shapes the dot
 #endif
 
 out vec4 FragColor;

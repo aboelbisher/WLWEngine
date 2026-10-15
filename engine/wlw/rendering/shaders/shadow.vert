@@ -6,7 +6,7 @@ layout (location = 0) in vec3 aPos;
 layout (location = 4) in mat4 aInstanceTransform;
 #endif
 
-uniform mat4 uModel;
+uniform highp mat4 uModel;
 
 void main() {
 #ifdef INSTANCED

@@ -2,14 +2,20 @@
 
 #include "wlw/rendering/gl_program.h"
 
+#include <utility>
+
 #include "wlw/core/log.h"
 #include "wlw/core/profile.h"
+#include "wlw/platform/platform.h"
+#include "wlw/rendering/glsl_header.h"
 #include "wlw/rendering/shader_library.h"
 #include "wlw/rendering/shader_preprocessor.h"
 
 namespace wlw::rendering {
 
 namespace {
+
+ShaderSourceObserver g_observer;
 
 std::string Joined(const std::vector<std::string>& defines) {
   std::string text;
@@ -26,8 +32,12 @@ GLuint CompileStage(GLenum type, std::string_view label, const ShaderStageSource
     WLW_LOG(LogShader, Error, "Shader %.*s: %s", static_cast<int>(label.size()), label.data(), source.error.c_str());
     return 0;
   }
+  const ShaderStage shader_stage = type == GL_VERTEX_SHADER ? ShaderStage::Vertex : ShaderStage::Fragment;
+  const std::string header = GlslHeader(CurrentGlslDialect(), shader_stage);
+  const std::string code = ApplyMediumpSetting(source.code, cv_mediump.Get());  // r.mediump 0: opt-ins off
+  if (g_observer) g_observer(label, shader_stage, header + code);
   const GLuint shader = glCreateShader(type);
-  const char* parts[] = {kGLSLHeader, source.code.c_str()};
+  const char* parts[] = {header.c_str(), code.c_str()};
   glShaderSource(shader, 2, parts, nullptr);
   glCompileShader(shader);
   GLint ok = GL_FALSE;
@@ -47,6 +57,28 @@ GLuint CompileStage(GLenum type, std::string_view label, const ShaderStageSource
 }
 
 }  // namespace
+
+GlslDialect CurrentGlslDialect() {
+#if defined(WLW_GLES)
+  return GlslDialect::Essl300;
+#else
+  return platform::CurrentContextIsES() ? GlslDialect::Essl300 : GlslDialect::Glsl330;
+#endif
+}
+
+std::string DescribeFragmentPrecision() {
+  std::string text = "ignored (desktop GL)";
+#if defined(WLW_GLES)
+  GLint range[2] = {0, 0};
+  GLint precision = 0;  // bits of the significand: 10 = fp16, 23 = fp32
+  glGetShaderPrecisionFormat(GL_FRAGMENT_SHADER, GL_MEDIUM_FLOAT, range, &precision);
+  text = precision >= 23 ? "32-bit: no gain here" : "16-bit";
+  if (!cv_mediump.Get()) text += ", opt-ins off (r.mediump 0)";
+#endif
+  return text;
+}
+
+void SetShaderSourceObserver(ShaderSourceObserver observer) { g_observer = std::move(observer); }
 
 GLuint BuildProgram(std::string_view label, const ShaderStageSource& vertex, const ShaderStageSource& fragment,
                     const std::vector<std::string>& defines) {

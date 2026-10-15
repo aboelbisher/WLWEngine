@@ -28,20 +28,38 @@ namespace wlw::rendering {
 // vertex(): keep fragment-only built-ins (dFdx, fwidth, gl_FragCoord) inside fragment().
 // Error line numbers match the game's text.
 //
+// Precision (GLES only: phones; desktop GL ignores it, see glsl_header.h). The game's text is highp:
+// 32-bit floats, like desktop (the engine's own shaders too). A fragment-heavy shader can opt in to
+// 16-bit maths (up to twice the maths per cycle on phone GPUs, less power) with one line after shader_type.
+// Measure it on a phone (GPU ms with r.mediump 1 vs 0): it isn't always faster. On the Pixel 4's
+// Adreno 640 a lit shader got 8% slower and the blur / threshold post effects 2% slower, so no engine
+// shader opts in yet (Mali's offline compiler predicts gains there: unmeasured on a Mali phone).
+//   precision mediump float;
+// It applies to everything declared after it in the text, in both stages (so a uniform used by
+// vertex() and fragment() still matches). Then name highp what fp16 (11 significant bits, max 65504)
+// can't hold: positions and matrices (32-64 units from the origin moves in 1/32 steps), texture
+// coordinates (near 1 the step is 1/2048: a whole texel of a 2048 px texture), pixel coordinates
+// (vUV * uSize: 2 px steps past 2048), time (1 s steps after 17 minutes), hashes like
+// fract(sin(x) * 43758.5), big pow() exponents (pow(x, 2500.0) of a coarse x). E.g.
+//   uniform highp float uTime;   highp vec2 pixel = vUV * uSize;
+// The engine's inputs below say their precision; colours and normals are mediump (enough for them).
+// Phones are the only place a precision bug shows (no desktop or software GPU has fp16): r.mediump 0
+// turns every opt-in (the game's and the engine's) back to highp, to check whether an artifact is one.
+//
 // Canvas shaders (the vertex stage is always the engine's). fragment() gets:
-//   in vec2 vUV;          // 0..1 across the rectangle, (0, 0) = top left
-//   in vec4 vColor;       // the ShaderRect's tint
-//   uniform vec2 uSize;   // the rectangle's size in pixels
+//   in highp vec2 vUV;          // 0..1 across the rectangle, (0, 0) = top left
+//   in mediump vec4 vColor;     // the ShaderRect's tint
+//   uniform highp vec2 uSize;   // the rectangle's size in pixels
 //   out vec4 FragColor;   // premultiplied alpha (rgb * a), like the rest of the UI
 //
 // Mesh shaders. Without vertex() the engine's does the usual transform (instancing included).
-//   Both stages:          uniform mat4 uModel; the frame block (wlw/frame.glsl): uView, uProjection,
-//                         uViewProjection, uCameraPos (vec3), the lights, the shadow light...
+//   Both stages:          uniform highp mat4 uModel; the frame block (wlw/frame.glsl): uView, uProjection,
+//                         uViewProjection, uCameraPos (highp vec3), the lights, the shadow light...
 //   vertex() gets:        in aPos, aColor (vec4), aNormal, aUV; aInstanceTransform (mat4),
 //                         aInstanceTint (vec4); uniform bool uInstanced;
 //                         sets gl_Position and out vWorldPos, vNormal, vUV, vColor.
-//   fragment() gets:      in vec3 vWorldPos; in vec3 vNormal (world, not normalized);
-//                         in vec2 vUV; in vec4 vColor; out vec4 FragColor;
+//   fragment() gets:      in highp vec3 vWorldPos; in mediump vec3 vNormal (world, not normalized);
+//                         in highp vec2 vUV; in mediump vec4 vColor; out vec4 FragColor;
 //                         FragColor is premultiplied alpha (rgb * a); it only blends if the
 //                         material's `blend` isn't Opaque (see blend_mode.h).
 //   Lighting: #include "wlw/lighting.glsl" and multiply by SceneLighting(vWorldPos,
@@ -51,14 +69,16 @@ namespace wlw::rendering {
 //
 // Post shaders (a viewport's post passes, see rendering/post_pass.h; no vertex()). fragment() runs
 // once per pixel of the pass's output and gets:
-//   in vec2 vUV;              // 0..1 across the picture, (0, 0) = BOTTOM left, like the textures:
+//   in highp vec2 vUV;        // 0..1 across the picture, (0, 0) = BOTTOM left, like the textures:
 //                             // texture(uSource, vUV) is the same pixel
 //   uniform sampler2D uSource;  // the previous pass's output (the first pass: the viewport's picture)
 //   uniform sampler2D uScene;   // the viewport's picture before any pass
-//   uniform vec2 uTexel;        // 1 / uSource's size in pixels: the step to a neighbouring texel
-//   uniform vec2 uOutputSize;   // this pass's output size in pixels
+//   uniform highp vec2 uTexel;  // 1 / uSource's size in pixels: the step to a neighbouring texel
+//   uniform highp vec2 uOutputSize;  // this pass's output size in pixels
 //   out vec4 FragColor;         // replaces the output pixel (no blending), premultiplied alpha
 // plus a sampler2D uniform for each of the pass's `inputs` (other passes' outputs, by name).
+// Samplers are mediump everywhere (fp16 holds RGBA8 and RGBA16F texels exactly), shadow and
+// integer samplers highp; every sampler type has a default, so sampler3D, sampler2DArray, isampler2D... work.
 enum class ShaderTarget { Mesh, Canvas, Post };
 
 // A shader text split for the two GPU stages (no GPU needed; the backends add their inputs).

@@ -52,7 +52,8 @@ void EnginePanel::OnDebugUI() {
       ImGui::Text("GPU %.2f ms / frame", window.GpuFrameMs());
     }
   }
-  bool invalidate = app::cv_invalidate_framebuffers.Get();  // phones: compare the GPU time with it off
+  ImGui::Text("Fragment mediump: %s", window.FragmentPrecision().c_str());  // r.mediump (glsl_header.h)
+  bool invalidate = app::cv_invalidate_framebuffers.Get();                  // phones: compare the GPU time with it off
   if (ImGui::Checkbox("Invalidate framebuffers", &invalidate)) {
     app::cv_invalidate_framebuffers.Set(invalidate, CVarSource::Console);
   }

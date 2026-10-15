@@ -84,7 +84,23 @@ bool IsAlive() { return g_alive; }
 
 bool HasCurrentGLContext() { return g_alive && glfwGetCurrentContext() != nullptr; }
 
-bool LoadGLFunctions() { return gladLoadGLLoader(reinterpret_cast<GLADloadproc>(glfwGetProcAddress)) != 0; }
+bool CurrentContextIsES() {
+  GLFWwindow* context = g_alive ? glfwGetCurrentContext() : nullptr;
+  return context != nullptr && glfwGetWindowAttrib(context, GLFW_CLIENT_API) == GLFW_OPENGL_ES_API;
+}
+
+bool LoadGLFunctions() {
+  if (gladLoadGLLoader(reinterpret_cast<GLADloadproc>(glfwGetProcAddress)) == 0) return false;
+  // glad loads by version number, and an OpenGL ES context's "3.0" means GL 3.0's functions: the
+  // uniform blocks (GL 3.1, ES 3.0) come by name then. (Mesa reports ES 3.2, which covers them.)
+  if (CurrentContextIsES() && glad_glGetUniformBlockIndex == nullptr) {
+    glad_glGetUniformBlockIndex =
+        reinterpret_cast<PFNGLGETUNIFORMBLOCKINDEXPROC>(glfwGetProcAddress("glGetUniformBlockIndex"));
+    glad_glUniformBlockBinding =
+        reinterpret_cast<PFNGLUNIFORMBLOCKBINDINGPROC>(glfwGetProcAddress("glUniformBlockBinding"));
+  }
+  return true;
+}
 
 void* GetGLProcAddress(const char* name) { return reinterpret_cast<void*>(glfwGetProcAddress(name)); }
 
@@ -242,10 +258,16 @@ class GlfwWindow : public Window {
     glfwWindowHint(GLFW_VISIBLE, options_.visible ? GLFW_TRUE : GLFW_FALSE);
     glfwWindowHint(GLFW_DEPTH_BITS, options_.depth ? 24 : 0);  // no depth: no stencil either
     glfwWindowHint(GLFW_STENCIL_BITS, options_.depth ? 8 : 0);
+    if (options_.gles) {  // OpenGL ES 3.0 (the profile hint doesn't apply to ES)
+      glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
+      glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
+    }
     window_ = glfwCreateWindow((int)size_.x, (int)size_.y, title_.c_str(), nullptr, share);
     glfwWindowHint(GLFW_VISIBLE, GLFW_TRUE);
     glfwWindowHint(GLFW_DEPTH_BITS, 24);
     glfwWindowHint(GLFW_STENCIL_BITS, 8);
+    glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_API);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     if (window_ == nullptr) {
       WLW_LOG(LogPlatform, Error, "Failed to create GLFW window '%s'", title_.c_str());
       return false;
