@@ -1,5 +1,7 @@
 // Golden-image scenes: one per renderer feature (golden.h). Everything is fixed: no time, no random
 // numbers, fixed cameras, so the same GPU draws the same pixels every run.
+#include <algorithm>
+#include <array>
 #include <cmath>
 #include <memory>
 #include <vector>
@@ -12,6 +14,7 @@
 #include "wlw/rendering/material.h"
 #include "wlw/rendering/shader.h"
 #include "wlw/rendering/shader_material.h"
+#include "wlw/rendering/texture.h"
 #include "wlw/scene/camera_3d.h"
 #include "wlw/scene/light.h"
 #include "wlw/scene/node.h"
@@ -227,6 +230,76 @@ TEST_CASE("sprites") {
   }
   dots->FitBounds();
   CheckGolden("sprites", viewport);
+}
+
+namespace {
+
+// Six 16x16 faces, one colour each (+X red, -X cyan, +Y green, -Y magenta, +Z blue, -Z yellow), with
+// a lighter quarter in each face's first texels: wrong faces or a wrong turn show in the picture.
+std::shared_ptr<rendering::WCubemap> TestCubemap() {
+  const glm::vec3 colors[6] = {{0.8f, 0.2f, 0.2f}, {0.2f, 0.7f, 0.7f}, {0.2f, 0.7f, 0.3f},
+                               {0.7f, 0.2f, 0.7f}, {0.2f, 0.3f, 0.8f}, {0.8f, 0.7f, 0.2f}};
+  constexpr int kFace = 16;
+  std::array<utils::RawImage, 6> faces;
+  for (int face = 0; face < 6; ++face) {
+    faces[face].size = {kFace, kFace};
+    faces[face].channels = 4;
+    faces[face].pixels.resize(kFace * kFace * 4);
+    for (int y = 0; y < kFace; ++y) {
+      for (int x = 0; x < kFace; ++x) {
+        const float light = x < kFace / 2 && y < kFace / 2 ? 1.25f : 1.0f;
+        uint8_t* pixel = &faces[face].pixels[(y * kFace + x) * 4];
+        for (int c = 0; c < 3; ++c) pixel[c] = static_cast<uint8_t>(std::min(255.0f, colors[face][c] * light * 255.0f));
+        pixel[3] = 255;
+      }
+    }
+  }
+  return rendering::WCubemap::Create(faces);
+}
+
+}  // namespace
+
+TEST_CASE("skybox") {
+  // The sky after the opaque cube (only the pixels the cube leaves show it: depth 1.0, LEQUAL) and
+  // before the see-through cube, which blends over both. Three faces meet in the corner the camera
+  // looks at.
+  auto viewport = MakeViewport();
+  viewport->SetCamera(std::make_shared<FixedCamera>(core::Vector3{-3.0f, 1.5f, -3.0f}, core::Vector3{0, 0, 0}));
+  viewport->GetScene()->SetSkybox(TestCubemap());
+  AddSun(*viewport, 0.4f);
+  AddMesh(*viewport, utils::createCubeWithNormals(1.2f, Color{0.9f, 0.9f, 0.9f, 1.0f}), Opaque(), {0, 0, 0});
+  auto glass = rendering::Material::Create();
+  glass->blend = rendering::BlendMode::Alpha;
+  AddMesh(*viewport, utils::createCubeWithNormals(1.0f, Color{1.0f, 1.0f, 1.0f, 0.5f}), std::move(glass),
+          {-0.3f, -0.9f, -0.9f});
+  CheckGolden("skybox", viewport);
+}
+
+TEST_CASE("skybox orthographic") {
+  // An orthographic camera's sky covers the whole viewport too.
+  auto viewport = MakeViewport();
+  auto camera = scene::OrthographicCamera::Create();
+  camera->SetPosition({-6.0f, 3.0f, -6.0f});
+  camera->SetTarget({0, 0, 0});
+  camera->SetVisibleArea(4.0f, 4.0f);
+  camera->SetClipPlanes(0.1f, 50.0f);
+  viewport->SetCamera(camera);
+  viewport->GetScene()->SetSkybox(TestCubemap());
+  AddSun(*viewport, 0.4f);
+  AddMesh(*viewport, utils::createCubeWithNormals(1.2f, Color{0.9f, 0.9f, 0.9f, 1.0f}), Opaque(), {0, 0, 0});
+  CheckGolden("skybox_ortho", viewport);
+}
+
+TEST_CASE("skybox without depth buffer") {
+  // A viewport without depth: the sky is drawn first, so the floor is drawn over it.
+  auto viewport =
+      scene::Viewport::Create({.name = "golden", .depth = false, .clear = core::Color{0.08f, 0.09f, 0.14f, 1.0f}});
+  viewport->SetSize(gpu_tests::kSize, gpu_tests::kSize);
+  viewport->SetCamera(std::make_shared<FixedCamera>(core::Vector3{0, 4, 4}, core::Vector3{0, 0, 0}));
+  viewport->GetScene()->SetSkybox(TestCubemap());
+  AddSun(*viewport, 0.4f);
+  AddMesh(*viewport, utils::createPlaneWithNormals(3.0f, 3.0f, Color{0.9f, 0.9f, 0.9f, 1.0f}), Opaque(), {0, 0, 0});
+  CheckGolden("skybox_no_depth", viewport);
 }
 
 TEST_CASE("post chain bloom") {

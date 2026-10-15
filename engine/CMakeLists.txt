@@ -128,6 +128,7 @@ add_library(wlw STATIC
   wlw/rendering/shader_library.cpp
   wlw/rendering/shader_library.h
   wlw/rendering/shader_material.h
+  wlw/rendering/sky.h
   wlw/rendering/shader_preprocessor.cpp
   wlw/rendering/shader_preprocessor.h
   wlw/rendering/texture.cpp

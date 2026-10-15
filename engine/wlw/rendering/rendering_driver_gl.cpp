@@ -31,6 +31,7 @@
 #include "wlw/rendering/render_device.h"
 #include "wlw/rendering/render_list.h"
 #include "wlw/rendering/scene_gather.h"
+#include "wlw/rendering/sky.h"
 #include "wlw/rendering/gl_state_cache.h"
 #include "wlw/scene/light.h"
 #include "wlw/scene/shadow_map.h"
@@ -44,7 +45,7 @@ namespace wlw::rendering {
 //   1. gather   visible lights and drawables (each one's world box computed once), shadow bounds
 //   2. frame    the per-frame uniform block (camera, lights, shadow) uploaded once (frame_uniforms.h)
 //   3. shadows  casters' depth from the shadow light into the shadow map
-//   4. main     skybox, opaque meshes, then transparent ones back to front; each mesh with the
+//   4. main     opaque meshes, the sky (sky.h), then transparent ones back to front; each mesh with the
 //               shader variant its features need (mesh_variant.h), or its ShaderMaterial's shader
 //   5. 2D        its Picture canvas layers (part of the picture)
 //   6. post      its post passes, if any (steps 3-5 then drew into the scene picture): full-screen
@@ -87,26 +88,13 @@ class GLRenderingDriver : public RenderingDriver {
     if (skybox_program_ == 0) return false;
     glUseProgram(skybox_program_);
     glUniform1i(glGetUniformLocation(skybox_program_, "uSkybox"), 0);
+    skybox_ray_ = glGetUniformLocation(skybox_program_, "uSkyRay");
     glUseProgram(0);
 
-    const float skybox_vertices[] = {
-        -1.0f, 1.0f,  -1.0f, -1.0f, -1.0f, -1.0f, 1.0f,  -1.0f, -1.0f, 1.0f,  -1.0f, -1.0f, 1.0f,  1.0f,  -1.0f, -1.0f,
-        1.0f,  -1.0f, -1.0f, -1.0f, 1.0f,  -1.0f, -1.0f, -1.0f, -1.0f, 1.0f,  -1.0f, -1.0f, 1.0f,  -1.0f, -1.0f, 1.0f,
-        1.0f,  -1.0f, -1.0f, 1.0f,  1.0f,  -1.0f, -1.0f, 1.0f,  -1.0f, 1.0f,  1.0f,  1.0f,  1.0f,  1.0f,  1.0f,  1.0f,
-        1.0f,  1.0f,  -1.0f, 1.0f,  -1.0f, -1.0f, -1.0f, -1.0f, 1.0f,  -1.0f, 1.0f,  1.0f,  1.0f,  1.0f,  1.0f,  1.0f,
-        1.0f,  1.0f,  1.0f,  -1.0f, 1.0f,  -1.0f, -1.0f, 1.0f,  -1.0f, 1.0f,  -1.0f, 1.0f,  1.0f,  -1.0f, 1.0f,  1.0f,
-        1.0f,  1.0f,  1.0f,  1.0f,  -1.0f, 1.0f,  1.0f,  -1.0f, 1.0f,  -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, 1.0f,
-        1.0f,  -1.0f, -1.0f, 1.0f,  -1.0f, -1.0f, -1.0f, -1.0f, 1.0f,  1.0f,  -1.0f, 1.0f};
-    glGenVertexArrays(1, &skybox_vao_);
-    glGenBuffers(1, &skybox_vbo_);
-    glBindVertexArray(skybox_vao_);
-    glBindBuffer(GL_ARRAY_BUFFER, skybox_vbo_);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(skybox_vertices), skybox_vertices, GL_STATIC_DRAW);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), nullptr);
-    glBindVertexArray(0);
-    glGenVertexArrays(1, &post_vao_);  // GL 3.3 core draws need a vertex array, even an empty one
-    CopyShader();                      // made now, so the warm-up compiles it
+    // GL 3.3 core draws need a vertex array, even an empty one (post passes and the sky make
+    // their triangle in the shader).
+    glGenVertexArrays(1, &post_vao_);
+    CopyShader();  // made now, so the warm-up compiles it
     // The largest picture it can draw into (a colour texture + a depth renderbuffer): render
     // scales above 1 stop there.
     GLint max_texture = 0, max_renderbuffer = 0;
@@ -373,7 +361,7 @@ class GLRenderingDriver : public RenderingDriver {
     }
     if (clear_bits) glClear(clear_bits);
 
-    if (draw_scene) DrawMainPass(*scene, frame_, stats);
+    if (draw_scene) DrawMainPass(*scene, *camera, frame_, has_depth, stats);
     const auto submitted = Clock::now();
 
     auto micros = [](Clock::duration d) { return std::chrono::duration<float, std::micro>(d).count(); };
@@ -730,23 +718,28 @@ class GLRenderingDriver : public RenderingDriver {
     glBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(previous_framebuffer));
   }
 
-  // --- 5. MAIN PASS: the skybox, then the draw list in key order ---
-  void DrawMainPass(const scene::Scene& scene, const Frame& frame, scene::RenderStats& stats) {
+  // The sky (sky.h): one triangle at depth 1.0, drawn where the depth buffer still holds the clear
+  // value (LEQUAL), or everywhere into a target without depth. No depth writes.
+  void DrawSky(const WCubemap& skybox, scene::Camera3D& camera) {
+    WLW_PROFILE_SCOPE("Sky");
+    state_.SetDepthWrite(false);
+    state_.SetBlendMode(BlendMode::Opaque);
+    state_.UseProgram(skybox_program_);
+    const glm::mat4 ray = SkyRayMatrix(camera.GetViewMatrix(), camera.GetProjectionMatrix());
+    glUniformMatrix4fv(skybox_ray_, 1, GL_FALSE, glm::value_ptr(ray));
+    BindGLTexture(skybox, 0);  // a cubemap target: unit 0's 2D texture (the cache's) stays bound
+    glDepthFunc(GL_LEQUAL);
+    glBindVertexArray(post_vao_);
+    glDrawArrays(GL_TRIANGLES, 0, 3);
+    glBindVertexArray(0);
+    glDepthFunc(GL_LESS);
+  }
+
+  // --- 5. MAIN PASS: the draw list in key order, the sky after the opaque draws ---
+  void DrawMainPass(const scene::Scene& scene, scene::Camera3D& camera, const Frame& frame, bool has_depth,
+                    scene::RenderStats& stats) {
     WLW_PROFILE_SCOPE("Main pass");
     WLW_PROFILE_GPU_ZONE("Main pass");
-    if (const auto& skybox = scene.GetSkybox()) {
-      glDisable(GL_DEPTH_TEST);
-      glDisable(GL_CULL_FACE);
-      state_.SetDepthWrite(false);
-      state_.SetBlendMode(BlendMode::Opaque);
-      state_.UseProgram(skybox_program_);
-      glBindVertexArray(skybox_vao_);
-      BindGLTexture(*skybox, 0);
-      glDrawArrays(GL_TRIANGLES, 0, 36);
-      glBindVertexArray(0);
-      glEnable(GL_DEPTH_TEST);
-    }
-
     // The shadow map on texture unit 1 (unit 0: the mesh's texture; units 2+: ShaderMaterials').
     if (frame.shadow_active) {
       glActiveTexture(GL_TEXTURE1);
@@ -754,7 +747,11 @@ class GLRenderingDriver : public RenderingDriver {
       glActiveTexture(GL_TEXTURE0);
     }
 
-    for (const DrawOrder& order : draw_order_) {
+    const WCubemap* skybox = scene.GetSkybox().get();
+    const size_t sky_position = skybox ? SkyDrawPosition(draw_order_, has_depth) : draw_order_.size() + 1;
+    for (size_t i = 0; i < draw_order_.size(); ++i) {
+      if (i == sky_position) DrawSky(*skybox, camera);
+      const DrawOrder& order = draw_order_[i];
       const DrawItem& item = draw_items_[order.item];
       const NodeSlot& slot = node_slots_[item.node_slot];
       state_.SetBlendMode(item.blend);
@@ -777,6 +774,7 @@ class GLRenderingDriver : public RenderingDriver {
       }
       DrawMesh(*item.node, *item.mesh, slot.instances, &stats);
     }
+    if (sky_position == draw_order_.size()) DrawSky(*skybox, camera);  // nothing transparent
 
     state_.SetBlendMode(BlendMode::Opaque);  // back to the defaults for whatever draws next
     state_.SetDepthWrite(true);
@@ -1060,8 +1058,6 @@ class GLRenderingDriver : public RenderingDriver {
       if (skybox_program_) glDeleteProgram(skybox_program_);
       if (frame_ubo_) glDeleteBuffers(1, &frame_ubo_);
       DeleteShadowMap();
-      glDeleteVertexArrays(1, &skybox_vao_);
-      glDeleteBuffers(1, &skybox_vbo_);
       glDeleteVertexArrays(1, &post_vao_);
       copy_shader_.reset();
       gpu_timer_.reset();
@@ -1082,8 +1078,7 @@ class GLRenderingDriver : public RenderingDriver {
   SpriteProgram sprite_programs_[2];                         // computed dot, textured dot
   bool sprite_failed_[2] = {false, false};
   GLuint skybox_program_ = 0;
-  GLuint skybox_vao_ = 0;
-  GLuint skybox_vbo_ = 0;
+  GLint skybox_ray_ = -1;                     // its uSkyRay
   GLuint post_vao_ = 0;                       // empty: post passes draw a triangle made in the shader
   std::shared_ptr<Shader> copy_shader_;       // a post pass without a usable shader
   PostPass upscale_pass_{.name = "Upscale"};  // kUpscalePass: no material, so a copy

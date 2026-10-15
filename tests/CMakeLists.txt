@@ -39,6 +39,7 @@ add_executable(wlw_tests
   search_tests.cpp
   shader_system_tests.cpp
   shader_tests.cpp
+  sky_tests.cpp
   system_tests.cpp
   ui_tests.cpp
   version_tests.cpp

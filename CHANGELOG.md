@@ -156,6 +156,25 @@ then it's deleted (listed under **Removed**).
   baked on the CPU with inverse-transpose normals (no stored reference; turning off the mirror flip on the CPU or
   in GLSL fails it with 3% of pixels). Golden references unchanged.
 
+### Skybox after opaques (Roadmap 1.5)
+- The skybox is drawn after the opaque draws and before the transparent ones, at depth 1.0 with the depth test
+  `LEQUAL` (set only around the sky draw; the engine's default stays `LESS`) and no depth writes, like Unreal,
+  Unity URP and Godot: the early depth test skips every sky pixel an opaque mesh covers, and transparent meshes
+  still blend over the sky. A viewport without a depth buffer draws the sky first, as before.
+- The sky is one triangle over the viewport (`skybox.vert`, no vertex buffer; was a 36-vertex cube) whose corners
+  carry their view rays from `rendering::SkyRayMatrix(view, projection)` (`rendering/sky.h`, computed on the CPU
+  once per draw: `inverse(mat3(view)) * inverse(projection)`; the rays are linear on the far plane, so the
+  interpolation is exact). `SkyDrawPosition(sorted draws, has_depth)` picks its place in the draw order.
+- Orthographic cameras now get a sky over the whole viewport (the cube used to show as a small square in the middle).
+- RTX 5080, Windows Release, 2560x1440, an opaque wall over 89% of the picture, alternating runs (3 x 3 rounds of
+  1000 frames): the sky's GPU cost 0.0124-0.0139 ms -> -0.0001-0.0019 ms (about 90% less = the covered share).
+  Mali Offline Compiler (Mali-G78), `skybox.vert` position variant: arithmetic 0.78 -> 0.47 cycles, load/store
+  3 -> 2, work registers 16 -> 11, and 3 vertices instead of 36; `skybox.frag` unchanged.
+- Tests: `sky` suite (rays through the pixels for a moved and turned perspective camera, exact interpolation over
+  the triangle, translation dropped, orthographic rays ahead, the sky's place in the draw order); golden images
+  `gpu: skybox` (sky behind an opaque cube, a see-through cube blending over both), `gpu: skybox orthographic`,
+  `gpu: skybox without depth buffer`.
+
 ## 0.1.0 (2026-10-15): Phase 0, safety net and tooling
 
 The first tagged version: tests (doctest, golden images, benchmarks), CI on Windows, Linux and Android, logging,

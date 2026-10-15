@@ -5,10 +5,13 @@ first (Android, iOS, web), with desktop as a full target. This plan came out of 
 architecture review. Work goes one step at a time, in order. Step ids are stable: commits name
 them ("Roadmap 4.3b: ...").
 
-**Current step:** 1.5 Skybox after opaques (not planned yet) · **Updated:** 2026-10-16
+**Current step:** 1.6 Instances (not planned yet) · **Updated:** 2026-10-16
 
-**Next session:** research and plan 1.5 (concept + exact plan in chat, wait for the OK), then implement it on a
-branch. 1.4 is done: merged 2026-10-16 ("Next session plan: 1.4" below has its plan and outcome).
+**Next session:** research and plan 1.6 (concept + exact plan in chat, wait for the OK), then implement it on a
+branch. 1.6 is Phase 1's last step: after it, release v0.2.0 and move both games to it.
+1.5 is done (2026-10-16): the sky is drawn after the opaques, one full-screen triangle, LEQUAL around its draw only
+(owner chose the recommended options; no phone run: no game uses a skybox yet). Numbers: CHANGELOG 1.5.
+1.4 is done: merged 2026-10-16 ("Next session plan: 1.4" below has its plan and outcome).
 1.3 is done: 1.3a and 1.3b merged 2026-10-15.
 1.3b (canvas shader): each pixel computes only its quad's kind. Mali-G78 longest path 2.62 -> 1.38 arithmetic cycles,
 images 0.16; Pixel 4 Threadlock canvas GPU 4.96 -> 2.30 ms (-54%), frame 7.08 -> 5.0 ms (CHANGELOG 1.3b). The owner
@@ -221,7 +224,7 @@ libunibreak (zlib), msdfgen (MIT), Jolt (MIT), Box2D v3 (MIT), ImGuizmo (MIT), F
   own quad kind).
 - [x] **1.4 Cofactor normals.** *(done 2026-10-16, commit "Roadmap 1.4: cofactor normals"; render/cull 10k 54.7 -> 39.5 us; Mali-G78 instanced mesh vertex 6.50 -> 2.40 arithmetic cycles, 64 -> 32 registers)* Replace the per-vertex `inverse()` and the CPU inverse; correct for
   mirrored transforms; tested against inverse-transpose.
-- [ ] **1.5 Skybox after opaques.** Depth test `LEQUAL`; golden image. (From 1.4: `skybox.vert` multiplies
+- [x] **1.5 Skybox after opaques.** *(done 2026-10-16, commit "Roadmap 1.5: skybox after opaques"; one full-screen triangle with rays from `SkyRayMatrix`, LEQUAL around the sky draw only, sky first without depth; RTX 5080 1440p, 89% covered: sky 0.013 -> 0.001 ms; Mali-G78 sky vertex 0.78 -> 0.47 cycles)* Depth test `LEQUAL`; golden image. (From 1.4: `skybox.vert` multiplies
   `uProjection * mat4(mat3(uView))` per vertex: one matrix-vector chain, or the product on the CPU, instead.)
 - [ ] **1.6 Instances.** 52-byte instances (3x4 matrix + RGBA8), instance bounds cached on change,
   a `WriteInstances(count)` span API; Bluzzle's particles use it.
