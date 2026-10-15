@@ -1,12 +1,17 @@
 // The renderer's CPU side, without a GPU: the scene walk (gather), frustum culling with matrices
-// and depths (cull), the draw-order sort, and node transforms. At 1k and 10k nodes.
+// and depths (cull), the draw-order sort, and node transforms. At 1k and 10k nodes. Plus the bounds
+// of an instanced node's 5k copies (recomputed after each write).
+#include <memory>
+
 #include <glm/gtc/matrix_transform.hpp>
 
 #include "bench.h"
 #include "wlw/core/random.h"
+#include "wlw/rendering/instance_buffer.h"
 #include "wlw/rendering/render_list.h"
 #include "wlw/rendering/scene_gather.h"
 #include "wlw/scene/light.h"
+#include "wlw/scene/node.h"
 #include "wlw/scene/scene.h"
 #include "wlw/utils/primitives.h"
 
@@ -125,11 +130,32 @@ void TransformBenchmarks(bench::Context& ctx, int count, const char* size) {
   });
 }
 
+void InstanceBoundsBenchmark(bench::Context& ctx) {
+  // 5k copies with random rotations, scales and positions (a particle field): one op = one write +
+  // the bounds the renderer asks for after it.
+  constexpr size_t kCopies = 5000;
+  scene::Node3D node;
+  auto model = std::make_shared<core::Model<core::Vertex3D>>();
+  model->meshes.push_back(utils::createCubeWithNormals(1.0f));
+  node.SetModel(model);
+  core::Random rng(42);
+  for (rendering::Instance& copy : node.WriteInstances(kCopies)) {
+    glm::mat4 m = glm::translate(glm::mat4(1.0f), glm::vec3(rng.Range(-20, 20), rng.Range(0, 10), rng.Range(-20, 20)));
+    m = glm::rotate(m, rng.Range(0, 6.28f), glm::normalize(glm::vec3(rng.Range(-1, 1), 1.0f, rng.Range(-1, 1))));
+    copy.SetTransform(glm::scale(m, glm::vec3(rng.Range(0.1f, 0.5f))));
+  }
+  ctx.Run("render/instance bounds 5k", [&] {
+    node.WriteInstances(kCopies);  // same copies, new version: the cache is stale
+    bench::Context::Keep(node.InstanceBounds().max.x);
+  });
+}
+
 }  // namespace
 
 WLW_BENCHMARK("render") {
   RenderBenchmarks(ctx, 1000, "1k");
   RenderBenchmarks(ctx, 10000, "10k");
+  InstanceBoundsBenchmark(ctx);
 }
 
 WLW_BENCHMARK("transform") {

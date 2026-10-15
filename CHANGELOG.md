@@ -175,6 +175,62 @@ then it's deleted (listed under **Removed**).
   `gpu: skybox` (sky behind an opaque cube, a see-through cube blending over both), `gpu: skybox orthographic`,
   `gpu: skybox without depth buffer`.
 
+### Instances (Roadmap 1.6)
+- `rendering::Instance` (`rendering/instance_buffer.h`): 52 bytes per instanced copy (was 80: a `mat4` + a float
+  colour), the layout of Godot's GLES3 renderer: the top 3 rows of the copy's affine transform (`.w` = translation)
+  + an RGBA8 tint. `Instance::FromTransform(m, tint)`, `SetTransform`, `Transform()`. The GPU reads the tint as 4
+  bytes scaled to 0..1.
+- `Node::WriteInstances(count)` returns the copies as a span to fill in place, like `SpriteBatch::Write`: the first
+  min(old, count) keep their values, new ones start as identity + white, each call is one change (one upload, one
+  bounds update). `Instances()`, `InstanceCount()`, `ReserveInstances(n)`, `ClearInstances()`, `IsInstanced()`.
+- Instance bounds: `Node::InstanceBounds()` = the node-space box of every copy (each copy's transform applied to the
+  model's box by Arvo's method), cached until the next write or until the model's box changes, so a moving node
+  costs nothing and copies written once are measured once. `SetInstanceBounds(box)` sets a fixed box instead (like
+  Godot's `custom_aabb`: a particle field's volume, or displacement a shader adds); `nullopt` computes it again.
+  `GetAABB()` moves boxes to world space with `scene::TransformBox` (Arvo, `core/collision.h`, exact for a box:
+  2 matrix-vector products instead of 8 corners), per mesh for plain nodes (as tight as before), the cached bounds
+  for instanced ones. `scene::Union(a, b)` too.
+- `fx::ParticleSystem::WriteTo(node)` writes the particles straight into the node's copies (like
+  `FlowParticles::WriteTo`), reserving its capacity there once. The rows of T * Rx * Ry * Rz * S are written in
+  closed form instead of 4 matrix products, sines and cosines by `core::SinCos` (new `core/math.h`: one Cody-Waite
+  reduction for both, Cephes polynomials, quadrants without branches; max error 1.2e-7 over +-60 rad), colours by a
+  `PackColor` without `std::lround` (the same bytes for every float in 0..1, checked exhaustively; NaN = 0).
+- Windows Release (Ryzen 7 9800X3D, MSVC, alternating runs against main, medians of 3): `fx/particles instances 5k`
+  315 -> 120 us (-62%); `render/gather` 10k 659 -> 403 us (-39%), 1k 57.6 -> 31.1 us (-46%) (Arvo boxes + no
+  reference counting in `GetModel`); new `render/instance bounds 5k` = 20 us (one write + the bounds after it; before,
+  every frame multiplied each copy's matrix by the node's and moved its 8 corners). Bytes uploaded per copy 80 -> 52.
+  `transform/move flat` 1k reads 4-9% slower (the node is ~90 bytes bigger: the bounds cache; Phase 2.2 rewrites
+  the node). The plan's scratch replica estimated 73 us for the particles: MSVC's `SinCos` costs ~4 ns a call here.
+- Shaders: `wlw/instance.glsl` (attributes `aInstanceRow0..2` at locations 4-6, `aInstanceTint` at 7;
+  `InstancePosition(p)` = 3 dot products, `InstanceNormal(n)` = the cofactor of the rows (cross products of rows),
+  `InstanceTransform()`), used by `mesh.vert` and `shadow.vert` INSTANCED and by game mesh shaders. Mali Offline
+  Compiler, longest path load/store cycles (the bound) and work registers, before -> after: Mali-G78 instanced mesh
+  varying 14 -> 13 (32 registers, full occupancy), lit + shadows 15 -> 14, position variant 7 -> 6 (29 -> 24
+  registers), instanced shadow 7 -> 6, game default vertex stage 16 -> 13; Mali-G76 instanced mesh 17 -> 16,
+  lit + shadows 19 -> 18, position 5 -> 4, shadow 5 -> 4, game default 19 -> 16. Plain mesh variants keep their
+  cycles. `mesh.vert` declares its varyings with `vUV` first: with `vColor` first the G78 unlit instanced variant
+  needs 50 registers (half occupancy).
+- `Node::GetModel()` / `GetMaterial()` return `const std::shared_ptr<...>&` (were copies: an atomic increment and
+  decrement per call, per node per frame in the scene walk). Source-compatible; a reference kept across `SetModel`
+  / `SetMaterial` now sees the new one.
+- Tests: `instances` suite (layout and transforms, `PackColor` against `lround` on every 997th float in 0..1 and at
+  each byte's halves, `SinCos` against double precision over +-1000 rad and at the quadrant edges, `TransformBox` and
+  `InstanceBounds` against brute-force corners for random affine transforms with mirrors and shears,
+  `WriteInstances` keeping / adding / trimming copies and keeping its storage, the cache following writes, a new
+  model, new vertices and the override, plain boxes against each mesh's corners, the shims); `write to matches the
+  matrices glm builds` (2000-degree rotations, 1e-5). Golden references unchanged (`gpu: instancing`, `gpu: normals
+  match inverse-transpose`).
+- **Deprecated** (removed in 0.3): `rendering::InstanceData` -> `rendering::Instance`; `Node::SetInstances(vector)`
+  -> `WriteInstances(count)` and fill the span; `Node::GetInstances()` (now converted copies, by value) ->
+  `Instances()`; `ParticleSystem::BuildInstances(out)` -> `WriteTo(node)`.
+- **Breaking:** game mesh shaders' `aInstanceTransform` (mat4) is gone: use `aInstanceRow0..2`, or
+  `InstanceTransform()` / `InstancePosition()` / `InstanceNormal()` (`WorldPosition` / `WorldNormal` are unchanged,
+  and no game shader used the attribute). Tints are clamped to 0..1 (8 bits each).
+- **Migration:** particles: `particles.WriteTo(*node)` once per frame instead of `BuildInstances` +
+  `SetInstances`, and `node->WriteInstances(0)` at setup instead of `SetInstances({})`. Copies that don't move
+  (a grid of cubes turning together): put the motion on the node's transform and write the copies once: uploaded
+  once, measured once.
+
 ## 0.1.0 (2026-10-15): Phase 0, safety net and tooling
 
 The first tagged version: tests (doctest, golden images, benchmarks), CI on Windows, Linux and Android, logging,

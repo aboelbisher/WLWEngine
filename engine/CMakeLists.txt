@@ -55,6 +55,7 @@ add_library(wlw STATIC
   wlw/core/git_info.h
   wlw/core/log.cpp
   wlw/core/log.h
+  wlw/core/math.h
   wlw/core/mesh.h
   wlw/core/normal_matrix.h
   wlw/core/random.h
@@ -110,6 +111,7 @@ add_library(wlw STATIC
   wlw/rendering/glsl_header.cpp
   wlw/rendering/glsl_header.h
   wlw/rendering/index_buffer.h
+  wlw/rendering/instance_buffer.cpp
   wlw/rendering/instance_buffer.h
   wlw/rendering/material.h
   wlw/rendering/mesh_variant.h

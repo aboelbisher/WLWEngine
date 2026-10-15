@@ -60,7 +60,6 @@ class SnakeApp : public wlw::app::System {
   // Sparkles when the snake eats: one instanced node draws every particle in one call.
   wlw::fx::ParticleSystem particles_{256};
   NodePtr particle_node_;
-  std::vector<wlw::rendering::InstanceData> particle_instances_;
   std::shared_ptr<wlw::scene::OrthographicCamera> ortho_camera_;
   std::shared_ptr<wlw::scene::FollowCamera> perspective_camera_;
 };

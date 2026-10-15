@@ -48,7 +48,7 @@ TEST_CASE("gather collects drawables lights and sprites") {
   hidden->AddNode(Cube({2, 0, 0}));  // hidden with its parent
   scene.AddNode(hidden);
   auto empty_instanced = Cube({3, 0, 0});
-  empty_instanced->SetInstances({});
+  empty_instanced->WriteInstances(0);
   scene.AddNode(empty_instanced);
   scene.AddNode(std::make_shared<scene::DirectionalLight>());
   auto dots = std::make_shared<scene::SpriteBatch>(4);
@@ -124,7 +124,7 @@ TEST_CASE("cull normal matrices") {
   scaled->SetScale({2.0f, 1.0f, 1.0f});
   auto instanced = Cube({1, 0, 0});
   instanced->SetScale({2.0f, 1.0f, 1.0f});
-  instanced->SetInstances({rendering::InstanceData{}});
+  instanced->WriteInstances(1);
   scene.AddNode(scaled);
   scene.AddNode(instanced);
   SceneGather gather;

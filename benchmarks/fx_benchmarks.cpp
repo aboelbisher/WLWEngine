@@ -1,11 +1,12 @@
 // Particles: FlowParticles at 20k dots (Update, WriteTo) and ParticleSystem at 5k (Update,
-// BuildInstances): the sizes Bluzzle's effects run at.
+// WriteTo into a node's instances): the sizes Bluzzle's effects run at.
 #include <cmath>
 #include <vector>
 
 #include "bench.h"
 #include "wlw/fx/flow_particles.h"
 #include "wlw/fx/particle_system.h"
+#include "wlw/scene/node.h"
 #include "wlw/scene/sprite_batch.h"
 
 using namespace wlw;
@@ -62,11 +63,10 @@ void ParticleBenchmarks(bench::Context& ctx) {
     system.Update(1.0f / 60.0f);
     bench::Context::Keep(system.Count());
   });
-  std::vector<rendering::InstanceData> instances;
-  instances.reserve(kParticles);
+  scene::Node3D node;  // (the name is older than WriteTo: before 1.6 it timed BuildInstances)
   ctx.Run("fx/particles instances 5k", [&] {
-    system.BuildInstances(instances);
-    bench::Context::Keep(instances.size());
+    system.WriteTo(node);
+    bench::Context::Keep(node.InstanceCount());
   });
 }
 

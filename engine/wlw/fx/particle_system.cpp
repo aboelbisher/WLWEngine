@@ -2,9 +2,9 @@
 
 #include <algorithm>
 #include <cmath>
+#include <span>
 
-#include <glm/gtc/matrix_transform.hpp>
-
+#include "wlw/core/math.h"
 #include "wlw/core/profile.h"
 
 namespace wlw::fx {
@@ -108,19 +108,51 @@ void ParticleSystem::Update(float dt) {
   }
 }
 
-void ParticleSystem::BuildInstances(std::vector<rendering::InstanceData>& out) const {
-  out.clear();
+namespace {
+
+// The particle's copy: the rows of translate(position) * rotate x * rotate y * rotate z * scale(size)
+// (glm's order, the one the particles always had), written out instead of 4 matrix products. With
+// Rz = [cz -sz 0; sz cz 0; 0 0 1], Ry = [cy 0 sy; 0 1 0; -sy 0 cy], Rx = [1 0 0; 0 cx -sx; 0 sx cx]:
+// Ry * Rz = [cy*cz -cy*sz sy; sz cz 0; -sy*cz sy*sz cy], and Rx mixes its rows 1 and 2.
+void WriteInstance(const ParticleSystem::Particle& p, float size, rendering::Instance& out) {
+  constexpr float kRadians = 0.0174532925199432958f;  // glm::radians' factor
+  const auto [sx, cx] = core::SinCos(p.rotation.x * kRadians);
+  const auto [sy, cy] = core::SinCos(p.rotation.y * kRadians);
+  const auto [sz, cz] = core::SinCos(p.rotation.z * kRadians);
+  const float sxsy = sx * sy, cxsy = cx * sy;
+  out.rows[0] = {size * (cy * cz), size * (-cy * sz), size * sy, p.position.x};
+  out.rows[1] = {size * (sxsy * cz + cx * sz), size * (cx * cz - sxsy * sz), size * (-sx * cy), p.position.y};
+  out.rows[2] = {size * (sx * sz - cxsy * cz), size * (cxsy * sz + sx * cz), size * (cx * cy), p.position.z};
+  out.color = rendering::PackColor(p.color);
+}
+
+}  // namespace
+
+void ParticleSystem::WriteTo(scene::Node3D& node) const {
+  WLW_PROFILE_SCOPE("ParticleSystem::WriteTo");
+  node.ReserveInstances(capacity_);  // allocates once: later writes stay within it
+  const std::span<rendering::Instance> out = node.WriteInstances(particles_.size());
+  size_t count = 0;
   for (const Particle& p : particles_) {
-    if (p.age < 0.0f) continue;
+    if (p.age < 0.0f) continue;  // still delayed
     const float size = p.Size();
     if (size <= 0.0f) continue;
-    glm::mat4 m = glm::translate(glm::mat4(1.0f), p.position);
-    m = glm::rotate(m, glm::radians(p.rotation.x), glm::vec3(1, 0, 0));
-    m = glm::rotate(m, glm::radians(p.rotation.y), glm::vec3(0, 1, 0));
-    m = glm::rotate(m, glm::radians(p.rotation.z), glm::vec3(0, 0, 1));
-    m = glm::scale(m, glm::vec3(size));
-    out.push_back({m, p.color});
+    WriteInstance(p, size, out[count++]);
+  }
+  if (count < out.size()) node.WriteInstances(count);  // drop the slots of the skipped ones
+}
+
+#if !WLW_NO_DEPRECATED
+WLW_DISABLE_DEPRECATION_WARNINGS_BEGIN
+void ParticleSystem::BuildInstances(std::vector<rendering::InstanceData>& out) const {
+  scene::Node3D node;  // the copies as WriteTo makes them, then the old 80-byte form
+  WriteTo(node);
+  out.clear();
+  for (const rendering::Instance& instance : node.Instances()) {
+    out.push_back({instance.Transform(), rendering::UnpackColor(instance.color)});
   }
 }
+WLW_DISABLE_DEPRECATION_WARNINGS_END
+#endif
 
 }  // namespace wlw::fx

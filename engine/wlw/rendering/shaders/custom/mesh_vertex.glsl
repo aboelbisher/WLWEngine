@@ -2,13 +2,12 @@
 // The frame block gives uView, uProjection, uViewProjection, uCameraPos, the lights...
 #include "wlw/common.glsl"
 #include "wlw/frame.glsl"
+#include "wlw/instance.glsl"  // aInstanceRow0..2, aInstanceTint, InstanceTransform(), InstancePosition/Normal
 
 layout (location = 0) in vec3 aPos;
 layout (location = 1) in vec4 aColor;
 layout (location = 2) in vec3 aNormal;
 layout (location = 3) in vec2 aUV;
-layout (location = 4) in mat4 aInstanceTransform;
-layout (location = 8) in vec4 aInstanceTint;
 
 uniform highp mat4 uModel;
 uniform highp mat3 uNormalMatrix;  // carries the node's normals to world space (not unit length)
@@ -22,10 +21,10 @@ out mediump vec4 vColor;
 // The usual transforms, instanced copies included: a point of the mesh in world space, and a mesh
 // normal in world space (unit length).
 highp vec4 WorldPosition(highp vec3 local) {
-  if (uInstanced) local = (aInstanceTransform * vec4(local, 1.0)).xyz;
+  if (uInstanced) local = InstancePosition(local);
   return uModel * vec4(local, 1.0);
 }
 highp vec3 WorldNormal(highp vec3 normal) {
-  if (uInstanced) normal = NormalMatrix(mat3(aInstanceTransform)) * normal;
+  if (uInstanced) normal = InstanceNormal(normal);
   return SafeNormalize(uNormalMatrix * normal);
 }

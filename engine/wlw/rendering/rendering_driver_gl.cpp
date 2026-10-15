@@ -823,7 +823,7 @@ class GLRenderingDriver : public RenderingDriver {
     if (!node.IsInstanced()) return nullptr;
     if (!node.GetInstanceBuffer()) node.SetInstanceBuffer(std::make_unique<GLInstanceBuffer>());
     auto* buffer = static_cast<GLInstanceBuffer*>(node.GetInstanceBuffer());
-    const size_t bytes = buffer->Upload(node.GetInstances(), node.GetInstancesVersion());
+    const size_t bytes = buffer->Upload(node.Instances(), node.GetInstancesVersion());
     if (stats) stats->instance_bytes += static_cast<int>(bytes);
     return buffer;
   }
@@ -861,7 +861,7 @@ class GLRenderingDriver : public RenderingDriver {
     index_buffer->Bind();
     const auto index_count = static_cast<GLsizei>(mesh.GetIndices().size());
     if (instances) {
-      const auto count = static_cast<GLsizei>(node.GetInstances().size());
+      const auto count = static_cast<GLsizei>(node.InstanceCount());
       instances->Attach();
       glDrawElementsInstanced(GL_TRIANGLES, index_count, GL_UNSIGNED_INT, nullptr, count);
       GLInstanceBuffer::Detach();

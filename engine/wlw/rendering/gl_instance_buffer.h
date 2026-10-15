@@ -6,7 +6,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <span>
-#include <vector>
 
 #include "wlw/platform/platform.h"
 #include "wlw/rendering/gl.h"
@@ -14,12 +13,12 @@
 
 namespace wlw::rendering {
 
-// GL buffer holding a node's per-instance data, fed to the 3D shader's instance attributes
-// (locations 4..7 = transform, 8 = tint; see shaders/mesh.vert).
+// GL buffer holding a node's copies (Instance, 52 bytes each), fed to the 3D shader's instance
+// attributes: locations 4..6 = the transform's rows, 7 = the RGBA8 tint (shaders/wlw/instance.glsl).
 class GLInstanceBuffer : public WInstanceBuffer {
  public:
-  static constexpr GLuint kTransformLocation = 4;  // a mat4 attribute uses 4 vec4 locations
-  static constexpr GLuint kTintLocation = 8;
+  static constexpr GLuint kRowLocation = 4;  // rows 0, 1, 2 at 4, 5, 6
+  static constexpr GLuint kTintLocation = 7;
 
   GLInstanceBuffer() { glGenBuffers(1, &vbo_); }
   ~GLInstanceBuffer() override {
@@ -29,10 +28,10 @@ class GLInstanceBuffer : public WInstanceBuffer {
   // Copies the instances to the GPU, only if they changed since the last upload. The storage
   // grows (doubling) but never shrinks, so steady particle counts don't reallocate. Returns the
   // bytes copied (0 = unchanged).
-  size_t Upload(const std::vector<InstanceData>& instances, uint64_t version) {
+  size_t Upload(std::span<const Instance> instances, uint64_t version) {
     if (version == uploaded_version_) return 0;
     uploaded_version_ = version;
-    const auto bytes = static_cast<GLsizeiptr>(instances.size() * sizeof(InstanceData));
+    const auto bytes = static_cast<GLsizeiptr>(instances.size_bytes());
     if (bytes == 0) return 0;
     if (bytes > capacity_bytes_) capacity_bytes_ = 2 * bytes;
     UploadOrphaned(vbo_, capacity_bytes_, instances.data(), bytes);
@@ -51,22 +50,22 @@ class GLInstanceBuffer : public WInstanceBuffer {
   // mesh's VAO bound, and Detach() after drawing: the VAO is shared with non-instanced draws.
   void Attach() const {
     glBindBuffer(GL_ARRAY_BUFFER, vbo_);
-    const GLsizei stride = sizeof(InstanceData);
-    for (GLuint column = 0; column < 4; ++column) {
-      const GLuint location = kTransformLocation + column;
+    const GLsizei stride = sizeof(Instance);
+    for (GLuint row = 0; row < 3; ++row) {
+      const GLuint location = kRowLocation + row;
       glEnableVertexAttribArray(location);
       glVertexAttribPointer(location, 4, GL_FLOAT, GL_FALSE, stride,
-                            reinterpret_cast<void*>(offsetof(InstanceData, transform) + column * 4 * sizeof(float)));
+                            reinterpret_cast<void*>(offsetof(Instance, rows) + row * sizeof(glm::vec4)));
       glVertexAttribDivisor(location, 1);
     }
-    glEnableVertexAttribArray(kTintLocation);
-    glVertexAttribPointer(kTintLocation, 4, GL_FLOAT, GL_FALSE, stride,
-                          reinterpret_cast<void*>(offsetof(InstanceData, tint)));
+    glEnableVertexAttribArray(kTintLocation);  // 4 bytes, scaled to 0..1 by the GPU
+    glVertexAttribPointer(kTintLocation, 4, GL_UNSIGNED_BYTE, GL_TRUE, stride,
+                          reinterpret_cast<void*>(offsetof(Instance, color)));
     glVertexAttribDivisor(kTintLocation, 1);
   }
 
   static void Detach() {
-    for (GLuint location = kTransformLocation; location <= kTintLocation; ++location) {
+    for (GLuint location = kRowLocation; location <= kTintLocation; ++location) {
       glVertexAttribDivisor(location, 0);
       glDisableVertexAttribArray(location);
     }

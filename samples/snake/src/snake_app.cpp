@@ -62,7 +62,7 @@ void SnakeApp::OnStart() {
   particle_node_ = std::make_shared<scene::Node3D>();
   particle_node_->SetModel(MakeModel(utils::createCubeWithNormals(1.0f)));  // white: tinted per particle
   particle_node_->SetMaterial(material_);
-  particle_node_->SetInstances({});
+  particle_node_->WriteInstances(0);  // instanced: no copies until the first sparkle
   App().Window().GetScreen().GetScene()->AddNode(particle_node_);
 
   SetupCameras();
@@ -235,8 +235,7 @@ void SnakeApp::OnRender(float alpha) {
   food_node_->SetPosition({(float)food.x, 0.55f + bob, (float)food.z});
   food_node_->SetRotation({0.0f, food_spin_, 0.0f});
 
-  particles_.BuildInstances(particle_instances_);
-  particle_node_->SetInstances(particle_instances_);
+  particles_.WriteTo(*particle_node_);
 }
 
 void SnakeApp::SyncSnakeNodes(float t) {

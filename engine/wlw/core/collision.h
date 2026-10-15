@@ -3,6 +3,8 @@
 #include <cmath>
 #include <optional>
 
+#include <glm/glm.hpp>
+
 #include "wlw/core/vector3.h"
 
 namespace wlw::scene {
@@ -65,5 +67,28 @@ struct AABB {
     return {{pos.x - half.x, pos.y - half.y, pos.z - half.z}, {pos.x + half.x, pos.y + half.y, pos.z + half.z}};
   }
 };
+
+// The box around `box` moved by the affine `transform` (exactly the box of its 8 transformed corners).
+// Arvo's method ("Transforming Axis-Aligned Bounding Boxes", Graphics Gems 1990): the centre goes
+// through the matrix, the half-size through the matrix's absolute values (each output axis gets the
+// most every input axis can reach along it). 2 matrix-vector products instead of 8.
+inline AABB TransformBox(const glm::mat4& transform, const AABB& box) {
+  const glm::vec3 min(box.min.x, box.min.y, box.min.z);
+  const glm::vec3 max(box.max.x, box.max.y, box.max.z);
+  const glm::vec3 centre = (min + max) * 0.5f;
+  const glm::vec3 half = (max - min) * 0.5f;
+  const glm::mat3 linear(transform);
+  const glm::vec3 moved = linear * centre + glm::vec3(transform[3]);
+  const glm::mat3 reach(glm::abs(linear[0]), glm::abs(linear[1]), glm::abs(linear[2]));
+  const glm::vec3 extent = reach * half;
+  return {{moved.x - extent.x, moved.y - extent.y, moved.z - extent.z},
+          {moved.x + extent.x, moved.y + extent.y, moved.z + extent.z}};
+}
+
+// The smallest box holding both.
+inline AABB Union(const AABB& a, const AABB& b) {
+  return {{std::min(a.min.x, b.min.x), std::min(a.min.y, b.min.y), std::min(a.min.z, b.min.z)},
+          {std::max(a.max.x, b.max.x), std::max(a.max.y, b.max.y), std::max(a.max.z, b.max.z)}};
+}
 
 }  // namespace wlw::scene

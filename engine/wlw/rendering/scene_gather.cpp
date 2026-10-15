@@ -51,7 +51,7 @@ void GatherScene(const scene::Scene& scene, SceneGather& out) {
     }
     const auto& model = node->GetModel();
     if (model == nullptr || model->meshes.empty()) return;
-    if (node->IsInstanced() && node->GetInstances().empty()) return;  // instanced with zero copies
+    if (node->IsInstanced() && node->InstanceCount() == 0) return;  // instanced with zero copies
     const scene::AABB box = node->GetAABB();
     out.drawables.push_back({node.get(), box});
     if (node->CastsShadow()) Grow(out.casters, out.has_casters, box);

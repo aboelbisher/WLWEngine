@@ -4,6 +4,7 @@
 #include <array>
 #include <cmath>
 #include <memory>
+#include <span>
 #include <vector>
 
 #include <glm/glm.hpp>
@@ -193,17 +194,15 @@ TEST_CASE("instancing") {
   viewport->SetCamera(std::make_shared<FixedCamera>(core::Vector3{0, 7, 7}, core::Vector3{0, 0, 0}));
   AddSun(*viewport);
   auto node = AddMesh(*viewport, utils::createCubeWithNormals(0.7f), Opaque(), {0, 0, 0});
-  std::vector<rendering::InstanceData> copies;
+  std::span<rendering::Instance> copies = node->WriteInstances(25);
   for (int z = 0; z < 5; ++z) {
     for (int x = 0; x < 5; ++x) {
-      rendering::InstanceData copy;
-      copy.transform = glm::translate(glm::mat4(1.0f), glm::vec3(x - 2.0f, 0.15f * (x + z), z - 2.0f));
-      copy.transform = glm::rotate(copy.transform, glm::radians(9.0f * (x * 5 + z)), glm::vec3(0, 1, 0));
-      copy.tint = {0.2f + 0.2f * x, 0.9f - 0.15f * z, 0.5f, 1.0f};
-      copies.push_back(copy);
+      glm::mat4 transform = glm::translate(glm::mat4(1.0f), glm::vec3(x - 2.0f, 0.15f * (x + z), z - 2.0f));
+      transform = glm::rotate(transform, glm::radians(9.0f * (x * 5 + z)), glm::vec3(0, 1, 0));
+      const core::Color tint{0.2f + 0.2f * x, 0.9f - 0.15f * z, 0.5f, 1.0f};
+      copies[static_cast<size_t>(z * 5 + x)] = rendering::Instance::FromTransform(transform, tint);
     }
   }
-  node->SetInstances(std::move(copies));
   CheckGolden("instancing", viewport);
 }
 
@@ -369,12 +368,11 @@ std::vector<std::shared_ptr<scene::Node3D>> AddTransformedShapes(scene::Viewport
   drawn.push_back(child);
 
   auto copies = add(utils::createSphereWithNormals(0.4f, 12, 24), {1.5f, -1.1f, 0}, {0, 0, 0}, {1.3f, 1.0f, 1.0f});
-  std::vector<rendering::InstanceData> instances(3);
-  instances[0].transform = glm::scale(glm::translate(glm::mat4(1.0f), {-0.7f, 0, 0}), {1.0f, 0.4f, 1.0f});
-  instances[1].transform = glm::scale(glm::rotate(glm::mat4(1.0f), 0.6f, {0, 0, 1}), {-0.8f, 1.2f, 1.0f});
-  instances[2].transform =
-      glm::scale(glm::rotate(glm::translate(glm::mat4(1.0f), {0.7f, 0, 0}), 0.9f, {1, 1, 0}), {0.5f, -1.0f, 1.5f});
-  copies->SetInstances(std::move(instances));
+  std::span<rendering::Instance> instances = copies->WriteInstances(3);
+  instances[0].SetTransform(glm::scale(glm::translate(glm::mat4(1.0f), {-0.7f, 0, 0}), {1.0f, 0.4f, 1.0f}));
+  instances[1].SetTransform(glm::scale(glm::rotate(glm::mat4(1.0f), 0.6f, {0, 0, 1}), {-0.8f, 1.2f, 1.0f}));
+  instances[2].SetTransform(
+      glm::scale(glm::rotate(glm::translate(glm::mat4(1.0f), {0.7f, 0, 0}), 0.9f, {1, 1, 0}), {0.5f, -1.0f, 1.5f}));
   return drawn;
 }
 
@@ -400,7 +398,7 @@ void AddBakedShapes(scene::Viewport& viewport, const std::vector<std::shared_ptr
     const glm::mat4 world = shape->GetModelMatrix();
     for (const auto& mesh : shape->GetModel()->meshes) {
       if (!shape->IsInstanced()) bake(*mesh, shape->GetMaterial(), world);
-      for (const auto& copy : shape->GetInstances()) bake(*mesh, shape->GetMaterial(), world * copy.transform);
+      for (const auto& copy : shape->Instances()) bake(*mesh, shape->GetMaterial(), world * copy.Transform());
     }
   }
 }

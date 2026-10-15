@@ -5,10 +5,13 @@ first (Android, iOS, web), with desktop as a full target. This plan came out of 
 architecture review. Work goes one step at a time, in order. Step ids are stable: commits name
 them ("Roadmap 4.3b: ...").
 
-**Current step:** 1.6 Instances (not planned yet) · **Updated:** 2026-10-16
+**Current step:** release v0.2.0 (Phase 1 done once 1.6 is merged) · **Updated:** 2026-10-16
 
-**Next session:** research and plan 1.6 (concept + exact plan in chat, wait for the OK), then implement it on a
-branch. 1.6 is Phase 1's last step: after it, release v0.2.0 and move both games to it.
+**Next session:** release v0.2.0 (CLAUDE.md "Versioning": wait for main's CI, bump project(VERSION) to 0.2.0, CHANGELOG
+"Unreleased" -> "## 0.2.0 (date): Phase 1, rendering performance", tag, GitHub Release), then move both games to the
+tag (Bluzzle: `particles_.WriteTo(*particle_node_)` + `WriteInstances(0)` at setup, drop `particle_instances_`; both
+add Swappy's Java dir + R8 rule if missing). The 0.2 shims stay through v0.2.x and go before v0.3.0.
+1.6 (2026-10-16): implemented on `bench/instances` as planned ("Next session plan: 1.6" below has the outcome).
 1.5 is done (2026-10-16): the sky is drawn after the opaques, one full-screen triangle, LEQUAL around its draw only
 (owner chose the recommended options; no phone run: no game uses a skybox yet). Numbers: CHANGELOG 1.5.
 1.4 is done: merged 2026-10-16 ("Next session plan: 1.4" below has its plan and outcome).
@@ -70,6 +73,36 @@ Where things stand (2026-10-15):
   by CI only.
 - 1.3 was researched and planned on 2026-10-15 and the owner approved the plan with the recommended decisions (next
   section). Findings that belong to later steps are written into those steps: 3.6, 4.2, 6.6, 8.2, 10.2, 10.4.
+
+## Next session plan: 1.6 (approved 2026-10-16)
+Branch `bench/instances`, one squashed commit "Roadmap 1.6: instances". The owner took every recommended decision
+(core::SinCos yes; plain nodes' boxes by the same Arvo transform; SetInstanceBounds override; RGBA8 tints, HDR glow =
+emissive materials in 8.2) and asked to fold in the side findings (GetModel/GetMaterial by const reference).
+*Outcome: done as below (numbers: CHANGELOG 1.6). Deviations: particles 315 -> 120 us, not the scratch replica's 73
+(MSVC's SinCos ~4 ns a call; a switch or a sign branch on the quadrant mispredicts, std::floor is the fastest
+rounding); the G78 unlit instanced varying variant needed `vUV` declared first to stay at 32 registers (the plan's
+catch, fixed); transform/move flat 1k ~4-9% slower (node ~90 bytes bigger).*
+
+**Plan:**
+1. `rendering::Instance` (52 B: `vec4 rows[3]` + RGBA8 `color`; FromTransform, SetTransform, Transform; layout
+   static_asserts), `InstanceBounds(span, mesh_box)` in instance_buffer.cpp, `scene::TransformBox` (Arvo) in collision.h.
+2. `PackColor` without std::lround (bit-identical in 0..1).
+3. `core/math.h`: `core::SinCos` (Cody-Waite 3-part pi/2, Cephes polynomials, quadrant swap).
+4. Node: `WriteInstances(count)` span, `ReserveInstances`, `Instances()`, `InstanceCount()`, cached node-space
+   `InstanceBounds()` (recomputed when the version or the model's box changes), `SetInstanceBounds(optional)`,
+   `GetAABB` by TransformBox; zero copies keep the 0.1 box.
+5. `GetModel()` / `GetMaterial()` return const refs.
+6. `ParticleSystem::WriteTo(Node3D&)`: closed-form rows, SinCos, fast PackColor, reserve on first write.
+7. GLInstanceBuffer: span upload, stride 52, rows at 4-6, RGBA8 tint at 7.
+8. Shaders: `wlw/instance.glsl` (InstanceTransform, InstancePosition, InstanceNormal = cofactor from rows) in
+   mesh.vert / shadow.vert INSTANCED and custom/mesh_vertex.glsl; shader.h docs.
+9. Shims `WLW_DEPRECATED(0.2, ...)`: InstanceData, SetInstances(vector), GetInstances(), BuildInstances.
+10. Snake on WriteTo; Bluzzle builds against the branch unchanged (shims warn) and with WriteTo locally, committed
+    with its move to v0.2.0; Threadlock: Android build check.
+11. Tests: layout, PackColor, SinCos, bounds vs corners, WriteInstances, cache, plain boxes, WriteTo vs glm, shims;
+    GPU references unchanged.
+12. Benchmarks: `fx/particles instances 5k` (now WriteTo), new `render/instance bounds 5k`, render/gather; malioc.
+13. Docs: CLAUDE.md, CHANGELOG, this file.
 
 ## Next session plan: 1.4 (approved 2026-10-15)
 Branch `bench/normals` (so `bench.yml` runs), one squashed commit "Roadmap 1.4: cofactor normals". The owner took
@@ -226,8 +259,8 @@ libunibreak (zlib), msdfgen (MIT), Jolt (MIT), Box2D v3 (MIT), ImGuizmo (MIT), F
   mirrored transforms; tested against inverse-transpose.
 - [x] **1.5 Skybox after opaques.** *(done 2026-10-16, commit "Roadmap 1.5: skybox after opaques"; one full-screen triangle with rays from `SkyRayMatrix`, LEQUAL around the sky draw only, sky first without depth; RTX 5080 1440p, 89% covered: sky 0.013 -> 0.001 ms; Mali-G78 sky vertex 0.78 -> 0.47 cycles)* Depth test `LEQUAL`; golden image. (From 1.4: `skybox.vert` multiplies
   `uProjection * mat4(mat3(uView))` per vertex: one matrix-vector chain, or the product on the CPU, instead.)
-- [ ] **1.6 Instances.** 52-byte instances (3x4 matrix + RGBA8), instance bounds cached on change,
-  a `WriteInstances(count)` span API; Bluzzle's particles use it.
+- [x] **1.6 Instances.** *(done 2026-10-16, commit "Roadmap 1.6: instances"; fx/particles instances 5k 315 -> 120 us, render/gather 10k 659 -> 403 us, 52 B per copy; Mali-G78/G76 instanced vertex load/store -1 cycle at full occupancy)* 52-byte instances (3x4 matrix + RGBA8), instance bounds cached on change,
+  a `WriteInstances(count)` span API; Bluzzle's particles use it (with its move to v0.2.0).
 
 ## Phase 2: Core API (breaking, while the games are small)
 - [ ] **2.1 Math, colour, geometry.** `wlw/core/math.h` (glm configuration, aliases);

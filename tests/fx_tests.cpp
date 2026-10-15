@@ -6,10 +6,12 @@
 #include <vector>
 
 #include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 
 #include "test_helpers.h"
 #include "wlw/fx/flow_particles.h"
 #include "wlw/fx/particle_system.h"
+#include "wlw/scene/node.h"
 #include "wlw/scene/sprite_batch.h"
 
 TEST_SUITE_BEGIN("fx");
@@ -103,20 +105,56 @@ TEST_CASE("delay and instances") {
   s.lifetime_min = s.lifetime_max = 1.0f;
   ps.Burst(s, glm::vec3(1.0f, 2.0f, 3.0f));
 
-  std::vector<wlw::rendering::InstanceData> instances;
+  wlw::scene::Node3D node;
   ps.Update(0.25f);
-  ps.BuildInstances(instances);
-  CHECK(instances.empty());                                          // still delayed: invisible...
+  ps.WriteTo(node);
+  CHECK(node.IsInstanced());
+  CHECK(node.InstanceCount() == 0);                                  // still delayed: invisible...
   CHECK(ps.Particles()[0].position == glm::vec3(1.0f, 2.0f, 3.0f));  // ...and not moving
 
   ps.Update(0.25f);  // delay over
   ps.Update(0.5f);   // half its life
-  ps.BuildInstances(instances);
-  CHECK(instances.size() == 5);
+  ps.WriteTo(node);
+  REQUIRE(node.InstanceCount() == 5);
   CHECK(Near(ps.Particles()[0].Size(), 0.5f, 1e-3f));  // shrinking linearly
   // The instance transform carries the position (column 3) and the size (column lengths).
-  CHECK(glm::length(glm::vec3(instances[0].transform[3]) - ps.Particles()[0].position) < 1e-4f);
-  CHECK(Near(glm::length(glm::vec3(instances[0].transform[0])), 0.5f, 1e-3f));
+  const glm::mat4 first = node.Instances()[0].Transform();
+  CHECK(glm::length(glm::vec3(first[3]) - ps.Particles()[0].position) < 1e-4f);
+  CHECK(Near(glm::length(glm::vec3(first[0])), 0.5f, 1e-3f));
+}
+
+TEST_CASE("write to matches the matrices glm builds") {
+  // WriteTo writes T * Rx * Ry * Rz * S in closed form with core::SinCos: the same copies as glm's
+  // translate / rotate / scale (what BuildInstances did before 1.6), the same colours as PackColor.
+  ParticleSystem ps(300, 5u);
+  BurstSettings s = Fixed(100);
+  s.spread_degrees = 180.0f;
+  s.spin_max = 2000.0f;
+  s.lifetime_min = s.lifetime_max = 10.0f;
+  s.size_start = 2.0f;
+  s.size_end = 0.1f;
+  s.brightness_jitter = 0.6f;
+  for (int i = 0; i < 3; ++i) ps.Burst(s, glm::vec3(static_cast<float>(i) * 4.0f, 1.0f, -2.0f));
+  for (int frame = 0; frame < 30; ++frame) ps.Update(1.0f / 30.0f);  // rotations up to ~2000 degrees
+
+  wlw::scene::Node3D node;
+  ps.WriteTo(node);
+  REQUIRE(node.InstanceCount() == ps.Count());
+  float worst = 0.0f;
+  for (size_t i = 0; i < ps.Count(); ++i) {
+    const ParticleSystem::Particle& p = ps.Particles()[i];
+    glm::mat4 m = glm::translate(glm::mat4(1.0f), p.position);
+    m = glm::rotate(m, glm::radians(p.rotation.x), glm::vec3(1, 0, 0));
+    m = glm::rotate(m, glm::radians(p.rotation.y), glm::vec3(0, 1, 0));
+    m = glm::rotate(m, glm::radians(p.rotation.z), glm::vec3(0, 0, 1));
+    m = glm::scale(m, glm::vec3(p.Size()));
+    const glm::mat4 written = node.Instances()[i].Transform();
+    for (int c = 0; c < 4; ++c) {
+      for (int r = 0; r < 4; ++r) worst = std::max(worst, std::abs(written[c][r] - m[c][r]));
+    }
+    CHECK(node.Instances()[i].color == wlw::rendering::PackColor(p.color));
+  }
+  CHECK(worst < 1e-5f);
 }
 
 TEST_CASE("emit exactly") {

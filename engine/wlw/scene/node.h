@@ -1,14 +1,17 @@
 #pragma once
 
-#include <array>
+#include <cstddef>
 #include <cstdint>
-#include <limits>
 #include <memory>
+#include <optional>
+#include <span>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "wlw/core/collision.h"
 #include "wlw/core/assert.h"
+#include "wlw/core/deprecated.h"
 #include "wlw/core/model.h"
 #include "wlw/core/vertex_2d.h"
 #include "wlw/core/vertex_3d.h"
@@ -42,11 +45,13 @@ class Node {
   }
 
   // ---- Model / material ----
-  std::shared_ptr<core::Model<T>> GetModel() const { return model_; }
-  void SetModel(std::shared_ptr<core::Model<T>> model) { model_ = model; }
+  // By reference: no reference-count traffic per call (the renderer asks every node every frame).
+  // A reference held across SetModel / SetMaterial sees the new one.
+  const std::shared_ptr<core::Model<T>>& GetModel() const { return model_; }
+  void SetModel(std::shared_ptr<core::Model<T>> model) { model_ = std::move(model); }
 
-  void SetMaterial(std::shared_ptr<rendering::Material> material) { material_ = material; }
-  const std::shared_ptr<rendering::Material> GetMaterial() const { return material_; }
+  void SetMaterial(std::shared_ptr<rendering::Material> material) { material_ = std::move(material); }
+  const std::shared_ptr<rendering::Material>& GetMaterial() const { return material_; }
 
   // ---- Local transform ----
   void SetPosition(const core::Vector3& position) {
@@ -76,23 +81,77 @@ class Node {
 
   // ---- Instancing ----
   // Draws the node's model once per instance, all in ONE draw call (GPU instancing), each copy
-  // with its own transform (relative to the node) and colour tint. For many copies of the same
-  // mesh - particles, crowds, tiles. Calling it switches the node to instanced drawing (an empty
-  // list draws nothing); ClearInstances() switches back to drawing the model once.
-  void SetInstances(std::vector<rendering::InstanceData> instances) {
-    instances_ = std::move(instances);
+  // with its own transform (relative to the node) and colour tint (rendering::Instance, 52 bytes).
+  // For many copies of the same mesh - particles, crowds, tiles.
+  //
+  // WriteInstances(count) switches the node to instanced drawing (0 copies draw nothing) and returns
+  // its `count` copies to fill in place, like SpriteBatch::Write: the first min(old, count) keep
+  // their values, new ones start as identity + white. The span is valid until the next
+  // WriteInstances / ReserveInstances / ClearInstances. Fill it right away: only a call counts as a
+  // change (the renderer uploads again, the bounds are recomputed), so to change copies later, write
+  // again (the same count keeps their values). Once per frame, not per copy.
+  //   std::span<rendering::Instance> copies = node->WriteInstances(n);
+  //   for (size_t i = 0; i < n; ++i) copies[i] = rendering::Instance::FromTransform(m[i], tint);
+  // (fx::ParticleSystem::WriteTo does this for particles.) ClearInstances() switches back to drawing
+  // the model once.
+  std::span<rendering::Instance> WriteInstances(size_t count) {
+    instances_.resize(count);
     instanced_ = true;
     ++instances_version_;
+    return instances_;
   }
+  // Room for `count` copies, so writes up to it never reallocate (a particle system's capacity).
+  void ReserveInstances(size_t count) { instances_.reserve(count); }
   void ClearInstances() {
     instances_.clear();
     instanced_ = false;
     ++instances_version_;
   }
   bool IsInstanced() const { return instanced_; }
-  const std::vector<rendering::InstanceData>& GetInstances() const { return instances_; }
+  std::span<const rendering::Instance> Instances() const { return instances_; }
+  size_t InstanceCount() const { return instances_.size(); }
   // For the renderer: bumped by every change, so it re-uploads only when something changed.
   uint64_t GetInstancesVersion() const { return instances_version_; }
+
+  // The box around every copy, in the node's space: SetInstanceBounds' box if one is set, else
+  // computed from the copies (each copy's transform applied to the model's box) and cached until the
+  // copies or the model's box change. Culling uses it (GetAABB), so a moving node costs nothing; for
+  // copies that never move, one write = one computation.
+  scene::AABB InstanceBounds() const {
+    if (custom_instance_bounds_) return *custom_instance_bounds_;
+    const scene::AABB model_box = ModelBox();
+    if (instance_bounds_version_ != instances_version_ || !SameBox(instance_bounds_model_box_, model_box)) {
+      instance_bounds_ = rendering::InstanceBounds(instances_, model_box);
+      instance_bounds_model_box_ = model_box;
+      instance_bounds_version_ = instances_version_;
+    }
+    return instance_bounds_;
+  }
+  // A fixed node-space box for the copies instead of the computed one (like Godot's custom_aabb):
+  // skips the computation when the game knows where its copies can go (a particle field's volume),
+  // or makes a vertex shader's displacement visible to culling. nullopt = computed again.
+  void SetInstanceBounds(std::optional<scene::AABB> box) { custom_instance_bounds_ = box; }
+
+#if !WLW_NO_DEPRECATED
+  WLW_DISABLE_DEPRECATION_WARNINGS_BEGIN
+  WLW_DEPRECATED(0.2, "Use WriteInstances(count) and fill the span")
+  void SetInstances(const std::vector<rendering::InstanceData>& instances) {
+    std::span<rendering::Instance> out = WriteInstances(instances.size());
+    for (size_t i = 0; i < instances.size(); ++i) {
+      out[i] = rendering::Instance::FromTransform(instances[i].transform, instances[i].tint);
+    }
+  }
+  WLW_DEPRECATED(0.2, "Use Instances() (rendering::Instance: 3 rows + RGBA8)")
+  std::vector<rendering::InstanceData> GetInstances() const {
+    std::vector<rendering::InstanceData> copies;
+    copies.reserve(instances_.size());
+    for (const rendering::Instance& instance : instances_) {
+      copies.push_back({instance.Transform(), rendering::UnpackColor(instance.color)});
+    }
+    return copies;
+  }
+  WLW_DISABLE_DEPRECATION_WARNINGS_END
+#endif
   rendering::WInstanceBuffer* GetInstanceBuffer() const { return instance_buffer_.get(); }
   void SetInstanceBuffer(std::unique_ptr<rendering::WInstanceBuffer> buffer) { instance_buffer_ = std::move(buffer); }
 
@@ -131,38 +190,20 @@ class Node {
   }
 
   // World-space bounding box of this node's model (children not included). For an instanced node,
-  // the box around all its instances.
+  // the box around all its instances (InstanceBounds, cached). Each box is moved to world space by
+  // Arvo's method (scene::TransformBox: exact for a box, 2 matrix-vector products instead of 8).
   scene::AABB GetAABB() const {
     const glm::mat4 world = GetModelMatrix();
     if (!model_ || model_->meshes.empty() || (instanced_ && instances_.empty())) {
       return scene::AABB::FromPositionAndSize({world[3].x, world[3].y, world[3].z}, 0.1f);
     }
-
-    glm::vec3 min_bound(std::numeric_limits<float>::max());
-    glm::vec3 max_bound(std::numeric_limits<float>::lowest());
-
-    auto add_corners = [&](const glm::mat4& to_world) {
-      for (const auto& mesh : model_->meshes) {
-        const auto& local = mesh->GetLocalAABB();
-        const std::array<glm::vec3, 8> corners = {
-            glm::vec3{local.min.x, local.min.y, local.min.z}, glm::vec3{local.min.x, local.min.y, local.max.z},
-            glm::vec3{local.min.x, local.max.y, local.min.z}, glm::vec3{local.min.x, local.max.y, local.max.z},
-            glm::vec3{local.max.x, local.min.y, local.min.z}, glm::vec3{local.max.x, local.min.y, local.max.z},
-            glm::vec3{local.max.x, local.max.y, local.min.z}, glm::vec3{local.max.x, local.max.y, local.max.z}};
-
-        for (const auto& corner : corners) {
-          const glm::vec3 p = glm::vec3(to_world * glm::vec4(corner, 1.0f));
-          min_bound = glm::min(min_bound, p);
-          max_bound = glm::max(max_bound, p);
-        }
-      }
-    };
-    if (instanced_) {
-      for (const auto& instance : instances_) add_corners(world * instance.transform);
-    } else {
-      add_corners(world);
+    if (instanced_) return scene::TransformBox(world, InstanceBounds());
+    // Mesh by mesh: as tight as the 8 corners of each (a union box first would grow under rotation).
+    scene::AABB box = scene::TransformBox(world, model_->meshes.front()->GetLocalAABB());
+    for (size_t i = 1; i < model_->meshes.size(); ++i) {
+      box = scene::Union(box, scene::TransformBox(world, model_->meshes[i]->GetLocalAABB()));
     }
-    return {{min_bound.x, min_bound.y, min_bound.z}, {max_bound.x, max_bound.y, max_bound.z}};
+    return box;
   }
 
   // ---- Hierarchy ----
@@ -206,13 +247,30 @@ class Node {
     local_matrix_ = glm::scale(local_matrix_, glm::vec3(scale_.x, scale_.y, scale_.z));
   }
 
+  // The box around all the model's meshes, in the node's space (a point at 0 without any).
+  scene::AABB ModelBox() const {
+    if (!model_ || model_->meshes.empty()) return {{0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}};
+    scene::AABB box = model_->meshes.front()->GetLocalAABB();
+    for (size_t i = 1; i < model_->meshes.size(); ++i) box = scene::Union(box, model_->meshes[i]->GetLocalAABB());
+    return box;
+  }
+  static bool SameBox(const scene::AABB& a, const scene::AABB& b) {
+    return a.min.x == b.min.x && a.min.y == b.min.y && a.min.z == b.min.z && a.max.x == b.max.x && a.max.y == b.max.y &&
+           a.max.z == b.max.z;
+  }
+
   std::shared_ptr<core::Model<T>> model_;
   std::shared_ptr<rendering::Material> material_;
 
   bool instanced_ = false;
-  std::vector<rendering::InstanceData> instances_;
+  std::vector<rendering::Instance> instances_;
   uint64_t instances_version_ = 0;
   std::unique_ptr<rendering::WInstanceBuffer> instance_buffer_;
+  std::optional<scene::AABB> custom_instance_bounds_;
+  // InstanceBounds' cache: valid while the copies' version and the model's box are these.
+  mutable scene::AABB instance_bounds_{};
+  mutable scene::AABB instance_bounds_model_box_{};
+  mutable uint64_t instance_bounds_version_ = UINT64_MAX;
 
   core::Vector3 position_ = {0, 0, 0};
   core::Vector3 scale_ = {1, 1, 1};

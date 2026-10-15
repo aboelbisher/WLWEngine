@@ -57,8 +57,10 @@ namespace wlw::rendering {
 //                         to world space, not unit length: core/normal_matrix.h); the frame block
 //                         (wlw/frame.glsl): uView, uProjection, uViewProjection, uCameraPos (highp vec3),
 //                         the lights, the shadow light...
-//   vertex() gets:        in aPos, aColor (vec4), aNormal, aUV; aInstanceTransform (mat4),
-//                         aInstanceTint (vec4); uniform bool uInstanced;
+//   vertex() gets:        in aPos, aColor (vec4), aNormal, aUV; per instanced copy (wlw/instance.glsl)
+//                         aInstanceRow0..2 (vec4: the transform's top 3 rows, .w = translation) with
+//                         InstanceTransform() (mat4), InstancePosition(p), InstanceNormal(n), and
+//                         aInstanceTint (vec4, 0..1); uniform bool uInstanced;
 //                         helpers WorldPosition(local) = vec4 in world space and WorldNormal(normal) =
 //                         unit world normal (instanced copies included; what the engine's vertex stage
 //                         does) and wlw/common.glsl (NormalMatrix(mat3), SafeNormalize);
