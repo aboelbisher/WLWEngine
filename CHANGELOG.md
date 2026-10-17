@@ -9,6 +9,25 @@ then it's deleted (listed under **Removed**).
 
 ## Unreleased
 
+## 0.2.0 (2026-10-18): Phase 1, rendering performance
+
+Quick mobile wins on the current renderer: frame pacing (Swappy on Android, vsync interval or a precise limiter on
+desktop, 60 fps by default), render scale with a Quality hook, explicit shader precisions (GLES stays highp; a
+GLSL ES compile check in CI), a canvas shader that computes only each quad's own kind (Pixel 4 canvas GPU -54%),
+cofactor normals (no inverse; mirrors stay lit outward), the skybox drawn after the opaques, and 52-byte instances
+with cached bounds and a `WriteInstances` span API. Details and measurements per step below.
+
+- **Breaking** (migration notes in the steps):
+  - Games run at 60 fps by default instead of the display's rate (`AppConfig::target_fps = 0` for the old
+    behaviour) (1.1).
+  - Android games add Swappy's Java classes to their Gradle source set
+    (`../../external/WLWengine/third_party/swappy/java`) and the R8 rule `-keep class com.google.androidgamesdk.** { *; }`;
+    without them the engine falls back to vsync + the limiter (1.1).
+  - Game mesh shaders' `aInstanceTransform` (mat4) is gone: `aInstanceRow0..2` or `InstanceTransform()` /
+    `InstancePosition()` / `InstanceNormal()` (1.6). Instance tints are clamped to 0..1 (RGBA8) (1.6).
+- **Deprecated** (removed in 0.3): `rendering::InstanceData`, `Node::SetInstances(vector)`, `Node::GetInstances()`,
+  `ParticleSystem::BuildInstances(out)` (1.6).
+
 ### Frame pacing (Roadmap 1.1)
 - `AppConfig::target_fps` (default 60): frames per second the screen gets; `core::kTargetDisplayRate` (0) = the
   display's own rate, `core::kTargetUncapped` (-1) = no limit (desktop profiling). Changed at runtime with

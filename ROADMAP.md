@@ -5,12 +5,12 @@ first (Android, iOS, web), with desktop as a full target. This plan came out of 
 architecture review. Work goes one step at a time, in order. Step ids are stable: commits name
 them ("Roadmap 4.3b: ...").
 
-**Current step:** release v0.2.0 (Phase 1 done once 1.6 is merged) · **Updated:** 2026-10-16
+**Current step:** 2.1 Math, colour, geometry (plan in chat first) · **Updated:** 2026-10-18
 
-**Next session:** release v0.2.0 (CLAUDE.md "Versioning": wait for main's CI, bump project(VERSION) to 0.2.0, CHANGELOG
-"Unreleased" -> "## 0.2.0 (date): Phase 1, rendering performance", tag, GitHub Release), then move both games to the
-tag (Bluzzle: `particles_.WriteTo(*particle_node_)` + `WriteInstances(0)` at setup, drop `particle_instances_`; both
-add Swappy's Java dir + R8 rule if missing). The 0.2 shims stay through v0.2.x and go before v0.3.0.
+**Next session:** plan 2.1 in chat and wait for the OK. Phase 1 is released as **v0.2.0** (2026-10-18, tag + GitHub
+Release); the games move to the tag (Bluzzle: `particles_.WriteTo(*particle_node_)` + `WriteInstances(0)` at setup,
+drop `particle_instances_`; both add Swappy's Java dir + R8 rule if missing). The 0.2 shims stay through v0.2.x and
+go before v0.3.0.
 1.6 (2026-10-16): implemented on `bench/instances` as planned ("Next session plan: 1.6" below has the outcome).
 1.5 is done (2026-10-16): the sky is drawn after the opaques, one full-screen triangle, LEQUAL around its draw only
 (owner chose the recommended options; no phone run: no game uses a skybox yet). Numbers: CHANGELOG 1.5.
@@ -241,7 +241,7 @@ libunibreak (zlib), msdfgen (MIT), Jolt (MIT), Box2D v3 (MIT), ImGuizmo (MIT), F
 - [x] **0.9 Versioning.** *(done 2026-10-15, commit "Roadmap 0.9: versioning"; tag v0.1.0; one minor version per phase; git commit in BuildInfo; shims checked by the CTest test `deprecations`)* `wlw/version.h` from `project(VERSION)`, CHANGELOG.md, `WLW_DEPRECATED`
   shims kept for one minor version, a tag per milestone.
 
-## Phase 1: Quick mobile wins on the current renderer
+## Phase 1: Quick mobile wins on the current renderer (released as v0.2.0, 2026-10-18)
 - [x] **1.1 Frame pacing.** *(done 2026-10-15, commit "Roadmap 1.1: frame pacing"; Swappy 2.3.0-alpha01 vendored (AGDK archived its repo in 2025); default 60 fps; auto swap interval off; desktop 240 Hz: 60 fps sd 0.12 ms, limiter 100 fps sd < 0.02 ms)* `AppConfig::target_fps` (30/60/90/120/display) with a runtime setter.
   Android: Swappy (GL) for pacing and refresh-rate choice, `ANativeWindow_setFrameRate` as fallback.
   Desktop: vsync plus a precise limiter. Quality's budget follows the target.
