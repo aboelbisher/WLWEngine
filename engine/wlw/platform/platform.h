@@ -74,6 +74,13 @@ bool MoveToBackground();
 // manifest. No-op on desktop.
 void Vibrate(int milliseconds, float strength = 1.0f);
 
+// Keeps the screen from dimming and locking while `on` (like Unity's Screen.sleepTimeout =
+// NeverSleep or Unreal's ControlScreensaver): for stretches the player watches without touching,
+// such as a replay or a cutscene. Turn it off again when they end, so the phone sleeps as usual.
+// Cheap to call every frame (only changes are sent to the OS). Android: the window's
+// FLAG_KEEP_SCREEN_ON, no permission. No-op on desktop.
+void KeepScreenOn(bool on);
+
 // Waits `seconds` to within ~0.1 ms (the frame limiter, core/frame_pacing.h): the OS sleeps until about
 // 1 ms before the end (Windows: a high-resolution waitable timer), then a short spin.
 void PreciseSleep(double seconds);

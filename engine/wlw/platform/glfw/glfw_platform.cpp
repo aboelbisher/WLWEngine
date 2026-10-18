@@ -185,6 +185,8 @@ bool MoveToBackground() { return false; }  // no such thing on desktop: the app 
 
 void Vibrate(int, float) {}  // desktops don't vibrate
 
+void KeepScreenOn(bool) {}  // a desktop's screensaver is the user's business
+
 // No platform-language side on desktop: games use C++ fakes for SDK features (see bridge.h).
 bool HasBridge() { return false; }
 bool BridgeCall(const std::string&, const std::string&, const std::string&) { return false; }

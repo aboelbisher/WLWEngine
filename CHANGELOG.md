@@ -9,6 +9,9 @@ then it's deleted (listed under **Removed**).
 
 ## Unreleased
 
+- `platform::KeepScreenOn(bool)`: keeps the screen awake while the player watches without touching (Android:
+  FLAG_KEEP_SCREEN_ON; no-op on desktop). Asked for by Threadlock, whose runs outlast a 30 s screen timeout.
+
 ## 0.2.0 (2026-10-18): Phase 1, rendering performance
 
 Quick mobile wins on the current renderer: frame pacing (Swappy on Android, vsync interval or a precise limiter on

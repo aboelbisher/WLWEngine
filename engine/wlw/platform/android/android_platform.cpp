@@ -33,6 +33,7 @@
 #include <android/configuration.h>
 #include <android/log.h>
 #include <android/native_window.h>
+#include <android/window.h>  // AWINDOW_FLAG_KEEP_SCREEN_ON
 #include <android_native_app_glue.h>
 #include <swappy/swappyGL.h>
 #include <swappy/swappyGL_extra.h>
@@ -57,6 +58,7 @@ bool g_alive = false;
 EGLDisplay g_display = EGL_NO_DISPLAY;
 SafeAreaInsets g_insets;  // cached; refreshed when the window changes
 bool g_insets_valid = false;
+bool g_keep_screen_on = false;  // what the game asked for (KeepScreenOn)
 
 // Processes pending OS events. timeout_ms = -1 blocks until at least one event arrives.
 void PollEvents(int timeout_ms) {
@@ -640,6 +642,14 @@ void Vibrate(int milliseconds, float strength) {
   env->PopLocalFrame(nullptr);
 }
 
+void KeepScreenOn(bool on) {
+  if (!g_app || on == g_keep_screen_on) return;
+  g_keep_screen_on = on;
+  // Posted to the UI thread by the framework: safe from the game thread, no JNI.
+  ANativeActivity_setWindowFlags(g_app->activity, on ? AWINDOW_FLAG_KEEP_SCREEN_ON : 0,
+                                 on ? 0 : AWINDOW_FLAG_KEEP_SCREEN_ON);
+}
+
 std::string GetSaveDirectory(const std::string& app_name) {
   // NativeActivity gives us the app's private internal storage (/data/data/<package>/files).
   if (!g_app || !g_app->activity->internalDataPath) return {};
@@ -797,6 +807,7 @@ std::vector<std::string> IntentCVarArguments(JNIEnv* env, jobject activity) {
 // ---- entry point (app/entry_point.h) ----
 void RunAndroidApp(android_app* app, std::unique_ptr<::wlw::app::Application> (*create_app)()) {
   g_app = app;
+  g_keep_screen_on = false;  // a new activity's window starts without the flag (the process may be reused)
   // Attach this thread (android_main's) to the Java VM once, for all JNI calls (insets, Back,
   // vibration...). Detached again before the thread ends, as the JVM requires.
   JNIEnv* env = nullptr;
