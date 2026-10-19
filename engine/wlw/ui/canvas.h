@@ -37,6 +37,9 @@ struct TextStyle {
   core::Color outline_color{0.0f, 0.0f, 0.0f, 1.0f};
   glm::vec2 shadow_offset{0.0f};  // in Canvas units; zero = no shadow
   core::Color shadow_color{0.0f, 0.0f, 0.0f, 0.5f};
+  // Turns the line about Text()'s `position` (its alignment point), in radians, clockwise on screen like Arc's
+  // angles (a slip pinned askew). The shadow still falls by shadow_offset on screen: the light doesn't turn.
+  float rotation = 0.0f;
 
   // Chunky outlined text with a drop shadow: readable over anything (game HUDs).
   static TextStyle Outlined(const core::Color& color, const core::Color& ink = {0.06f, 0.07f, 0.12f, 1.0f},
@@ -143,8 +146,10 @@ class Canvas {
                const glm::vec2& uv_max, const core::Color& color, const glm::vec4& params);
   void AddQuad(const Font* font, const glm::vec2 (&corners)[4], const glm::vec2 (&uvs)[4], const core::Color& color,
                const glm::vec4& params);
-  void AddText(const Font& font, std::string_view text, glm::vec2 pen, float size, const core::Color& color,
-               float edge);
+  // `pen` = the unturned baseline start; the glyphs are turned by `turn` (cos, sin) about `pivot`, then moved by
+  // `offset`.
+  void AddText(const Font& font, std::string_view text, glm::vec2 pen, float size, const core::Color& color, float edge,
+               glm::vec2 pivot = {}, glm::vec2 turn = {1.0f, 0.0f}, glm::vec2 offset = {});
 
   glm::vec2 size_{1.0f};
   float pixels_per_unit_ = 1.0f;

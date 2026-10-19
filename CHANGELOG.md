@@ -11,6 +11,9 @@ then it's deleted (listed under **Removed**).
 
 - `platform::KeepScreenOn(bool)`: keeps the screen awake while the player watches without touching (Android:
   FLAG_KEEP_SCREEN_ON; no-op on desktop). Asked for by Threadlock, whose runs outlast a 30 s screen timeout.
+- `ui::TextStyle::rotation`: Canvas text turned about its alignment point (radians, clockwise on screen, like
+  Arc). Only the glyph corners turn; the SDF anti-aliasing holds (abs-derivative width: ~8% softer at 5°,
+  ~16% at 10°, ~41% at 45°). The shadow keeps its on-screen offset. Asked for by Threadlock (World 2's pinned order slips).
 
 ## 0.2.0 (2026-10-18): Phase 1, rendering performance
 

@@ -132,6 +132,40 @@ TEST_CASE("canvas text and batches") {
       (rect.params.x == 2.0f && Near(rect.params.y, 20.0f) && Near(rect.params.z, 5.0f) && Near(rect.params.w, 5.0f)));
 }
 
+TEST_CASE("canvas turned text") {
+  const Font& font = TestFont();
+  Canvas canvas;
+  canvas.BeginFrame({400.0f, 800.0f}, {400.0f, 800.0f});
+  const glm::vec2 at(200.0f, 100.0f);
+  canvas.Text(font, "HH", at, 40.0f, Align::Center);
+  const std::vector<UIVertex> flat = canvas.Vertices();
+
+  // A quarter turn clockwise (y down): what was right of the point is now below it; uvs and params are untouched.
+  canvas.BeginFrame({400.0f, 800.0f}, {400.0f, 800.0f});
+  TextStyle style;
+  style.rotation = 1.5707963f;
+  canvas.Text(font, "HH", at, 40.0f, Align::Center, style);
+  const auto& turned = canvas.Vertices();
+  REQUIRE(turned.size() == flat.size());
+  for (size_t i = 0; i < flat.size(); ++i) {
+    const glm::vec2 d = flat[i].position - at;
+    CHECK(Near(turned[i].position.x, at.x - d.y, 1e-3f));
+    CHECK(Near(turned[i].position.y, at.y + d.x, 1e-3f));
+    CHECK((turned[i].uv == flat[i].uv && turned[i].params == flat[i].params));
+  }
+
+  // The shadow turns with the text but still falls by its offset on screen.
+  canvas.BeginFrame({400.0f, 800.0f}, {400.0f, 800.0f});
+  style.shadow_offset = {0.0f, 3.0f};
+  canvas.Text(font, "HH", at, 40.0f, Align::Center, style);
+  const auto& shadowed = canvas.Vertices();
+  REQUIRE(shadowed.size() == flat.size() * 2);
+  for (size_t i = 0; i < flat.size(); ++i) {
+    CHECK(Near(glm::length(shadowed[i].position - shadowed[i + flat.size()].position - glm::vec2(0.0f, 3.0f)), 0.0f,
+               1e-3f));
+  }
+}
+
 TEST_CASE("canvas keeps its fonts alive") {
   // Text from a font the caller lets go of before the frame is drawn still has its atlas.
   Canvas canvas;

@@ -165,11 +165,26 @@ void Canvas::Arc(glm::vec2 center, float radius, float thickness, float start, f
 }
 
 void Canvas::AddText(const Font& font, std::string_view text, glm::vec2 pen, float size, const core::Color& color,
-                     float edge) {
+                     float edge, glm::vec2 pivot, glm::vec2 turn, glm::vec2 offset) {
   glyph_scratch_.clear();
   font.Layout(text, size, pen, glyph_scratch_);
+  const glm::vec4 params{kKindText, edge, font.DistanceRange(), 0.0f};
+  const bool turned = turn != glm::vec2(1.0f, 0.0f);
   for (const GlyphQuad& q : glyph_scratch_) {
-    AddQuad(&font, q.min, q.max, q.uv_min, q.uv_max, color, {kKindText, edge, font.DistanceRange(), 0.0f});
+    if (!turned) {
+      AddQuad(&font, q.min + offset, q.max + offset, q.uv_min, q.uv_max, color, params);
+      continue;
+    }
+    // Only the corners turn: the atlas uvs ride along, and the shader's SDF anti-aliasing works from the uv's
+    // screen derivatives, so it holds at any angle.
+    const glm::vec2 local[4] = {q.min, {q.max.x, q.min.y}, q.max, {q.min.x, q.max.y}};
+    const glm::vec2 uvs[4] = {q.uv_min, {q.uv_max.x, q.uv_min.y}, q.uv_max, {q.uv_min.x, q.uv_max.y}};
+    glm::vec2 corners[4];
+    for (int i = 0; i < 4; ++i) {
+      const glm::vec2 d = local[i] - pivot;
+      corners[i] = pivot + glm::vec2(d.x * turn.x - d.y * turn.y, d.x * turn.y + d.y * turn.x) + offset;
+    }
+    AddQuad(&font, corners, uvs, color, params);
   }
 }
 
@@ -181,15 +196,18 @@ void Canvas::Text(const Font& font, std::string_view text, glm::vec2 position, f
   if (align == Align::Right) pen.x -= width;
   // From the middle of the line box (ascent..descent) down to the baseline.
   pen.y += (font.Ascent(size) - font.Descent(size)) * 0.5f;
+  // Clockwise on screen (y down): x' = x cos - y sin, y' = x sin + y cos.
+  const glm::vec2 turn =
+      style.rotation == 0.0f ? glm::vec2(1.0f, 0.0f) : glm::vec2(std::cos(style.rotation), std::sin(style.rotation));
 
   // Back to front: shadow, outline, then the fill on top.
   const float outline_edge = font.EdgeForOutline(style.outline);
   if (style.shadow_offset != glm::vec2(0.0f)) {
-    AddText(font, text, pen + style.shadow_offset, size, style.shadow_color,
-            style.outline > 0.0f ? outline_edge : 0.5f);
+    AddText(font, text, pen, size, style.shadow_color, style.outline > 0.0f ? outline_edge : 0.5f, position, turn,
+            style.shadow_offset);
   }
-  if (style.outline > 0.0f) AddText(font, text, pen, size, style.outline_color, outline_edge);
-  AddText(font, text, pen, size, style.color, 0.5f);
+  if (style.outline > 0.0f) AddText(font, text, pen, size, style.outline_color, outline_edge, position, turn);
+  AddText(font, text, pen, size, style.color, 0.5f, position, turn);
 }
 
 }  // namespace wlw::ui
