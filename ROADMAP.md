@@ -1,143 +1,80 @@
 # WLWengine roadmap
 
 The engine is being brought to big-engine quality in architecture, practices and features: mobile
-first (Android, iOS, web), with desktop as a full target. This plan came out of the October 2026
-architecture review. Work goes one step at a time, in order. Step ids are stable: commits name
-them ("Roadmap 4.3b: ...").
+first (Android, iOS, web), with desktop as a full target, and an editor to make the games with, like
+Godot's. This plan came out of the October 2026 architecture review and was reordered on 2026-10-21
+around the editor and iOS ("Why this order"). Work goes one step at a time, in order. Step ids are
+stable: commits name them ("Roadmap 4.3b: ..."). Commits and CHANGELOG entries from before 2026-10-21
+use the old numbers: "Old numbering" at the end maps them.
 
-**Current step:** 2.1 Math, colour, geometry (plan in chat first) · **Updated:** 2026-10-18
+**Current step:** 2.1 Math, colour, geometry (plan in chat first) · **Updated:** 2026-10-21
 
-**Next session:** plan 2.1 in chat and wait for the OK. Phase 1 is released as **v0.2.0** (2026-10-18, tag + GitHub
-Release); the games move to the tag (Bluzzle: `particles_.WriteTo(*particle_node_)` + `WriteInstances(0)` at setup,
-drop `particle_instances_`; both add Swappy's Java dir + R8 rule if missing). The 0.2 shims stay through v0.2.x and
-go before v0.3.0.
-1.6 (2026-10-16): implemented on `bench/instances` as planned ("Next session plan: 1.6" below has the outcome).
-1.5 is done (2026-10-16): the sky is drawn after the opaques, one full-screen triangle, LEQUAL around its draw only
-(owner chose the recommended options; no phone run: no game uses a skybox yet). Numbers: CHANGELOG 1.5.
-1.4 is done: merged 2026-10-16 ("Next session plan: 1.4" below has its plan and outcome).
-1.3 is done: 1.3a and 1.3b merged 2026-10-15.
-1.3b (canvas shader): each pixel computes only its quad's kind. Mali-G78 longest path 2.62 -> 1.38 arithmetic cycles,
-images 0.16; Pixel 4 Threadlock canvas GPU 4.96 -> 2.30 ms (-54%), frame 7.08 -> 5.0 ms (CHANGELOG 1.3b). The owner
-chose derivatives + `texture()` inside the branches (quad-uniform flow) over the plan's `textureGrad`. Golden references
-canvas, render_scale and render_scale_post were renewed from CI. Verified: 263 tests, CI green, Bluzzle desktop UI, Threadlock
-on the Pixel 4. Not run: the emulator (see the next rule).
-New rule (owner, 2026-10-15): always ask before using the Android emulator (the owner may be playing a game on the PC
-and it can crash); the Pixel 4 is separate. Games are still on v0.1.0 and get Phase 1 with v0.2.0.
-1.3a (2026-10-15): the Pixel 4 (Adreno 640) reversed the mediump fragment default (Bluzzle's lit 3D 8% slower): GLES
-stays highp, shaders opt in only where a phone measures a gain (none in the engine yet). Numbers: CHANGELOG 1.3a.
+**Next session:** plan 2.1 in chat and wait for the OK. The 0.2 shims stay through v0.2.x and go before v0.3.0.
 
-Where things stand (2026-10-15):
-- Done: 0.1 doctest, 0.2 CI, 0.3 golden images, 0.4 logging and asserts, 0.5 cvars and console, 0.6 Tracy, 0.7 benchmarks,
-  0.8 build hygiene, 0.9 versioning (Phase 0 = engine v0.1.0, tagged). Each is one squashed commit on main named "Roadmap 0.x: ...", with details in CHANGELOG.md
-  (0.8 also has a separate reformat commit, listed in `.git-blame-ignore-revs`). Phase 1: 1.1 frame pacing (Swappy vendored in
-  `third_party/swappy`; games must add its Java dir + an R8 keep rule when they move to the next engine version),
-  1.2 render scale (no game uses it yet: `QualitySettings::render_scales` or `SetRenderScale` when a game wants it).
-- How the owner works: the plan goes in chat first; code only after an OK. Work on a branch (`<topic>/setup`)
-  pushed to GitHub so CI checks it, then show the result and squash-merge to main only on approval. Delete the
-  work branch after. Ask before deleting files.
+Where things stand (2026-10-21):
+- Done: Phase 0 = v0.1.0 (2026-10-15), Phase 1 = v0.2.0 (2026-10-18), each step one squashed commit on main named
+  "Roadmap x.y: ..." with its details and numbers in CHANGELOG.md (0.8 also has a reformat commit, listed in
+  `.git-blame-ignore-revs`). Since v0.2.0, two small additions Threadlock asked for (CHANGELOG "Unreleased"):
+  `platform::KeepScreenOn`, `ui::TextStyle::rotation`.
+- Games: Bluzzle (live in Play testing; desktop + Android) and Threadlock (Android) are on the engine's main
+  (c39718e). Snake (`samples/snake`) only has to keep compiling. Epicycles, Silhouette and Ripple are on old
+  pre-0.1 commits and are not targets (the owner dropped them).
+- How the owner works: the plan goes in chat first; code only after an OK. Work on a branch (`<topic>/setup`, or
+  `bench/<topic>` so `bench.yml` runs) pushed to GitHub so CI checks it, then show the result and squash-merge to
+  main only on approval. Delete the work branch after. Ask before deleting files, and before using the Android
+  emulator (the owner may be playing on the PC and it can crash; a phone is separate).
 - CI: GitHub Actions (`.github/workflows/ci.yml`). Every push runs clang-format (check), Windows MSVC Debug, Linux
   clang ASan+UBSan (+ golden images on llvmpipe under xvfb) and Android arm64 (NDK 30, builds engine + Snake,
   WLW_PROFILE on, WLW_PCH off). Windows Release runs only on main and manual runs (private repo: the owner wants
   zero cost; GitHub stops at the free minutes). Markdown-only pushes don't run CI. Warnings are errors in every
-  preset; actions are on their Node 24 versions.
-- Formatting (from 0.8): `cmake -P cmake/ClangFormat.cmake` before committing (pinned clang-format 23.1.3 from its
-  PyPI wheel, downloaded into build/tools; no install). `.clang-format` = the style the code was already in.
-- GitHub CLI: installed and logged in (`C:\Program Files\GitHub CLI\gh.exe`, not on the bash PATH: call it by
-  its full path). `gh run list/watch/view --log-failed`, `gh run download <id> --name gpu-output`.
+  preset.
+- Formatting: `cmake -P cmake/ClangFormat.cmake` before committing (pinned clang-format 23.1.3 from its PyPI
+  wheel, downloaded into build/tools).
+- GitHub CLI: `C:\Program Files\GitHub CLI\gh.exe` (not on the bash PATH: call it by its full path).
+  `gh run list/watch/view --log-failed`, `gh run download <id> --name gpu-output`.
 - Golden images: a rendering change that changes pictures on purpose gets new references from CI's `gpu-output`
-  artifact (llvmpipe), looked at and reviewed like code. They're plain git, not LFS (a .gitattributes rule).
-- Tests: `wlw_tests` + `snake_game_tests` (242 cases) + `wlw_gpu_tests` (9, label gpu) + `bench: smoke` + 5 `deprecations` (the script and its tests) = 257 CTest tests. Cases
-  run in parallel processes (no shared temp files); global state (log filters, cvars) is restored per case, and
-  test cvars are static with unique "test.<case>.*" names.
-- Benchmarks (from 0.7): `wlw_benchmarks` + baselines in `benchmarks/baselines/` (windows-local, pixel4, linux-ci);
-  CLAUDE.md "Benchmarks" has the commands. Performance steps run it before and after with `--baseline` on
-  desktop + CI; phone runs are optional (owner's decision 2026-10-14: the engine isn't tied to one phone). Phone
-  runs must be pinned to one fast core (Pixel 4: `taskset 80`): unpinned runs jump ~17% between cores. `bench.yml` runs on
-  main, manual runs and `bench/**` branches (name a perf work branch `bench/...` to get CI numbers). Known hot
-  spots: render/gather 10k = 1.86 ms on the Pixel 4 (GetAABB + world matrices recomputed per node: Phases 2.2,
-  4.5), fx/particles instances 5k = 440 us (1.6), transform/move flat 10k = 1.3 ms (2.2).
-- Games: Bluzzle and Threadlock are on engine v0.1.0 (2026-10-15; glm dropped from their vcpkg.json). Bluzzle
-  (desktop + Android) and Threadlock (Android) build with zero warnings, their tests pass, Threadlock runs on the Pixel 4. They get
-  `WLW_OPTIMIZE_ENGINE_IN_DEBUG` (engine -O2 in their Debug builds) and the `/W4` warnings from 0.8. Header-only engine code (node.h transforms, templates) stays -O0 in a game's Debug
-  build: moving hot code into .cpp files (Phase 2.2) is what makes it fast there.
-- From 0.6: on desktop NVIDIA the frame's first glGet waits for the driver thread (frame pacing). The renderer
-  calls `glGetIntegerv(GL_FRAMEBUFFER_BINDING)` every frame; caching it would stop that wait landing in our code
-  (it moves, it isn't removed: worth checking in Phase 4). Tracy in a phone game needs the INTERNET permission
-  in the game's profile build; nobody has profiled on the Pixel 4 yet.
-- Open items: typing in the console on
-  phones waits for GameTextInput (D9). Nobody has typed into the new console yet: the owner was asked to
-  try ` in Snake.
-- Local machine: use `build/win-debug` and `build/win-release` (`build/windows-debug` is stale), from a VS 18
-  dev shell. The Android preset builds locally with
-  `ANDROID_NDK_HOME=%LOCALAPPDATA%\Android\Sdk\ndk\30.0.16248370`. WSL Ubuntu has no compilers: Linux is checked
-  by CI only.
-- 1.3 was researched and planned on 2026-10-15 and the owner approved the plan with the recommended decisions (next
-  section). Findings that belong to later steps are written into those steps: 3.6, 4.2, 6.6, 8.2, 10.2, 10.4.
+  artifact (llvmpipe), looked at and reviewed like code. They're plain git, not LFS.
+- Tests: cases run in parallel processes (no shared temp files); global state (log filters, cvars) is restored per
+  case, and test cvars are static with unique "test.<case>.*" names.
+- Benchmarks: CLAUDE.md "Benchmarks". Performance steps run them before and after with `--baseline` on desktop +
+  Linux CI; phone runs are optional and pinned to one fast core (Pixel 4: `taskset 80`). Known hot spots:
+  render/gather 10k = 1.86 ms on the Pixel 4 (world matrices recomputed per node: 2.2, 9.5), transform/move flat
+  10k = 1.3 ms (2.2). Header-only engine code (node.h transforms) stays -O0 in a game's Debug build until 2.2
+  moves it into .cpp files.
+- Local machine: `build/win-debug` and `build/win-release` from a VS 18 dev shell (`build/windows-debug` is stale).
+  The Android preset builds locally with `ANDROID_NDK_HOME=%LOCALAPPDATA%\Android\Sdk\ndk\30.0.16248370`. WSL Ubuntu
+  has no compilers: Linux is checked by CI only.
+- Open items: typing in the console on phones waits for GameTextInput (D9, 7.1). On desktop NVIDIA the frame's
+  first glGet waits for the driver thread: the renderer's per-frame `glGetIntegerv(GL_FRAMEBUFFER_BINDING)` moves
+  that wait into our code (9.3's tracked state removes the call). Nobody has profiled on the Pixel 4 with Tracy yet
+  (a game's profile build needs the INTERNET permission).
 
-## Next session plan: 1.6 (approved 2026-10-16)
-Branch `bench/instances`, one squashed commit "Roadmap 1.6: instances". The owner took every recommended decision
-(core::SinCos yes; plain nodes' boxes by the same Arvo transform; SetInstanceBounds override; RGBA8 tints, HDR glow =
-emissive materials in 8.2) and asked to fold in the side findings (GetModel/GetMaterial by const reference).
-*Outcome: done as below (numbers: CHANGELOG 1.6). Deviations: particles 315 -> 120 us, not the scratch replica's 73
-(MSVC's SinCos ~4 ns a call; a switch or a sign branch on the quadrant mispredicts, std::floor is the fastest
-rounding); the G78 unlit instanced varying variant needed `vUV` declared first to stay at 32 registers (the plan's
-catch, fixed); transform/move flat 1k ~4-9% slower (node ~90 bytes bigger).*
-
-**Plan:**
-1. `rendering::Instance` (52 B: `vec4 rows[3]` + RGBA8 `color`; FromTransform, SetTransform, Transform; layout
-   static_asserts), `InstanceBounds(span, mesh_box)` in instance_buffer.cpp, `scene::TransformBox` (Arvo) in collision.h.
-2. `PackColor` without std::lround (bit-identical in 0..1).
-3. `core/math.h`: `core::SinCos` (Cody-Waite 3-part pi/2, Cephes polynomials, quadrant swap).
-4. Node: `WriteInstances(count)` span, `ReserveInstances`, `Instances()`, `InstanceCount()`, cached node-space
-   `InstanceBounds()` (recomputed when the version or the model's box changes), `SetInstanceBounds(optional)`,
-   `GetAABB` by TransformBox; zero copies keep the 0.1 box.
-5. `GetModel()` / `GetMaterial()` return const refs.
-6. `ParticleSystem::WriteTo(Node3D&)`: closed-form rows, SinCos, fast PackColor, reserve on first write.
-7. GLInstanceBuffer: span upload, stride 52, rows at 4-6, RGBA8 tint at 7.
-8. Shaders: `wlw/instance.glsl` (InstanceTransform, InstancePosition, InstanceNormal = cofactor from rows) in
-   mesh.vert / shadow.vert INSTANCED and custom/mesh_vertex.glsl; shader.h docs.
-9. Shims `WLW_DEPRECATED(0.2, ...)`: InstanceData, SetInstances(vector), GetInstances(), BuildInstances.
-10. Snake on WriteTo; Bluzzle builds against the branch unchanged (shims warn) and with WriteTo locally, committed
-    with its move to v0.2.0; Threadlock: Android build check.
-11. Tests: layout, PackColor, SinCos, bounds vs corners, WriteInstances, cache, plain boxes, WriteTo vs glm, shims;
-    GPU references unchanged.
-12. Benchmarks: `fx/particles instances 5k` (now WriteTo), new `render/instance bounds 5k`, render/gather; malioc.
-13. Docs: CLAUDE.md, CHANGELOG, this file.
-
-## Next session plan: 1.4 (approved 2026-10-15)
-Branch `bench/normals` (so `bench.yml` runs), one squashed commit "Roadmap 1.4: cofactor normals". The owner took
-every recommended decision. *Outcome: done as below, merged 2026-10-16 (numbers: CHANGELOG 1.4). Verified: 269 tests, CI
-green with unchanged golden references, Bluzzle on the Pixel 4. Not done: a Bluzzle desktop screenshot (the capture
-came back blank).*
-
-**Concept:** normals need `transpose(inverse(M3))`. Before 1.4: a 4x4 inverse on the CPU per visible plain node
-(`CullScene`), `inverse(uModel * aInstanceTransform)` per vertex in `mesh.vert` INSTANCED and in the game shaders'
-default vertex stage. The cofactor matrix (columns b×c, c×a, a×b) has the same directions with no division (finite
-when a scale is 0), negated when det < 0 so mirrored nodes stay lit outward (the bare cofactor points inward).
-Filament does the same; its prescale is skipped (we normalize per vertex in highp).
-
-**Plan:**
-1. `core/normal_matrix.h`: `core::NormalMatrix(mat3)` + a mat4 overload.
-2. `CullScene`: `NormalMatrix(model)` for every visible node, instanced ones included (the node's part). The driver
-   uploads `uNormalMatrix` for every mesh draw, game shader materials too.
-3. Shaders: `wlw/common.glsl` gets `NormalMatrix(mat3)` (a `dot < 0 ? -1 : 1` sign, not `sign()`: det 0 must keep
-   the normal) and `SafeNormalize`. `mesh.vert`: `uNormalMatrix` in every variant; INSTANCED = node part x the
-   copy's `NormalMatrix()` per vertex, positions through matrix-vector products. `shadow.vert` INSTANCED the same
-   (the plain one stays: compilers hoist the uniform-only product). Game shaders: `uNormalMatrix` in both stages,
-   `WorldPosition()` / `WorldNormal()` helpers in `vertex()`, the default vertex stage uses them.
-4. `shader.h` docs (additive: no game has mesh shaders; all 5 game repos checked). glTF loader uses
-   `core::NormalMatrix`.
-5. Tests: `normal_matrix` suite against double-precision inverse-transpose (random transforms, mirrors, flat
-   transforms, product rule); `cull normal matrices` updated; GPU `normals match inverse-transpose` (transformed
-   vs CPU-baked pictures, engine shader + game shader; no stored reference); the shader compile test's game shader
-   uses the helpers. Existing golden references must not change.
-6. Measure: malioc before/after, `render/cull` before/after on Windows + Linux CI, Bluzzle desktop before/after,
-   Android build of Bluzzle + Threadlock (Pixel 4 if connected; ask before the emulator).
-7. Docs: CLAUDE.md, CHANGELOG, this file (notes for 1.5, 7.3, 8.2), the benchmark's wrong "sees about half".
-
-**Decisions after review (owner, 2026-10-16):** back-face culling stays with 8.2 (noted there). Game shaders' default
-vertex stage keeps the `WorldPosition` / `WorldNormal` helper form (Mali-G78: 26 registers, full occupancy, load/store
-14 -> 16 cycles) over one branch around all of `main()` (load/store 14, 48 registers, half occupancy).
+## Why this order (2026-10-21)
+- **The owner wants an editor ("studio"), like the Godot editor: for their own games first, maybe a product for
+  other developers later** (decided 2026-10-21). Phases 3-5 build it; Phase 19 turns it into a product if that is
+  still wanted then.
+- **The editor needs the scene model, reflection, data files, resources and scenes, not the rendering rewrite.** It
+  shows the game through a viewport texture (`Viewport::GetTexture()` in an ImGui panel), so the RHI, Vulkan and
+  Metal (Phases 9-11) change one spot in it later. Phase 2 comes first because the editor shows and edits exactly
+  what it changes (names, children order, node types, the platform-driven frame).
+- **Editor features come in the order the games use them.** Research (2026-10-21): small engines that built a
+  generic editor first (Hazel: docking, hierarchy, inspector, gizmos, then play/stop over two years; no undo in the
+  public repo) spent years before a game used it; Godot's and Unity's value for a game is in game-specific plugins
+  (EditorPlugin, EditorWindow, custom inspectors). So: the shell and game plugins first (Phase 3), with Threadlock's
+  level editor as the first user (72 JSON levels, ~35 to redesign for Worlds 3-4, all edited by hand as
+  coordinates today; its solver and validators are ready to run live); reflection, the inspector and data files
+  next (Phase 4), with Bluzzle's tuning as the first user (69 hand-written ImGui widgets over plain structs, none
+  saved); generic scene editing last (Phase 5), for the next games and Bluzzle's static stage.
+- **iOS roughly doubles the market of a mobile puzzle game.** The owner has or will get a Mac (2026-10-21), and
+  iOS can ship on today's GLES renderer, as Godot's Compatibility renderer does (D17), so it no longer waits for
+  Metal (Phase 11). It can move ahead of
+  Phases 3-5 if the Mac arrives first and Bluzzle wants iOS before the editor.
+- **Android platform work (GameActivity, thermal, device lab) helps the live game now**, so it moves ahead of the
+  rendering rewrite; its Vulkan parts stay with Vulkan (Phase 10).
+- **Everything else stays planned in full** (the owner's decision of 2026-10-14: big-engine quality, Vulkan
+  included), in the same relative order as before, after the work that ships games. Editor panels that belong to a
+  feature (frame graph view, import settings, material and particle editors, animation timeline, physics shapes)
+  come with that feature.
 
 ## How a step runs
 1. Concept and plan in chat: why it exists, the trade-offs, how the big engines do it, exactly
@@ -152,9 +89,12 @@ vertex stage keeps the `WorldPosition` / `WorldNormal` helper form (Mali-G78: 26
 - New logic has unit tests; rendering changes have golden-image tests (from 0.3 on); performance
   work has benchmark numbers before and after on desktop (`windows-local`) and Linux CI. Phone
   numbers (any Android device, compared only with its own baseline) are optional: taken when a
-  phone is at hand, never a blocker. Firebase Test Lab (6.6) brings a device matrix later.
+  phone is at hand, never a blocker. Firebase Test Lab (7.6) brings a device matrix later.
+- Editor work (from Phase 3): the editor targets build in CI (Windows and Linux); editor logic (documents, undo,
+  reflection, serialization) is tested without a window; file formats have round-trip tests and a corpus of old
+  files that must keep loading.
 - Bluzzle (desktop and Android) and Threadlock (Android) build and run with the change; Snake
-  compiles.
+  compiles. iOS joins the list once Phase 6 has run it.
 - CLAUDE.md and CHANGELOG.md updated; breaking changes come with migration notes.
 - Whatever a step replaces is deleted within the same phase (file deletions confirmed with the
   owner first). A renamed public API may keep a thin `WLW_DEPRECATED` forwarding shim through one
@@ -170,6 +110,8 @@ vertex stage keeps the `WorldPosition` / `WorldNormal` helper form (Mali-G78: 26
 - Measure on devices; every quality tier has a budget; no battery spent for nothing.
 - Deterministic where it matters: simulation, random numbers, draw order.
 - Every API says which thread may call it.
+- Every editor feature names the game that uses it first. The editor runs the game's own code: no editor-only
+  gameplay paths, and what plays in the editor plays the same in the shipped game.
 
 ## Decisions (confirmed when their step starts)
 - **D1 Math:** glm is the only math library, behind `wlw` aliases (`Vec3`, `Quat`, `Mat4`...).
@@ -188,9 +130,42 @@ vertex stage keeps the `WorldPosition` / `WorldNormal` helper form (Mali-G78: 26
 - **D9 Android:** GameActivity + AGDK (Swappy, GameTextInput, Paddleboat) + ADPF.
 - **D10 Physics:** Jolt (3D), Box2D v3 (2D).
 - **D11 Text:** FreeType + HarfBuzz + SheenBidi + msdfgen + libunibreak.
-- **D12 Editor:** an in-process ImGui (docking) editor build of the game, driven by reflection.
+- **D12 Editor (revised 2026-10-21):** an in-process editor build of each game, like Unreal's Editor target and
+  Fyrox's editor crate: `wlw_add_game` adds a desktop-only `<game>_editor` executable = the game's own code + the
+  `wlw::editor` library, statically linked, `WLW_EDITOR` defined. Dear ImGui's docking branch (multi-viewports off
+  until Wayland can place windows). Two ways to play: in the editor (on a copy of what is being edited) and Launch
+  (the real game as its own process, on the desktop or a phone: the ground truth, and a crash can't take the editor
+  down). No game DLLs and no engine shared library until Phase 19: they need one CRT, one copy of every engine
+  global (glad's GL pointers, cvars, log sinks, resource lists, the shader library) and a stable ABI, and C++ hot
+  reload is fragile (Godot's GDExtension reload and Fyrox's dylib reload both warn about it). Code changes mean a
+  fast rebuild that restores the editor's session; MSVC Hot Reload or Live++ cover small edits.
 - **D13 Dependencies:** vendored, pinned sources in `third_party/`, built by our CMake on every
   platform (versions and licences in `third_party/README.md`); vcpkg only for desktop-only GLFW.
+- **D14 Reflection (2026-10-21):** hand-written registration, no code generator (Godot ClassDB / O3DE
+  SerializeContext style): a `Reflect(ClassBuilder<T>&)` function per type adds properties as member pointers or
+  getter/setter pairs, with attributes as small structural types (`Range{min, max, step}`, hints) and flags
+  (Storage, Editor, ReadOnly, NoUndo). Registration is called explicitly (engine types from Application, game
+  types from `MakeApp`): a static library drops self-registering globals. C++26 reflection (P2996) can fill the
+  same tables later, the attribute types becoming annotations; today only GCC 16 has it (MSVC 19.51 and NDK r30's
+  clang 21 reject it, checked 2026-10-21).
+- **D15 Scene and data files (2026-10-21):** JSON (nlohmann) as the text form, CBOR of the same tree as the
+  binary form. Only non-default values, deterministic order, shortest round-trip floats, small vectors on one
+  line. A random 64-bit id per node (unique in its scene) and per resource (uid); references store ids, resource
+  references `{uid, path}` with the path as a fallback. Prefab instances store overrides as (target id chain,
+  property, value). A file format number plus per-class versions, upgraded by functions run on the JSON before
+  loading. A custom Godot-like text format only if JSON's diffs hurt in practice.
+- **D16 Undo (2026-10-21):** one command stack per open document. Commands name their targets by id and property
+  and keep old and new values as serialized JSON, never pointers, so they survive delete and re-create. Commands
+  inside one gesture (mouse down to up) merge; each records the selection without marking the document unsaved;
+  a version counter drives the unsaved mark. Playing in the editor runs on a copy, with undo off.
+- **D17 iOS renderer (2026-10-21):** iOS ships on the current renderer through native OpenGL ES 3.0 (EAGLContext
+  + CAEAGLLayer), as Godot's Compatibility renderer does on iOS today. Apple deprecated it in iOS 12 but hasn't
+  removed it (it runs on iOS 26; no App Store rule bans it); it is frozen at ES 3.0 with no driver fixes, and any GL
+  call after the app enters the background gets it killed. The GL surface sits behind a small interface so ANGLE's
+  Metal backend (EGL, the Android code path; Safari's WebGL runs on it) can be a CMake option if Apple announces a
+  removal or native bugs show; reports of ANGLE in games are mixed (jMonkeyEngine 2026: 14 fps vs 47 native; Godot
+  rolled it back on macOS in 4.2.1). Native GLES doesn't run in the Apple-silicon Simulator (crashes since Xcode
+  15.4), so a real iPhone (A13 or later) is needed. Metal replaces it with the RHI (11.3).
 
 ## New third-party libraries (all permissive)
 doctest (MIT), nanobench (MIT), Tracy (BSD-3), volk (MIT), Vulkan-Headers (Apache-2.0), Vulkan
@@ -199,17 +174,25 @@ Swappy / GameActivity / GameTextInput / Paddleboat (Apache-2.0), zstd (BSD), cgl
 meshoptimizer (MIT), MikkTSpace (zlib), Basis Universal (Apache-2.0), astc-encoder (Apache-2.0),
 tinyexr (BSD-3), FreeType (FTL: credit required), HarfBuzz (MIT), SheenBidi (Apache-2.0),
 libunibreak (zlib), msdfgen (MIT), Jolt (MIT), Box2D v3 (MIT), ImGuizmo (MIT), FidelityFX FSR 1
-(MIT).
+(MIT). Editor (2026-10-21): Dear ImGui's docking branch (MIT; replaces the vendored master of the same version),
+nativefiledialog-extended (zlib) for native file dialogs. Not permissive, ask first: ImGui Test Engine (its own
+licence) for editor UI tests.
 
 ## Constraints
-- Metal, macOS and iOS need a Mac (and an iPhone; the Apple Developer Program to ship). Until then
-  CI can only compile them.
+- Metal, macOS and iOS need a Mac (and an iPhone; the Apple Developer Program to ship). The owner has or will get
+  one (2026-10-21); until then CI can only compile them.
+- macOS CI runners cost minutes on a private repo (the owner wants zero CI cost): $0.062 a minute after the free
+  minutes (2026; check the plan's macOS multiplier), so iOS and macOS jobs run only on main or by hand, and
+  day-to-day iOS builds happen on the Mac. The Apple Developer Program is $99 a year. Without a Mac of one's own, a
+  cloud Mac (Scaleway M1 from EUR 0.11 an hour, 24-hour minimum) covers signing setup and Instruments.
 - Vulkan on Windows: the Vulkan SDK installed (validation layers, tools).
 - Devices: development isn't tied to any phone the owner has. Phone checks use whatever Android
-  device is at hand (a Pixel 4 / Adreno 640 was used so far); Firebase Test Lab (6.6) for a matrix
+  device is at hand (a Pixel 4 / Adreno 640 was used so far); Firebase Test Lab (7.6) for a matrix
   (Adreno, Mali, low end) without owning them.
 - Bluzzle is live in testing: its releases pin a tagged engine version (from v0.1.0; one minor
   version per phase, CLAUDE.md "Versioning").
+- The editor is desktop-only (Windows first, Linux in CI; macOS with Phase 11). Threadlock's rule "desktop builds
+  are only the engine's dev target" gets an exception for its editor build (in Threadlock's repo).
 
 ## Phase 0: Safety net and tooling
 - [x] **0.1 doctest.** *(done 2026-10-14, commit "Roadmap 0.1: doctest"; the CHANGELOG has the details)* The 24 suites move to doctest: one `TEST_CASE` per behaviour, the same
@@ -247,7 +230,7 @@ libunibreak (zlib), msdfgen (MIT), Jolt (MIT), Box2D v3 (MIT), ImGuizmo (MIT), F
   Desktop: vsync plus a precise limiter. Quality's budget follows the target.
 - [x] **1.2 Render scale.** *(done 2026-10-15, commit "Roadmap 1.2: render scale"; 0.25-2, Picture layers follow the scale, post pass sizes stay relative to the viewport (constant look), upscale free with passes / one copy without; cvar r.render_scale; RTX 5080 2560x1440: 3D 2.20 ms at 1, 1.21 at 0.75, 0.53 at 0.5)* `Viewport::SetRenderScale` for the 3D picture (UI stays native),
   bilinear upscale, a Quality hook, shown in the engine panel.
-- [x] **1.3 Fragment precision.** *(done 2026-10-15, commits "Roadmap 1.3a: fragment precision" + "Roadmap 1.3b: canvas shader"; planned and approved 2026-10-15: "Next session plan: 1.3" above; decision changed by
+- [x] **1.3 Fragment precision.** *(done 2026-10-15, commits "Roadmap 1.3a: fragment precision" + "Roadmap 1.3b: canvas shader"; decision changed by
   the Pixel 4 measurements: GLES stays highp by default, shaders opt in to `mediump` where a phone measures a gain)*
   Explicit precisions: `highp` for positions, UVs, pixel and canvas coordinates, depth and shadow
   coordinates and the specular term; every uniform, block member and varying names its precision (GLSL ES needs both
@@ -263,18 +246,21 @@ libunibreak (zlib), msdfgen (MIT), Jolt (MIT), Box2D v3 (MIT), ImGuizmo (MIT), F
   a `WriteInstances(count)` span API; Bluzzle's particles use it (with its move to v0.2.0).
 
 ## Phase 2: Core API (breaking, while the games are small)
+The editor shows and edits what this phase defines, so it comes first.
 - [ ] **2.1 Math, colour, geometry.** `wlw/core/math.h` (glm configuration, aliases);
   `core::Vector2/3` removed. `Color`: linear RGBA, hex and sRGB constructors, operators, `Lerp`,
   `WithAlpha`, `Color32`. Geometry (AABB, Sphere, Ray, Plane, Frustum) with intersection tests in
   one namespace.
 - [ ] **2.2 Transform and Node3D.** Position + quaternion + scale; local and world matrices cached
-  with dirty propagation; children in a vector; `SetParent(keep_world)`, `LookAt`, `Rotate`, world
-  getters and setters, Euler helpers; names, `FindChild` and `GetNode(path)`; a render layer mask.
-  The `Node<T>` template, Node2D, Vertex2D and Triangle2D are removed; Scene gets a root node.
+  with dirty propagation; children in a vector (a stable order: the hierarchy panel and scene files show it);
+  `SetParent(keep_world)`, `LookAt`, `Rotate`, world getters and setters, Euler helpers; names, `FindChild` and
+  `GetNode(path)`; a 64-bit id per node, unique in its scene (scene files, undo and node references use it: D15);
+  a render layer mask. The `Node<T>` template, Node2D, Vertex2D and Triangle2D are removed; Scene gets a root node.
+  Hot transform code moves into .cpp files.
 - [ ] **2.3 Node types.** Node3D keeps only transform, hierarchy, visibility and layers. New:
   MeshInstance3D, MultiMeshInstance3D, SpriteBatch, DirectionalLight3D, PointLight3D, SpotLight3D,
   Camera3D (perspective and orthographic with fit modes, `ScreenPointToRay`, `WorldToScreen`,
-  frustum). Fly, orbit and follow camera controllers.
+  frustum). Fly, orbit and follow camera controllers (the editor camera reuses fly and orbit).
 - [ ] **2.4 Conventions.** Y-up, right-handed, -Z forward, meters, radians; the default camera
   follows them; documented and tested.
 - [ ] **2.5 API consistency.** `GetScreen()` -> `MainViewport()`; every `Create()` returns
@@ -284,39 +270,154 @@ libunibreak (zlib), msdfgen (MIT), Jolt (MIT), Box2D v3 (MIT), ImGuizmo (MIT), F
   `Window::ProcessMouseMovement/SetIsActive`, FPSCamera and FollowCamera, TextureManager, GEMINI.md
   (each deletion confirmed with the owner).
 - [ ] **2.7 Platform-driven frame.** `Application::Init/Frame/Shutdown`; `Run()` loops on desktop
-  and Android; `WLW_MAIN` unchanged.
-- [ ] **2.8 Migrate the games.** Bluzzle, Threadlock and Snake updated; a migration guide for
-  Epicycles, Silhouette and Ripple in the CHANGELOG.
+  and Android; `WLW_MAIN` unchanged. The editor (3.2) drives frames through it, and the shape must also fit iOS
+  (6.1: a game thread like `android_main`, or `Frame()` from CADisplayLink callbacks).
+- [ ] **2.8 Migrate the games.** Bluzzle, Threadlock and Snake updated; a short note for the dropped games
+  (Epicycles, Silhouette, Ripple) in the CHANGELOG.
 
-## Phase 3: Runtime infrastructure
-- [ ] **3.1 Job system.** Workers (cores - 1), work-stealing deques plus an injection queue,
+## Phase 3: Editor shell and game tools
+The editor as a build of each game (D12), useful first through the games' own tools. Done when Threadlock's
+level editor runs on it.
+- [ ] **3.1 Keys and mouse for tools.** The full key set (letters, digits, function keys, punctuation, numpad,
+  modifiers as keys and as a mask), every mouse button, the wheel (both axes), cursor shapes; Dear ImGui fed all of
+  them (Ctrl+Z, Ctrl+S, right-drag, wheel zoom work). The polling API stays; timestamped events, several pointers
+  and gamepads stay in 14.1.
+- [ ] **3.2 Editor shell.** `wlw::editor` (`editor/wlw/editor/`: a desktop-only target on top of the engine, like
+  kit; the runtime never includes it). `wlw_add_game(... EDITOR_SOURCES ...)` adds `<game>_editor`. Dear ImGui on
+  its docking branch of the same version (v1.92.9b-docking; 1.93's draw-list changes are a separate update),
+  layouts saved per game in the user's folder. Panels: Game (the game's screen drawn into a viewport texture at a
+  chosen device size: phone presets, orientation, safe areas and notches = the device simulator's first part),
+  the engine panel, cvars, console and log, docked. The editor owns the frame (2.7): Pause / Step (one fixed step)
+  / Resume / Restart the game; Launch runs the real game (the desktop executable with `+cvar` arguments, or the APK
+  on a phone through adb with the intent extra). Native file dialogs. The editor reopens its last session
+  (layout, documents, camera) so a rebuild costs seconds.
+- [ ] **3.3 Plugins, documents and undo.** `EditorPlugin` (Godot's EditorPlugin, Unity's EditorWindow): a game's
+  editor build registers plugins that add panels, menu items, toolbar buttons, tools drawn over the Game panel,
+  and document types (open, save, autosave, the unsaved mark, reload when the file changes on disk); a plugin can
+  play a document in the running game ("play this level"). Undo/redo from the start (D16): one command stack per
+  document, merging within a gesture, an Edit menu and a history panel; the first command type keeps a snapshot of
+  the document before and after (enough for a JSON level). A desktop file watcher on the game's asset folder
+  reloads changed JSON, shaders and textures in the running game (the first piece of 4.5 / 4.6's hot reload).
+- [ ] **3.4 First user: Threadlock's level editor** (planned and built in Threadlock's repo; this step is the
+  engine fixes it needs). The level drawn by the game's own board view, nodes and pipe bends dragged with snapping,
+  a palette of pieces, the validators and the solver run live (pars, timing), "play this level" and Launch on the
+  phone, saved through the game's level writer.
+
+## Phase 4: Reflection, data and scenes
+What the inspector, scene files, undo and animation tracks are built on. Bluzzle's tuning is the first user.
+- [ ] **4.1 Reflection.** D14: classes and plain structs register their properties (member pointers or
+  getter/setter pairs; enums with names; base classes); attributes `Range`, hints (colour, angle, multiline, file,
+  resource type), flags Storage / Editor / ReadOnly / NoUndo; `Version(n)` and `RenamedFrom`; types created by a
+  stable name (scene files; `TypeName<T>()` isn't stable). Engine types registered from Application, game types
+  from `MakeApp`.
+- [ ] **4.2 Serialization and data files.** D15: any reflected value to and from JSON and CBOR (nlohmann moves from
+  kit into the engine); non-default values only, shortest round-trip floats (`std::to_chars`; nlohmann alone
+  prints 0.1f as 0.10000000149011612); file format numbers, per-class versions and upgrade functions; unknown
+  properties kept with a warning; a corpus of old files in tests/data. Data files: a reflected struct saved as its
+  own file (Godot's custom Resource, Unity's ScriptableObject) for tuning, looks and settings.
+- [ ] **4.3 Inspector.** A reflection-driven panel: widgets per property type (numbers, ranges, bools, enums,
+  colours, vectors, strings, arrays, resource and node references), custom property editors from plugins (Godot's
+  EditorInspectorPlugin), each change a SetProperty command (D16), applied live to the running game. Bluzzle's
+  rules and tuning structs move to it and to data files (its hand-written sliders go).
+- [ ] **4.4 Signals.** `Signal<void(Args...)>` with scoped connections; queued signals delivered on the game
+  thread; a property-changed signal for inspected objects (games react to live edits).
+- [ ] **4.5 File system and async IO.** Mounts `res://` (the source folder on desktop, the APK, the iOS bundle;
+  paks in 12.6), `user://`, `cache://`; directory listing; editor builds write into the source folder; the desktop
+  file watcher from 3.3 behind it; sync and async reads completed on the game thread; replaces
+  `platform::ReadFile`. (This also lets glTF load from the APK.)
+- [ ] **4.6 Resource manager.** Typed ref-counted handles; a uid per resource (D15: in its own file's header, or a
+  `.uid` sidecar for PNG / glTF / OGG), a uid -> path table baked for the APK and the bundle; sync and async
+  loading with states and dependencies; a cache by path; unload on last release; a per-frame GPU upload budget;
+  source tracking to rebuild after device loss; desktop hot reload.
+- [ ] **4.7 Scenes and prefabs.** Scene files (D15): a flat node list in tree order (id, parent, name, type,
+  non-default properties), node references by id, resource references by uid; prefab instances with overrides
+  (target id chain, property, value; added and removed nodes), variants (a scene whose root is an instance),
+  nesting; migrations; games instantiate scene files at runtime.
+
+## Phase 5: Scene editor
+Generic editing, like the Godot editor's 3D view. First users: Bluzzle's static stage (lights, floor, camera) as
+a scene file, and the next games.
+- [ ] **5.1 Scene editing.** Scene documents (open, save, several at once); a hierarchy (drag to reparent, rename,
+  multi-select, filter); the inspector on nodes; a Scene panel with an editor camera (orbit, fly, frame the
+  selection) beside the Game panel; ImGuizmo gizmos (translate, rotate, scale, snapping, local / world); picking
+  (rays against world boxes, then GPU id picking); duplicate, delete, copy and paste; all undoable (create and
+  delete subtree, reparent). Play: the scene is serialized and the game runs on a copy; Stop throws the copy away
+  (a change made while playing can be copied back as one undoable command).
+- [ ] **5.2 Prefab editing.** Open a prefab; instances show their overrides, which can be reverted or applied to
+  the source; variants.
+- [ ] **5.3 Asset browser.** The `res://` tree and search, thumbnails (images; models and scenes rendered
+  offscreen), drag into the scene or onto a property, open scenes and data files, rename and move without breaking
+  uids. Import settings and reimport arrive with the cooker (12.8).
+- [ ] **5.4 Tool panels.** Profiler panel (CPU zones of the frame, GpuTimer sections; Tracy for depth), render
+  stats, the device simulator completed (a device list with real resolutions, densities, safe areas and notches;
+  orientation; the quality level), the log with filters. Editor UI smoke tests if ImGui Test Engine's licence fits.
+
+## Phase 6: iOS (needs a Mac and an iPhone)
+On the current GL renderer (D17); Metal comes with the RHI (11.3). Can move ahead of Phase 3 if the Mac arrives
+first and Bluzzle wants iOS before the editor. Estimated size: 1,000-1,500 lines of Objective-C++ (Android's layer
+is ~850 lines of C++ + ~225 of Kotlin).
+- [ ] **6.1 iOS platform.** `platform/ios/`: UIKit / UIScene lifecycle; the loop chosen first (the game loop on its
+  own thread, as `android_main` does, or `Frame()` (2.7) from CADisplayLink callbacks); the EAGL surface behind the
+  D17 interface (glFinish before the app goes to the background); CADisplayLink `preferredFrameRateRange` for frame
+  pacing (Swappy's job on Android; 120 Hz on iPhones needs `CADisableMinimumFrameDurationOnPhone`, Low Power Mode
+  caps at 60); multi-touch, `safeAreaInsets`, `nativeScale`, orientation; audio through miniaudio's Core Audio
+  backend with an ambient session (mixes with the player's music), interruptions and
+  `secondaryAudioShouldBeSilencedHint` (what AudioWatcher.kt does on Android); assets from the bundle (plain file
+  reads: glTF loads there), saves in Application Support; `idleTimerDisabled` = KeepScreenOn; haptics; thermal state
+  into Quality.
+- [ ] **6.2 Native bridge and kit on iOS.** The Swift side of `BridgeCall`; Google Mobile Ads + UMP, the App
+  Tracking Transparency prompt; Game Center / iCloud for CloudSync.
+- [ ] **6.3 Build and ship.** An Xcode project from CMake (`-G Xcode -DCMAKE_SYSTEM_NAME=iOS`, the signing team as
+  an Xcode attribute) with Info.plist, launch screen, asset catalog, entitlements and the privacy manifest
+  (PrivacyInfo.xcprivacy); App Store uploads need Xcode 26 and the iOS 26 SDK (since 2026-04-28; the iOS 27 SDK from
+  April 2027) and iOS 13 or later as the minimum; TestFlight; Bluzzle on an iPhone.
+- [ ] **6.4 CI.** An `ios-arm64` build-only job on a GitHub macOS runner (like `android-arm64`), on main and by hand
+  only (Constraints).
+
+## Phase 7: Android platform
+- [ ] **7.1 GameActivity.** AGDK GameActivity replaces NativeActivity (native glue, `WlwActivity`);
+  input from its buffers (all pointers, history, timestamps); insets without JNI reflection; GameTextInput (the
+  console can be typed into on phones); the games' Gradle files updated.
+- [ ] **7.2 Refresh rate.** Swappy (GL; Vulkan in 10.5); the refresh rate chosen per screen (menus vs
+  gameplay); checked with frame-time graphs.
+- [ ] **7.3 ADPF and thermal.** Performance hint sessions for the game and render threads, thermal
+  headroom forecasts feeding Quality (step down before throttling), the Game Mode API, low-power
+  reactions.
+- [ ] **7.4 Context loss.** Recovery from `EGL_CONTEXT_LOST` by rebuilding GPU state from resource sources (4.6);
+  a debug command that simulates it; tests. (`VK_ERROR_DEVICE_LOST` in 10.5.)
+- [ ] **7.5 Display and lifecycle.** Orientation lock and changes, foldable and multi-window resizes,
+  immersive mode, density (dp) for UI scale. (Keep-screen-on is done: `platform::KeepScreenOn`.)
+- [ ] **7.6 Device lab.** Firebase Test Lab game-loop tests with screenshots on a device matrix
+  (Mali, Adreno, PowerVR, low end); native symbols for Play Console crash reports
+  (`debugSymbolLevel`); a vitals checklist. This is the only place precision artifacts show (no
+  software GPU has fp16, 1.3): the screenshots include sharp specular highlights, large textures,
+  full-screen effects and the canvas, and compare `r.mediump` 1 with 0. Also measure mediump GPU time on
+  Mali (1.3: Adreno 640 got slower, Mali's offline compiler predicts lit meshes at 31 instead of 44-48 work
+  registers and the post effects at 100% fp16): opt the shaders that gain in, per GPU family if needed.
+- [ ] **7.7 Size and delivery.** An AAB size report in CI; texture-format targeting and asset packs
+  once assets grow.
+
+## Phase 8: Runtime infrastructure
+- [ ] **8.1 Job system.** Workers (cores - 1), work-stealing deques plus an injection queue,
   dependency counters, `ParallelFor` with a grain size, the waiting thread helps, priorities, Tracy
   zones, an inline mode (0 workers); stress tests and a TSan CI job.
-- [ ] **3.2 Memory and handles.** Per-frame and per-thread linear allocators, pools, generational
+- [ ] **8.2 Memory and handles.** Per-frame and per-thread linear allocators, pools, generational
   `Handle<T>` with dense storage, memory accounting by category (engine panel, Tracy).
-- [ ] **3.3 Signals.** `Signal<void(Args...)>` with scoped connections; queued signals delivered on
-  the game thread.
-- [ ] **3.4 File system and async IO.** Mounts `res://` (folder, APK, bundle, pak), `user://`,
-  `cache://`; sync and async reads completed on the game thread; pak archives (index, per-file
-  zstd, aligned for memory mapping); a desktop file watcher; replaces `platform::ReadFile`.
-- [ ] **3.5 Resource manager.** Typed ref-counted handles; sync and async loading with states and
-  dependencies; a cache by path; unload on last release; a per-frame GPU upload budget; source
-  tracking to rebuild after device loss; desktop hot reload.
-- [ ] **3.6 Web.** Emscripten: WebGL 2 through the GL backend, HTML5 input, `Frame()` from
-  `emscripten_set_main_loop`, files preloaded or fetched, saves in IndexedDB, WebAudio unlocked on
+- [ ] **8.3 Web.** Emscripten: WebGL 2 through the GL backend, HTML5 input, `Frame()` from
+  `emscripten_set_main_loop`, files preloaded or fetched (4.5), saves in IndexedDB, WebAudio unlocked on
   the first input. A single-threaded build by default, a threaded build for cross-origin-isolated
   hosts; a CI job; WebGL 2 limits added to the CLAUDE.md rules. WebGL 2 shaders are GLSL ES 3.00:
   1.3's precision rules (both stages agree on every uniform and block member) and its GLSL ES
   compile check already apply.
 
-## Phase 4: Rendering architecture
-- [ ] **4.1 RHI and null backend.** Device (caps, limits, frames in flight, deferred destruction),
+## Phase 9: Rendering architecture
+- [ ] **9.1 RHI and null backend.** Device (caps, limits, frames in flight, deferred destruction),
   Buffer, Texture and views, Sampler, ShaderModule, bind group layouts and bind groups (frame /
   view / material / draw), graphics and compute pipelines, a command encoder with render, compute
   and copy passes (load/store actions, clear values, dynamic offsets, labels, timestamps),
   Swapchain (acquire, present, resize, pre-rotation), clip-space and y-flip conventions per backend.
   The null backend records commands for tests.
-- [ ] **4.2 Shader pipeline.** Engine shaders in GLSL 4.50 with includes and permutation keys; a
+- [ ] **9.2 Shader pipeline.** Engine shaders in GLSL 4.50 with includes and permutation keys; a
   `wlw_shaderc` build tool (glslang, spirv-opt, SPIRV-Cross, reflection); per-platform shader
   archives. The game shader language (`shader_type ...`) goes the same way, with a runtime compiler
   and disk cache only when games create shaders from strings. A precision strategy (mediump /
@@ -324,244 +425,239 @@ libunibreak (zlib), msdfgen (MIT), Jolt (MIT), Box2D v3 (MIT), ImGuizmo (MIT), F
   precision, fragment code defaults to mediump, game shaders stay highp unless they opt in, and the
   GLSL ES compile check moves into the shader compiler (game shaders compiled at runtime keep it).
   Variant lists recorded in debug builds for warm-up.
-- [ ] **4.3 GL backend.** The RHI on GL 3.3 / GLES 3.0 / WebGL 2: tracked state (no `glGet` in a
+- [ ] **9.3 GL backend.** The RHI on GL 3.3 / GLES 3.0 / WebGL 2: tracked state (no `glGet` in a
   frame), sampler objects, immutable texture storage, a VAO cache with the index buffer inside the
   VAO, per-frame upload rings (unsynchronized mapping + fences; `glBufferSubData` on WebGL), per-draw
   data in one UBO with dynamic offsets, an FBO cache, load/store -> clear/invalidate, MSAA
   (`EXT_multisampled_render_to_texture` on mobile, blit resolve elsewhere), a program binary
   cache, `KHR_debug` labels, timer queries.
-- [ ] **4.4 Meshes and vertex formats.** Mesh as a Resource (GPU side in the backend, CPU copy
+- [ ] **9.4 Meshes and vertex formats.** Mesh as a Resource (GPU side in the backend, CPU copy
   optional); vertex layouts with streams (a position-only stream for depth and shadow passes); a
   packed 24-byte default (float3 position, packed normal + tangent, half/unorm16 UV, RGBA8 colour);
   skinning attributes; 16-bit indices when they fit; uploads through the resource manager and the
   warm-up.
-- [ ] **4.5 Render world and frontend.** A RenderWorld per Scene: dense proxies (instances,
+- [ ] **9.5 Render world and frontend.** A RenderWorld per Scene: dense proxies (instances,
   multi-meshes, sprites, lights, cameras) updated from node change lists; parallel frustum and layer
   culling; draw packets with 64-bit keys (pipeline, material, mesh, depth); automatic instancing of
   identical mesh + material runs; materials as resources with parameter blocks and bind groups
   (Unlit, SimpleLit and custom ShaderMaterials on one path).
-- [ ] **4.6 Frame graph.** Passes declare transient and imported resources; compiling culls unused
+- [ ] **9.6 Frame graph.** Passes declare transient and imported resources; compiling culls unused
   passes, aliases transient textures, derives load/store actions and barriers, and orders
   execution. Shadow, opaque, sky, transparent, sprites, picture canvas, post chain (PostPlan folded
   in; the post-effect API unchanged), overlay canvas, debug UI and readback all become passes. A
-  graph view in the debug UI.
-- [ ] **4.7 Switch over.** Every current feature on the RHI (variants, instancing, sprites, sky,
+  graph view in the debug UI and the editor.
+- [ ] **9.7 Switch over.** Every current feature on the RHI (variants, instancing, sprites, sky,
   shadows, post effects, canvas renderer, ImGui renderer, GPU timing through RHI timestamps, Quality
-  hooks); golden images match; the old driver is deleted.
-- [ ] **4.8 Render thread.** A thread-model setting (single / render thread). The game thread
+  hooks, the editor's Game and Scene panels); golden images match; the old driver is deleted.
+- [ ] **9.8 Render thread.** A thread-model setting (single / render thread). The game thread
   extracts a frame packet; the render thread culls, builds the graph and submits, at most one frame
   behind. The GL context lives on the render thread; web stays single-threaded.
 
-## Phase 5: Vulkan
-- [ ] **5.1 Bootstrap.** volk, an instance with validation and debug utils in debug builds, device
+## Phase 10: Vulkan
+- [ ] **10.1 Bootstrap.** volk, an instance with validation and debug utils in debug builds, device
   selection, queues, VMA, swapchain (Win32 through GLFW, Android surface), frames in flight, present
   modes, resize / out-of-date / suboptimal handling, Android pre-rotation, backend choice with
   automatic GL fallback.
-- [ ] **5.2 Resources.** VMA buffers and images, staging uploads, per-frame upload rings, layout
+- [ ] **10.2 Resources.** VMA buffers and images, staging uploads, per-frame upload rings, layout
   transitions, compressed formats by device caps, samplers, deferred destruction.
-- [ ] **5.3 Pipelines and descriptors.** Pipelines from RHI descriptions (dynamic rendering when
+- [ ] **10.3 Pipelines and descriptors.** Pipelines from RHI descriptions (dynamic rendering when
   available, a render-pass cache otherwise), layouts from reflection, per-frame descriptor pools for
   transient sets, persistent material sets, dynamic offsets for per-draw data; `VkPipelineCache`
   saved to disk and validated; background pipeline compilation.
-- [ ] **5.4 Passes and synchronization.** Render passes from the frame graph with load/store
+- [ ] **10.4 Passes and synchronization.** Render passes from the frame graph with load/store
   actions; lazily allocated transient depth and MSAA attachments on tilers; in-pass MSAA resolve;
   barriers (synchronization2 when present); timestamps; debug labels for RenderDoc and AGI.
-- [ ] **5.5 Vulkan on Android.** A device policy (Vulkan 1.1+, Android 10+, a driver denylist, GL
-  fallback), Swappy for Vulkan, validation layers in debug APKs, AGI profiling.
-- [ ] **5.6 Parity and default.** Golden images on lavapipe (CI) and real GPUs; Bluzzle and
+- [ ] **10.5 Vulkan on Android.** A device policy (Vulkan 1.1+, Android 10+, a driver denylist, GL
+  fallback), Swappy for Vulkan, recovery from `VK_ERROR_DEVICE_LOST`, validation layers in debug APKs, AGI
+  profiling.
+- [ ] **10.6 Parity and default.** Golden images on lavapipe (CI) and real GPUs; Bluzzle and
   Threadlock on Vulkan (Windows, a real phone or Test Lab, emulator); CPU, GPU and power compared with GL; the
   default backend per platform chosen from the numbers.
 
-## Phase 6: Android platform
-- [ ] **6.1 GameActivity.** AGDK GameActivity replaces NativeActivity (native glue, `WlwActivity`);
-  input from its buffers (all pointers, history, timestamps); insets without JNI reflection; the
-  games' Gradle files updated.
-- [ ] **6.2 Refresh rate.** Swappy on both backends; the refresh rate chosen per screen (menus vs
-  gameplay); checked with frame-time graphs.
-- [ ] **6.3 ADPF and thermal.** Performance hint sessions for the game and render threads, thermal
-  headroom forecasts feeding Quality (step down before throttling), the Game Mode API, low-power
-  reactions.
-- [ ] **6.4 Device and context loss.** Recovery from `EGL_CONTEXT_LOST` and `VK_ERROR_DEVICE_LOST` by
-  rebuilding GPU state from resource sources; a debug command that simulates it; tests.
-- [ ] **6.5 Display and lifecycle.** Orientation lock and changes, foldable and multi-window resizes,
-  immersive mode, keep-screen-on, density (dp) for UI scale.
-- [ ] **6.6 Device lab.** Firebase Test Lab game-loop tests with screenshots on a device matrix
-  (Mali, Adreno, PowerVR, low end); native symbols for Play Console crash reports
-  (`debugSymbolLevel`); a vitals checklist. This is the only place precision artifacts show (no
-  software GPU has fp16, 1.3): the screenshots include sharp specular highlights, large textures,
-  full-screen effects and the canvas, and compare `r.mediump` 1 with 0. Also measure mediump GPU time on
-  Mali (1.3: Adreno 640 got slower, Mali's offline compiler predicts lit meshes at 31 instead of 44-48 work
-  registers and the post effects at 100% fp16): opt the shaders that gain in, per GPU family if needed.
-- [ ] **6.7 Size and delivery.** An AAB size report in CI; texture-format targeting and asset packs
-  once assets grow.
+## Phase 11: Metal and macOS
+- [ ] **11.1 Metal backend.** The RHI on Metal (MSL from the shader pipeline, memoryless
+  attachments, MTLBinaryArchive caching, timestamps, debug groups).
+- [ ] **11.2 macOS.** A macOS window through GLFW + CAMetalLayer; golden images on macOS; the editor on macOS.
+- [ ] **11.3 iOS on Metal.** iOS moves from the GL path (D17) to Metal; CPU, GPU and power compared; the GL path
+  kept or deleted from the numbers.
+- [ ] **11.4 CI.** The macOS runner also builds macOS and runs the golden images there (main and by hand).
 
-## Phase 7: Content pipeline
-- [ ] **7.1 Cooker.** A `wlw_cook` host tool, an asset database (`.meta` sidecars: GUID, import
-  settings), content-hash incremental cooking, per-platform output, CMake and Gradle integration,
-  pak output, clear errors.
-- [ ] **7.2 Textures.** Decoding (PNG, JPG, 16-bit, HDR, EXR); sRGB-correct mips (normal
+## Phase 12: Content pipeline
+- [ ] **12.1 Cooker.** A `wlw_cook` host tool, an asset database (resources' uids from 4.6; `.meta` sidecars
+  hold import settings), content-hash incremental cooking, per-platform output, CMake, Gradle and Xcode
+  integration, pak output, clear errors.
+- [ ] **12.2 Textures.** Decoding (PNG, JPG, 16-bit, HDR, EXR); sRGB-correct mips (normal
   renormalization, alpha-coverage preservation); KTX2 with Basis Universal (UASTC / ETC1S) and
   direct ASTC/BC7 per platform; runtime transcoding by device caps; cubemaps and arrays; sprite and
   UI atlas packing.
-- [ ] **7.3 Models.** A cgltf glTF 2.0 importer: hierarchy, primitives, PBR materials and samplers,
+- [ ] **12.3 Models.** A cgltf glTF 2.0 importer: hierarchy, primitives, PBR materials and samplers,
   vertex colours, tangents (MikkTSpace), skins, animations, morph targets, `KHR_lights_punctual`,
   `KHR_texture_transform`, `KHR_mesh_quantization`, `KHR_texture_basisu`, `EXT_meshopt_compression`.
   meshoptimizer for cache / fetch / overdraw order, quantization and LODs. Output: a binary
-  ModelAsset instantiated into nodes (this also fixes loading models from the APK). (From 1.4: a glTF node
+  ModelAsset instantiated into nodes, or a scene file (4.7). (From 1.4: a glTF node
   with a mirroring transform (det < 0) flips its triangles' winding; glTF says to reverse it when importing.
   The baked normals already point out: `core::NormalMatrix`.)
-- [ ] **7.4 Fonts.** Cooked fonts: the TTF, prebaked MSDF atlas pages for chosen ranges, metrics.
-- [ ] **7.5 Audio.** Decode and resample at cook time; load types Decompress / CompressedInMemory /
+- [ ] **12.4 Fonts.** Cooked fonts: the TTF, prebaked MSDF atlas pages for chosen ranges, metrics.
+- [ ] **12.5 Audio.** Decode and resample at cook time; load types Decompress / CompressedInMemory /
   Streaming; PCM16 or ADPCM for effects, Vorbis for long clips; mono stays mono.
-- [ ] **7.6 Shaders and paks.** Per-platform shader archives and paks in the cooked output,
-  versioned.
-- [ ] **7.7 Hot reload.** Desktop watcher -> re-cook -> live reload of textures, meshes, materials,
+- [ ] **12.6 Shaders and paks.** Pak archives (index, per-file zstd, aligned for memory mapping) mounted under
+  `res://` (4.5); per-platform shader archives in the cooked output, versioned.
+- [ ] **12.7 Hot reload.** Desktop watcher -> re-cook -> live reload of textures, meshes, materials,
   shaders, fonts and audio.
+- [ ] **12.8 Import in the editor.** Import settings in the inspector, reimport from the asset browser, cook
+  errors in the log panel.
 
-## Phase 8: Rendering features
-- [ ] **8.1 Colour pipeline.** Linear workflow (sRGB textures and targets), HDR scene colour
+## Phase 13: Rendering features
+- [ ] **13.1 Colour pipeline.** Linear workflow (sRGB textures and targets), HDR scene colour
   (RGBA16F or R11G11B10F by caps), manual and auto exposure, tonemapping (ACES fitted, AgX, PBR
   Neutral), 3D LUT grading, dithering, UI composited in sRGB after tonemapping; the gamma opt-out;
   Bluzzle and Threadlock retuned with the owner.
-- [ ] **8.2 PBR materials.** Metallic-roughness (GGX, Smith, Schlick; Lambert or Burley diffuse),
+- [ ] **13.2 PBR materials.** Metallic-roughness (GGX, Smith, Schlick; Lambert or Burley diffuse),
   base / normal / ORM / emissive maps, alpha opaque / mask (alpha to coverage) / blend,
-  double-sided; Lit, SimpleLit and Unlit tiers; live material tweaking in the debug UI. From 1.3:
+  double-sided; Lit, SimpleLit and Unlit tiers; a material editor (inspector + preview). From 1.3:
   fp16 can't hold N·H near 1, so the specular terms stay highp or use Filament's form (1 - (N·H)²
   as |N×H|², exact in mediump); malioc checks the result. A way to turn specular off (a specular
   strength or colour, 0 = no highlight): Bluzzle's floor gets "no shine" from shininess 1000 today
   and moves to it then. From 1.4: the engine never turns on back-face culling. Single-sided materials want it,
   and a mirrored node (det < 0) then needs the front face flipped (`glFrontFace(GL_CW)`), and instanced copies
   that mirror split into their own draw (Godot: `CULL_VARIANT_REVERSED`). Normals already stay outward.
-- [ ] **8.3 Environment lighting.** Skybox (cube, equirect), procedural sky, IBL (prefiltered
+- [ ] **13.3 Environment lighting.** Skybox (cube, equirect), procedural sky, IBL (prefiltered
   specular, SH9 irradiance, BRDF LUT; cooked offline, computed at runtime for dynamic skies),
   reflection probes (baked, box-projected, blended).
-- [ ] **8.4 Clustered lights.** Forward+ clusters, binned on the CPU with jobs (GLES 3.0) or in
+- [ ] **13.4 Clustered lights.** Forward+ clusters, binned on the CPU with jobs (GLES 3.0) or in
   compute (Vulkan, Metal); inverse-square falloff with a range window; light layers; configurable
   limits. (Found in 1.3: malioc shows every lit mesh variant load/store bound, 10 LS cycles vs ~3.8
   arithmetic on Mali-G78, from the light loops reading `WlwFrame` with a runtime count and index; light
   lists per cluster, or loops with a compile-time bound, should fix it.)
-- [ ] **8.5 Shadows.** Cascaded sun shadows (2-4 cascades, stable fit, texel snapping, blending,
+- [ ] **13.5 Shadows.** Cascaded sun shadows (2-4 cascades, stable fit, texel snapping, blending,
   fade), an atlas for point and spot shadows, per-cascade caster culling with jobs, shadow data per
   viewport, PCF (PCSS on the high tier), presets per tier.
-- [ ] **8.6 Anti-aliasing.** MSAA with on-tile resolve on every backend, FXAA fallback, TAA on the
+- [ ] **13.6 Anti-aliasing.** MSAA with on-tile resolve on every backend, FXAA fallback, TAA on the
   high tier (jitter, motion vectors from previous transforms, history clamping, sharpening).
-- [ ] **8.7 Post stack.** Progressive bloom (Karis average), vignette, chromatic aberration, film
+- [ ] **13.7 Post stack.** Progressive bloom (Karis average), vignette, chromatic aberration, film
   grain, half-res bokeh depth of field, half-res GTAO (high tier), camera motion blur, SSR (desktop
   high tier); global and per-viewport settings with blending.
-- [ ] **8.8 Dynamic resolution.** Render scale driven by GPU time, FSR 1 (EASU + RCAS) upscaling with
+- [ ] **13.8 Dynamic resolution.** Render scale driven by GPU time, FSR 1 (EASU + RCAS) upscaling with
   a bilinear fallback, tied into Quality.
-- [ ] **8.9 LOD and culling.** Screen-size LOD selection with hysteresis and dithered crossfade, LOD
+- [ ] **13.9 LOD and culling.** Screen-size LOD selection with hysteresis and dithered crossfade, LOD
   bias per tier, distance culling per layer, a static BVH for large scenes, occlusion culling (CPU
   software depth everywhere, Hi-Z compute on Vulkan/Metal).
-- [ ] **8.10 Debug draw and views.** Immediate debug drawing (lines, boxes, spheres, frustums, text;
+- [ ] **13.10 Debug draw and views.** Immediate debug drawing (lines, boxes, spheres, frustums, text;
   timed; depth-tested or on top). Views: wireframe, overdraw, mip level, normals, albedo, lighting
-  only, cascades, clusters, LODs.
-- [ ] **8.11 GPU particles.** Compute emit / update / sort / indirect draw on Vulkan, Metal and GLES
+  only, cascades, clusters, LODs; chosen in the editor's Scene panel too.
+- [ ] **13.11 GPU particles.** Compute emit / update / sort / indirect draw on Vulkan, Metal and GLES
   3.1+, with a CPU fallback (the current systems); curves and gradients over lifetime; flipbooks;
-  depth-buffer collisions.
-- [ ] **8.12 2D rendering.** World-space sprites with atlases, 9-slice, flipbook animation and
+  depth-buffer collisions; a particle editor (curves, gradients, live preview).
+- [ ] **13.12 2D rendering.** World-space sprites with atlases, 9-slice, flipbook animation and
   sorting layers for 2D games.
 
-## Phase 9: Input
-- [ ] **9.1 Event core.** Timestamped events (keys, text, pointers with ids, wheel, gamepad); the full
-  key set, all mouse buttons, cursor modes (hidden, locked, confined), multi-pointer state; the
-  polling API built on the events.
-- [ ] **9.2 Gestures.** Recognizers as a layer: tap, double tap, long press, swipe, pan, pinch,
+## Phase 14: Input
+- [ ] **14.1 Event core.** Timestamped events (keys, text, pointers with ids, wheel, gamepad); cursor modes
+  (hidden, locked, confined), multi-pointer state; the polling API built on the events. (The full key set and
+  mouse buttons came in 3.1.)
+- [ ] **14.2 Gestures.** Recognizers as a layer: tap, double tap, long press, swipe, pan, pinch,
   rotate; thresholds in dp; conflict rules. Today's built-in swipe and tap move here.
-- [ ] **9.3 Actions.** Named actions (button, axis, 2D) with bindings and composites, contexts with
+- [ ] **14.3 Actions.** Named actions (button, axis, 2D) with bindings and composites, contexts with
   priorities, runtime rebinding saved to `user://`, dead zones, input buffering.
-- [ ] **9.4 Gamepads.** GLFW gamepads with the SDL mapping database, Paddleboat on Android, rumble.
-- [ ] **9.5 Text input and IME.** UTF-8 text and composition events: GLFW on desktop, GameTextInput
-  on Android; showing and hiding the soft keyboard.
-- [ ] **9.6 Haptics.** Patterns and amplitude (Android VibrationEffect compositions; iOS with its
-  platform).
+- [ ] **14.4 Gamepads.** GLFW gamepads with the SDL mapping database, Paddleboat on Android, game controllers
+  on iOS, rumble.
+- [ ] **14.5 Text input and IME.** UTF-8 text and composition events: GLFW on desktop, GameTextInput
+  on Android, UIKit on iOS; showing and hiding the soft keyboard.
+- [ ] **14.6 Haptics.** Patterns and amplitude (Android VibrationEffect compositions, iOS Core Haptics).
 
-## Phase 10: UI and text
-- [ ] **10.1 Text layout.** UTF-8 everywhere, line breaking (libunibreak), wrapping, multi-line
+## Phase 15: UI and text
+- [ ] **15.1 Text layout.** UTF-8 everywhere, line breaking (libunibreak), wrapping, multi-line
   alignment, ellipsis, simple rich-text tags (colour, size, bold), cached shaped runs.
-- [ ] **10.2 Fonts.** FreeType rasterization, a dynamic SDF/MSDF atlas with LRU pages, prebaked pages
+- [ ] **15.2 Fonts.** FreeType rasterization, a dynamic SDF/MSDF atlas with LRU pages, prebaked pages
   from the cooker, fallback chains (Latin -> Arabic -> CJK -> emoji), weights and styles, colour
   emoji. Text anti-aliasing keeps 1.3b's screen-pixel-range formula (the one MSDF uses), with the
   distance range per atlas page.
-- [ ] **10.3 Shaping and bidi.** HarfBuzz (ligatures, kerning, Arabic and Indic scripts), SheenBidi
+- [ ] **15.3 Shaping and bidi.** HarfBuzz (ligatures, kerning, Arabic and Indic scripts), SheenBidi
   for mixed directions, mirrored RTL layout.
-- [ ] **10.4 Canvas.** Clip-rect (scissor) and transform stacks per batch, 9-slice images, gradients,
+- [ ] **15.4 Canvas.** Clip-rect (scissor) and transform stacks per batch, 9-slice images, gradients,
   borders and strokes, soft shadows, a UI atlas, backdrop blur. New quad kinds keep 1.3b's shape:
   derivatives taken once in uniform control flow, each pixel computes only its own kind, textures
   read only by the kinds that need them, per-quad constants in flat varyings, precision named per
   input (canvas coordinates highp, colour and coverage mediump).
-- [ ] **10.5 Widgets and layout.** An ID stack, scroll views (inertia, overscroll), virtualized lists,
+- [ ] **15.5 Widgets and layout.** An ID stack, scroll views (inertia, overscroll), virtualized lists,
   a text field (IME), slider, progress bar, checkbox and radio, dropdown, a modal stack,
   keyboard/gamepad focus navigation, flexbox-style immediate-mode layout, accessibility hooks
   through the bridge.
-- [ ] **10.6 Localization.** String tables cooked per locale, locale detection, runtime switching,
+- [ ] **15.6 Localization.** String tables cooked per locale, locale detection, runtime switching,
   CLDR plural rules for shipped languages, number and date formatting, pseudo-localization, font
-  fallback per locale.
+  fallback per locale; a string-table editor panel.
 
-## Phase 11: Audio
-- [ ] **11.1 Voices.** `Play` returns a handle (stop, fade, volume, pitch and pan while playing);
+## Phase 16: Audio
+- [ ] **16.1 Voices.** `Play` returns a handle (stop, fade, volume, pitch and pan while playing);
   priorities, voice limits with stealing, virtual voices for inaudible sounds.
-- [ ] **11.2 Mixer graph.** User-defined buses (volume, mute, solo) with effects (biquad filters,
-  compressor, limiter, reverb, delay), sends, ducking, snapshots with transitions.
-- [ ] **11.3 Spatial audio.** A listener on the camera; an AudioSource3D node (attenuation curves,
+- [ ] **16.2 Mixer graph.** User-defined buses (volume, mute, solo) with effects (biquad filters,
+  compressor, limiter, reverb, delay), sends, ducking, snapshots with transitions; a mixer panel.
+- [ ] **16.3 Spatial audio.** A listener on the camera; an AudioSource3D node (attenuation curves,
   cone, doppler, spread); equal-power panning; occlusion low-pass from physics raycasts.
-- [ ] **11.4 Clips and streaming.** Load types from the cooker, compressed-in-memory decoding, any
+- [ ] **16.4 Clips and streaming.** Load types from the cooker, compressed-in-memory decoding, any
   clip streamable, ref-counted unload, music playlists with crossfades and stingers.
-- [ ] **11.5 Platform audio.** AAudio performance mode, output-device changes (headphones), latency
-  reporting; iOS and web specifics arrive with their platforms.
+- [ ] **16.5 Platform audio.** AAudio performance mode, output-device changes (headphones), latency
+  reporting; web specifics with 8.3.
 
-## Phase 12: Animation
-- [ ] **12.1 Skeletons and skinning.** A skeleton resource, GPU skinning (joint palette in a UBO or a
+## Phase 17: Animation
+- [ ] **17.1 Skeletons and skinning.** A skeleton resource, GPU skinning (joint palette in a UBO or a
   texture; dual quaternions optional), skinned bounds, bone attachments.
-- [ ] **12.2 Clips and AnimationPlayer.** Compressed clips (quantized rotations, key reduction),
+- [ ] **17.2 Clips and AnimationPlayer.** Compressed clips (quantized rotations, key reduction),
   sampling on jobs, play / crossfade / speed / loop / events, node TRS tracks.
-- [ ] **12.3 Blending and state machines.** 1D and 2D blend spaces, layers with masks, additive
+- [ ] **17.3 Blending and state machines.** 1D and 2D blend spaces, layers with masks, additive
   layers, root motion, a state machine with conditional transitions.
-- [ ] **12.4 Morph targets.** GPU blend shapes with animated weights.
-- [ ] **12.5 IK and constraints.** Two-bone IK, look-at / aim, FABRIK chains.
-- [ ] **12.6 Property tracks and tween sequences.** Tracks for material params, colours and
-  visibility (any property once 15.1 exists); tween sequences and parallel groups with callbacks.
+- [ ] **17.4 Morph targets.** GPU blend shapes with animated weights.
+- [ ] **17.5 IK and constraints.** Two-bone IK, look-at / aim, FABRIK chains.
+- [ ] **17.6 Property tracks and tween sequences.** Tracks for any reflected property (4.1): material params,
+  colours, visibility; tween sequences and parallel groups with callbacks; an animation timeline in the editor
+  (keys, curves, preview).
 
-## Phase 13: Physics
-- [ ] **13.1 Jolt (3D).** A physics system on the fixed step; body nodes (static, rigid, kinematic,
+## Phase 18: Physics
+- [ ] **18.1 Jolt (3D).** A physics system on the fixed step; body nodes (static, rigid, kinematic,
   character through CharacterVirtual); shapes (primitives, cooked convex hulls and meshes,
   heightfields); layers and filters; ray / shape / overlap queries; contact signals on the game
   thread; joints; CCD; sleeping; Jolt jobs on our job system; interpolated transforms; a
   cross-platform determinism option; physics materials.
-- [ ] **13.2 Box2D v3 (2D).** The same integration for 2D games: bodies, shapes, sensors, joints,
+- [ ] **18.2 Box2D v3 (2D).** The same integration for 2D games: bodies, shapes, sensors, joints,
   queries, events; its tasks on our job system.
-- [ ] **13.3 Physics tooling.** Debug drawing, a stats panel, profiling zones.
+- [ ] **18.3 Physics tooling.** Debug drawing, a stats panel, profiling zones; collision shapes edited with
+  gizmos in the editor.
 
-## Phase 14: Apple platforms (needs a Mac; can move up to right after Phase 5)
-- [ ] **14.1 Metal and macOS.** The RHI on Metal (MSL from the shader pipeline, memoryless
-  attachments, MTLBinaryArchive caching, timestamps, debug groups); a macOS window through GLFW +
-  CAMetalLayer; golden images on macOS.
-- [ ] **14.2 iOS.** UIKit/UIScene lifecycle; CAMetalLayer + CADisplayLink (ProMotion ranges);
-  multi-touch with coalesced touches; safe areas; orientation; AVAudioSession (interruptions, other
-  audio); haptics; file system (bundle, Application Support); text input; game controllers; thermal
-  state into Quality; the Swift side of the native bridge; an Xcode project from CMake with plist,
-  entitlements and privacy manifest.
-- [ ] **14.3 Kit on iOS.** Google Mobile Ads + UMP, the App Tracking Transparency prompt, Game Center
-  / iCloud for CloudSync.
-- [ ] **14.4 CI.** A macOS runner builds macOS and iOS (unsigned) and runs the desktop tests.
-
-## Phase 15: Editor and tools
-- [ ] **15.1 Reflection.** Type and property registration (ranges, flags, enums, resource
-  references), used by the inspector, serialization and animation tracks.
-- [ ] **15.2 Scenes and prefabs.** Text (diffable) and binary formats, GUID references, versioned
-  migrations, prefab instances with overrides.
-- [ ] **15.3 Editor shell.** A `WLW_EDITOR` desktop build of the game: ImGui docking with multiple
-  viewports, saved layouts, play / pause / step / stop with scene snapshot and restore, an editor
-  camera.
-- [ ] **15.4 Scene editing.** Hierarchy, a reflection-driven inspector, undo/redo, gizmos (ImGuizmo,
-  snapping, local/world), GPU ID picking, multi-select, duplicate/delete, prefab editing.
-- [ ] **15.5 Assets.** An asset browser over the asset database, thumbnails, drag into the scene,
-  import-settings editing, reimport with hot reload.
-- [ ] **15.6 Tool panels.** Console, profiler (CPU, GPU, memory, frame graph), render and physics
-  debug views, animation preview, particle editor (curves, gradients), material editor, a device
-  simulator (resolutions, safe areas, notches).
+## Phase 19: Editor as a product (only if still wanted then; ask first)
+For other developers' games: one prebuilt editor that opens any project, like Godot's.
+- [ ] **19.1 Game modules.** The engine as a shared library and each game as a module the editor loads (one CRT,
+  one copy of the engine's globals, a module API with a version); code reload with state saved across it, or
+  Live++.
+- [ ] **19.2 Projects.** A project manager (new from a template, open recent), project settings, templates for
+  2D and 3D games.
+- [ ] **19.3 Export.** Builds from the editor: Android APK / AAB (Gradle), iOS (Xcode), web, desktop; signing
+  settings; export presets.
+- [ ] **19.4 Remote link.** Inspect and tweak a running game on a phone or another process from the editor
+  (Godot's remote scene tree; over adb forward or TCP): the hierarchy, the inspector and cvars live. (Can be pulled
+  earlier for the owner's own games.)
+- [ ] **19.5 Stability and docs.** Crash recovery and autosave, editor tests, a manual, samples; a decision on a
+  scripting language.
 
 ## Not planned (ask to add)
-A scripting language, networking and multiplayer, consoles (NDA platforms), Direct3D 12 (Vulkan
+A scripting language (revisit with 19.5), networking and multiplayer, consoles (NDA platforms), Direct3D 12 (Vulkan
 covers Windows), hardware ray tracing / virtualized geometry / dynamic GI, terrain and vegetation,
 navigation meshes (Recast/Detour), video playback, XR, in-app purchases.
+
+## Old numbering (before 2026-10-21)
+Commits and CHANGELOG entries before the reorder use these numbers. Phases 0-2 kept theirs.
+
+| Old | New |
+|---|---|
+| 3 Runtime infrastructure: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6 | 8.1, 8.2, 4.4, 4.5 (paks: 12.6), 4.6, 8.3 |
+| 4 Rendering architecture: 4.1-4.8 | 9.1-9.8 |
+| 5 Vulkan: 5.1-5.6 | 10.1-10.6 |
+| 6 Android platform: 6.1-6.7 | 7.1-7.7 (Vulkan parts of 6.2 and 6.4: 10.5) |
+| 7 Content pipeline: 7.1-7.7 | 12.1-12.7 (+ 12.8 import in the editor) |
+| 8 Rendering features: 8.1-8.12 | 13.1-13.12 |
+| 9 Input: 9.1, 9.2-9.6 | 3.1 (keys, mouse) + 14.1 (events), 14.2-14.6 |
+| 10 UI and text: 10.1-10.6 | 15.1-15.6 |
+| 11 Audio: 11.1-11.5 | 16.1-16.5 |
+| 12 Animation: 12.1-12.6 | 17.1-17.6 |
+| 13 Physics: 13.1-13.3 | 18.1-18.3 |
+| 14 Apple platforms: 14.1, 14.2, 14.3, 14.4 | 11.1 + 11.2, 6.1 + 6.3, 6.2, 6.4 + 11.4 |
+| 15 Editor and tools: 15.1, 15.2, 15.3, 15.4, 15.5, 15.6 | 4.1, 4.7, 3.2, 5.1 + 5.2, 5.3 + 12.8, 5.4 (+ panels in 9.6, 13.x, 17.6, 18.3) |

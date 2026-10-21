@@ -1,6 +1,7 @@
 # Changelog
 
-Steps refer to ROADMAP.md. Breaking changes come with migration notes.
+Steps refer to ROADMAP.md. Breaking changes come with migration notes. Entries before the 2026-10-21 reorder use
+the old step numbers (ROADMAP.md "Old numbering" maps them).
 
 Versions follow SemVer below 1.0: a minor version may break the API, a patch only fixes. One minor version per
 finished roadmap phase, each tagged `vX.Y.Z` on `main` with a GitHub Release; games pin their engine submodule
@@ -9,6 +10,11 @@ then it's deleted (listed under **Removed**).
 
 ## Unreleased
 
+- ROADMAP.md reordered around the editor (2026-10-21): Phase 2 Core API, then the editor (3 shell and game
+  tools, 4 reflection, data and scenes, 5 scene editor), 6 iOS on the current GL renderer, 7 Android platform,
+  then runtime infrastructure, the rendering rewrite (RHI, Vulkan, Metal) and the feature phases; 19 = the editor
+  as a product, if still wanted. New decisions D14-D17 (reflection, scene files, undo, iOS renderer); D12 revised
+  (a `<game>_editor` build per game). Phase N is still released as v0.(N+1).0.
 - `platform::KeepScreenOn(bool)`: keeps the screen awake while the player watches without touching (Android:
   FLAG_KEEP_SCREEN_ON; no-op on desktop). Asked for by Threadlock, whose runs outlast a 30 s screen timeout.
 - `ui::TextStyle::rotation`: Canvas text turned about its alignment point (radians, clockwise on screen, like

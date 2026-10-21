@@ -350,7 +350,7 @@ phone is only ever compared with its own baseline. Build: `cmake --preset androi
 `adb shell "cd /data/local/tmp/wlw && taskset <mask> ./wlw_benchmarks --data . --baseline <device>.json"`. Pin to one fast
 core, or the scheduler moves it between core types (Pixel 4: `taskset 80` = the prime core; unpinned runs differ ~17%).
 Git Bash needs `MSYS_NO_PATHCONV=1` for adb paths. The emulator runs on the PC's x86 CPU: its numbers don't count.
-Firebase Test Lab (roadmap 6.6) is the planned way to get numbers from phones the owner doesn't have.
+Firebase Test Lab (roadmap 7.6) is the planned way to get numbers from phones the owner doesn't have.
 
 ## Profiling
 Build with a profile preset: `windows-profile` or `android-arm64-profile` (RelWithDebInfo = optimized with symbols,
