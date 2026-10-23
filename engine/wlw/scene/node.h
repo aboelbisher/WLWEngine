@@ -9,9 +9,9 @@
 #include <utility>
 #include <vector>
 
-#include "wlw/core/collision.h"
 #include "wlw/core/assert.h"
 #include "wlw/core/deprecated.h"
+#include "wlw/core/geometry.h"
 #include "wlw/core/model.h"
 #include "wlw/core/vertex_2d.h"
 #include "wlw/core/vertex_3d.h"
@@ -54,28 +54,28 @@ class Node {
   const std::shared_ptr<rendering::Material>& GetMaterial() const { return material_; }
 
   // ---- Local transform ----
-  void SetPosition(const core::Vector3& position) {
+  void SetPosition(const Vec3& position) {
     position_ = position;
     UpdateLocalMatrix();
   }
-  core::Vector3 GetPosition() const { return position_; }
+  Vec3 GetPosition() const { return position_; }
 
-  void Translate(const core::Vector3& delta) {
+  void Translate(const Vec3& delta) {
     position_ += delta;
     UpdateLocalMatrix();
   }
 
-  void SetScale(const core::Vector3& scale) {
+  void SetScale(const Vec3& scale) {
     scale_ = scale;
     UpdateLocalMatrix();
   }
-  const core::Vector3& GetScale() const { return scale_; }
+  const Vec3& GetScale() const { return scale_; }
 
-  void SetRotation(const core::Vector3& rotation_angle_degrees) {
+  void SetRotation(const Vec3& rotation_angle_degrees) {
     rotation_angles_degrees_ = rotation_angle_degrees;
     UpdateLocalMatrix();
   }
-  const core::Vector3& GetRotation() const { return rotation_angles_degrees_; }
+  const Vec3& GetRotation() const { return rotation_angles_degrees_; }
 
   const glm::mat4& GetLocalMatrix() const { return local_matrix_; }
 
@@ -117,9 +117,9 @@ class Node {
   // computed from the copies (each copy's transform applied to the model's box) and cached until the
   // copies or the model's box change. Culling uses it (GetAABB), so a moving node costs nothing; for
   // copies that never move, one write = one computation.
-  scene::AABB InstanceBounds() const {
+  wlw::AABB InstanceBounds() const {
     if (custom_instance_bounds_) return *custom_instance_bounds_;
-    const scene::AABB model_box = ModelBox();
+    const wlw::AABB model_box = ModelBox();
     if (instance_bounds_version_ != instances_version_ || !SameBox(instance_bounds_model_box_, model_box)) {
       instance_bounds_ = rendering::InstanceBounds(instances_, model_box);
       instance_bounds_model_box_ = model_box;
@@ -130,7 +130,7 @@ class Node {
   // A fixed node-space box for the copies instead of the computed one (like Godot's custom_aabb):
   // skips the computation when the game knows where its copies can go (a particle field's volume),
   // or makes a vertex shader's displacement visible to culling. nullopt = computed again.
-  void SetInstanceBounds(std::optional<scene::AABB> box) { custom_instance_bounds_ = box; }
+  void SetInstanceBounds(std::optional<wlw::AABB> box) { custom_instance_bounds_ = box; }
 
 #if !WLW_NO_DEPRECATED
   WLW_DISABLE_DEPRECATION_WARNINGS_BEGIN
@@ -146,7 +146,7 @@ class Node {
     std::vector<rendering::InstanceData> copies;
     copies.reserve(instances_.size());
     for (const rendering::Instance& instance : instances_) {
-      copies.push_back({instance.Transform(), rendering::UnpackColor(instance.color)});
+      copies.push_back({instance.Transform(), Color32::FromPacked(instance.color).ToColor()});
     }
     return copies;
   }
@@ -184,24 +184,24 @@ class Node {
   // ---- World transform (includes all parents) ----
   glm::mat4 GetModelMatrix() const { return parent_ ? parent_->GetModelMatrix() * local_matrix_ : local_matrix_; }
 
-  core::Vector3 GetWorldPosition() const {
+  Vec3 GetWorldPosition() const {
     const glm::mat4 world = GetModelMatrix();
-    return {world[3].x, world[3].y, world[3].z};
+    return Vec3(world[3]);
   }
 
   // World-space bounding box of this node's model (children not included). For an instanced node,
   // the box around all its instances (InstanceBounds, cached). Each box is moved to world space by
-  // Arvo's method (scene::TransformBox: exact for a box, 2 matrix-vector products instead of 8).
-  scene::AABB GetAABB() const {
+  // Arvo's method (wlw::TransformBox: exact for a box, 2 matrix-vector products instead of 8).
+  wlw::AABB GetAABB() const {
     const glm::mat4 world = GetModelMatrix();
     if (!model_ || model_->meshes.empty() || (instanced_ && instances_.empty())) {
-      return scene::AABB::FromPositionAndSize({world[3].x, world[3].y, world[3].z}, 0.1f);
+      return wlw::AABB::FromCenterSize(Vec3(world[3]), Vec3(0.1f));
     }
-    if (instanced_) return scene::TransformBox(world, InstanceBounds());
+    if (instanced_) return wlw::TransformBox(world, InstanceBounds());
     // Mesh by mesh: as tight as the 8 corners of each (a union box first would grow under rotation).
-    scene::AABB box = scene::TransformBox(world, model_->meshes.front()->GetLocalAABB());
+    wlw::AABB box = wlw::TransformBox(world, model_->meshes.front()->GetLocalAABB());
     for (size_t i = 1; i < model_->meshes.size(); ++i) {
-      box = scene::Union(box, scene::TransformBox(world, model_->meshes[i]->GetLocalAABB()));
+      box = wlw::Union(box, wlw::TransformBox(world, model_->meshes[i]->GetLocalAABB()));
     }
     return box;
   }
@@ -238,26 +238,22 @@ class Node {
 
  private:
   void UpdateLocalMatrix() {
-    const glm::vec3 radians =
-        glm::radians(glm::vec3(rotation_angles_degrees_.x, rotation_angles_degrees_.y, rotation_angles_degrees_.z));
-    local_matrix_ = glm::translate(glm::mat4(1.0f), glm::vec3(position_.x, position_.y, position_.z));
+    const glm::vec3 radians = glm::radians(rotation_angles_degrees_);
+    local_matrix_ = glm::translate(glm::mat4(1.0f), position_);
     local_matrix_ = glm::rotate(local_matrix_, radians.x, glm::vec3(1.0f, 0.0f, 0.0f));
     local_matrix_ = glm::rotate(local_matrix_, radians.y, glm::vec3(0.0f, 1.0f, 0.0f));
     local_matrix_ = glm::rotate(local_matrix_, radians.z, glm::vec3(0.0f, 0.0f, 1.0f));
-    local_matrix_ = glm::scale(local_matrix_, glm::vec3(scale_.x, scale_.y, scale_.z));
+    local_matrix_ = glm::scale(local_matrix_, scale_);
   }
 
   // The box around all the model's meshes, in the node's space (a point at 0 without any).
-  scene::AABB ModelBox() const {
+  wlw::AABB ModelBox() const {
     if (!model_ || model_->meshes.empty()) return {{0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}};
-    scene::AABB box = model_->meshes.front()->GetLocalAABB();
-    for (size_t i = 1; i < model_->meshes.size(); ++i) box = scene::Union(box, model_->meshes[i]->GetLocalAABB());
+    wlw::AABB box = model_->meshes.front()->GetLocalAABB();
+    for (size_t i = 1; i < model_->meshes.size(); ++i) box = wlw::Union(box, model_->meshes[i]->GetLocalAABB());
     return box;
   }
-  static bool SameBox(const scene::AABB& a, const scene::AABB& b) {
-    return a.min.x == b.min.x && a.min.y == b.min.y && a.min.z == b.min.z && a.max.x == b.max.x && a.max.y == b.max.y &&
-           a.max.z == b.max.z;
-  }
+  static bool SameBox(const wlw::AABB& a, const wlw::AABB& b) { return a.min == b.min && a.max == b.max; }
 
   std::shared_ptr<core::Model<T>> model_;
   std::shared_ptr<rendering::Material> material_;
@@ -266,15 +262,15 @@ class Node {
   std::vector<rendering::Instance> instances_;
   uint64_t instances_version_ = 0;
   std::unique_ptr<rendering::WInstanceBuffer> instance_buffer_;
-  std::optional<scene::AABB> custom_instance_bounds_;
+  std::optional<wlw::AABB> custom_instance_bounds_;
   // InstanceBounds' cache: valid while the copies' version and the model's box are these.
-  mutable scene::AABB instance_bounds_{};
-  mutable scene::AABB instance_bounds_model_box_{};
+  mutable wlw::AABB instance_bounds_{};
+  mutable wlw::AABB instance_bounds_model_box_{};
   mutable uint64_t instance_bounds_version_ = UINT64_MAX;
 
-  core::Vector3 position_ = {0, 0, 0};
-  core::Vector3 scale_ = {1, 1, 1};
-  core::Vector3 rotation_angles_degrees_ = {0, 0, 0};
+  Vec3 position_ = {0, 0, 0};
+  Vec3 scale_ = {1, 1, 1};
+  Vec3 rotation_angles_degrees_ = {0, 0, 0};
   glm::mat4 local_matrix_ = glm::mat4(1.0f);
   bool visible_ = true;
   bool casts_shadow_ = false;

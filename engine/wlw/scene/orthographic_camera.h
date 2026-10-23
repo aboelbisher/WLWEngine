@@ -27,17 +27,17 @@ class OrthographicCamera : public Camera3D {
   }
 
   // ---- View: where the camera is and where it looks ----
-  void SetPosition(const core::Vector3& position) override {
+  void SetPosition(const Vec3& position) override {
     position_ = position;
     RebuildView();
   }
-  void SetTarget(const core::Vector3& target) override {
+  void SetTarget(const Vec3& target) override {
     target_ = target;
     RebuildView();
   }
   // Which world direction points "up" on screen. Must not be parallel to the viewing direction:
   // a camera looking straight down -y needs e.g. {0, 0, -1}, not {0, 1, 0}.
-  void SetUp(const core::Vector3& up) {
+  void SetUp(const Vec3& up) {
     up_ = up;
     RebuildView();
   }
@@ -56,7 +56,7 @@ class OrthographicCamera : public Camera3D {
     far_ = far_plane;
     RebuildProjection();
   }
-  void UpdateSize(const core::Vector2& size) override {
+  void UpdateSize(const Vec2& size) override {
     if (size.x <= 0 || size.y <= 0) return;
     aspect_ = size.x / size.y;
     RebuildProjection();
@@ -66,7 +66,7 @@ class OrthographicCamera : public Camera3D {
   float GetHalfWidth() const { return half_width_; }
   float GetHalfHeight() const { return half_height_; }
 
-  const core::Vector3& GetPosition() const override { return position_; }
+  const Vec3& GetPosition() const override { return position_; }
   const glm::mat4& GetViewMatrix() override { return view_; }
   const glm::mat4& GetProjectionMatrix() override { return projection_; }
 
@@ -75,10 +75,7 @@ class OrthographicCamera : public Camera3D {
   void ProcessMouseMovement(float, float, bool) override {}
 
  private:
-  void RebuildView() {
-    view_ = glm::lookAt(glm::vec3(position_.x, position_.y, position_.z), glm::vec3(target_.x, target_.y, target_.z),
-                        glm::vec3(up_.x, up_.y, up_.z));
-  }
+  void RebuildView() { view_ = glm::lookAt(position_, target_, up_); }
 
   void RebuildProjection() {
     // Fit: start from the height that's needed, then grow it if the width wouldn't fit.
@@ -87,9 +84,9 @@ class OrthographicCamera : public Camera3D {
     projection_ = glm::ortho(-half_width_, half_width_, -half_height_, half_height_, near_, far_);
   }
 
-  core::Vector3 position_ = {0, 0, 10};
-  core::Vector3 target_ = {0, 0, 0};
-  core::Vector3 up_ = {0, 1, 0};
+  Vec3 position_ = {0, 0, 10};
+  Vec3 target_ = {0, 0, 0};
+  Vec3 up_ = {0, 1, 0};
 
   float visible_width_ = 10.0f;
   float visible_height_ = 10.0f;

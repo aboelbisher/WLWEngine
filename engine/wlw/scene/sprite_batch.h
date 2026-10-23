@@ -10,6 +10,7 @@
 
 #include <glm/glm.hpp>
 
+#include "wlw/core/geometry.h"
 #include "wlw/rendering/instance_buffer.h"
 #include "wlw/rendering/material.h"
 #include "wlw/scene/node.h"
@@ -76,7 +77,7 @@ class SpriteBatch : public Node3D {
   glm::vec2 BoundsMin() const { return bounds_min_; }
   glm::vec2 BoundsMax() const { return bounds_max_; }
   // The bounds in world space (through the node's transform and its parents').
-  AABB WorldBounds() const {
+  wlw::AABB WorldBounds() const {
     const glm::mat4 world = GetModelMatrix();
     glm::vec3 lo(std::numeric_limits<float>::max()), hi(std::numeric_limits<float>::lowest());
     for (const glm::vec2 corner :

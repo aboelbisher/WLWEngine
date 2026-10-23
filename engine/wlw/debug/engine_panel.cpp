@@ -160,8 +160,8 @@ void EnginePanel::OnDebugUI() {
     gpu_line(viewport->Settings().name.c_str(), *viewport);
     post_line(viewport->Settings().name.c_str(), *viewport);
   }
-  const core::Vector2 framebuffer = window.GetSize();
-  const core::Vector2 surface = window.GetInput().SurfaceSize();
+  const Vec2 framebuffer = window.GetSize();
+  const Vec2 surface = window.GetInput().SurfaceSize();
   ImGui::Text("Framebuffer %.0f x %.0f px", framebuffer.x, framebuffer.y);
   ImGui::Text("Pointer area %.0f x %.0f%s", surface.x, surface.y, window.GetInput().IsTouchScreen() ? " (touch)" : "");
   ImGui::Text("Time scale x%.2f", App().Time().Scale());

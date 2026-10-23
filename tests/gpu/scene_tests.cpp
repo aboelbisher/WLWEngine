@@ -30,7 +30,6 @@
 TEST_SUITE_BEGIN("golden");
 
 using namespace wlw;
-using core::Color;
 using gpu_tests::CheckGolden;
 using gpu_tests::MakeViewport;
 
@@ -39,13 +38,13 @@ namespace {
 // A perspective camera that never moves (45 degrees, looking from `eye` at `target`).
 class FixedCamera : public scene::Camera3D {
  public:
-  FixedCamera(const core::Vector3& eye, const core::Vector3& target) : eye_(eye), target_(target) { Update(); }
-  void SetPosition(const core::Vector3& position) override { eye_ = position, Update(); }
-  void SetTarget(const core::Vector3& target) override { target_ = target, Update(); }
-  void UpdateSize(const core::Vector2& size) override {
+  FixedCamera(const Vec3& eye, const Vec3& target) : eye_(eye), target_(target) { Update(); }
+  void SetPosition(const Vec3& position) override { eye_ = position, Update(); }
+  void SetTarget(const Vec3& target) override { target_ = target, Update(); }
+  void UpdateSize(const Vec2& size) override {
     projection_ = glm::perspective(glm::radians(45.0f), size.x / size.y, 0.1f, 100.0f);
   }
-  const core::Vector3& GetPosition() const override { return eye_; }
+  const Vec3& GetPosition() const override { return eye_; }
   const glm::mat4& GetViewMatrix() override { return view_; }
   const glm::mat4& GetProjectionMatrix() override { return projection_; }
   void ProcessKeyboard(scene::CameraMovement, float) override {}
@@ -56,7 +55,7 @@ class FixedCamera : public scene::Camera3D {
     view_ = glm::lookAt(glm::vec3(eye_.x, eye_.y, eye_.z), glm::vec3(target_.x, target_.y, target_.z),
                         glm::vec3(0.0f, 1.0f, 0.0f));
   }
-  core::Vector3 eye_, target_;
+  Vec3 eye_, target_;
   glm::mat4 view_{1.0f};
   glm::mat4 projection_ = glm::perspective(glm::radians(45.0f), 1.0f, 0.1f, 100.0f);
 };
@@ -70,7 +69,7 @@ std::shared_ptr<Model> MakeModel(std::shared_ptr<core::Mesh<core::Vertex3D>> mes
 }
 
 std::shared_ptr<scene::Node3D> AddMesh(scene::Viewport& viewport, std::shared_ptr<core::Mesh<core::Vertex3D>> mesh,
-                                       std::shared_ptr<rendering::Material> material, const core::Vector3& position) {
+                                       std::shared_ptr<rendering::Material> material, const Vec3& position) {
   auto node = std::make_shared<scene::Node3D>();
   node->SetModel(MakeModel(std::move(mesh)));
   node->SetMaterial(std::move(material));
@@ -91,7 +90,7 @@ std::shared_ptr<rendering::Material> Opaque() { return rendering::Material::Crea
 
 // A cube, a bevelled cube and a sphere under a sun and an orange point light.
 void AddLitCubes(scene::Viewport& viewport) {
-  viewport.SetCamera(std::make_shared<FixedCamera>(core::Vector3{0, 3, 7}, core::Vector3{0, 0, 0}));
+  viewport.SetCamera(std::make_shared<FixedCamera>(Vec3{0, 3, 7}, Vec3{0, 0, 0}));
   AddSun(viewport);
   auto point = std::make_shared<scene::PointLight>();
   point->SetPosition({2.0f, 1.5f, 2.0f});
@@ -141,7 +140,7 @@ TEST_CASE("render scale with post") {
   // the last one writes the full-size picture (no extra copy). A Picture layer is drawn into the
   // small picture (bloomed, soft); the Overlay layer stays sharp.
   auto viewport = MakeViewport();
-  viewport->SetCamera(std::make_shared<FixedCamera>(core::Vector3{0, 2, 6}, core::Vector3{0, 0, 0}));
+  viewport->SetCamera(std::make_shared<FixedCamera>(Vec3{0, 2, 6}, Vec3{0, 0, 0}));
   AddSun(*viewport, 0.9f);
   AddMesh(*viewport, utils::createCubeWithNormals(1.0f, Color{1.0f, 1.0f, 1.0f, 1.0f}), Opaque(), {-1.2f, 0, 0});
   AddMesh(*viewport, utils::createCubeWithNormals(1.0f, Color{0.2f, 0.25f, 0.6f, 1.0f}), Opaque(), {1.2f, 0, 0});
@@ -160,7 +159,7 @@ TEST_CASE("render scale with post") {
 
 TEST_CASE("shadows") {
   auto viewport = MakeViewport();
-  viewport->SetCamera(std::make_shared<FixedCamera>(core::Vector3{0, 5, 6}, core::Vector3{0, 0, 0}));
+  viewport->SetCamera(std::make_shared<FixedCamera>(Vec3{0, 5, 6}, Vec3{0, 0, 0}));
   AddSun(*viewport, 0.3f)->SetCastsShadows(true);
   auto ground = AddMesh(*viewport, utils::createPlaneWithNormals(8.0f, 8.0f, Color{0.7f, 0.7f, 0.75f, 1.0f}), Opaque(),
                         {0, 0, 0});
@@ -177,7 +176,7 @@ TEST_CASE("shadows") {
 TEST_CASE("transparency") {
   // Two see-through cubes over an opaque one: drawn back to front after it, blended, no depth writes.
   auto viewport = MakeViewport();
-  viewport->SetCamera(std::make_shared<FixedCamera>(core::Vector3{0, 2, 6}, core::Vector3{0, 0, 0}));
+  viewport->SetCamera(std::make_shared<FixedCamera>(Vec3{0, 2, 6}, Vec3{0, 0, 0}));
   AddSun(*viewport, 0.4f);
   AddMesh(*viewport, utils::createCubeWithNormals(1.5f, Color{0.9f, 0.9f, 0.2f, 1.0f}), Opaque(), {0, 0, -2});
   auto glass = rendering::Material::Create();
@@ -191,7 +190,7 @@ TEST_CASE("transparency") {
 TEST_CASE("instancing") {
   // One node, 25 tinted copies: one draw call.
   auto viewport = MakeViewport();
-  viewport->SetCamera(std::make_shared<FixedCamera>(core::Vector3{0, 7, 7}, core::Vector3{0, 0, 0}));
+  viewport->SetCamera(std::make_shared<FixedCamera>(Vec3{0, 7, 7}, Vec3{0, 0, 0}));
   AddSun(*viewport);
   auto node = AddMesh(*viewport, utils::createCubeWithNormals(0.7f), Opaque(), {0, 0, 0});
   std::span<rendering::Instance> copies = node->WriteInstances(25);
@@ -199,7 +198,7 @@ TEST_CASE("instancing") {
     for (int x = 0; x < 5; ++x) {
       glm::mat4 transform = glm::translate(glm::mat4(1.0f), glm::vec3(x - 2.0f, 0.15f * (x + z), z - 2.0f));
       transform = glm::rotate(transform, glm::radians(9.0f * (x * 5 + z)), glm::vec3(0, 1, 0));
-      const core::Color tint{0.2f + 0.2f * x, 0.9f - 0.15f * z, 0.5f, 1.0f};
+      const Color tint{0.2f + 0.2f * x, 0.9f - 0.15f * z, 0.5f, 1.0f};
       copies[static_cast<size_t>(z * 5 + x)] = rendering::Instance::FromTransform(transform, tint);
     }
   }
@@ -225,7 +224,7 @@ TEST_CASE("sprites") {
     const float radius = 0.5f + 3.8f * t;
     out[i].position = {radius * std::cos(angle), radius * std::sin(angle)};
     out[i].size = 0.4f + 1.2f * t;
-    out[i].color = rendering::PackColor({1.0f - t, 0.4f + 0.4f * t, t, 0.8f});
+    out[i].color = wlw::Color32(wlw::Color{1.0f - t, 0.4f + 0.4f * t, t, 0.8f}).Packed();
   }
   dots->FitBounds();
   CheckGolden("sprites", viewport);
@@ -263,7 +262,7 @@ TEST_CASE("skybox") {
   // before the see-through cube, which blends over both. Three faces meet in the corner the camera
   // looks at.
   auto viewport = MakeViewport();
-  viewport->SetCamera(std::make_shared<FixedCamera>(core::Vector3{-3.0f, 1.5f, -3.0f}, core::Vector3{0, 0, 0}));
+  viewport->SetCamera(std::make_shared<FixedCamera>(Vec3{-3.0f, 1.5f, -3.0f}, Vec3{0, 0, 0}));
   viewport->GetScene()->SetSkybox(TestCubemap());
   AddSun(*viewport, 0.4f);
   AddMesh(*viewport, utils::createCubeWithNormals(1.2f, Color{0.9f, 0.9f, 0.9f, 1.0f}), Opaque(), {0, 0, 0});
@@ -292,9 +291,9 @@ TEST_CASE("skybox orthographic") {
 TEST_CASE("skybox without depth buffer") {
   // A viewport without depth: the sky is drawn first, so the floor is drawn over it.
   auto viewport =
-      scene::Viewport::Create({.name = "golden", .depth = false, .clear = core::Color{0.08f, 0.09f, 0.14f, 1.0f}});
+      scene::Viewport::Create({.name = "golden", .depth = false, .clear = Color{0.08f, 0.09f, 0.14f, 1.0f}});
   viewport->SetSize(gpu_tests::kSize, gpu_tests::kSize);
-  viewport->SetCamera(std::make_shared<FixedCamera>(core::Vector3{0, 4, 4}, core::Vector3{0, 0, 0}));
+  viewport->SetCamera(std::make_shared<FixedCamera>(Vec3{0, 4, 4}, Vec3{0, 0, 0}));
   viewport->GetScene()->SetSkybox(TestCubemap());
   AddSun(*viewport, 0.4f);
   AddMesh(*viewport, utils::createPlaneWithNormals(3.0f, 3.0f, Color{0.9f, 0.9f, 0.9f, 1.0f}), Opaque(), {0, 0, 0});
@@ -304,7 +303,7 @@ TEST_CASE("skybox without depth buffer") {
 TEST_CASE("post chain bloom") {
   // Bright shapes glowing: bright pass, blur at a quarter size, combined onto the picture.
   auto viewport = MakeViewport();
-  viewport->SetCamera(std::make_shared<FixedCamera>(core::Vector3{0, 2, 6}, core::Vector3{0, 0, 0}));
+  viewport->SetCamera(std::make_shared<FixedCamera>(Vec3{0, 2, 6}, Vec3{0, 0, 0}));
   AddSun(*viewport, 0.9f);
   AddMesh(*viewport, utils::createCubeWithNormals(1.0f, Color{1.0f, 1.0f, 1.0f, 1.0f}), Opaque(), {-1.2f, 0, 0});
   AddMesh(*viewport, utils::createCubeWithNormals(1.0f, Color{0.2f, 0.25f, 0.6f, 1.0f}), Opaque(), {1.2f, 0, 0});
@@ -344,8 +343,8 @@ namespace {
 std::vector<std::shared_ptr<scene::Node3D>> AddTransformedShapes(scene::Viewport& viewport,
                                                                  const std::shared_ptr<rendering::Material>& material) {
   std::vector<std::shared_ptr<scene::Node3D>> drawn;
-  auto add = [&](std::shared_ptr<core::Mesh<core::Vertex3D>> mesh, const core::Vector3& position,
-                 const core::Vector3& rotation, const core::Vector3& scale) {
+  auto add = [&](std::shared_ptr<core::Mesh<core::Vertex3D>> mesh, const Vec3& position, const Vec3& rotation,
+                 const Vec3& scale) {
     auto node = AddMesh(viewport, std::move(mesh), material, position);
     node->SetRotation(rotation);
     node->SetScale(scale);
@@ -406,7 +405,7 @@ void AddBakedShapes(scene::Viewport& viewport, const std::vector<std::shared_ptr
 // Draws the shapes twice, moved by their transforms and baked, lit by a sun and a point light.
 void CheckNormalsMatchBaked(const std::string& name, const std::shared_ptr<rendering::Material>& material) {
   auto light = [](scene::Viewport& viewport) {
-    viewport.SetCamera(std::make_shared<FixedCamera>(core::Vector3{0, 0.5f, 8}, core::Vector3{0, 0, 0}));
+    viewport.SetCamera(std::make_shared<FixedCamera>(Vec3{0, 0.5f, 8}, Vec3{0, 0, 0}));
     AddSun(viewport);
     auto point = std::make_shared<scene::PointLight>();
     point->SetPosition({0.0f, 0.0f, 2.5f});

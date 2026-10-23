@@ -17,22 +17,21 @@ class FollowCamera : public Camera3D {
     projection_ = glm::perspective(glm::radians(45.0f), 1.0f, 0.1f, 100.0f);
   }
 
-  void SetOffset(const core::Vector3& offset) { offset_ = offset; }
+  void SetOffset(const Vec3& offset) { offset_ = offset; }
 
-  void SetPosition(const core::Vector3& position) override { position_ = position; }
-  void SetTarget(const core::Vector3& target) override { target_pos_ = target; }
-  void UpdateSize(const core::Vector2& size) override {
+  void SetPosition(const Vec3& position) override { position_ = position; }
+  void SetTarget(const Vec3& target) override { target_pos_ = target; }
+  void UpdateSize(const Vec2& size) override {
     projection_ = glm::perspective(glm::radians(45.0f), size.x / size.y, 0.1f, 100.0f);
   }
 
-  const core::Vector3& GetPosition() const override { return position_; }
+  const Vec3& GetPosition() const override { return position_; }
 
   const glm::mat4& GetViewMatrix() override {
     if (target_) {
-      core::Vector3 t = target_->GetPosition();
-      position_ = {t.x + offset_.x, t.y + offset_.y, t.z + offset_.z};
-      view_ = glm::lookAt(glm::vec3(position_.x, position_.y, position_.z), glm::vec3(t.x, t.y, t.z),
-                          glm::vec3(0.0f, 1.0f, 0.0f));
+      Vec3 t = target_->GetPosition();
+      position_ = t + offset_;
+      view_ = glm::lookAt(position_, t, glm::vec3(0.0f, 1.0f, 0.0f));
     }
     return view_;
   }
@@ -44,9 +43,9 @@ class FollowCamera : public Camera3D {
 
  private:
   std::shared_ptr<Node3D> target_;
-  core::Vector3 position_;
-  core::Vector3 offset_;
-  core::Vector3 target_pos_;
+  Vec3 position_;
+  Vec3 offset_;
+  Vec3 target_pos_;
   glm::mat4 view_;
   glm::mat4 projection_;
 };

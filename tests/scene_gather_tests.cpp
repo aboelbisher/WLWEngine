@@ -25,7 +25,7 @@ std::shared_ptr<core::Model<core::Vertex3D>> CubeModel() {
   return model;
 }
 
-std::shared_ptr<scene::Node3D> Cube(const core::Vector3& position) {
+std::shared_ptr<scene::Node3D> Cube(const Vec3& position) {
   auto node = std::make_shared<scene::Node3D>();
   node->SetModel(CubeModel());
   node->SetPosition(position);

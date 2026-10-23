@@ -22,7 +22,7 @@ constexpr const char* kImGuiGLSLVersion = "#version 330 core";
 // density estimate (a 1080 px wide phone gets ~2.7x) until the platform reports real density.
 float UIScale(const input::Input& input) {
   if (!input.IsTouchScreen()) return 1.0f;
-  const core::Vector2 size = input.SurfaceSize();
+  const Vec2 size = input.SurfaceSize();
   return std::clamp(std::min(size.x, size.y) / 400.0f, 1.0f, 4.0f);
 }
 
@@ -96,8 +96,8 @@ void DebugUI::FeedInput(float dt) {
 
   io.DeltaTime = dt > 0.0f ? dt : 1.0f / 60.0f;
   // ImGui works in pointer units; the framebuffer may have more pixels (HiDPI desktops).
-  const core::Vector2 surface = input.SurfaceSize();
-  const core::Vector2 framebuffer = window_.GetSize();
+  const Vec2 surface = input.SurfaceSize();
+  const Vec2 framebuffer = window_.GetSize();
   io.DisplaySize = ImVec2(surface.x, surface.y);
   if (surface.x > 0.0f && surface.y > 0.0f) {
     io.DisplayFramebufferScale = ImVec2(framebuffer.x / surface.x, framebuffer.y / surface.y);
@@ -105,7 +105,7 @@ void DebugUI::FeedInput(float dt) {
 
   const bool touch = input.IsTouchScreen();
   io.AddMouseSourceEvent(touch ? ImGuiMouseSource_TouchScreen : ImGuiMouseSource_Mouse);
-  const core::Vector2 pointer = input.PointerPosition();
+  const Vec2 pointer = input.PointerPosition();
   if (!touch || input.RawPointerDown() || input.RawPointerPressed() || input.RawPointerReleased()) {
     io.AddMousePosEvent(pointer.x, pointer.y);
   } else {

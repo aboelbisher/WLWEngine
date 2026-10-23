@@ -11,22 +11,6 @@ namespace wlw::ui {
 
 namespace {
 
-using core::Color;
-
-Color Shade(const Color& c, float k) { return {c.r * k, c.g * k, c.b * k, c.a}; }
-Color Mix(const Color& a, const Color& b, float t) {
-  return {a.r + (b.r - a.r) * t, a.g + (b.g - a.g) * t, a.b + (b.b - a.b) * t, a.a + (b.a - a.a) * t};
-}
-Color WithAlpha(const Color& c, float a) { return {c.r, c.g, c.b, c.a * a}; }
-
-float Approach(float value, float target, float step) {
-  return value < target ? std::min(value + step, target) : std::max(value - step, target);
-}
-
-bool Inside(const Rect& rect, glm::vec2 p) {
-  return p.x >= rect.min.x && p.x <= rect.max.x && p.y >= rect.min.y && p.y <= rect.max.y;
-}
-
 // Ids for what a widget remembers besides being held (salted so they don't meet WidgetId's).
 uint64_t Salted(uint64_t id, uint64_t salt) { return (id ^ (salt * 0x9E3779B97F4A7C15ull)) | 1u; }
 
@@ -61,7 +45,7 @@ void DrawSwitch(Canvas& canvas, const Theme& theme, const Rect& rect, float on) 
   const float e = anim::ease::InOutQuad(std::clamp(on, 0.0f, 1.0f));
   canvas.FillRect({rect.min + glm::vec2(0.0f, 2.0f), rect.max + glm::vec2(0.0f, 2.0f)}, {0.0f, 0.0f, 0.0f, 0.25f},
                   h * 0.5f);
-  canvas.FillRect(rect, Mix(theme.track, theme.on, e), h * 0.5f);
+  canvas.FillRect(rect, Lerp(theme.track, theme.on, e), h * 0.5f);
   const float r = h * 0.5f - 3.0f;
   const glm::vec2 knob(rect.min.x + h * 0.5f + (rect.Size().x - h) * e, rect.Center().y);
   canvas.Circle(knob + glm::vec2(0.0f, 2.0f), r, {0.0f, 0.0f, 0.0f, 0.3f});
@@ -95,7 +79,7 @@ Press Pressable(UIContext& ui, uint64_t id, const Rect& rect) {
   // Immediate mode keeps no widget objects: the one the pointer went down on is remembered by its
   // id, and a click is a release on that same one.
   const PointerState& pointer = ui.pointer;
-  const bool inside = Inside(rect, pointer.position);
+  const bool inside = rect.Contains(pointer.position);
   Press press;
   if (ui.interactive) {
     if (pointer.pressed && inside) ui.active_widget = id;  // went down on this one
@@ -109,7 +93,7 @@ Press Pressable(UIContext& ui, uint64_t id, const Rect& rect) {
   press.held = ui.interactive && ui.active_widget == id && pointer.down && inside;
   // Pushed in fast, springs back a little slower; a click shows at least a dip.
   float& amount = ui.Memory(Salted(id, 1));
-  amount = Approach(amount, press.held ? 1.0f : 0.0f, ui.dt * (press.held ? 16.0f : 7.0f));
+  amount = MoveTowards(amount, press.held ? 1.0f : 0.0f, ui.dt * (press.held ? 16.0f : 7.0f));
   if (press.held || press.clicked) amount = std::max(amount, 0.5f);
   press.amount = amount;
   return press;
@@ -120,7 +104,7 @@ Rect RaisedRect(Canvas& canvas, const Rect& rect, const Color& face, float radiu
   if (depth > 0.0f) {
     const glm::vec2 shadow(0.0f, depth + 3.0f);
     canvas.FillRect({rect.min + shadow, rect.max + shadow}, {0.0f, 0.0f, 0.0f, 0.25f * face.a}, radius);
-    canvas.FillRect({rect.min + down, rect.max + down}, Shade(face, 0.62f), radius);  // the lip
+    canvas.FillRect({rect.min + down, rect.max + down}, face.Darkened(0.38f), radius);  // the lip
   }
   const glm::vec2 sink = down * std::clamp(press, 0.0f, 1.0f) * 0.8f;
   const Rect f{rect.min + sink, rect.max + sink};
@@ -191,7 +175,7 @@ bool IconToggle(UIContext& ui, Icon icon, bool& value, const Rect& rect) {
   const Theme& theme = ui.theme;
   const Press press = Pressable(ui, WidgetId("toggle", rect) ^ static_cast<uint64_t>(icon), rect);
   const float size = std::min(rect.Size().x, rect.Size().y);
-  const Color face = value ? theme.secondary : Mix(theme.secondary, theme.track, 0.55f);
+  const Color face = value ? theme.secondary : Lerp(theme.secondary, theme.track, 0.55f);
   const Rect f = RaisedRect(ui.canvas, rect, face, size * 0.5f, theme.depth, press.amount);
   const Rect box = Centered(f.Center(), glm::vec2(size * 0.5f));
   DrawIcon(ui.canvas, icon, box, value ? theme.on_secondary : theme.text_muted);
@@ -211,7 +195,7 @@ bool Switch(UIContext& ui, bool& value, const Rect& rect) {
   const bool clicked = Pressable(ui, id, rect).clicked;
   if (clicked) value = !value;
   float& knob = ui.Memory(Salted(id, 2), value ? 1.0f : 0.0f);
-  knob = Approach(knob, value ? 1.0f : 0.0f, ui.dt * 7.0f);
+  knob = MoveTowards(knob, value ? 1.0f : 0.0f, ui.dt * 7.0f);
   DrawSwitch(ui.canvas, ui.theme, rect, knob);
   return clicked;
 }
@@ -231,7 +215,7 @@ bool SettingRow(UIContext& ui, Icon icon, std::string_view label, bool& value, c
     canvas.Text(*theme.font, label, {x, face.Center().y}, size, Align::Left, ThemedText(theme, theme.text));
   }
   float& knob = ui.Memory(Salted(id, 2), value ? 1.0f : 0.0f);
-  knob = Approach(knob, value ? 1.0f : 0.0f, ui.dt * 7.0f);
+  knob = MoveTowards(knob, value ? 1.0f : 0.0f, ui.dt * 7.0f);
   DrawSwitch(canvas, theme, track, knob);
   return press.clicked;
 }
@@ -265,7 +249,7 @@ CardResult Card(UIContext& ui, std::string_view title, std::string_view subtitle
   CardResult result;
   result.clicked = press.clicked;
   result.art = {face.min + glm::vec2(pad), {face.max.x - pad, face.min.y + h * 0.58f}};
-  canvas.FillRect(result.art, Shade(accent, 0.7f), theme.radius_small);
+  canvas.FillRect(result.art, accent.Darkened(0.3f), theme.radius_small);
   if (theme.font) {
     const float below = face.max.y - result.art.max.y;
     const float width = face.Size().x - 2.0f * pad;
@@ -279,7 +263,7 @@ CardResult Card(UIContext& ui, std::string_view title, std::string_view subtitle
       const float size = 16.0f;
       const glm::vec2 pill(theme.font->Measure(badge, size) + 18.0f, 26.0f);
       const Rect at = Centered({face.max.x - pill.x * 0.5f + 6.0f, face.min.y + 2.0f}, pill);
-      canvas.FillRect({at.min + glm::vec2(0.0f, 2.0f), at.max + glm::vec2(0.0f, 2.0f)}, Shade(theme.danger, 0.6f),
+      canvas.FillRect({at.min + glm::vec2(0.0f, 2.0f), at.max + glm::vec2(0.0f, 2.0f)}, theme.danger.Darkened(0.4f),
                       pill.y * 0.5f);
       canvas.FillRect(at, theme.danger, pill.y * 0.5f);
       canvas.Text(*theme.font, badge, at.Center(), size, Align::Center, ThemedText(theme, theme.on_danger));
@@ -297,7 +281,7 @@ DialogResult Dialog(UIContext& ui, std::string_view title, glm::vec2 size, bool 
   // Comes in over ~0.3 s: the screen dims, the panel rises with a little overshoot.
   float& shown = ui.Memory(Salted(id, 3));
   shown = std::min(shown + ui.dt / 0.3f, 1.0f);
-  canvas.FillRect({{0.0f, 0.0f}, canvas.Size()}, WithAlpha(theme.scrim, std::min(shown / 0.6f, 1.0f)));
+  canvas.FillRect({{0.0f, 0.0f}, canvas.Size()}, theme.scrim.Faded(std::min(shown / 0.6f, 1.0f)));
   const float rise = (1.0f - anim::ease::OutBack(shown)) * 70.0f;
   const Rect panel = Centered(ui.safe_area.Center() + glm::vec2(0.0f, rise), size);
   Panel(canvas, panel, theme.surface, theme.radius_large);
@@ -318,7 +302,7 @@ DialogResult Dialog(UIContext& ui, std::string_view title, glm::vec2 size, bool 
   // A tap outside the panel (down and up outside) closes it too.
   float& outside = ui.Memory(Salted(id, 4));
   if (ui.interactive) {
-    const bool in = Inside(panel, ui.pointer.position);
+    const bool in = panel.Contains(ui.pointer.position);
     if (ui.pointer.pressed) outside = in ? 0.0f : 1.0f;
     if (ui.pointer.released) {
       if (outside > 0.0f && !in && shown >= 1.0f) result.close = true;
@@ -345,7 +329,7 @@ bool Segmented(UIContext& ui, std::span<const std::string_view> labels, int& sel
     }
   }
   float& marker = ui.Memory(Salted(WidgetId("tabs", rect), 5), static_cast<float>(selected));
-  marker = Approach(marker, static_cast<float>(selected), ui.dt * 9.0f);
+  marker = MoveTowards(marker, static_cast<float>(selected), ui.dt * 9.0f);
   const float width = inner.Size().x / static_cast<float>(count);
   const Rect pill{{inner.min.x + marker * width, inner.min.y},
                   {inner.min.x + (marker + 1.0f) * width, inner.max.y - 3.0f}};
@@ -384,7 +368,7 @@ Rect Chip(UIContext& ui, std::string_view text, glm::vec2 center, Icon icon, flo
   const float gap = icon == Icon::None ? 0.0f : height * 0.2f;
   const float pad = height * 0.42f;
   const Rect rect = Centered(center, ChipSize(ui, text, icon, height));
-  canvas.FillRect(rect, WithAlpha(theme.track, 0.85f), height * 0.5f);
+  canvas.FillRect(rect, theme.track.Faded(0.85f), height * 0.5f);
   float x = rect.min.x + pad;
   if (icon != Icon::None) {
     DrawIcon(canvas, icon, Centered({x + icon_size * 0.5f, center.y}, glm::vec2(icon_size)), theme.primary);

@@ -6,7 +6,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
-#include "wlw/core/collision.h"
+#include "wlw/core/geometry.h"
 
 namespace wlw::scene {
 
@@ -30,15 +30,15 @@ struct ShadowFrustum {
 // edges land between texels the shadow edges crawl ("shimmering"). So the light's view is fixed
 // (only its direction matters), the box's size is rounded up to whole half units, and its centre
 // is snapped to whole texels: moving geometry shifts the box by exact texels, and shadows stay put.
-inline ShadowFrustum FitDirectionalShadow(const glm::vec3& direction, const AABB& casters, const AABB& receivers,
-                                          int map_size) {
+inline ShadowFrustum FitDirectionalShadow(const glm::vec3& direction, const wlw::AABB& casters,
+                                          const wlw::AABB& receivers, int map_size) {
   const glm::vec3 d = glm::normalize(direction);
   const glm::vec3 up = std::abs(d.y) > 0.99f ? glm::vec3(0.0f, 0.0f, -1.0f) : glm::vec3(0.0f, 1.0f, 0.0f);
   ShadowFrustum frustum;
   frustum.view = glm::lookAt(-d, glm::vec3(0.0f), up);  // through the origin: the same for any bounds
 
   // A box's extent in the light's view.
-  const auto light_bounds = [&frustum](const AABB& box, glm::vec3& lo, glm::vec3& hi) {
+  const auto light_bounds = [&frustum](const wlw::AABB& box, glm::vec3& lo, glm::vec3& hi) {
     for (int i = 0; i < 8; ++i) {
       const glm::vec3 corner{(i & 1) ? box.max.x : box.min.x, (i & 2) ? box.max.y : box.min.y,
                              (i & 4) ? box.max.z : box.min.z};
@@ -67,7 +67,7 @@ inline ShadowFrustum FitDirectionalShadow(const glm::vec3& direction, const AABB
 }
 
 // Casters and receivers in one box.
-inline ShadowFrustum FitDirectionalShadow(const glm::vec3& direction, const AABB& bounds, int map_size) {
+inline ShadowFrustum FitDirectionalShadow(const glm::vec3& direction, const wlw::AABB& bounds, int map_size) {
   return FitDirectionalShadow(direction, bounds, bounds, map_size);
 }
 

@@ -72,7 +72,7 @@ struct ViewportSettings {
   bool depth = true;   // a depth buffer; false for a 2D-only viewport (saves memory)
   bool smooth = true;  // linear filtering when its texture is sampled
   // Each drawn frame starts from this colour; nullopt keeps the last picture (trails, painting).
-  std::optional<core::Color> clear = core::Color{0.0f, 0.0f, 0.0f, 0.0f};
+  std::optional<Color> clear = Color{0.0f, 0.0f, 0.0f, 0.0f};
 };
 
 // "Draw this scene, from this camera, into this picture" - like Godot's SubViewport. It shows a
@@ -202,8 +202,8 @@ class Viewport {
 
   void SetUpdateMode(UpdateMode mode) { update_mode_ = mode; }
   UpdateMode GetUpdateMode() const { return update_mode_; }
-  void SetClearColor(std::optional<core::Color> color) { settings_.clear = color; }
-  const std::optional<core::Color>& GetClearColor() const { return settings_.clear; }
+  void SetClearColor(std::optional<Color> color) { settings_.clear = color; }
+  const std::optional<Color>& GetClearColor() const { return settings_.clear; }
   const ViewportSettings& Settings() const { return settings_; }
 
   // ---- Post passes (rendering/post_pass.h; ready-made: scene/post_effects.h) ----

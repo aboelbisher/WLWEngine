@@ -252,7 +252,7 @@ int Application::Run() {
 
 void Application::BuildUI() {
   WLW_PROFILE_SCOPE("RenderUI");
-  const core::Vector2 framebuffer = window_->GetSize();
+  const Vec2 framebuffer = window_->GetSize();
   const glm::vec2 reference{config_.ui_reference_size.x, config_.ui_reference_size.y};
   // Offscreen viewports' canvas layers: emptied and sized to their viewport (same units as the
   // UI's when proportioned like the screen); the game draws into them during OnRenderUI.
@@ -270,10 +270,10 @@ void Application::BuildUI() {
   // The pointer for UI widgets, in Canvas units: pointer units -> framebuffer pixels -> units.
   // Uses the normal (blockable) queries, so the debug UI still takes precedence.
   const input::Input& input = window_->GetInput();
-  const core::Vector2 surface = input.SurfaceSize();
+  const Vec2 surface = input.SurfaceSize();
   ui::PointerState pointer;
   if (surface.x > 0.0f && surface.y > 0.0f) {
-    const core::Vector2 p = input.PointerPosition();
+    const Vec2 p = input.PointerPosition();
     pointer.position = canvas.FromPixels({p.x * framebuffer.x / surface.x, p.y * framebuffer.y / surface.y});
   }
   pointer.down = input.IsPointerDown();

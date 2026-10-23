@@ -30,7 +30,7 @@ struct BurstSettings {
   float size_start = 0.25f;  // uniform scale of the particle's mesh, shrinking/growing linearly
   float size_end = 0.0f;     //   to size_end over its life
   float spin_max = 720.0f;   // degrees per second, random per axis in [-spin_max, spin_max]
-  core::Color color{1.0f, 1.0f, 1.0f, 1.0f};
+  Color color{1.0f, 1.0f, 1.0f, 1.0f};
   float brightness_jitter = 0.15f;  // each particle's colour is scaled by 1 +- this
   float delay = 0.0f;               // seconds before the particles appear (for staggered effects)
 };
@@ -50,7 +50,7 @@ class ParticleSystem {
     glm::vec3 spin{0.0f};      // degrees per second
     float size_start = 1.0f;
     float size_end = 0.0f;
-    core::Color color{1.0f, 1.0f, 1.0f, 1.0f};
+    Color color{1.0f, 1.0f, 1.0f, 1.0f};
     float age = 0.0f;  // seconds; negative while still delayed (not shown, not moving)
     float lifetime = 1.0f;
 

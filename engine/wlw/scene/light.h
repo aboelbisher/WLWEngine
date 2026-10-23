@@ -4,6 +4,7 @@
 
 #include <glm/glm.hpp>
 
+#include "wlw/core/color.h"
 #include "wlw/scene/node.h"
 
 namespace wlw::scene {
@@ -30,8 +31,9 @@ class LightNode : public Node3D {
   Type GetType() const { return type_; }
   const LightNode* AsLight() const override { return this; }
 
-  void SetColor(const glm::vec3& color) { color_ = color; }
-  const glm::vec3& GetColor() const { return color_; }
+  // Alpha is ignored. Values past 1 are fine (or use the intensity).
+  void SetColor(const Color& color) { color_ = color; }
+  const Color& GetColor() const { return color_; }
   // Brightness multiplier on the colour (diffuse and specular).
   void SetIntensity(float intensity) { intensity_ = intensity; }
   float GetIntensity() const { return intensity_; }
@@ -63,7 +65,7 @@ class LightNode : public Node3D {
 
  private:
   Type type_;
-  glm::vec3 color_{1.0f, 1.0f, 1.0f};
+  Color color_{1.0f, 1.0f, 1.0f};
   float intensity_ = 1.0f;
   float ambient_ = 0.2f;
   bool casts_shadows_ = false;

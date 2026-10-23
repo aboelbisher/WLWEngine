@@ -30,14 +30,14 @@ glm::mat4 Canvas::Projection() const {
 }
 
 void Canvas::AddQuad(const Font* font, const glm::vec2& min, const glm::vec2& max, const glm::vec2& uv_min,
-                     const glm::vec2& uv_max, const core::Color& color, const glm::vec4& params) {
+                     const glm::vec2& uv_max, const Color& color, const glm::vec4& params) {
   const glm::vec2 corners[4] = {{min.x, min.y}, {max.x, min.y}, {max.x, max.y}, {min.x, max.y}};
   const glm::vec2 uvs[4] = {{uv_min.x, uv_min.y}, {uv_max.x, uv_min.y}, {uv_max.x, uv_max.y}, {uv_min.x, uv_max.y}};
   AddQuad(font, corners, uvs, color, params);
 }
 
-void Canvas::AddQuad(const Font* font, const glm::vec2 (&corners)[4], const glm::vec2 (&uvs)[4],
-                     const core::Color& color, const glm::vec4& params) {
+void Canvas::AddQuad(const Font* font, const glm::vec2 (&corners)[4], const glm::vec2 (&uvs)[4], const Color& color,
+                     const glm::vec4& params) {
   ++BatchFor(font, nullptr).quad_count;
   for (int i = 0; i < 4; ++i) vertices_.push_back({corners[i], uvs[i], color, params});
 }
@@ -69,7 +69,7 @@ UIBatch& Canvas::BatchFor(const Font* font, const std::shared_ptr<rendering::WTe
   return batches_.back();
 }
 
-void Canvas::FillRect(const Rect& rect, const core::Color& color, float corner_radius) {
+void Canvas::FillRect(const Rect& rect, const Color& color, float corner_radius) {
   // The shader computes the rounded shape from the position relative to the centre (uv) and the
   // half size, so any size and radius is one quad and needs no texture.
   const glm::vec2 half = rect.Size() * 0.5f;
@@ -77,8 +77,7 @@ void Canvas::FillRect(const Rect& rect, const core::Color& color, float corner_r
   AddQuad(nullptr, rect.min, rect.max, -half, half, color, {kKindRect, half.x, half.y, radius});
 }
 
-void Canvas::ShaderRect(const Rect& rect, std::shared_ptr<rendering::ShaderMaterial> material,
-                        const core::Color& tint) {
+void Canvas::ShaderRect(const Rect& rect, std::shared_ptr<rendering::ShaderMaterial> material, const Color& tint) {
   if (!material) return;
   UIBatch batch;
   batch.first_quad = QuadCount();
@@ -95,13 +94,13 @@ void Canvas::Image(const Rect& rect, const std::shared_ptr<rendering::WTexture2D
   if (!texture) return;
   ++BatchFor(nullptr, &texture, style.blend).quad_count;
   const Rect& uv = style.uv;
-  const core::Color& tint = style.tint;
+  const Color& tint = style.tint;
   const glm::vec2 corners[4] = {rect.min, {rect.max.x, rect.min.y}, rect.max, {rect.min.x, rect.max.y}};
   const glm::vec2 uvs[4] = {uv.min, {uv.max.x, uv.min.y}, uv.max, {uv.min.x, uv.max.y}};
   for (int i = 0; i < 4; ++i) vertices_.push_back({corners[i], uvs[i], tint, {kKindImage, 0.0f, 0.0f, 0.0f}});
 }
 
-void Canvas::Line(glm::vec2 from, glm::vec2 to, float thickness, const core::Color& color) {
+void Canvas::Line(glm::vec2 from, glm::vec2 to, float thickness, const Color& color) {
   // A rounded rectangle turned along the line: its corners are rotated, but the uv still gives
   // positions in the line's own frame, so the shader's rounded-box distance draws a capsule
   // (round ends, anti-aliased) at any angle.
@@ -118,11 +117,11 @@ void Canvas::Line(glm::vec2 from, glm::vec2 to, float thickness, const core::Col
   AddQuad(nullptr, corners, uvs, color, {kKindRect, half.x, half.y, half.y});
 }
 
-void Canvas::Circle(glm::vec2 center, float radius, const core::Color& color) {
+void Canvas::Circle(glm::vec2 center, float radius, const Color& color) {
   FillRect({center - glm::vec2(radius), center + glm::vec2(radius)}, color, radius);
 }
 
-void Canvas::Triangle(glm::vec2 a, glm::vec2 b, glm::vec2 c, const core::Color& color) {
+void Canvas::Triangle(glm::vec2 a, glm::vec2 b, glm::vec2 c, const Color& color) {
   const auto cross = [](glm::vec2 u, glm::vec2 v) { return u.x * v.y - u.y * v.x; };
   const float area2 = cross(b - a, c - a);
   if (std::fabs(area2) < 1e-6f) return;
@@ -149,7 +148,7 @@ void Canvas::Triangle(glm::vec2 a, glm::vec2 b, glm::vec2 c, const core::Color& 
   }
 }
 
-void Canvas::Arc(glm::vec2 center, float radius, float thickness, float start, float sweep, const core::Color& color) {
+void Canvas::Arc(glm::vec2 center, float radius, float thickness, float start, float sweep, const Color& color) {
   if (radius <= 0.0f || thickness <= 0.0f || sweep <= 0.0f) return;
   // A square around the circle, turned so its own "down" (+y in uv) points at the middle of the
   // arc: the shader then only needs the half sweep, measured both ways from that axis.
@@ -164,8 +163,8 @@ void Canvas::Arc(glm::vec2 center, float radius, float thickness, float start, f
   AddQuad(nullptr, corners, local, color, {kKindArc, radius, thickness * 0.5f, half_sweep});
 }
 
-void Canvas::AddText(const Font& font, std::string_view text, glm::vec2 pen, float size, const core::Color& color,
-                     float edge, glm::vec2 pivot, glm::vec2 turn, glm::vec2 offset) {
+void Canvas::AddText(const Font& font, std::string_view text, glm::vec2 pen, float size, const Color& color, float edge,
+                     glm::vec2 pivot, glm::vec2 turn, glm::vec2 offset) {
   glyph_scratch_.clear();
   font.Layout(text, size, pen, glyph_scratch_);
   const glm::vec4 params{kKindText, edge, font.DistanceRange(), 0.0f};

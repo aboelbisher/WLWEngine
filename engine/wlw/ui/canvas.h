@@ -8,6 +8,7 @@
 #include <glm/glm.hpp>
 
 #include "wlw/core/color.h"
+#include "wlw/core/geometry.h"
 #include "wlw/rendering/blend_mode.h"
 #include "wlw/rendering/shader_material.h"
 #include "wlw/ui/font.h"
@@ -16,38 +17,33 @@ namespace wlw::ui {
 
 enum class Align { Left, Center, Right };
 
-struct Rect {
-  glm::vec2 min{0.0f};
-  glm::vec2 max{0.0f};
-  glm::vec2 Center() const { return (min + max) * 0.5f; }
-  glm::vec2 Size() const { return max - min; }
-};
+// Canvas rectangles are wlw::Rect (core/geometry.h): min = top-left, max = bottom-right in Canvas units (y down).
+using Rect = wlw::Rect;
 
 // How Canvas::Image draws its texture.
 struct ImageStyle {
-  core::Color tint{1.0f, 1.0f, 1.0f, 1.0f};  // multiplies the texture (white texture + tint = any colour)
-  Rect uv{{0.0f, 0.0f}, {1.0f, 1.0f}};       // the part of the texture (sprite sheets); (0, 0) = first row uploaded
+  Color tint{1.0f, 1.0f, 1.0f, 1.0f};   // multiplies the texture (white texture + tint = any colour)
+  Rect uv{{0.0f, 0.0f}, {1.0f, 1.0f}};  // the part of the texture (sprite sheets); (0, 0) = first row uploaded
   rendering::BlendMode blend = rendering::BlendMode::Alpha;  // e.g. Additive for glows (see blend_mode.h)
 };
 
 // How text looks. Outline and shadow come from the same SDF atlas (see Font).
 struct TextStyle {
-  core::Color color{1.0f, 1.0f, 1.0f, 1.0f};
+  Color color{1.0f, 1.0f, 1.0f, 1.0f};
   float outline = 0.0f;  // thickness as a fraction of the text size (~0.05 is bold); 0 = none
-  core::Color outline_color{0.0f, 0.0f, 0.0f, 1.0f};
+  Color outline_color{0.0f, 0.0f, 0.0f, 1.0f};
   glm::vec2 shadow_offset{0.0f};  // in Canvas units; zero = no shadow
-  core::Color shadow_color{0.0f, 0.0f, 0.0f, 0.5f};
+  Color shadow_color{0.0f, 0.0f, 0.0f, 0.5f};
   // Turns the line about Text()'s `position` (its alignment point), in radians, clockwise on screen like Arc's
   // angles (a slip pinned askew). The shadow still falls by shadow_offset on screen: the light doesn't turn.
   float rotation = 0.0f;
 
   // Chunky outlined text with a drop shadow: readable over anything (game HUDs).
-  static TextStyle Outlined(const core::Color& color, const core::Color& ink = {0.06f, 0.07f, 0.12f, 1.0f},
-                            float alpha = 1.0f) {
+  static TextStyle Outlined(const Color& color, const Color& ink = {0.06f, 0.07f, 0.12f, 1.0f}, float alpha = 1.0f) {
     TextStyle style;
-    style.color = {color.r, color.g, color.b, color.a * alpha};
+    style.color = color.Faded(alpha);
     style.outline = 0.07f;
-    style.outline_color = {ink.r, ink.g, ink.b, ink.a * alpha};
+    style.outline_color = ink.Faded(alpha);
     style.shadow_offset = {0.0f, 3.0f};
     style.shadow_color = {0.0f, 0.0f, 0.0f, 0.45f * alpha};
     return style;
@@ -62,7 +58,7 @@ enum class QuadKind : int { Text = 1, Rect = 2, Shader = 3, Image = 4, Triangle 
 struct UIVertex {
   glm::vec2 position{0.0f};  // Canvas units
   glm::vec2 uv{0.0f};        // text: atlas coordinate; rect: position relative to the rect centre
-  core::Color color{1.0f, 1.0f, 1.0f, 1.0f};
+  Color color{1.0f, 1.0f, 1.0f, 1.0f};
   glm::vec4 params{
       0.0f};  // x = kind (QuadKind); text: y = SDF edge, z = Font::DistanceRange; rect: y,z = half size, w = radius;
               // triangle: uv.x, uv.y, y = distances to its 3 edges; arc: y = radius, z = half thickness, w = half sweep
@@ -100,17 +96,17 @@ class Canvas {
   glm::vec2 FromPixels(glm::vec2 pixels) const { return pixels / pixels_per_unit_; }
 
   // A filled rectangle; corner_radius rounds the corners (anti-aliased edges either way).
-  void FillRect(const Rect& rect, const core::Color& color, float corner_radius = 0.0f);
+  void FillRect(const Rect& rect, const Color& color, float corner_radius = 0.0f);
   // A straight line with round ends, at any angle (e.g. over the 3D scene, between projected points).
-  void Line(glm::vec2 from, glm::vec2 to, float thickness, const core::Color& color);
+  void Line(glm::vec2 from, glm::vec2 to, float thickness, const Color& color);
   // A filled circle.
-  void Circle(glm::vec2 center, float radius, const core::Color& color);
+  void Circle(glm::vec2 center, float radius, const Color& color);
   // A filled triangle (any winding), anti-aliased like the rest.
-  void Triangle(glm::vec2 a, glm::vec2 b, glm::vec2 c, const core::Color& color);
+  void Triangle(glm::vec2 a, glm::vec2 b, glm::vec2 c, const Color& color);
   // Part of a ring with round ends: `radius` to the middle of the stroke; angles in radians,
   // 0 = up (12 o'clock), growing clockwise; `sweep` 2*pi (or more) = a whole ring.
-  void Arc(glm::vec2 center, float radius, float thickness, float start, float sweep, const core::Color& color);
-  void Ring(glm::vec2 center, float radius, float thickness, const core::Color& color) {
+  void Arc(glm::vec2 center, float radius, float thickness, float start, float sweep, const Color& color);
+  void Ring(glm::vec2 center, float radius, float thickness, const Color& color) {
     Arc(center, radius, thickness, 0.0f, 7.0f, color);
   }
   // A single line of text. `position` is where the alignment edge (left / centre / right)
@@ -124,7 +120,7 @@ class Canvas {
   // with everything else (e.g. first, as a background). Each one is its own draw call.
   // Nothing is drawn if the material has no valid canvas shader.
   void ShaderRect(const Rect& rect, std::shared_ptr<rendering::ShaderMaterial> material,
-                  const core::Color& tint = {1.0f, 1.0f, 1.0f, 1.0f});
+                  const Color& tint = {1.0f, 1.0f, 1.0f, 1.0f});
 
   // A texture over a rectangle (a sprite), as `style` says (tint, part of the texture, blending).
   // Texture alpha is straight (not premultiplied), like image files. Consecutive images with the
@@ -143,12 +139,12 @@ class Canvas {
   UIBatch& BatchFor(const Font* font, const std::shared_ptr<rendering::WTexture2D>* texture,
                     rendering::BlendMode blend = rendering::BlendMode::Alpha);
   void AddQuad(const Font* font, const glm::vec2& min, const glm::vec2& max, const glm::vec2& uv_min,
-               const glm::vec2& uv_max, const core::Color& color, const glm::vec4& params);
-  void AddQuad(const Font* font, const glm::vec2 (&corners)[4], const glm::vec2 (&uvs)[4], const core::Color& color,
+               const glm::vec2& uv_max, const Color& color, const glm::vec4& params);
+  void AddQuad(const Font* font, const glm::vec2 (&corners)[4], const glm::vec2 (&uvs)[4], const Color& color,
                const glm::vec4& params);
   // `pen` = the unturned baseline start; the glyphs are turned by `turn` (cos, sin) about `pivot`, then moved by
   // `offset`.
-  void AddText(const Font& font, std::string_view text, glm::vec2 pen, float size, const core::Color& color, float edge,
+  void AddText(const Font& font, std::string_view text, glm::vec2 pen, float size, const Color& color, float edge,
                glm::vec2 pivot = {}, glm::vec2 turn = {1.0f, 0.0f}, glm::vec2 offset = {});
 
   glm::vec2 size_{1.0f};

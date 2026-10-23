@@ -6,7 +6,7 @@
 #include <vector>
 
 #include "wlw/core/color.h"
-#include "wlw/core/vector2.h"
+#include "wlw/core/math.h"
 #include "wlw/scene/viewport.h"
 #include "wlw/input/input.h"
 
@@ -72,7 +72,7 @@ class Window {
 
   void SetIsActive(bool is_active) { is_active_ = is_active; }
 
-  core::Vector2 GetSize() const {
+  Vec2 GetSize() const {
     return size_;  // drawable size in pixels
   }
 
@@ -162,15 +162,15 @@ class Window {
   virtual std::string PacingMethod() const { return "none"; }
 
  protected:
-  core::Vector2 size_;  // drawable size in pixels (updated by the platform on resize)
+  Vec2 size_;  // drawable size in pixels (updated by the platform on resize)
   input::Input input_;
   bool first_mouse_ = true;
-  core::Vector2 last_mouse_{0, 0};
+  Vec2 last_mouse_{0, 0};
 
   bool is_active_ = true;
 
-  std::shared_ptr<Viewport> screen_ = std::make_shared<Viewport>(
-      nullptr, ViewportSettings{.name = "Screen", .clear = core::Color{0.1f, 0.1f, 0.15f, 1.0f}});
+  std::shared_ptr<Viewport> screen_ =
+      std::make_shared<Viewport>(nullptr, ViewportSettings{.name = "Screen", .clear = Color{0.1f, 0.1f, 0.15f, 1.0f}});
   std::vector<std::pair<int, std::shared_ptr<Viewport>>> viewports_;
   int next_viewport_id_ = 0;
   std::vector<std::pair<int, std::function<void()>>> overlays_;
@@ -185,8 +185,7 @@ class Window {
   bool auto_swap_interval_ = false;
 
  public:
-  static std::unique_ptr<Window> Create(const core::Vector2& size, const std::string& title,
-                                        const WindowOptions& options = {});
+  static std::unique_ptr<Window> Create(const Vec2& size, const std::string& title, const WindowOptions& options = {});
 };
 
 }  // namespace wlw::scene

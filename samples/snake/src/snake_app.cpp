@@ -14,7 +14,7 @@
 namespace snake {
 namespace {
 
-using wlw::core::Color;
+using wlw::Color;
 
 std::shared_ptr<wlw::core::Model<wlw::core::Vertex3D>> MakeModel(
     std::shared_ptr<wlw::core::Mesh<wlw::core::Vertex3D>> mesh) {
@@ -209,7 +209,7 @@ void SnakeApp::ReadInput() {
 // Keeps the whole board visible in the perspective view on any aspect ratio. With perspective the
 // visible area depends on distance and field of view, so the camera backs off until the board fits.
 void SnakeApp::FitPerspectiveCameraToScreen() {
-  const wlw::core::Vector2 size = App().Window().GetSize();
+  const wlw::Vec2 size = App().Window().GetSize();
   if (size.x <= 0 || size.y <= 0) return;
   const float aspect = size.x / size.y;
   const float vertical_fov = glm::radians(45.0f);  // FollowCamera's field of view

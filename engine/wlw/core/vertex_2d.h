@@ -1,14 +1,14 @@
 #pragma once
 
-#include "color.h"
-#include "vector2.h"
+#include "wlw/core/color.h"
+#include "wlw/core/math.h"
 
 namespace wlw::core {
 
 class Vertex2D {
  public:
-  Vector2 position;
-  Color color;
+  Vec2 position;
+  wlw::Color color;
 };
 
 }  // namespace wlw::core

@@ -1,5 +1,5 @@
-// Tests for instancing (Roadmap 1.6): rendering::Instance (52 bytes: layout, transforms, PackColor),
-// core::SinCos, scene::TransformBox and InstanceBounds against brute-force corners, Node::WriteInstances
+// Tests for instancing (Roadmap 1.6): rendering::Instance (52 bytes: layout, transforms, Color32),
+// core::SinCos, TransformBox and InstanceBounds against brute-force corners, Node::WriteInstances
 // and the node's cached instance bounds, plain nodes' boxes, and the deprecated shims.
 #include <algorithm>
 #include <bit>
@@ -16,7 +16,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 #include "test_helpers.h"
-#include "wlw/core/collision.h"
+#include "wlw/core/geometry.h"
 #include "wlw/core/deprecated.h"
 #include "wlw/core/math.h"
 #include "wlw/core/model.h"
@@ -42,14 +42,14 @@ glm::mat4 RandomAffine(core::Random& rng) {
   return m;
 }
 
-scene::AABB RandomBox(core::Random& rng) {
+AABB RandomBox(core::Random& rng) {
   const glm::vec3 a(rng.Range(-3.0f, 3.0f), rng.Range(-3.0f, 3.0f), rng.Range(-3.0f, 3.0f));
   const glm::vec3 size(rng.Range(0.0f, 2.0f), rng.Range(0.0f, 2.0f), rng.Range(0.0f, 2.0f));
   return {{a.x, a.y, a.z}, {a.x + size.x, a.y + size.y, a.z + size.z}};
 }
 
 // The box of the 8 transformed corners, the way GetAABB did it before 1.6.
-void GrowByCorners(const glm::mat4& m, const scene::AABB& box, glm::vec3& low, glm::vec3& high) {
+void GrowByCorners(const glm::mat4& m, const AABB& box, glm::vec3& low, glm::vec3& high) {
   for (int i = 0; i < 8; ++i) {
     const glm::vec3 corner((i & 1) ? box.max.x : box.min.x, (i & 2) ? box.max.y : box.min.y,
                            (i & 4) ? box.max.z : box.min.z);
@@ -58,18 +58,18 @@ void GrowByCorners(const glm::mat4& m, const scene::AABB& box, glm::vec3& low, g
     high = glm::max(high, p);
   }
 }
-scene::AABB CornerBox(const glm::mat4& m, const scene::AABB& box) {
+AABB CornerBox(const glm::mat4& m, const AABB& box) {
   glm::vec3 low(std::numeric_limits<float>::max()), high(std::numeric_limits<float>::lowest());
   GrowByCorners(m, box, low, high);
   return {{low.x, low.y, low.z}, {high.x, high.y, high.z}};
 }
 
-bool SameBox(const scene::AABB& a, const scene::AABB& b, float tolerance = 1e-4f) {
+bool SameBox(const AABB& a, const AABB& b, float tolerance = 1e-4f) {
   return Near(a.min.x, b.min.x, tolerance) && Near(a.min.y, b.min.y, tolerance) && Near(a.min.z, b.min.z, tolerance) &&
          Near(a.max.x, b.max.x, tolerance) && Near(a.max.y, b.max.y, tolerance) && Near(a.max.z, b.max.z, tolerance);
 }
 
-std::shared_ptr<core::Mesh<core::Vertex3D>> BoxMesh(const scene::AABB& box) {
+std::shared_ptr<core::Mesh<core::Vertex3D>> BoxMesh(const AABB& box) {
   std::vector<core::Vertex3D> vertices(2);
   vertices[0].position = box.min;
   vertices[1].position = box.max;
@@ -78,9 +78,9 @@ std::shared_ptr<core::Mesh<core::Vertex3D>> BoxMesh(const scene::AABB& box) {
   return mesh;
 }
 
-std::shared_ptr<core::Model<core::Vertex3D>> ModelOf(std::initializer_list<scene::AABB> boxes) {
+std::shared_ptr<core::Model<core::Vertex3D>> ModelOf(std::initializer_list<AABB> boxes) {
   auto model = std::make_shared<core::Model<core::Vertex3D>>();
-  for (const scene::AABB& box : boxes) model->meshes.push_back(BoxMesh(box));
+  for (const AABB& box : boxes) model->meshes.push_back(BoxMesh(box));
   return model;
 }
 
@@ -98,7 +98,7 @@ TEST_CASE("instance layout and transform") {
     const Instance instance = Instance::FromTransform(m, {1.0f, 0.5f, 0.0f, 0.25f});
     CHECK(instance.Transform() == m);  // exact: the floats are only moved
     CHECK(instance.rows[1] == glm::vec4(m[0][1], m[1][1], m[2][1], m[3][1]));
-    CHECK(instance.color == rendering::PackColor({1.0f, 0.5f, 0.0f, 0.25f}));
+    CHECK(instance.color == wlw::Color32(wlw::Color{1.0f, 0.5f, 0.0f, 0.25f}).Packed());
   }
   // Bytes r, g, b, a in memory, the order GL_UNSIGNED_BYTE x4 reads them.
   const Instance tinted = Instance::FromTransform(glm::mat4(1.0f), {1.0f, 0.0f, 0.2f, 0.6f});
@@ -110,14 +110,14 @@ TEST_CASE("instance layout and transform") {
   CHECK(bytes[3] == 153);
 }
 
-TEST_CASE("pack color rounds like lround") {
+TEST_CASE("unit to byte rounds like lround") {
   auto reference = [](float v) { return static_cast<uint32_t>(std::lround(std::clamp(v, 0.0f, 1.0f) * 255.0f)); };
   // Every 997th float in [0, 1] (the whole range was checked once, all 1,065,353,217).
   const uint32_t one = std::bit_cast<uint32_t>(1.0f);
   int mismatches = 0;
   for (uint32_t bits = 0; bits <= one; bits += 997) {
     const float v = std::bit_cast<float>(bits);
-    if (rendering::PackUnitByte(v) != reference(v)) ++mismatches;
+    if (UnitToByte(v) != reference(v)) ++mismatches;
   }
   CHECK(mismatches == 0);
   // Where truncating v * 255 + 0.5 would differ (0.5 / 255 rounds up), the halves around each byte,
@@ -125,16 +125,16 @@ TEST_CASE("pack color rounds like lround") {
   for (int k = 0; k < 255; ++k) {
     const float half = (static_cast<float>(k) + 0.5f) / 255.0f;
     for (float v : {half, std::nextafter(half, 0.0f), std::nextafter(half, 1.0f)}) {
-      CHECK_MESSAGE(rendering::PackUnitByte(v) == reference(v), v);
+      CHECK_MESSAGE(UnitToByte(v) == reference(v), v);
     }
   }
-  CHECK(rendering::PackUnitByte(0.5f / 255.0f) == 1);
-  CHECK(rendering::PackUnitByte(0.0f) == 0);
-  CHECK(rendering::PackUnitByte(1.0f) == 255);
-  CHECK(rendering::PackUnitByte(-3.0f) == 0);
-  CHECK(rendering::PackUnitByte(7.0f) == 255);
-  CHECK(rendering::PackUnitByte(std::numeric_limits<float>::quiet_NaN()) == 0);
-  CHECK(rendering::UnpackColor(rendering::PackColor({0.0f, 1.0f, 0.2f, 0.6f})).b == doctest::Approx(0.2f));
+  CHECK(UnitToByte(0.5f / 255.0f) == 1);
+  CHECK(UnitToByte(0.0f) == 0);
+  CHECK(UnitToByte(1.0f) == 255);
+  CHECK(UnitToByte(-3.0f) == 0);
+  CHECK(UnitToByte(7.0f) == 255);
+  CHECK(UnitToByte(std::numeric_limits<float>::quiet_NaN()) == 0);
+  CHECK(Color32::FromPacked(Color32(Color{0.0f, 1.0f, 0.2f, 0.6f}).Packed()).ToColor().b == doctest::Approx(0.2f));
 }
 
 TEST_CASE("sincos matches the standard library") {
@@ -166,19 +166,19 @@ TEST_CASE("transform box matches the 8 corners") {
   core::Random rng(11);
   for (int i = 0; i < 200; ++i) {
     const glm::mat4 m = RandomAffine(rng);
-    const scene::AABB box = RandomBox(rng);
-    CHECK(SameBox(scene::TransformBox(m, box), CornerBox(m, box)));
+    const AABB box = RandomBox(rng);
+    CHECK(SameBox(TransformBox(m, box), CornerBox(m, box)));
   }
   // A flat box and a transform squashed to a plane stay finite.
-  const scene::AABB flat{{-1, 0, -1}, {1, 0, 1}};
-  const scene::AABB squashed = scene::TransformBox(glm::scale(glm::mat4(1.0f), {2.0f, 0.0f, 1.0f}), flat);
+  const AABB flat{{-1, 0, -1}, {1, 0, 1}};
+  const AABB squashed = TransformBox(glm::scale(glm::mat4(1.0f), {2.0f, 0.0f, 1.0f}), flat);
   CHECK(SameBox(squashed, {{-2, 0, -1}, {2, 0, 1}}));
 }
 
 TEST_CASE("instance bounds match the corners of every copy") {
   core::Random rng(13);
   for (int round = 0; round < 20; ++round) {
-    const scene::AABB box = RandomBox(rng);
+    const AABB box = RandomBox(rng);
     std::vector<Instance> copies(1 + rng.Below(60));
     glm::vec3 low(std::numeric_limits<float>::max()), high(std::numeric_limits<float>::lowest());
     for (Instance& copy : copies) {
@@ -245,7 +245,7 @@ TEST_CASE("instance bounds are cached and follow the copies and the model") {
   node.GetModel()->meshes[0]->SetVertices({core::Vertex3D{}, core::Vertex3D{}});  // ...or new vertices
   CHECK(SameBox(node.InstanceBounds(), {{0, 0, 0}, {0, 0, 0}}));
 
-  node.SetInstanceBounds(scene::AABB{{-5, -5, -5}, {5, 5, 5}});  // the game's own box wins
+  node.SetInstanceBounds(AABB{{-5, -5, -5}, {5, 5, 5}});  // the game's own box wins
   CHECK(SameBox(node.InstanceBounds(), {{-5, -5, -5}, {5, 5, 5}}));
   node.SetPosition({1, 0, 0});
   CHECK(SameBox(node.GetAABB(), {{-4, -5, -5}, {6, 5, 5}}));
@@ -253,7 +253,7 @@ TEST_CASE("instance bounds are cached and follow the copies and the model") {
   CHECK(SameBox(node.InstanceBounds(), {{0, 0, 0}, {0, 0, 0}}));
 
   node.WriteInstances(0);  // no copies: the small box at the node, as before
-  CHECK(SameBox(node.GetAABB(), scene::AABB::FromPositionAndSize({1, 0, 0}, 0.1f)));
+  CHECK(SameBox(node.GetAABB(), AABB::FromCenterSize({1, 0, 0}, Vec3(0.1f))));
 }
 
 TEST_CASE("instanced node box matches the corners of every copy in world space") {
@@ -265,7 +265,7 @@ TEST_CASE("instanced node box matches the corners of every copy in world space")
   parent.SetScale({1.0f, -2.0f, 0.5f});
   node->SetPosition({1, 2, 3});
   node->SetRotation({10, 80, -30});
-  const scene::AABB box{{-0.5f, -0.2f, 0.0f}, {0.5f, 0.7f, 1.5f}};
+  const AABB box{{-0.5f, -0.2f, 0.0f}, {0.5f, 0.7f, 1.5f}};
   node->SetModel(ModelOf({box}));
   std::span<Instance> copies = node->WriteInstances(40);
   glm::vec3 low(std::numeric_limits<float>::max()), high(std::numeric_limits<float>::lowest());
@@ -276,7 +276,7 @@ TEST_CASE("instanced node box matches the corners of every copy in world space")
   }
   // Two Arvo steps (per copy, then the node) can only be looser than the copies' own corners, never
   // tighter: it must contain them.
-  const scene::AABB aabb = node->GetAABB();
+  const AABB aabb = node->GetAABB();
   CHECK((aabb.min.x <= low.x + 1e-3f && aabb.min.y <= low.y + 1e-3f && aabb.min.z <= low.z + 1e-3f));
   CHECK((aabb.max.x >= high.x - 1e-3f && aabb.max.y >= high.y - 1e-3f && aabb.max.z >= high.z - 1e-3f));
 }
@@ -289,7 +289,7 @@ TEST_CASE("plain node box matches the corners of each mesh") {
   parent.SetRotation({0, 0, 25});
   node->SetRotation({40, 15, 70});
   node->SetScale({1.5f, -0.5f, 2.0f});  // mirrored
-  const scene::AABB a{{-1, -1, -1}, {0, 0, 0}}, b{{2, 2, 2}, {3, 4, 3}};
+  const AABB a{{-1, -1, -1}, {0, 0, 0}}, b{{2, 2, 2}, {3, 4, 3}};
   node->SetModel(ModelOf({a, b}));
   const glm::mat4 world = node->GetModelMatrix();
   glm::vec3 low(std::numeric_limits<float>::max()), high(std::numeric_limits<float>::lowest());
@@ -341,7 +341,7 @@ TEST_CASE("deprecated instance shims") {
   REQUIRE(built.size() == node.InstanceCount());
   for (size_t i = 0; i < built.size(); ++i) {
     CHECK(built[i].transform == node.Instances()[i].Transform());
-    CHECK(rendering::PackColor(built[i].tint) == node.Instances()[i].color);
+    CHECK(wlw::Color32(built[i].tint).Packed() == node.Instances()[i].color);
   }
 }
 WLW_DISABLE_DEPRECATION_WARNINGS_END

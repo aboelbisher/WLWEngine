@@ -36,6 +36,6 @@ enum class Icon {
 };
 
 // `icon` fitted into the square centred in `box`.
-void DrawIcon(Canvas& canvas, Icon icon, const Rect& box, const core::Color& color);
+void DrawIcon(Canvas& canvas, Icon icon, const Rect& box, const Color& color);
 
 }  // namespace wlw::ui

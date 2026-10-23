@@ -12,7 +12,7 @@
 #include "wlw/rendering/material.h"
 #include "wlw/rendering/vertex_buffer.h"
 #include "wlw/rendering/index_buffer.h"
-#include "wlw/core/collision.h"
+#include "wlw/core/geometry.h"
 
 namespace wlw::core {
 
@@ -47,7 +47,7 @@ class Mesh {
     local_aabb_ = {{minB.x, minB.y, minB.z}, {maxB.x, maxB.y, maxB.z}};
   }
 
-  const scene::AABB& GetLocalAABB() const { return local_aabb_; }
+  const AABB& GetLocalAABB() const { return local_aabb_; }
 
   void SetIndices(const std::vector<uint32_t>& indices) {
     indices_ = indices;
@@ -77,6 +77,6 @@ class Mesh {
 
   std::shared_ptr<rendering::Material> material_ = nullptr;
 
-  scene::AABB local_aabb_ = {{0, 0, 0}, {0, 0, 0}};
+  AABB local_aabb_ = {{0, 0, 0}, {0, 0, 0}};
 };
 }  // namespace wlw::core

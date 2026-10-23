@@ -21,6 +21,56 @@ then it's deleted (listed under **Removed**).
   Arc). Only the glyph corners turn; the SDF anti-aliasing holds (abs-derivative width: ~8% softer at 5°,
   ~16% at 10°, ~41% at 45°). The shadow keeps its on-screen offset. Asked for by Threadlock (World 2's pinned order slips).
 
+### Math, colour, geometry (Roadmap 2.1)
+One set of value types in namespace `wlw`, replacing the hand-written `core::Vector2/3` and the bare `core::Color`,
+plus the helpers both games had written again (Threadlock had 5 `Distance`, 7 normalise-with-fallback and 3 `Box`
+structs; `kPi` was spelled 6 ways across the engine and games).
+- `wlw/core/math.h`: `Vec2/3/4`, `IVec2/3/4`, `Quat`, `Mat3`, `Mat4` (= glm's types, D1); `kPi`, `kTau`,
+  `kHalfPi`, `kDegToRad`, `kRadToDeg`; `Lerp` (floats, vectors, colours; `anim::Lerp` is now this one),
+  `InverseLerp`, `Remap`, `Saturate`, `SmoothStep`, `MoveTowards`, `ExpDecay` (frame-rate independent smoothing),
+  `WrapAngle`, `AngleDifference`, `LerpAngle`, `IsNearlyEqual/Zero`; `SafeNormalize(v, fallback)`, `Perp`,
+  `Cross(Vec2, Vec2)`, `Rotate(Vec2, radians)`, `ClosestPointOnSegment`, `DistanceToSegment` (2D and 3D).
+  glm is configured in CMake for the engine and every game (`GLM_ENABLE_EXPERIMENTAL`, for gtx in 2.2).
+  `GLM_FORCE_CTOR_INIT` was measured and left off: with it nested transforms ran 21-30% slower and the draw sort
+  ~8% slower (MSVC Release, A/B of the same branch), because glm's operators then build each result twice.
+- `wlw/core/color.h`: `Color` holds the values **as authored** (sRGB-encoded, like Unity's and Godot's `Color`);
+  the renderer uses them as they are until it shades in linear space (13.1, D8), and converts them then. Maths
+  that must be physically right goes through `ToLinear()` / `Color::FromLinear()` (the exact sRGB curve; every
+  byte value survives the round trip). `Color(r, g, b, a = 1)`, `Color()` = transparent black as before;
+  `Color::Hex(0xRRGGBB, alpha)` (constexpr: colour tables), `HexRgba`, `Parse("#rgb" / "#rgba" / "#rrggbb" /
+  "#rrggbbaa")`, `ToHex()`; `WithAlpha(a)` (replaces alpha), `Faded(k)` (multiplies it), `Darkened(k)`,
+  `Lightened(k)`; `+ - * /`, `==`; `ToVec4()`, `Rgb()`; `colors::kWhite` and friends. `Color32` = RGBA8 bytes
+  (`Packed()` / `FromPacked()` / `ToColor()`, rounding by `UnitToByte`, the same bytes as 0.2's `PackColor`).
+- `wlw/core/geometry.h`: `AABB` (`Center`, `Size`, `Extents`, `Contains`, `Grown`, `Expanded`, `FromCenterSize`,
+  `FromCenterExtents`, `Empty()` / `IsEmpty()`), `Sphere` (`BoundingSphere(box)`), `Ray`, `Plane`
+  (`FromPointAndNormal`, `FromPoints`), `Frustum` (`FromMatrix`, moved out of camera_3d.h), `Rect` (2D; `ui::Rect`
+  is now this type). `Overlaps(a, b)` for box/box, rect/rect, sphere/sphere, box/sphere and frustum/box,
+  frustum/sphere (conservative: never drops a visible shape); `Raycast(ray, shape)` = the distance along the ray
+  (0 when it starts inside) for planes, boxes (slab method, zero direction components handled), spheres and
+  triangles (Möller-Trumbore); `TransformBox`, `Union`. Tested against brute force (points marched along random
+  rays, sampled inside shapes, fixed seeds).
+- Engine APIs take the new types: Node transforms, cameras, `Input::PointerPosition/SurfaceSize`, `Window::GetSize/
+  Create`, `AppConfig::window_size`, `Vertex3D` (layout checked by static_asserts), `Light::SetColor(Color)`,
+  `ShaderMaterial::SetParam(name, Color)` (a vec4). Golden images unchanged; benchmarks within noise of main
+  (Windows, alternating runs: gather/cull/sort/transform/fx all within ±6%).
+- **Migration** (all of it compiles today through the shims, with deprecation warnings):
+  - `core::Vector2` / `core::Vector3` -> `Vec2` / `Vec3`; `v.Cross(w)` -> `glm::cross(v, w)`, `v.Normalize()` ->
+    `glm::normalize(v)` (or `SafeNormalize`); `ToVector3(glm::vec3)` helpers go.
+  - `core::Color` -> `Color`. A game's `Hex` / `WithAlpha(c, k)` / `Mixed` / `Faded` -> `Color::Hex`,
+    `c.Faded(k)` (**`Color::WithAlpha` replaces alpha**, it doesn't multiply), `Lerp`.
+  - `scene::AABB` / `Ray` / `Plane` / `Frustum` -> `wlw::` (include `wlw/core/geometry.h`, not collision.h);
+    `scene::IntersectPlane(ray, plane)` -> `Raycast(ray, plane)` (a distance: `ray.At(*t)` is the point);
+    `box.Intersects(b)` -> `Overlaps(box, b)`; `AABB::FromPositionAndSize(p, s)` -> `AABB::FromCenterSize(p, Vec3(s))`;
+    `frustum.TestAABB(box)` -> `Overlaps(frustum, box)`.
+  - `rendering::PackColor(c)` -> `Color32(c).Packed()`, `UnpackColor(u)` -> `Color32::FromPacked(u).ToColor()`,
+    `PackUnitByte` -> `UnitToByte`.
+  - A camera subclass overrides `SetPosition(const Vec3&)`, `UpdateSize(const Vec2&)`, `const Vec3& GetPosition()`.
+- **Deprecated** (removed in 0.4): `core::Vector2`, `core::Vector3`, `core::Color`, `scene::AABB`, `scene::Ray`,
+  `scene::Plane`, `scene::Frustum`, `scene::IntersectPlane`, `scene::TransformBox`, `scene::Union`,
+  `AABB::Intersects`, `AABB::FromPositionAndSize`, `AABB::FromPositionAndScale`, `Frustum::TestAABB`,
+  `rendering::PackColor`, `UnpackColor`, `PackUnitByte`. The headers `core/vector2.h`, `vector3.h` and
+  `collision.h` only hold shims now.
+
 ## 0.2.0 (2026-10-18): Phase 1, rendering performance
 
 Quick mobile wins on the current renderer: frame pacing (Swappy on Android, vsync interval or a precise limiter on

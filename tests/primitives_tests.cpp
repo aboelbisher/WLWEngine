@@ -10,8 +10,6 @@ using namespace wlw;
 
 namespace {
 
-glm::vec3 ToGlm(const core::Vector3& v) { return {v.x, v.y, v.z}; }
-
 // Checks a triangle soup (3 vertices per triangle) is a proper closed solid:
 // - each triangle's winding agrees with its stored normal (front faces point outwards),
 // - normals are unit length,
@@ -23,9 +21,9 @@ float CheckClosedSolid(const core::Mesh<core::Vertex3D>& mesh) {
   glm::vec3 normal_sum(0.0f);
   float volume = 0.0f;
   for (size_t i = 0; i + 2 < v.size(); i += 3) {
-    const glm::vec3 a = ToGlm(v[i].position), b = ToGlm(v[i + 1].position), c = ToGlm(v[i + 2].position);
+    const glm::vec3 a = v[i].position, b = v[i + 1].position, c = v[i + 2].position;
     const glm::vec3 area_normal = glm::cross(b - a, c - a) / 2.0f;
-    const glm::vec3 stored = ToGlm(v[i].normal);
+    const glm::vec3 stored = v[i].normal;
     CHECK(Near(glm::length(stored), 1.0f));
     CHECK(glm::dot(area_normal, stored) > 0.0f);  // counter-clockwise seen from outside
     normal_sum += area_normal;
@@ -68,8 +66,7 @@ TEST_CASE("plane") {
   const auto& index = mesh->GetIndices();
   CHECK((v.size() == 4 && index.size() == 6));
   for (size_t i = 0; i + 2 < index.size(); i += 3) {
-    const glm::vec3 a = ToGlm(v[index[i]].position), b = ToGlm(v[index[i + 1]].position),
-                    c = ToGlm(v[index[i + 2]].position);
+    const glm::vec3 a = v[index[i]].position, b = v[index[i + 1]].position, c = v[index[i + 2]].position;
     CHECK(glm::cross(b - a, c - a).y > 0.0f);
   }
   for (const auto& vertex : v)

@@ -4,7 +4,7 @@
 #include "image_loader.h"
 #include "wlw/platform/platform.h"
 #include "stb_image.h"
-#include "wlw/core/vector2.h"
+#include "wlw/core/math.h"
 #include "wlw/rendering/texture.h"
 
 namespace wlw::utils {
@@ -29,8 +29,8 @@ std::unique_ptr<RawImage> ImageLoader::LoadImage(const std::string& file_path) {
   std::vector<unsigned char> data_vector(data, data + total_size);
   stbi_image_free(data);
 
-  return std::make_unique<RawImage>(core::Vector2{.x = static_cast<float>(width), .y = static_cast<float>(height)},
-                                    channels_count, data_vector);
+  return std::make_unique<RawImage>(Vec2(static_cast<float>(width), static_cast<float>(height)), channels_count,
+                                    data_vector);
 }
 
 }  // namespace wlw::utils

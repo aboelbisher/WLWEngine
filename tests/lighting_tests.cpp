@@ -53,7 +53,7 @@ TEST_CASE("set direction") {
 
 TEST_CASE("shadow box contains the bounds") {
   // Every corner of the bounds lands inside the light's box (clip space -1..1 on all axes).
-  const scene::AABB bounds{{-4.0f, 0.0f, -5.0f}, {4.0f, 1.0f, 7.0f}};
+  const AABB bounds{{-4.0f, 0.0f, -5.0f}, {4.0f, 1.0f, 7.0f}};
   const glm::vec3 directions[] = {{-0.5f, -1.0f, -0.7f}, {0.0f, -1.0f, 0.0f}, {0.2f, -0.3f, 1.0f}};
   for (const glm::vec3& d : directions) {
     const scene::ShadowFrustum f = scene::FitDirectionalShadow(d, bounds, 1024);
@@ -71,11 +71,11 @@ TEST_CASE("shadow box contains the bounds") {
 
 TEST_CASE("shadow box is stable") {
   // Looking straight down, a box 8 x 12 wide maps to a square of 12 (rounded up to half units).
-  const scene::AABB bounds{{-4.0f, 0.0f, -6.0f}, {4.0f, 1.0f, 6.0f}};
+  const AABB bounds{{-4.0f, 0.0f, -6.0f}, {4.0f, 1.0f, 6.0f}};
   const scene::ShadowFrustum f = scene::FitDirectionalShadow({0.0f, -1.0f, 0.0f}, bounds, 1024);
   CHECK(Near(f.texel_world, 12.0f / 1024.0f));
   // Moving the bounds by less than a texel keeps the box exactly where it was: no shimmer.
-  scene::AABB moved = bounds;
+  AABB moved = bounds;
   moved.min.x += 0.001f;
   moved.max.x += 0.001f;
   const scene::ShadowFrustum g = scene::FitDirectionalShadow({0.0f, -1.0f, 0.0f}, moved, 1024);
@@ -93,8 +93,8 @@ TEST_CASE("shadow box is stable") {
 TEST_CASE("big receiver does not stretch the map") {
   // Small casters over a huge floor: the map covers the casters (sharp shadows), and the floor
   // under them still fits in the box's depth.
-  const scene::AABB casters{{-2.0f, 0.0f, -2.0f}, {2.0f, 1.0f, 2.0f}};
-  const scene::AABB floor{{-50.0f, -0.1f, -50.0f}, {50.0f, 0.0f, 50.0f}};
+  const AABB casters{{-2.0f, 0.0f, -2.0f}, {2.0f, 1.0f, 2.0f}};
+  const AABB floor{{-50.0f, -0.1f, -50.0f}, {50.0f, 0.0f, 50.0f}};
   const glm::vec3 sun{-0.5f, -1.0f, -0.7f};
   const scene::ShadowFrustum f = scene::FitDirectionalShadow(sun, casters, floor, 1024);
   CHECK(f.texel_world * 1024.0f < 8.0f);  // about the casters' size, not the floor's 100

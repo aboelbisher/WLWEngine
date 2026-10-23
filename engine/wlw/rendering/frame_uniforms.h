@@ -61,9 +61,8 @@ inline void SetFrameLights(FrameUniforms& frame, const std::vector<const scene::
                            const scene::LightNode* shadow_light) {
   frame.light_counts = {0, 0, 0, -1};
   for (const scene::LightNode* light : lights) {
-    const glm::vec3 color = light->GetColor() * light->GetIntensity();
-    const core::Vector3 p = light->GetWorldPosition();
-    const glm::vec3 position(p.x, p.y, p.z);
+    const glm::vec3 color = light->GetColor().Rgb() * light->GetIntensity();
+    const glm::vec3 position = light->GetWorldPosition();
     switch (light->GetType()) {
       case scene::LightNode::Type::Directional: {
         int& count = frame.light_counts.x;

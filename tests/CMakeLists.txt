@@ -13,6 +13,7 @@ add_executable(wlw_tests
   anim_tests.cpp
   audio_tests.cpp
   blend_tests.cpp
+  color_tests.cpp
   console_tests.cpp
   core_tests.cpp
   cvar_tests.cpp
@@ -20,12 +21,14 @@ add_executable(wlw_tests
   frame_pacing_tests.cpp
   fx_tests.cpp
   instance_tests.cpp
+  geometry_tests.cpp
   gf2_tests.cpp
   gpu_timer_tests.cpp
   image_compare_tests.cpp
   input_tests.cpp
   kit_tests.cpp
   log_tests.cpp
+  math_tests.cpp
   normal_matrix_tests.cpp
   lighting_tests.cpp
   picking_tests.cpp

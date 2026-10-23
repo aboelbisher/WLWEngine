@@ -55,7 +55,7 @@ void SetShaderDumpDirectory(std::string directory) { g_dump_directory = std::mov
 const std::string& ShaderDumpDirectory() { return g_dump_directory; }
 
 std::shared_ptr<scene::Viewport> MakeViewport() {
-  auto viewport = scene::Viewport::Create({.name = "golden", .clear = core::Color{0.08f, 0.09f, 0.14f, 1.0f}});
+  auto viewport = scene::Viewport::Create({.name = "golden", .clear = Color{0.08f, 0.09f, 0.14f, 1.0f}});
   viewport->SetSize(kSize, kSize);
   return viewport;
 }

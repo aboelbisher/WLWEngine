@@ -36,6 +36,7 @@ add_library(wlw STATIC
   wlw/app/time.h
 
   wlw/core/collision.h
+  wlw/core/color.cpp
   wlw/core/color.h
   wlw/core/fixed_timestep.h
   wlw/core/frame_pacing.cpp
@@ -52,6 +53,7 @@ add_library(wlw STATIC
   wlw/core/cvar.cpp
   wlw/core/cvar.h
   wlw/core/deprecated.h
+  wlw/core/geometry.h
   wlw/core/git_info.h
   wlw/core/log.cpp
   wlw/core/log.h

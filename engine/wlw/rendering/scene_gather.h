@@ -4,7 +4,7 @@
 
 #include <glm/glm.hpp>
 
-#include "wlw/core/collision.h"
+#include "wlw/core/geometry.h"
 #include "wlw/scene/node.h"
 
 namespace wlw::scene {
@@ -24,16 +24,16 @@ namespace wlw::rendering {
 struct SceneGather {
   struct Drawable {
     scene::Node3D* node;
-    scene::AABB box;  // world bounds, computed once per frame (GetAABB walks every mesh / copy)
+    AABB box;  // world bounds, computed once per frame (GetAABB walks every mesh / copy)
   };
   struct Sprites {
     scene::SpriteBatch* batch;
-    scene::AABB box;  // world bounds (its SetBounds box through its transform)
+    AABB box;  // world bounds (its SetBounds box through its transform)
   };
   std::vector<const scene::LightNode*> lights;  // visible light nodes
   std::vector<Drawable> drawables;              // visible nodes with something to draw
   std::vector<Sprites> sprites;                 // visible sprite batches with dots (no shadows)
-  scene::AABB casters{}, receivers{};           // around every shadow caster / receiver
+  AABB casters{}, receivers{};                  // around every shadow caster / receiver
   bool has_casters = false, has_receivers = false;
 
   void Clear();

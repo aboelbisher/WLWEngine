@@ -4,12 +4,12 @@
 #include <string>
 #include <vector>
 #include <array>
-#include "wlw/core/vector2.h"
+#include "wlw/core/math.h"
 
 namespace wlw::utils {
 
 struct RawImage {
-  core::Vector2 size;
+  Vec2 size;
   int channels;
   std::vector<unsigned char> pixels;
 };

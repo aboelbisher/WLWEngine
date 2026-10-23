@@ -6,43 +6,37 @@
 
 #include <glm/glm.hpp>
 
-#include "wlw/core/collision.h"
 #include "wlw/core/color.h"
 #include "wlw/core/deprecated.h"
+#include "wlw/core/geometry.h"
 
 namespace wlw::rendering {
 
-// A colour as 4 bytes r, g, b, a in that order in memory (each 0..1 clamped, rounded to the nearest
-// byte, halves up). Not std::lround: the same bytes for every float in 0..1 (checked exhaustively)
-// at a fraction of the cost (it's in the particle loop).
-inline uint32_t PackUnitByte(float v) {
-  const float x = (v > 0.0f ? (v < 1.0f ? v : 1.0f) : 0.0f) * 255.0f;  // NaN -> 0
-  const auto whole = static_cast<uint32_t>(x);
-  return whole + (x - static_cast<float>(whole) >= 0.5f ? 1u : 0u);
+#if !WLW_NO_DEPRECATED
+// 0.2's names for Color32 (wlw/core/color.h): the same bytes.
+WLW_DEPRECATED(0.3, "Use wlw::UnitToByte") inline uint32_t PackUnitByte(float v) { return UnitToByte(v); }
+WLW_DEPRECATED(0.3, "Use Color32(color).Packed()") inline uint32_t PackColor(const Color& color) {
+  return Color32(color).Packed();
 }
-inline uint32_t PackColor(const core::Color& color) {
-  return PackUnitByte(color.r) | (PackUnitByte(color.g) << 8) | (PackUnitByte(color.b) << 16) |
-         (PackUnitByte(color.a) << 24);
+WLW_DEPRECATED(0.3, "Use Color32::FromPacked(packed).ToColor()") inline Color UnpackColor(uint32_t packed) {
+  return Color32::FromPacked(packed).ToColor();
 }
-inline core::Color UnpackColor(uint32_t packed) {
-  auto unit = [packed](int shift) { return static_cast<float>((packed >> shift) & 0xFFu) / 255.0f; };
-  return {unit(0), unit(8), unit(16), unit(24)};
-}
+#endif
 
 // One copy of a mesh in an instanced draw (see Node::WriteInstances): 52 bytes, the layout Godot's
 // GLES3 renderer uses. `rows` are the top 3 rows of the copy's affine 4x4 transform, relative to the
 // node (the 4th row is always 0 0 0 1, so it isn't stored): rows[i].w is the translation's i-th
-// component. `color` (RGBA8, PackColor) multiplies the mesh's vertex colours (white mesh + tint =
+// component. `color` (RGBA8, Color32::Packed) multiplies the mesh's vertex colours (white mesh + tint =
 // any colour); tints are 0..1.
 // GLSL twin: shaders/wlw/instance.glsl (aInstanceRow0..2 at locations 4-6, aInstanceTint at 7).
 struct Instance {
   glm::vec4 rows[3] = {{1.0f, 0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f, 0.0f}};
   uint32_t color = 0xFFFFFFFFu;  // white
 
-  static Instance FromTransform(const glm::mat4& transform, const core::Color& tint = {1.0f, 1.0f, 1.0f, 1.0f}) {
+  static Instance FromTransform(const glm::mat4& transform, const Color& tint = {1.0f, 1.0f, 1.0f, 1.0f}) {
     Instance instance;
     instance.SetTransform(transform);
-    instance.color = PackColor(tint);
+    instance.color = Color32(tint).Packed();
     return instance;
   }
   // Takes the top 3 rows (an affine transform: the bottom row is ignored).
@@ -61,14 +55,14 @@ static_assert(alignof(Instance) == 4, "no padding: GLM's aligned types would bre
 static_assert(offsetof(Instance, rows) == 0 && offsetof(Instance, color) == 48);
 
 // The node-space box around every copy of a mesh whose own box is `mesh_box` (each copy's box by
-// Arvo's method, see scene::TransformBox, from its 3x4 rows). Empty `instances`: an empty box at 0.
-scene::AABB InstanceBounds(std::span<const Instance> instances, const scene::AABB& mesh_box);
+// Arvo's method, see TransformBox, from its 3x4 rows). Empty `instances`: an empty box at 0.
+AABB InstanceBounds(std::span<const Instance> instances, const AABB& mesh_box);
 
 #if !WLW_NO_DEPRECATED
 // The 80-byte instance before 1.6: a full 4x4 matrix and a float colour.
 struct WLW_DEPRECATED(0.2, "Use rendering::Instance (52 bytes: 3 rows + RGBA8)") InstanceData {
   glm::mat4 transform{1.0f};
-  core::Color tint{1.0f, 1.0f, 1.0f, 1.0f};
+  Color tint{1.0f, 1.0f, 1.0f, 1.0f};
 };
 #endif
 
@@ -78,7 +72,7 @@ struct WLW_DEPRECATED(0.2, "Use rendering::Instance (52 bytes: 3 rows + RGBA8)")
 struct SpriteInstance {
   glm::vec2 position{0.0f};      // centre, on the batch node's z = 0 plane (node units)
   float size = 1.0f;             // diameter (node units)
-  uint32_t color = 0xFFFFFFFFu;  // RGBA8, see PackColor: read by the GPU as 4 bytes scaled to 0..1
+  uint32_t color = 0xFFFFFFFFu;  // RGBA8, see Color32::Packed: read by the GPU as 4 bytes scaled to 0..1
 };
 static_assert(sizeof(SpriteInstance) == 16, "the GPU reads it with a 16-byte stride");
 

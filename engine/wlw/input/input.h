@@ -4,7 +4,7 @@
 #include <cstdint>
 #include <vector>
 
-#include "wlw/core/vector2.h"
+#include "wlw/core/math.h"
 
 namespace wlw::input {
 
@@ -68,11 +68,11 @@ class Input {
   bool IsPointerDown() const { return !pointer_blocked_ && pointer_down_; }
   bool WasPointerPressed() const { return !pointer_blocked_ && pointer_pressed_; }
   bool WasPointerReleased() const { return !pointer_blocked_ && pointer_released_; }
-  core::Vector2 PointerPosition() const { return pointer_position_; }  // pixels, origin top-left
+  Vec2 PointerPosition() const { return pointer_position_; }  // pixels, origin top-left
   // The size of the area PointerPosition() is measured in, in the same units. Pass this (not
   // Window::GetSize()) to Camera3D::ScreenPointToRay: on HiDPI desktops the cursor uses window
   // units while the framebuffer is bigger.
-  core::Vector2 SurfaceSize() const { return surface_size_; }
+  Vec2 SurfaceSize() const { return surface_size_; }
 
   // Swipes completed this frame, in order. A swipe fires as soon as the finger/mouse has moved
   // far enough (no need to lift), and keeps firing for further turns in the same drag.
@@ -121,10 +121,10 @@ class Input {
   bool pointer_down_ = false;
   bool pointer_pressed_ = false;
   bool pointer_released_ = false;
-  core::Vector2 pointer_position_{0, 0};
+  Vec2 pointer_position_{0, 0};
 
-  core::Vector2 swipe_origin_{0, 0};  // where the current swipe gesture is measured from
-  bool swiped_this_drag_ = false;     // a drag that swiped is not a tap
+  Vec2 swipe_origin_{0, 0};        // where the current swipe gesture is measured from
+  bool swiped_this_drag_ = false;  // a drag that swiped is not a tap
   std::vector<Swipe> swipes_;
   bool tapped_ = false;
   bool pointer_blocked_ = false;
@@ -132,7 +132,7 @@ class Input {
   std::vector<uint32_t> text_;
   bool touch_screen_ = false;
 
-  core::Vector2 surface_size_{720.0f, 1280.0f};
+  Vec2 surface_size_{720.0f, 1280.0f};
   float surface_min_side_ = 720.0f;
 };
 

@@ -601,10 +601,10 @@ class GLRenderingDriver : public RenderingDriver {
     block.view = camera.GetViewMatrix();
     block.projection = camera.GetProjectionMatrix();
     block.view_projection = block.projection * block.view;
-    const core::Vector3 position = camera.GetPosition();
+    const Vec3 position = camera.GetPosition();
     // The projection tells the two kinds apart: w is 1 for orthographic (no divide by depth), -z for
     // perspective. Row 2 of the view matrix is the camera's backward axis in world space.
-    block.camera_position = {position.x, position.y, position.z, block.projection[3][3] == 1.0f ? 1.0f : 0.0f};
+    block.camera_position = {position, block.projection[3][3] == 1.0f ? 1.0f : 0.0f};
     block.view_forward = {-block.view[0][2], -block.view[1][2], -block.view[2][2], 0.0f};
     if (frame.shadow_active) {
       const scene::ShadowSettings& settings = frame.shadow_light->shadow;

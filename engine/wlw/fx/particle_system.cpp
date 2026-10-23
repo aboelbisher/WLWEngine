@@ -123,7 +123,7 @@ void WriteInstance(const ParticleSystem::Particle& p, float size, rendering::Ins
   out.rows[0] = {size * (cy * cz), size * (-cy * sz), size * sy, p.position.x};
   out.rows[1] = {size * (sxsy * cz + cx * sz), size * (cx * cz - sxsy * sz), size * (-sx * cy), p.position.y};
   out.rows[2] = {size * (sx * sz - cxsy * cz), size * (cxsy * sz + sx * cz), size * (cx * cy), p.position.z};
-  out.color = rendering::PackColor(p.color);
+  out.color = Color32(p.color).Packed();
 }
 
 }  // namespace
@@ -149,7 +149,7 @@ void ParticleSystem::BuildInstances(std::vector<rendering::InstanceData>& out) c
   WriteTo(node);
   out.clear();
   for (const rendering::Instance& instance : node.Instances()) {
-    out.push_back({instance.Transform(), rendering::UnpackColor(instance.color)});
+    out.push_back({instance.Transform(), Color32::FromPacked(instance.color).ToColor()});
   }
 }
 WLW_DISABLE_DEPRECATION_WARNINGS_END

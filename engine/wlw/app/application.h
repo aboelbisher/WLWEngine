@@ -14,7 +14,7 @@
 #include "wlw/core/cvar.h"
 #include "wlw/core/fixed_timestep.h"
 #include "wlw/core/type_name.h"
-#include "wlw/core/vector2.h"
+#include "wlw/core/math.h"
 #include "wlw/input/input.h"
 #include "wlw/scene/window.h"
 #include "wlw/wlw.h"
@@ -35,7 +35,7 @@ namespace app {
 
 struct AppConfig {
   std::string title = "WLWengine";
-  core::Vector2 window_size = {1280, 720};
+  Vec2 window_size = {1280, 720};
   // false: the screen surface gets no depth buffer (scene::WindowOptions::depth): saves its memory
   // for a game whose screen always has post passes or a render scale below 1 (else it costs a copy).
   bool screen_depth = true;
@@ -47,7 +47,7 @@ struct AppConfig {
   int target_fps = 60;
   bool show_stats_in_title = true;  // "title | 60 fps | 16.7 ms" (desktop)
   // The UI's virtual resolution: the Canvas is scaled so this area fits on any screen.
-  core::Vector2 ui_reference_size = {640, 360};
+  Vec2 ui_reference_size = {640, 360};
 };
 
 // The app: owns the services (engine and renderer, window, input, audio, screens, time) and runs

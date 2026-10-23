@@ -8,6 +8,7 @@
 
 #include <glm/glm.hpp>
 
+#include "wlw/core/color.h"
 #include "wlw/rendering/material.h"
 #include "wlw/rendering/shader.h"
 #include "wlw/rendering/texture.h"
@@ -49,6 +50,8 @@ class ShaderMaterial : public Material {
     }
     params_.emplace_back(uniform, std::move(value));
   }
+  // A colour goes in as a vec4 (r, g, b, a), as authored (see color.h).
+  void SetParam(const std::string& uniform, const Color& color) { SetParam(uniform, Param(color.ToVec4())); }
   const Param* GetParam(const std::string& uniform) const {
     for (const auto& [key, value] : params_) {
       if (key == uniform) return &value;

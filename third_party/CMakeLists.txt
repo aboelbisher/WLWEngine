@@ -8,6 +8,8 @@ endif()
 # ---- glm 1.0.1 (MIT / Happy Bunny; headers only): maths. Public through wlw::wlw, so games get it too ----
 add_library(wlw_glm INTERFACE)
 target_include_directories(wlw_glm SYSTEM INTERFACE glm)
+# One configuration for the engine and every game (wlw/core/math.h explains it): the gtx headers allowed.
+target_compile_definitions(wlw_glm INTERFACE GLM_ENABLE_EXPERIMENTAL)
 
 # ---- header-only: stb, tinygltf (+ nlohmann json) ----
 add_library(wlw_stb INTERFACE)

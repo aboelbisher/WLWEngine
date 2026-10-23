@@ -100,15 +100,15 @@ void FlowParticles::SetNext(int path, std::span<const int> next) {
   }
 }
 
-void FlowParticles::SetEmitter(int path, float per_second, core::Color color) {
+void FlowParticles::SetEmitter(int path, float per_second, Color color) {
   Path& p = paths_[Index(path)];
   p.emit_rate = std::max(per_second, 0.0f);
-  p.emit_color = rendering::PackColor(color);
+  p.emit_color = Color32(color).Packed();
 }
 
-bool FlowParticles::Emit(int path, float distance, core::Color color) {
+bool FlowParticles::Emit(int path, float distance, Color color) {
   if (dist_.size() >= capacity_) return false;
-  Spawn(path, std::clamp(distance, 0.0f, paths_[Index(path)].length), rendering::PackColor(color));
+  Spawn(path, std::clamp(distance, 0.0f, paths_[Index(path)].length), Color32(color).Packed());
   return true;
 }
 

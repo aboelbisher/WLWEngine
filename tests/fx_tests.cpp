@@ -152,7 +152,7 @@ TEST_CASE("write to matches the matrices glm builds") {
     for (int c = 0; c < 4; ++c) {
       for (int r = 0; r < 4; ++r) worst = std::max(worst, std::abs(written[c][r] - m[c][r]));
     }
-    CHECK(node.Instances()[i].color == wlw::rendering::PackColor(p.color));
+    CHECK(node.Instances()[i].color == wlw::Color32(p.color).Packed());
   }
   CHECK(worst < 1e-5f);
 }
@@ -227,12 +227,11 @@ TEST_CASE("floor bounce and edge") {
 // ---- SpriteBatch: the 16-byte dots ----
 
 TEST_CASE("sprite batch") {
-  using wlw::rendering::PackColor;
-  using wlw::rendering::UnpackColor;
   CHECK(sizeof(wlw::rendering::SpriteInstance) == 16);
-  const uint32_t red = PackColor({1.0f, 0.0f, 0.5f, 1.0f});
+  const uint32_t red = wlw::Color32(wlw::Color{1.0f, 0.0f, 0.5f, 1.0f}).Packed();
   CHECK(((red & 0xFFu) == 255 && ((red >> 8) & 0xFFu) == 0 && ((red >> 16) & 0xFFu) == 128 && (red >> 24) == 255));
-  CHECK((Near(UnpackColor(red).b, 128.0f / 255.0f) && PackColor({2.0f, -1.0f, 0.0f, 0.0f}) == 0xFFu));  // clamped
+  CHECK((Near(wlw::Color32::FromPacked(red).ToColor().b, 128.0f / 255.0f) &&
+         wlw::Color32(wlw::Color{2.0f, -1.0f, 0.0f, 0.0f}).Packed() == 0xFFu));  // clamped
 
   wlw::scene::SpriteBatch batch(3);
   std::shared_ptr<wlw::scene::Node3D> as_node = std::make_shared<wlw::scene::SpriteBatch>(1);
@@ -247,7 +246,7 @@ TEST_CASE("sprite batch") {
   batch.FitBounds();
   CHECK((batch.BoundsMin() == glm::vec2(-1.0f, -1.0f) && batch.BoundsMax() == glm::vec2(4.5f, 1.5f)));
   batch.SetPosition({10.0f, 0.0f, 2.0f});
-  const wlw::scene::AABB world = batch.WorldBounds();
+  const wlw::AABB world = batch.WorldBounds();
   CHECK((Near(world.min.x, 9.0f) && Near(world.max.x, 14.5f) && Near(world.min.z, 2.0f) && Near(world.max.z, 2.0f)));
   batch.Clear();
   CHECK((batch.Empty() && batch.Version() == before + 2));
@@ -331,7 +330,7 @@ TEST_CASE("flow emitters and capacity") {
   flow.SetEmitter(path, 60.0f, {0, 1, 0, 1});
   for (int i = 0; i < 60; ++i) flow.Update(1.0f / 60.0f);
   CHECK((flow.Count() >= 59 && flow.Count() <= 61));  // about the rate x the time
-  CHECK(flow.GetDot(0).color == wlw::rendering::PackColor({0, 1, 0, 1}));
+  CHECK(flow.GetDot(0).color == wlw::Color32(wlw::Color{0, 1, 0, 1}).Packed());
   flow.SetEmitter(path, 100000.0f, {0, 1, 0, 1});
   flow.Update(0.1f);
   CHECK((flow.Count() == 100 && !flow.Emit(path, 0.0f, {1, 1, 1, 1})));  // full: no growth

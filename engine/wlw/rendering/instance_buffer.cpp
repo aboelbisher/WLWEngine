@@ -7,13 +7,11 @@
 
 namespace wlw::rendering {
 
-scene::AABB InstanceBounds(std::span<const Instance> instances, const scene::AABB& mesh_box) {
+AABB InstanceBounds(std::span<const Instance> instances, const AABB& mesh_box) {
   WLW_PROFILE_FUNCTION();
   if (instances.empty()) return {{0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}};
-  const glm::vec3 box_min(mesh_box.min.x, mesh_box.min.y, mesh_box.min.z);
-  const glm::vec3 box_max(mesh_box.max.x, mesh_box.max.y, mesh_box.max.z);
-  const glm::vec4 centre((box_min + box_max) * 0.5f, 1.0f);
-  const glm::vec3 half = (box_max - box_min) * 0.5f;
+  const glm::vec4 centre(mesh_box.Center(), 1.0f);
+  const glm::vec3 half = mesh_box.Extents();
 
   glm::vec3 low(std::numeric_limits<float>::max());
   glm::vec3 high(std::numeric_limits<float>::lowest());
@@ -27,7 +25,7 @@ scene::AABB InstanceBounds(std::span<const Instance> instances, const scene::AAB
       high[i] = std::max(high[i], middle + reach);
     }
   }
-  return {{low.x, low.y, low.z}, {high.x, high.y, high.z}};
+  return {low, high};
 }
 
 }  // namespace wlw::rendering

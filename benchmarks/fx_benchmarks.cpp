@@ -32,7 +32,7 @@ void FlowBenchmarks(bench::Context& ctx) {
   for (size_t i = 0; i < kDots; ++i) {
     const int path = static_cast<int>(i % 8);
     const float distance = flow.PathLength(path) * static_cast<float>(i / 8) / static_cast<float>(kDots / 8);
-    flow.Emit(path, distance, core::Color{0.2f, 0.6f, 1.0f, 1.0f});
+    flow.Emit(path, distance, Color{0.2f, 0.6f, 1.0f, 1.0f});
   }
   for (int i = 0; i < 120; ++i) flow.Update(1.0f / 60.0f);  // queues formed: a steady state
 

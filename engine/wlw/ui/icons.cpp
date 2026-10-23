@@ -14,7 +14,7 @@ glm::vec2 Dir(float angle) { return {std::sin(angle), -std::cos(angle)}; }
 
 // An arrow head at angle `at` on a circle, pointing along it (clockwise if `clockwise`).
 void ArrowHead(Canvas& canvas, glm::vec2 center, float radius, float at, bool clockwise, float size,
-               const core::Color& color) {
+               const Color& color) {
   const glm::vec2 point = center + Dir(at) * radius;
   const glm::vec2 radial = Dir(at);
   const glm::vec2 along = glm::vec2(-radial.y, radial.x) * (clockwise ? 1.0f : -1.0f);  // d/da of Dir
@@ -24,7 +24,7 @@ void ArrowHead(Canvas& canvas, glm::vec2 center, float radius, float at, bool cl
 
 }  // namespace
 
-void DrawIcon(Canvas& canvas, Icon icon, const Rect& box, const core::Color& color) {
+void DrawIcon(Canvas& canvas, Icon icon, const Rect& box, const Color& color) {
   // Shapes are written in a square from -1 to 1 (y down), scaled to the box.
   const glm::vec2 c = box.Center();
   const float s = std::min(box.Size().x, box.Size().y) * 0.5f;

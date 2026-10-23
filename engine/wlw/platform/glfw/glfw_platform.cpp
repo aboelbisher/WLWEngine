@@ -238,7 +238,7 @@ input::Key MapKey(int key) {
 
 class GlfwWindow : public Window {
  public:
-  GlfwWindow(const core::Vector2& size, const std::string& title, const WindowOptions& options)
+  GlfwWindow(const Vec2& size, const std::string& title, const WindowOptions& options)
       : title_(title), options_(options) {
     size_ = size;
   }
@@ -427,8 +427,7 @@ class GlfwWindow : public Window {
 
 }  // namespace
 
-std::unique_ptr<Window> Window::Create(const core::Vector2& size, const std::string& title,
-                                       const WindowOptions& options) {
+std::unique_ptr<Window> Window::Create(const Vec2& size, const std::string& title, const WindowOptions& options) {
   auto window = std::make_unique<GlfwWindow>(size, title, options);
   window->SetScreenHasDepth(options.depth);
   return window;

@@ -63,7 +63,7 @@ class FlowParticles {
   // Where dots go at the end: the next paths in turn (round robin). Empty = they fade out.
   void SetNext(int path, std::span<const int> next);
   // Spawns `per_second` dots of `color` at the path's start (0 = none). Fractions carry over.
-  void SetEmitter(int path, float per_second, core::Color color);
+  void SetEmitter(int path, float per_second, Color color);
 
   // How many dots, as a share of what the paths ask for (0..1; a quality level): emitters spawn
   // this share of their rate and queues pack this share per unit, so a blocked pipe still fills
@@ -74,7 +74,7 @@ class FlowParticles {
 
   // ---- Dots ----
   // One dot at `distance` along `path` (a random side offset). False when full.
-  bool Emit(int path, float distance, core::Color color);
+  bool Emit(int path, float distance, Color color);
   void Update(float dt);
   void Clear();
   size_t Count() const { return dist_.size(); }

@@ -3,16 +3,14 @@
 #include <algorithm>
 
 #include "wlw/anim/ease.h"
+#include "wlw/core/math.h"
 
 namespace wlw::anim {
 
 using EaseFunction = float (*)(float);
 
-// Linear interpolation for anything with + - and * float (float, glm::vec3, ...).
-template <typename T>
-T Lerp(const T& from, const T& to, float t) {
-  return from + (to - from) * t;
-}
+// Linear interpolation for anything with + - and * float (float, Vec3, Color, ...): wlw::Lerp (core/math.h).
+using wlw::Lerp;
 
 // A value animated from `from` to `to` over `duration` seconds, after an optional `delay`, shaped
 // by an easing function. It's a plain value: the owner calls Update(dt) each frame and reads

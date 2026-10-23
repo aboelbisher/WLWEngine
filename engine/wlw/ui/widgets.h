@@ -35,14 +35,13 @@ Press Pressable(UIContext& ui, uint64_t id, const Rect& rect);
 
 // A chunky "3D" slab, the look of casual-game buttons: a soft shadow, a darker lip under the face,
 // the face (pushed down onto the lip by `press`), and a light band across its top. Returns the face.
-Rect RaisedRect(Canvas& canvas, const Rect& rect, const core::Color& face, float radius, float depth,
-                float press = 0.0f);
+Rect RaisedRect(Canvas& canvas, const Rect& rect, const Color& face, float radius, float depth, float press = 0.0f);
 
 // `text` scaled down to fit `max_width` if it's wider at `size` (never up).
 float FitTextSize(const Font& font, std::string_view text, float size, float max_width);
 
 // Outlined text in the theme's ink (readable over anything).
-TextStyle ThemedText(const Theme& theme, const core::Color& color, float alpha = 1.0f);
+TextStyle ThemedText(const Theme& theme, const Color& color, float alpha = 1.0f);
 
 // ---- Buttons ----
 
@@ -78,8 +77,8 @@ struct CardResult {
 };
 // A tile that leads somewhere, e.g. a game mode: coloured by `accent`, a picture area at the top for
 // the caller to draw in, the title and a subtitle under it, an optional badge ("NEW") on its corner.
-CardResult Card(UIContext& ui, std::string_view title, std::string_view subtitle, const Rect& rect,
-                const core::Color& accent, std::string_view badge = {});
+CardResult Card(UIContext& ui, std::string_view title, std::string_view subtitle, const Rect& rect, const Color& accent,
+                std::string_view badge = {});
 
 // ---- Containers ----
 
@@ -110,11 +109,11 @@ void Stars(UIContext& ui, glm::vec2 center, float size, int filled, int count = 
 
 // How a Button / Toggle looks.
 struct ButtonStyle {
-  core::Color fill{0.98f, 0.76f, 0.25f, 1.0f};
-  core::Color text{0.10f, 0.08f, 0.16f, 1.0f};
+  Color fill{0.98f, 0.76f, 0.25f, 1.0f};
+  Color text{0.10f, 0.08f, 0.16f, 1.0f};
   float text_size = 0.0f;  // 0 = 45% of the button height
   float corner_radius = 14.0f;
-  core::Color shadow{0.0f, 0.0f, 0.0f, 0.35f};  // the soft shadow under the button; alpha 0 = none
+  Color shadow{0.0f, 0.0f, 0.0f, 0.35f};  // the soft shadow under the button; alpha 0 = none
 };
 
 // A button: returns true on the frame it was clicked (pressed on it and released on it - sliding
@@ -127,7 +126,7 @@ bool Toggle(UIContext& ui, const Font& font, std::string_view label, bool& value
             const ButtonStyle& style = {});
 
 // A rounded box with a soft shadow under it: the background of dialogs and panels (drawing only).
-void Panel(Canvas& canvas, const Rect& rect, const core::Color& fill, float corner_radius = 24.0f,
-           const core::Color& shadow = {0.0f, 0.0f, 0.0f, 0.35f});
+void Panel(Canvas& canvas, const Rect& rect, const Color& fill, float corner_radius = 24.0f,
+           const Color& shadow = {0.0f, 0.0f, 0.0f, 0.35f});
 
 }  // namespace wlw::ui

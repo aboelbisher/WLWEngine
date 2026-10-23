@@ -7,9 +7,10 @@ around the editor and iOS ("Why this order"). Work goes one step at a time, in o
 stable: commits name them ("Roadmap 4.3b: ..."). Commits and CHANGELOG entries from before 2026-10-21
 use the old numbers: "Old numbering" at the end maps them.
 
-**Current step:** 2.1 Math, colour, geometry (plan in chat first) · **Updated:** 2026-10-21
+**Current step:** 2.2 Transform and Node3D (plan in chat first) · **Updated:** 2026-10-23
 
-**Next session:** plan 2.1 in chat and wait for the OK. The 0.2 shims stay through v0.2.x and go before v0.3.0.
+**Next session:** plan 2.2 in chat and wait for the OK. The 0.2 shims stay through v0.2.x and go before v0.3.0; the 0.3
+  ones (2.1: core::Vector2/3, core::Color, scene::AABB...) stay through v0.3.x; the games move off them in 2.8.
 
 Where things stand (2026-10-21):
 - Done: Phase 0 = v0.1.0 (2026-10-15), Phase 1 = v0.2.0 (2026-10-18), each step one squashed commit on main named
@@ -127,6 +128,8 @@ Where things stand (2026-10-21):
 - **D7 Assets:** build-time cooker; KTX2 + Basis Universal (direct ASTC/BC where better); cgltf +
   meshoptimizer + MikkTSpace; pak files with zstd.
 - **D8 Colour:** linear HDR with tonemapping by default; gamma mode kept as an opt-out.
+  Refined in 2.1: a `Color` holds the values as authored (sRGB-encoded, like Unity and Godot); the renderer
+  converts them to linear when it shades in linear space (13.1). Unreal stores linear instead.
 - **D9 Android:** GameActivity + AGDK (Swappy, GameTextInput, Paddleboat) + ADPF.
 - **D10 Physics:** Jolt (3D), Box2D v3 (2D).
 - **D11 Text:** FreeType + HarfBuzz + SheenBidi + msdfgen + libunibreak.
@@ -247,10 +250,10 @@ licence) for editor UI tests.
 
 ## Phase 2: Core API (breaking, while the games are small)
 The editor shows and edits what this phase defines, so it comes first.
-- [ ] **2.1 Math, colour, geometry.** `wlw/core/math.h` (glm configuration, aliases);
-  `core::Vector2/3` removed. `Color`: linear RGBA, hex and sRGB constructors, operators, `Lerp`,
-  `WithAlpha`, `Color32`. Geometry (AABB, Sphere, Ray, Plane, Frustum) with intersection tests in
-  one namespace.
+- [x] **2.1 Math, colour, geometry.** *(done 2026-10-23, commit "Roadmap 2.1: math, colour, geometry"; benchmarks within noise of main; GLM_FORCE_CTOR_INIT measured +21-30% on nested transforms, left off)* `wlw/core/math.h` (glm configuration, aliases, helpers);
+  `core::Vector2/3` replaced (0.3 shims). `Color`: RGBA as authored (sRGB-encoded; see D8), hex and text, exact sRGB
+  conversions, operators, `Lerp`, `WithAlpha`, `Color32`. Geometry (AABB, Sphere, Ray, Plane, Frustum, Rect) with
+  `Overlaps` and `Raycast` in namespace `wlw`.
 - [ ] **2.2 Transform and Node3D.** Position + quaternion + scale; local and world matrices cached
   with dirty propagation; children in a vector (a stable order: the hierarchy panel and scene files show it);
   `SetParent(keep_world)`, `LookAt`, `Rotate`, world getters and setters, Euler helpers; names, `FindChild` and

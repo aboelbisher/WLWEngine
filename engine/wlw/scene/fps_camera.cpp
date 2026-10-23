@@ -19,24 +19,24 @@ class FPSCameraImpl : public FPSCamera {
     updateCameraVectors();
   }
 
-  void SetPosition(const core::Vector3& position) override {
+  void SetPosition(const Vec3& position) override {
     position_ = {position.x, position.y, position.z};
     updateCameraVectors();
   }
-  void SetTarget(const core::Vector3& target) override {
+  void SetTarget(const Vec3& target) override {
     // In an FPS camera, the target is calculated from Position + Front.
     // For simplicity, we just ignore this setter here and rely on rotation for direction.
   }
-  // void SetCameraUp(const core::Vector3& up) override {
+  // void SetCameraUp(const Vec3& up) override {
   //   world_up_ = {up.x, up.y, up.z};
   //   updateCameraVectors();
   // }
-  void UpdateSize(const core::Vector2& size) override {
+  void UpdateSize(const Vec2& size) override {
     aspect_ratio_ = size.x / size.y;
     projection_matrix_ = glm::perspective(glm::radians(fov_), aspect_ratio_, near_plane_, far_plane_);
   }
 
-  const core::Vector3& GetPosition() const override { return position_; }
+  const Vec3& GetPosition() const override { return position_; }
   const glm::mat4& GetViewMatrix() override {
     updateCameraVectors();  // Ensure the view matrix is always up-to-date before access
     return view_matrix_;
@@ -46,15 +46,15 @@ class FPSCameraImpl : public FPSCamera {
   // --- Core Movement Logic ---
   void ProcessKeyboard(CameraMovement direction, float deltaTime) override {
     float velocity = movement_speed_ * deltaTime;
-    core::Vector3 movementVector;
+    Vec3 movementVector;
 
     switch (direction) {
       case CameraMovement::FORWARD:
       case CameraMovement::BACKWARD: {
         // Project the Front vector onto the horizontal plane (XY)
-        core::Vector3 horizontalFront = front_;
+        Vec3 horizontalFront = front_;
         horizontalFront.z = 0.0f;  // <--- The key to staying grounded
-        horizontalFront = horizontalFront.Normalize();
+        horizontalFront = glm::normalize(horizontalFront);
 
         if (direction == CameraMovement::FORWARD) {
           movementVector = horizontalFront;
@@ -134,12 +134,12 @@ class FPSCameraImpl : public FPSCamera {
     updateCameraVectors();
   }
 
-  static constexpr core::Vector3 world_up_ = {0.0f, 0.0f, 1.0f};  // Z-up coordinate system
+  static constexpr Vec3 world_up_ = {0.0f, 0.0f, 1.0f};  // Z-up coordinate system
 
  private:
   void updateCameraVectors() {
     // Calculate the new Front vector
-    core::Vector3 front;
+    Vec3 front;
     // for- world up
     front.x = cos(glm::radians(yaw_)) * cos(glm::radians(pitch_));
     front.y = sin(glm::radians(yaw_)) * cos(glm::radians(pitch_));
@@ -148,9 +148,9 @@ class FPSCameraImpl : public FPSCamera {
     // For this simple example, we assume Yaw/Pitch is fixed (looking towards -Z initially)
     // We will only use the Right and WorldUp vectors for simple strafing and elevation.
 
-    front_ = front.Normalize();
-    right_ = front.Cross(world_up_).Normalize();
-    up_ = right_.Cross(front_).Normalize();
+    front_ = glm::normalize(front);
+    right_ = glm::normalize(glm::cross(front, world_up_));
+    up_ = glm::normalize(glm::cross(right_, front_));
 
     // Calculate view matrix
     view_matrix_ = glm::lookAt(glm::vec3(position_), glm::vec3(position_ + front), glm::vec3(up_));
@@ -158,10 +158,10 @@ class FPSCameraImpl : public FPSCamera {
 
  private:
   // Camera attributes
-  core::Vector3 position_;
-  core::Vector3 front_;  // The direction the camera is looking
-  core::Vector3 right_;  // The vector pointing to the right
-  core::Vector3 up_;     // The local up vector
+  Vec3 position_;
+  Vec3 front_;  // The direction the camera is looking
+  Vec3 right_;  // The vector pointing to the right
+  Vec3 up_;     // The local up vector
 
   // Eular angles (used for rotation, but we focus on position here)
   float yaw_;
