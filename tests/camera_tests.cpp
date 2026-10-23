@@ -43,14 +43,20 @@ constexpr float kAspects[] = {0.5f, 1.0f, 2.0f};  // portrait, square, landscape
 
 }  // namespace
 
-TEST_CASE("default camera looks down -z") {
+TEST_CASE("default camera looks along +y") {
   Camera3D camera;
   CHECK(camera.Kind() == scene::NodeKind::Camera);
   CHECK((camera.GetProjection() == Camera3D::Projection::Perspective && camera.GetFitMode() == FitMode::KeepHeight));
   CHECK((Near(camera.GetFov(), glm::radians(60.0f)) && Near(camera.GetNear(), 0.1f) && Near(camera.GetFar(), 1000.0f)));
-  CHECK(NearMat(camera.GetViewMatrix(), Mat4(1.0f)));
+  // At the origin, so the view only turns the engine's axes into GL's view space: forward (+Y) -> -z, up (+Z) -> +y.
+  const Mat4 view = camera.GetViewMatrix();
+  CHECK(NearVec(Vec3(view * Vec4(kForward, 0.0f)), {0, 0, -1}));
+  CHECK(NearVec(Vec3(view * Vec4(kUp, 0.0f)), {0, 1, 0}));
+  CHECK(NearVec(Vec3(view * Vec4(kRight, 0.0f)), {1, 0, 0}));
+  CHECK(NearVec(Vec3(view[3]), {0, 0, 0}));
   CHECK(NearMat(camera.GetProjectionMatrix(1.5f), glm::perspective(glm::radians(60.0f), 1.5f, 0.1f, 1000.0f)));
-  CHECK(NearVec(camera.Forward(), {0, 0, -1}));
+  CHECK(NearVec(camera.Forward(), kForward));
+  CHECK(NearVec(camera.Up(), kUp));
 }
 
 TEST_CASE("view matrix is the inverse world transform") {
@@ -61,8 +67,10 @@ TEST_CASE("view matrix is the inverse world transform") {
   parent->SetEulerAngles({0.3f, -1.1f, 0.2f});
   camera->SetPosition({1, 2, 3});
   camera->LookAt({0, 0, 0});
-  CHECK(NearMat(camera->GetViewMatrix(), glm::inverse(camera->GetWorldMatrix()), 1e-4f));
-  CHECK(NearMat(camera->GetViewMatrix(), glm::lookAt(camera->GetWorldPosition(), Vec3(0), Vec3(0, 1, 0)), 1e-4f));
+  // The inverse world transform, then the engine's axes into GL's (ToYUp: x, z, -y).
+  const Mat4 to_gl(Vec4(1, 0, 0, 0), Vec4(0, 0, -1, 0), Vec4(0, 1, 0, 0), Vec4(0, 0, 0, 1));
+  CHECK(NearMat(camera->GetViewMatrix(), to_gl * glm::inverse(camera->GetWorldMatrix()), 1e-4f));
+  CHECK(NearMat(camera->GetViewMatrix(), glm::lookAt(camera->GetWorldPosition(), Vec3(0), kUp), 1e-4f));
 
   // A scaled parent moves the camera but doesn't squash the picture: the view has no scale.
   parent->SetScale({2.0f, 0.5f, 3.0f});
@@ -126,14 +134,14 @@ TEST_CASE("fit modes: perspective") {
 TEST_CASE("frustum") {
   Camera3D camera;
   camera.SetPerspective(glm::radians(60.0f), 0.5f, 50.0f);
-  camera.SetPosition({0, 0, 10});
+  camera.SetPosition({0, -10, 0});
   const Frustum frustum = camera.GetFrustum(1.0f);
   CHECK(Overlaps(frustum, AABB::FromCenterSize({0, 0, 0}, Vec3(1))));          // in front
-  CHECK_FALSE(Overlaps(frustum, AABB::FromCenterSize({0, 0, 20}, Vec3(1))));   // behind
-  CHECK_FALSE(Overlaps(frustum, AABB::FromCenterSize({0, 0, -50}, Vec3(1))));  // past far
+  CHECK_FALSE(Overlaps(frustum, AABB::FromCenterSize({0, -20, 0}, Vec3(1))));  // behind
+  CHECK_FALSE(Overlaps(frustum, AABB::FromCenterSize({0, 50, 0}, Vec3(1))));   // past far
   CHECK_FALSE(Overlaps(frustum, AABB::FromCenterSize({30, 0, 0}, Vec3(1))));   // to the side
-  camera.RotateWorld({0, 1, 0}, glm::radians(-90.0f));                         // now looking down +x
-  CHECK(Overlaps(camera.GetFrustum(1.0f), AABB::FromCenterSize({20, 0, 10}, Vec3(1))));
+  camera.RotateWorld(kUp, glm::radians(-90.0f));                               // now looking along +x
+  CHECK(Overlaps(camera.GetFrustum(1.0f), AABB::FromCenterSize({20, -10, 0}, Vec3(1))));
 }
 
 // ---- Controllers ----
@@ -145,8 +153,8 @@ TEST_CASE("fly controller clamps pitch and moves along its axes") {
   fly.Attach(camera);
   fly.Update(camera, {.look = {0.0f, 10.0f}}, 0.016f);  // far past straight up
   CHECK(Near(fly.Pitch(), fly.pitch_limit));
-  CHECK(camera.Forward().y < 1.0f);
-  CHECK(camera.Forward().y > 0.99f);
+  CHECK(camera.Forward().z < 1.0f);
+  CHECK(camera.Forward().z > 0.99f);
 
   Camera3D level;
   scene::FlyController walk;
@@ -154,9 +162,9 @@ TEST_CASE("fly controller clamps pitch and moves along its axes") {
   walk.Attach(level);
   walk.Update(level, {.look = {glm::radians(90.0f), 0.0f}}, 0.0f);  // turn right: now facing +x
   CHECK(NearVec(level.Forward(), {1, 0, 0}, 1e-4f));
-  walk.Update(level, {.move = {0, 0, 1}}, 0.5f);  // forward at 5 m/s for 0.5 s
+  walk.Update(level, {.move = {0, 1, 0}}, 0.5f);  // forward at 5 m/s for 0.5 s
   CHECK(NearVec(level.GetWorldPosition(), {2.5f, 0, 0}, 1e-4f));
-  walk.Update(level, {.move = {0, 0, 1}, .boost = true}, 0.5f);
+  walk.Update(level, {.move = {0, 1, 0}, .boost = true}, 0.5f);
   CHECK(NearVec(level.GetWorldPosition(), {12.5f, 0, 0}, 1e-3f));
 
   // Damped: the speed builds up the same over one step or many.

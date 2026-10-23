@@ -9,6 +9,7 @@
 
 #include "wlw/core/color.h"
 #include "wlw/core/deprecated.h"
+#include "wlw/core/math.h"
 #include "wlw/core/random.h"
 #include "wlw/rendering/instance_buffer.h"
 #include "wlw/scene/geometry_instance.h"
@@ -20,19 +21,33 @@ namespace wlw::fx {
 struct BurstSettings {
   int count_min = 8;
   int count_max = 12;
-  glm::vec3 direction{0.0f, 1.0f, 0.0f};  // main direction particles fly in (normalised for you)
-  float spread_degrees = 60.0f;           // half-angle of the cone around `direction` (180 = all)
+  glm::vec3 direction = kUp;  // main direction particles fly in (normalised for you)
+  float spread = kPi / 3.0f;  // half-angle of the cone around `direction`, radians (kPi = every way)
   float speed_min = 2.0f;
   float speed_max = 5.0f;
   float position_jitter = 0.0f;  // spawn anywhere in a cube of this half-size around the origin
   float lifetime_min = 0.5f;
   float lifetime_max = 0.9f;
-  float size_start = 0.25f;  // uniform scale of the particle's mesh, shrinking/growing linearly
-  float size_end = 0.0f;     //   to size_end over its life
-  float spin_max = 720.0f;   // degrees per second, random per axis in [-spin_max, spin_max]
+  float size_start = 0.25f;     // uniform scale of the particle's mesh, shrinking/growing linearly
+  float size_end = 0.0f;        //   to size_end over its life
+  float max_spin = 4.0f * kPi;  // radians per second, random per axis in [-max_spin, max_spin]
   Color color{1.0f, 1.0f, 1.0f, 1.0f};
   float brightness_jitter = 0.15f;  // each particle's colour is scaled by 1 +- this
   float delay = 0.0f;               // seconds before the particles appear (for staggered effects)
+
+#if !WLW_NO_DEPRECATED
+  // 0.3's degrees: when set (>= 0) they win over spread / max_spin. Only assigning one warns (a deprecated field
+  // would warn wherever the settings are copied, in clang).
+  struct Degrees {
+    float value = -1.0f;
+    WLW_DEPRECATED(0.3, "Use spread / max_spin (radians)") Degrees& operator=(float degrees) {
+      value = degrees;
+      return *this;
+    }
+  };
+  Degrees spread_degrees;
+  Degrees spin_max;
+#endif
 };
 
 // A CPU particle simulation that outputs GPU instances: the particles of all bursts are drawn as
@@ -46,8 +61,8 @@ class ParticleSystem {
   struct Particle {
     glm::vec3 position{0.0f};
     glm::vec3 velocity{0.0f};
-    glm::vec3 rotation{0.0f};  // degrees around x, y, z
-    glm::vec3 spin{0.0f};      // degrees per second
+    glm::vec3 angles{0.0f};            // radians about x, y, z (the copy is turned by Rx * Ry * Rz)
+    glm::vec3 angular_velocity{0.0f};  // radians per second about x, y, z
     float size_start = 1.0f;
     float size_end = 0.0f;
     Color color{1.0f, 1.0f, 1.0f, 1.0f};
@@ -88,9 +103,9 @@ class ParticleSystem {
 
   // Applied to every particle. Drag is "fraction of speed lost per second"-like: velocity is
   // multiplied by exp(-drag * dt), which gives the same motion at any frame rate.
-  glm::vec3 gravity{0.0f, -9.8f, 0.0f};
-  // An optional floor: a horizontal rectangle (x from min.x to max.x, z from min.y to max.y) at
-  // `height`. Particles falling onto it bounce (losing speed) and slide (losing more), and come to
+  glm::vec3 gravity{0.0f, 0.0f, -9.8f};
+  // An optional floor: a horizontal rectangle (x from min.x to max.x, y from min.y to max.y) at
+  // `height` (z). Particles falling onto it bounce (losing speed) and slide (losing more), and come to
   // rest; past its edges they fall on by. Particles count as cubes of their current size.
   struct Floor {
     float height = 0.0f;
@@ -103,7 +118,7 @@ class ParticleSystem {
   float drag = 0.5f;
 
  private:
-  glm::vec3 RandomDirectionInCone(const glm::vec3& axis, float half_angle_degrees);
+  glm::vec3 RandomDirectionInCone(const glm::vec3& axis, float half_angle);
 
   std::vector<Particle> particles_;
   size_t capacity_;

@@ -70,11 +70,11 @@ class Node3D {
   void SetRotation(const Quat& rotation);
   const Quat& GetRotation() const { return rotation_; }
 
-  // Euler angles in radians (see core/rotation.h for the orders; YXZ = yaw, pitch, roll). GetEulerAngles returns
-  // the angles last set with SetEulerAngles in the same order, exactly as given (an inspector shows 190°, not
+  // Euler angles in radians (see core/rotation.h for the orders; the default ZXY = yaw, pitch, roll). GetEulerAngles
+  // returns the angles last set with SetEulerAngles in the same order, exactly as given (an inspector shows 190°, not
   // its equivalent), until the rotation is changed another way; then it works them out from the quaternion.
-  void SetEulerAngles(const Vec3& radians, EulerOrder order = EulerOrder::YXZ);
-  Vec3 GetEulerAngles(EulerOrder order = EulerOrder::YXZ) const;
+  void SetEulerAngles(const Vec3& radians, EulerOrder order = kDefaultEulerOrder);
+  Vec3 GetEulerAngles(EulerOrder order = kDefaultEulerOrder) const;
 
   // Turns the node by `radians` about `axis`: Rotate about its own (local) axis, RotateWorld about a world axis.
   void Rotate(const Vec3& axis, float radians);
@@ -85,9 +85,9 @@ class Node3D {
   void Translate(const Vec3& delta);
   void TranslateWorld(const Vec3& delta);
 
-  // Turns the node so its forward axis (-Z) points at the world point `target`, its +Y as close to `up` as it
+  // Turns the node so its forward axis (+Y) points at the world point `target`, its +Z as close to `up` as it
   // can (see LookRotation for when they're parallel). Nothing happens when the target is the node's position.
-  void LookAt(const Vec3& target, const Vec3& up = {0.0f, 1.0f, 0.0f});
+  void LookAt(const Vec3& target, const Vec3& up = kUp);
 
   // T * R * S, built when asked for after a change.
   const Mat4& GetLocalMatrix() const;
@@ -104,7 +104,7 @@ class Node3D {
   void SetWorldPosition(const Vec3& position);
   void SetWorldRotation(const Quat& rotation);
 
-  // The node's axes in world space, normalized: Forward = -Z, Right = +X, Up = +Y.
+  // The node's axes in world space, normalized: Forward = +Y, Right = +X, Up = +Z (core/math.h Conventions).
   Vec3 Forward() const;
   Vec3 Right() const;
   Vec3 Up() const;
@@ -198,7 +198,7 @@ class Node3D {
   Vec3 scale_{1.0f};
   // The Euler angles last given to SetEulerAngles (GetEulerAngles returns them while euler_set_).
   Vec3 euler_{0.0f};
-  EulerOrder euler_order_ = EulerOrder::YXZ;
+  EulerOrder euler_order_ = kDefaultEulerOrder;
   bool euler_set_ = false;
 
   mutable Mat4 local_matrix_{1.0f};

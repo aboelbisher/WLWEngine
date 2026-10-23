@@ -16,6 +16,7 @@ add_executable(wlw_tests
   camera_tests.cpp
   color_tests.cpp
   console_tests.cpp
+  conventions_tests.cpp
   core_tests.cpp
   cvar_tests.cpp
   exact_cover_tests.cpp
@@ -51,7 +52,8 @@ add_executable(wlw_tests
   version_tests.cpp
   viewport_tests.cpp)
 target_link_libraries(wlw_tests PRIVATE wlw::wlw wlw::kit wlw_doctest wlw_test_support)
-target_compile_definitions(wlw_tests PRIVATE WLW_TEST_FONT="${CMAKE_CURRENT_SOURCE_DIR}/data/LilitaOne-Regular.ttf")
+target_compile_definitions(wlw_tests PRIVATE WLW_TEST_FONT="${CMAKE_CURRENT_SOURCE_DIR}/data/LilitaOne-Regular.ttf"
+                                            WLW_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data")
 wlw_set_warnings(wlw_tests)
 doctest_discover_tests(wlw_tests)
 

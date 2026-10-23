@@ -121,7 +121,7 @@ void SnakeApp::EatBurst() {
   wlw::fx::BurstSettings burst;
   burst.count_min = 14;
   burst.count_max = 20;
-  burst.spread_degrees = 70.0f;
+  burst.spread = 70.0f * wlw::kDegToRad;
   burst.speed_min = 3.0f;
   burst.speed_max = 6.0f;
   burst.size_start = 0.22f;

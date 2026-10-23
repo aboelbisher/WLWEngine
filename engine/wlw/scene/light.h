@@ -20,7 +20,7 @@ struct ShadowSettings {
 // nothing is drawn for it; the renderer gathers the visible lights every frame and lights the
 // scene with them (up to kMaxLights of each type).
 //
-// Directional and spot lights shine along the node's forward axis, -Z, turned by its rotation.
+// Directional and spot lights shine along the node's forward axis, +Y, turned by its rotation.
 // SetDirection is the convenient way to aim them. Like Godot's Light3D.
 class Light3D : public Node3D {
  public:
@@ -40,8 +40,8 @@ class Light3D : public Node3D {
   void SetAmbient(float ambient) { ambient_ = ambient; }
   float GetAmbient() const { return ambient_; }
 
-  // Points the light's forward axis (-Z) along `direction` (needn't be normalized) by setting the node's local
-  // rotation (LookRotation with +Y up; straight up or down works too).
+  // Points the light's forward axis (+Y) along `direction` (needn't be normalized) by setting the node's local
+  // rotation (LookRotation with +Z up; straight up or down works too). A sun: SetDirection({0.3f, 0.5f, -1.0f}).
   void SetDirection(const Vec3& direction) { SetRotation(LookRotation(direction)); }
   // The world-space direction the light shines in (includes the parents' rotations).
   Vec3 GetDirection() const { return Forward(); }
@@ -66,7 +66,7 @@ class Light3D : public Node3D {
 // Parallel rays from far away, like the sun: only the direction matters, not the position.
 class DirectionalLight3D : public Light3D {
  public:
-  DirectionalLight3D() : Light3D(Type::Directional) { SetDirection({0.0f, -1.0f, 0.0f}); }
+  DirectionalLight3D() : Light3D(Type::Directional) { SetDirection(kDown); }
 };
 
 // A bulb: shines in every direction from the node's position, fading out by `range`.
@@ -84,7 +84,7 @@ class PointLight3D : public Light3D {
 // the outer angle (half-angles from the axis, in radians).
 class SpotLight3D : public Light3D {
  public:
-  SpotLight3D() : Light3D(Type::Spot) { SetDirection({0.0f, -1.0f, 0.0f}); }
+  SpotLight3D() : Light3D(Type::Spot) { SetDirection(kDown); }
   void SetRange(float range) { range_ = range; }
   float GetRange() const { return range_; }
   void SetInnerAngle(float radians) { inner_angle_ = radians; }

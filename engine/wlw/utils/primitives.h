@@ -12,7 +12,18 @@ namespace wlw::utils {
 namespace primitives_detail {
 // v / |v| (written out, not glm::normalize's inverse square root: the meshes stay bit-identical to 0.2's).
 inline Vec3 Unit(const Vec3& v) { return v / glm::length(v); }
+// Meshes written with Y up (the cube, cylinder and gem) turned to the engine's Z up (core/math.h FromYUp): their
+// +Y becomes +Z and their +Z (the cube's "front") becomes -Y, kModelFront. A rotation, so windings stay.
+inline void TurnToZUp(std::vector<core::Vertex3D>& vertices) {
+  for (core::Vertex3D& v : vertices) {
+    v.position = FromYUp(v.position);
+    v.normal = FromYUp(v.normal);
+  }
+}
 }  // namespace primitives_detail
+
+// Every mesh here is centred on the origin, Z up (core/math.h Conventions), front faces counter-clockwise seen
+// from outside. The pyramid frustum, cylinder, gem and sphere stand on Z.
 
 inline std::shared_ptr<core::Mesh<core::Vertex3D>> createPyramidFrustumWithNormals(float baseSize = 2.0f,
                                                                                    float topSize = 1.0f,
@@ -42,22 +53,22 @@ inline std::shared_ptr<core::Mesh<core::Vertex3D>> createPyramidFrustumWithNorma
   // --- 1. Bottom Face (Normal: 0, 0, -1) ---
   Vec3 N_Bottom = {0.0f, 0.0f, -1.0f};
   vertices.push_back({P[0], {1.0f, 0.0f, 0.0f, 1.0f}, N_Bottom, UV_BL});  // 0
-  vertices.push_back({P[1], {1.0f, 0.5f, 0.0f, 1.0f}, N_Bottom, UV_BR});  // 1
-  vertices.push_back({P[2], {0.0f, 1.0f, 0.0f, 1.0f}, N_Bottom, UV_TR});  // 2
+  vertices.push_back({P[2], {0.0f, 1.0f, 0.0f, 1.0f}, N_Bottom, UV_TR});  // 1 (counter-clockwise seen from below)
+  vertices.push_back({P[1], {1.0f, 0.5f, 0.0f, 1.0f}, N_Bottom, UV_BR});  // 2
 
   vertices.push_back({P[2], {0.0f, 1.0f, 0.0f, 1.0f}, N_Bottom, UV_TR});  // 3
-  vertices.push_back({P[3], {0.0f, 0.0f, 1.0f, 1.0f}, N_Bottom, UV_TL});  // 4
-  vertices.push_back({P[0], {1.0f, 0.0f, 0.0f, 1.0f}, N_Bottom, UV_BL});  // 5
+  vertices.push_back({P[0], {1.0f, 0.0f, 0.0f, 1.0f}, N_Bottom, UV_BL});  // 4
+  vertices.push_back({P[3], {0.0f, 0.0f, 1.0f, 1.0f}, N_Bottom, UV_TL});  // 5
 
   // --- 2. Top Face (Normal: 0, 0, 1) ---
   Vec3 N_Top = {0.0f, 0.0f, 1.0f};
   vertices.push_back({P[4], {1.0f, 1.0f, 1.0f, 1.0f}, N_Top, UV_BL});  // 6
-  vertices.push_back({P[7], {0.0f, 1.0f, 1.0f, 1.0f}, N_Top, UV_TL});  // 7
-  vertices.push_back({P[6], {1.0f, 1.0f, 0.0f, 1.0f}, N_Top, UV_TR});  // 8
+  vertices.push_back({P[6], {1.0f, 1.0f, 0.0f, 1.0f}, N_Top, UV_TR});  // 7 (counter-clockwise seen from above)
+  vertices.push_back({P[7], {0.0f, 1.0f, 1.0f, 1.0f}, N_Top, UV_TL});  // 8
 
   vertices.push_back({P[6], {1.0f, 1.0f, 0.0f, 1.0f}, N_Top, UV_TR});  // 9
-  vertices.push_back({P[5], {0.5f, 0.5f, 0.5f, 1.0f}, N_Top, UV_BR});  // 10
-  vertices.push_back({P[4], {1.0f, 1.0f, 1.0f, 1.0f}, N_Top, UV_BL});  // 11
+  vertices.push_back({P[4], {1.0f, 1.0f, 1.0f, 1.0f}, N_Top, UV_BL});  // 10
+  vertices.push_back({P[5], {0.5f, 0.5f, 0.5f, 1.0f}, N_Top, UV_BR});  // 11
 
   // --- 3. Side 1 (Face 0-1-5-4) ---
   // P[0] is BL, P[1] is BR, P[5] is TR (top-right), P[4] is TL (top-left)
@@ -199,7 +210,8 @@ inline std::shared_ptr<core::Mesh<core::Vertex3D>> createCubeWithNormals(float s
   vertices.push_back({{-HS, HS, -HS}, color, N_Left, UV_TR});
   vertices.push_back({{-HS, -HS, -HS}, color, N_Left, UV_BR});
 
-  // ... (indices and mesh_ setup remains the same) ...
+  // The faces above are named as written (Y up); turned, front (+Z) faces -Y and top (+Y) faces +Z.
+  primitives_detail::TurnToZUp(vertices);
   std::vector<uint32_t> indices(vertices.size());
   for (size_t i = 0; i < vertices.size(); ++i) {
     indices[i] = static_cast<uint32_t>(i);
@@ -211,18 +223,17 @@ inline std::shared_ptr<core::Mesh<core::Vertex3D>> createCubeWithNormals(float s
   return mesh_;
 }
 
-// A flat rectangle in the XZ plane, facing up (+Y), centred on the origin: a floor or a ground
-// for shadows to land on. One quad, two triangles.
+// A flat rectangle in the XY plane, facing up (+Z), centred on the origin: a floor or a ground for shadows to land
+// on. `width` along X, `depth` along Y; uv (0, 0) at the -X -Y corner. One quad, two triangles.
 inline std::shared_ptr<core::Mesh<core::Vertex3D>> createPlaneWithNormals(float width = 1.0f, float depth = 1.0f,
                                                                           const Color& color = {1.0f, 1.0f, 1.0f,
                                                                                                 1.0f}) {
   const float hw = width / 2.0f, hd = depth / 2.0f;
-  const Vec3 up = {0.0f, 1.0f, 0.0f};
   std::vector<core::Vertex3D> vertices = {
-      {{-hw, 0.0f, hd}, color, up, {0.0f, 0.0f}},
-      {{hw, 0.0f, hd}, color, up, {1.0f, 0.0f}},
-      {{hw, 0.0f, -hd}, color, up, {1.0f, 1.0f}},
-      {{-hw, 0.0f, -hd}, color, up, {0.0f, 1.0f}},
+      {{-hw, -hd, 0.0f}, color, kUp, {0.0f, 0.0f}},
+      {{hw, -hd, 0.0f}, color, kUp, {1.0f, 0.0f}},
+      {{hw, hd, 0.0f}, color, kUp, {1.0f, 1.0f}},
+      {{-hw, hd, 0.0f}, color, kUp, {0.0f, 1.0f}},
   };
   // Counter-clockwise seen from above, like the cube's top face.
   std::vector<uint32_t> indices = {0, 1, 2, 2, 3, 0};
@@ -447,17 +458,18 @@ inline std::shared_ptr<core::Mesh<core::Vertex3D>> createCylinderWithNormals(flo
     // Top cap
     int tcIdx = (int)vertices.size();
     vertices.push_back(topCenter);
-    indices.push_back(tcIdx);
-    indices.push_back(curr + 2);
+    indices.push_back(tcIdx);  // counter-clockwise seen from outside (the angle turns clockwise from above)
     indices.push_back(next + 2);
+    indices.push_back(curr + 2);
 
     // Bottom cap
     int bcIdx = (int)vertices.size();
     vertices.push_back(bottomCenter);
     indices.push_back(bcIdx);
-    indices.push_back(next + 3);
     indices.push_back(curr + 3);
+    indices.push_back(next + 3);
   }
+  primitives_detail::TurnToZUp(vertices);
 
   auto mesh_ = std::make_shared<core::Mesh<core::Vertex3D>>();
   mesh_->SetVertices(vertices);
@@ -488,6 +500,7 @@ inline std::shared_ptr<core::Mesh<core::Vertex3D>> createGemWithNormals(float wi
     addTriangle(top, mid[(i + 1) % 4], mid[i]);
     addTriangle(bottom, mid[i], mid[(i + 1) % 4]);
   }
+  primitives_detail::TurnToZUp(vertices);
 
   std::vector<uint32_t> indices(vertices.size());
   for (size_t i = 0; i < vertices.size(); ++i) indices[i] = (uint32_t)i;

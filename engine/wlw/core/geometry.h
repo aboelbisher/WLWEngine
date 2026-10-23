@@ -20,16 +20,16 @@ namespace wlw {
 // Typical source: Camera3D::ScreenPointToRay (what is under the finger/cursor?).
 struct Ray {
   Vec3 origin{0.0f};
-  Vec3 direction{0.0f, 0.0f, -1.0f};
+  Vec3 direction = kForward;
 
   Vec3 At(float t) const { return origin + t * direction; }
 };
 
 // The points p with dot(normal, p) + distance == 0. `normal` is unit length; `distance` is the
-// signed offset from the origin, so the ground plane y = 0 is {{0, 1, 0}, 0} and y = h is
-// {{0, 1, 0}, -h}. Points on the normal's side have a positive GetDistanceToPoint().
+// signed offset from the origin, so the ground plane z = 0 is {{0, 0, 1}, 0} (the default) and z = h is
+// {{0, 0, 1}, -h}. Points on the normal's side have a positive GetDistanceToPoint().
 struct Plane {
-  Vec3 normal{0.0f, 1.0f, 0.0f};
+  Vec3 normal = kUp;
   float distance = 0.0f;
 
   static Plane FromPointAndNormal(const Vec3& point, const Vec3& normal) { return {normal, -glm::dot(normal, point)}; }

@@ -7,6 +7,7 @@
 
 #include "gltf_loader.h"
 #include "wlw/core/assert.h"
+#include "wlw/core/math.h"
 #include "wlw/core/profile.h"
 #include "wlw/core/mesh.h"
 #include "wlw/core/model.h"
@@ -187,8 +188,11 @@ std::shared_ptr<core::Model<core::Vertex3D>> GLTFLoader::LoadModel(const std::st
 
   std::vector<core::Mesh3DShared> meshes;
   const tinygltf::Scene& scene = model.scenes[model.defaultScene > -1 ? model.defaultScene : 0];
+  // glTF is Y up with models facing +Z: turned into the engine's Z up (core/math.h FromYUp), the front faces -Y.
+  const glm::mat4 from_y_up(glm::vec4(FromYUp(kRight), 0.0f), glm::vec4(FromYUp({0.0f, 1.0f, 0.0f}), 0.0f),
+                            glm::vec4(FromYUp({0.0f, 0.0f, 1.0f}), 0.0f), glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
   for (int nodeIdx : scene.nodes) {
-    ProcessNode(model, model.nodes[nodeIdx], glm::mat4(1.0f), materials, meshes);
+    ProcessNode(model, model.nodes[nodeIdx], from_y_up, materials, meshes);
   }
 
   if (normalize && !meshes.empty()) {

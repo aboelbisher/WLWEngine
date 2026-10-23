@@ -14,28 +14,28 @@ namespace {
 // rate <= 0: all of it.
 float Approach(float rate, float dt) { return rate > 0.0f ? 1.0f - std::exp(-rate * dt) : 1.0f; }
 
-Quat Heading(float yaw, float pitch) { return QuatFromEuler({pitch, yaw, 0.0f}, EulerOrder::YXZ); }
+Quat Heading(float yaw, float pitch) { return QuatFromEuler({pitch, 0.0f, yaw}, EulerOrder::ZXY); }
 
 }  // namespace
 
 // ---- Fly ----
 
 void FlyController::Attach(const Node3D& camera) {
-  const Vec3 angles = EulerFromQuat(camera.GetWorldRotation(), EulerOrder::YXZ);
+  const Vec3 angles = EulerFromQuat(camera.GetWorldRotation(), EulerOrder::ZXY);
   pitch_ = std::clamp(angles.x, -pitch_limit, pitch_limit);
-  yaw_ = angles.y;
+  yaw_ = angles.z;
   velocity_ = Vec3(0.0f);
 }
 
 void FlyController::Update(Node3D& camera, const FlyInput& input, float dt) {
-  yaw_ = WrapAngle(yaw_ - input.look.x);  // turning right = clockwise seen from above = negative about +Y
+  yaw_ = WrapAngle(yaw_ - input.look.x);  // turning right = clockwise seen from above = negative about +Z
   pitch_ = std::clamp(pitch_ + input.look.y, -pitch_limit, pitch_limit);
   const Quat rotation = Heading(yaw_, pitch_);
   camera.SetWorldRotation(rotation);
 
   Vec3 move = input.move;
   if (glm::dot(move, move) > 1.0f) move = glm::normalize(move);  // diagonals no faster
-  const Vec3 wanted = rotation * Vec3(move.x, move.y, -move.z) * speed * (input.boost ? boost_multiplier : 1.0f);
+  const Vec3 wanted = rotation * move * speed * (input.boost ? boost_multiplier : 1.0f);
   velocity_ = damping > 0.0f ? ExpDecay(velocity_, wanted, damping, dt) : wanted;
   camera.TranslateWorld(velocity_ * dt);
 }
@@ -45,7 +45,7 @@ void FlyController::Update(Node3D& camera, const FlyInput& input, float dt) {
 void OrbitController::Apply(Camera3D& camera) const {
   const Quat rotation = Heading(yaw_now_, pitch_now_);
   camera.SetWorldRotation(rotation);
-  camera.SetWorldPosition(pivot_now_ + rotation * Vec3(0.0f, 0.0f, distance_now_));
+  camera.SetWorldPosition(pivot_now_ + rotation * Vec3(0.0f, -distance_now_, 0.0f));
 }
 
 void OrbitController::Snap(Camera3D& camera) {
@@ -85,7 +85,7 @@ void OrbitController::Update(Camera3D& camera, const OrbitInput& input, float dt
   if (input.pan.x != 0.0f || input.pan.y != 0.0f) {
     const Quat rotation = Heading(yaw_now_, pitch_now_);
     const float height = camera.VisibleSize(input.aspect, distance_now_).y;
-    pivot += (rotation * Vec3(input.pan.x, input.pan.y, 0.0f)) * height;
+    pivot += (rotation * Vec3(input.pan.x, 0.0f, input.pan.y)) * height;
   }
   if (input.zoom != 0.0f) {
     const float factor = std::pow(zoom_step, input.zoom);

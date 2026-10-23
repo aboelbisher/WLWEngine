@@ -81,7 +81,7 @@ TEST_CASE("euler orders: the named product, and back") {
   CHECK(SameRotation(QuatFromEuler(angles, EulerOrder::YZX), y * z * x));
   CHECK(SameRotation(QuatFromEuler(angles, EulerOrder::ZXY), z * x * y));
   CHECK(SameRotation(QuatFromEuler(angles, EulerOrder::ZYX), z * y * x));
-  CHECK(SameRotation(QuatFromEuler(angles), y * x * z));  // YXZ by default
+  CHECK(SameRotation(QuatFromEuler(angles), z * x * y));  // ZXY by default: yaw (Z), pitch (X), roll (Y)
 
   // Random rotations survive quaternion -> angles -> quaternion in every order (the angles needn't match).
   core::Random rng(5);
@@ -96,18 +96,18 @@ TEST_CASE("euler orders: the named product, and back") {
   for (EulerOrder order : kOrders) CHECK(NearVec(EulerFromQuat(QuatFromEuler(angles, order), order), angles, 1e-4f));
 }
 
-TEST_CASE("look rotation: -Z to forward, +Y towards up, straight up and down") {
-  const Vec3 forwards[] = {{1, 0, 0}, {0.3f, -0.5f, -2.0f}, {0, 0, 1}, {0, -1, 0}, {0, 1, 0}, {0, -3, 0.0001f}};
+TEST_CASE("look rotation: +Y to forward, +Z towards up, straight up and down") {
+  const Vec3 forwards[] = {{1, 0, 0}, {0.3f, 2.0f, -0.5f}, {0, -1, 0}, {0, 0, -1}, {0, 0, 1}, {0, -0.0001f, -3}};
   for (const Vec3& f : forwards) {
     const Quat q = LookRotation(f);
     CHECK(Near(glm::length(q), 1.0f));
-    CHECK(NearVec(q * Vec3(0, 0, -1), glm::normalize(f), 1e-3f));
-    CHECK(Near((q * Vec3(1, 0, 0)).y, 0.0f, 1e-3f));  // right stays level (no roll)
+    CHECK(NearVec(q * kForward, glm::normalize(f), 1e-3f));
+    CHECK(Near((q * kRight).z, 0.0f, 1e-3f));  // right stays level (no roll)
   }
-  // Straight down: what the old Euler aiming gave (a pitch of -90 degrees: +Y goes to -Z).
-  CHECK(NearVec(LookRotation({0, -1, 0}) * Vec3(0, 1, 0), {0, 0, -1}));
-  CHECK(NearVec(LookRotation({0, 0, -1}) * Vec3(0, 1, 0), {0, 1, 0}));  // forward already: identity
-  CHECK(SameRotation(LookRotation({0, 0, 0}), Quat(1, 0, 0, 0)));       // nothing to look along
+  // Straight down: a pitch of -90 degrees, so +Z (the top of a camera's picture) goes to +Y.
+  CHECK(NearVec(LookRotation(kDown) * kUp, kForward));
+  CHECK(NearVec(LookRotation(kForward) * kUp, kUp));               // forward already: identity
+  CHECK(SameRotation(LookRotation({0, 0, 0}), Quat(1, 0, 0, 0)));  // nothing to look along
 }
 
 TEST_CASE("local matrix is T * R * S") {
@@ -178,26 +178,26 @@ TEST_CASE("rotate, translate and look at, locally and in the world") {
   auto parent = std::make_shared<Node3D>();
   auto node = std::make_shared<Node3D>();
   parent->AddChild(node);
-  parent->SetRotation(glm::angleAxis(kHalfPi, Vec3(0, 1, 0)));  // the parent's -Z is the world's -X
+  parent->SetRotation(glm::angleAxis(kHalfPi, kUp));  // the parent's +Y (forward) is the world's -X
   parent->SetPosition({10, 0, 0});
 
-  node->Translate({0, 0, -1});  // own axes = the parent's: one step along its -Z
-  CHECK(NearVec(node->GetPosition(), {0, 0, -1}));
+  node->Translate(kForward);  // own axes = the parent's: one step along its +Y
+  CHECK(NearVec(node->GetPosition(), {0, 1, 0}));
   CHECK(NearVec(node->GetWorldPosition(), {9, 0, 0}));
-  node->TranslateWorld({0, 0, -1});  // world -Z
-  CHECK(NearVec(node->GetWorldPosition(), {9, 0, -1}));
+  node->TranslateWorld(kForward);  // world +Y
+  CHECK(NearVec(node->GetWorldPosition(), {9, 1, 0}));
 
-  node->Rotate({0, 1, 0}, kHalfPi);  // its own Y: forward goes from world -X to world +Z
-  CHECK(NearVec(node->Forward(), {0, 0, 1}));
-  node->RotateWorld({1, 0, 0}, kHalfPi);  // world X: +Z turns to -Y
+  node->Rotate(kUp, kHalfPi);  // its own Z: forward goes from world -X to world -Y
   CHECK(NearVec(node->Forward(), {0, -1, 0}));
-  CHECK(NearVec(node->Up(), glm::cross(-node->Forward(), node->Right())));  // Y = Z x X
+  node->RotateWorld(kRight, kHalfPi);  // world X: -Y turns to -Z
+  CHECK(NearVec(node->Forward(), {0, 0, -1}));
+  CHECK(NearVec(node->Up(), glm::cross(node->Right(), node->Forward())));  // Z = X x Y
 
-  node->LookAt({9, 5, -1});
-  CHECK(NearVec(node->Forward(), {0, 1, 0}));  // straight up from where it is: the fallback up
-  node->LookAt({20, 0, -1});
+  node->LookAt({9, 1, 5});
+  CHECK(NearVec(node->Forward(), {0, 0, 1}));  // straight up from where it is: the fallback up
+  node->LookAt({20, 1, 0});
   CHECK(NearVec(node->Forward(), {1, 0, 0}));
-  CHECK(NearVec(node->Up(), {0, 1, 0}));
+  CHECK(NearVec(node->Up(), {0, 0, 1}));
   CHECK(SameRotation(node->GetWorldRotation(), parent->GetRotation() * node->GetRotation()));
   node->LookAt(node->GetWorldPosition());  // no direction: unchanged
   CHECK(NearVec(node->Forward(), {1, 0, 0}));
@@ -414,12 +414,12 @@ WLW_DISABLE_DEPRECATION_WARNINGS_END
 
 TEST_CASE("lights aim with a look rotation") {
   scene::DirectionalLight3D light;
-  CHECK(NearVec(light.GetDirection(), {0, -1, 0}));  // the default: straight down
-  CHECK(NearVec(light.Up(), {0, 0, -1}));            // as the old Euler aiming had it
-  light.SetDirection({0, 1, 0});
-  CHECK(NearVec(light.GetDirection(), {0, 1, 0}));
-  light.SetDirection({3, -4, 0});
-  CHECK(NearVec(light.GetDirection(), {0.6f, -0.8f, 0.0f}));
+  CHECK(NearVec(light.GetDirection(), kDown));  // the default: straight down
+  CHECK(NearVec(light.Up(), kForward));         // LookRotation's pitch of -90 degrees
+  light.SetDirection(kUp);
+  CHECK(NearVec(light.GetDirection(), kUp));
+  light.SetDirection({3, 0, -4});
+  CHECK(NearVec(light.GetDirection(), {0.6f, 0.0f, -0.8f}));
 }
 
 TEST_SUITE_END();

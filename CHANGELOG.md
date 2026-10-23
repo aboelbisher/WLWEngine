@@ -21,6 +21,44 @@ then it's deleted (listed under **Removed**).
   Arc). Only the glyph corners turn; the SDF anti-aliasing holds (abs-derivative width: ~8% softer at 5°,
   ~16% at 10°, ~41% at 45°). The shadow keeps its on-screen offset. Asked for by Threadlock (World 2's pinned order slips).
 
+### Conventions (Roadmap 2.4)
+The engine is **Z up** now: +Z up, +Y forward, +X right, right-handed (Right x Forward = Up), meters, radians, like
+Blender, O3DE and CryEngine (D1 rewritten; the owner's choice). One quarter turn about X takes the old axes to the
+new ones (+Y up -> +Z, -Z forward -> +Y), and every system moved by exactly that turn, so the golden scenes, turned
+the same way, draw the same pictures. Documented in `core/math.h` and CLAUDE.md "Conventions".
+- `core/math.h`: `kRight`, `kLeft`, `kForward`, `kBack`, `kUp`, `kDown`, `kModelFront` (-Y: the way a model
+  faces), `FromYUp` / `ToYUp` (Y-up files and GL's view space).
+- Nodes: `Forward()` = +Y, `Up()` = +Z; `LookAt` / `LookRotation` turn +Y to the target with +Z as up (straight
+  down = a pitch of -90 degrees); Euler angles default to `kDefaultEulerOrder` = ZXY (yaw about Z, pitch, roll).
+- `Camera3D` looks along its +Y with +Z up on screen; its view matrix also turns the axes into GL's view space
+  (looking down -Z). The default camera: the origin, looking along +Y.
+- Lights shine along their +Y; directional and spot lights point straight down (-Z) by default. The shadow map
+  keeps world up (or, for a light straight down, +Y) at the top of its picture.
+- Controllers: fly and orbit yaw about +Z (orbit yaw 0 = the camera on -Y of the pivot); `FlyInput::move` is
+  (right, forward, up); `FollowController::offset` defaults to (0, -10, 5), `up` to +Z.
+- `fx::ParticleSystem` (all radians now): gravity (0, 0, -9.8); `Floor` is a rectangle in XY at a height in z;
+  `BurstSettings::direction` +Z, `spread` (half-angle, radians) and `max_spin` (radians per second) replace
+  `spread_degrees` / `spin_max`; `Particle::angles` / `angular_velocity` (radians) replace `rotation` / `spin`.
+- Primitives stand on Z: the plane is the XY ground facing +Z; the cube, cylinder and gem are turned (the cube's
+  old +Z front faces -Y); the sphere and pyramid frustum already had their axis on Z. Fixed while testing every
+  mesh's winding: the pyramid frustum's top and bottom and the cylinder's caps were wound inwards (invisible with
+  culling off).
+- glTF models are turned from Y up on import (they face -Y); skyboxes are sampled with `ToYUp`, so cube-map images
+  keep the usual Y-up layout. `wlw::Ray` defaults along +Y, `wlw::Plane` to the ground z = 0.
+- Tests: suite `conventions` (axes, turn directions, the default camera on screen, lights, particles, windings and
+  axes of every primitive, a glTF triangle's front), GPU probes `gpu: axes` and `gpu: cube faces`.
+- **Breaking** (no shim can exist: the same calls mean other directions): positions, directions, `LookAt` ups,
+  Euler angles in the default order, `FlyInput::move`, particle gravity and floors, the plane and turned
+  primitives, imported glTF models, the default camera and lights.
+- **Migration:** turn a Y-up world by `FromYUp` (x, y, z) -> (x, -z, y): positions and directions; `LookAt(t, {0,
+  1, 0})` -> `LookAt(FromYUp(t))`; a ground plane at y = h -> z = h; gravity -Y -> -Z; Euler angles in the old
+  default (YXZ: x pitch, y yaw, z roll) -> ZXY with (pitch, -roll, yaw); non-uniform scales swap y and z. A game
+  that only looks straight down at the XY plane (a camera on +Z, no up given) keeps its picture: `LookRotation`'s
+  fallback up puts +Y at the top. `spread_degrees = d` -> `spread = d * kDegToRad`; `spin_max` -> `max_spin`;
+  `Particle::rotation` / `spin` (degrees) -> `angles` / `angular_velocity` (radians).
+- **Deprecated** (removed in 0.4): `BurstSettings::spread_degrees` and `spin_max` (degrees; when set they win over
+  the radians).
+
 ### Node types (Roadmap 2.3)
 `Node3D` draws nothing now: what a node is comes from its type, like Godot's node tree. Each type sets a 1-byte
 `NodeKind` in its constructor (`Node3D::Kind()`), and the renderer's gather switches on it instead of making two

@@ -10,12 +10,13 @@
 namespace wlw::scene {
 
 // A view into the scene: a node, so it is placed, turned and parented like any other (put it under a car and it
-// rides along). It looks down its forward axis (-Z) with +Y up on screen; the view matrix is the inverse of its world
-// transform with the scale taken out (like Godot's Camera3D). A Viewport draws through one (Viewport::SetCamera); it
-// needn't be in the scene's tree (a free camera's world transform is its local one).
+// rides along). It looks along its forward axis (+Y) with its +Z up on screen; the view matrix is the inverse of its
+// world transform with the scale taken out, turned into GL's view space (looking down -Z, +Y up). A Viewport draws
+// through one (Viewport::SetCamera); it needn't be in the scene's tree (a free camera's world transform is its local
+// one).
 //
 //   auto camera = scene::Camera3D::Create();
-//   camera->SetPosition({0.0f, 5.0f, 10.0f});
+//   camera->SetPosition({0.0f, -10.0f, 5.0f});  // behind and above the origin
 //   camera->LookAt({0.0f, 0.0f, 0.0f});
 //   window->GetScreen().SetCamera(camera);
 //
@@ -38,7 +39,7 @@ class Camera3D : public Node3D {
   enum class Projection : uint8_t { Perspective, Orthographic };
   enum class FitMode : uint8_t { KeepHeight, KeepWidth, Contain, Cover };
 
-  // At the origin looking down -Z: perspective, 60 degrees vertically, 0.1 to 1000 m.
+  // At the origin looking along +Y, +Z up: perspective, 60 degrees vertically, 0.1 to 1000 m.
   Camera3D() : Node3D(NodeKind::Camera) {}
   static std::shared_ptr<Camera3D> Create() { return std::make_shared<Camera3D>(); }
 

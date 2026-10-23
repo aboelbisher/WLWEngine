@@ -56,16 +56,22 @@ TEST_CASE("particles die at their lifetime") {
 
 TEST_CASE("gravity") {
   ParticleSystem ps;
-  ps.gravity = glm::vec3(0.0f, -10.0f, 0.0f);
+  ps.gravity = glm::vec3(0.0f, 0.0f, -10.0f);
   ps.drag = 0.0f;
   BurstSettings s = Fixed(1);
   s.speed_min = s.speed_max = 0.0f;
   s.lifetime_min = s.lifetime_max = 10.0f;
   ps.Burst(s, glm::vec3(0.0f));
   for (int i = 0; i < 100; ++i) ps.Update(0.01f);  // 1 second
-  // Exact free fall: y = -g t^2 / 2 = -5. Semi-implicit Euler lands within ~1% of that.
-  CHECK(std::fabs(ps.Particles()[0].position.y + 5.0f) < 0.1f);
-  CHECK(std::fabs(ps.Particles()[0].velocity.y + 10.0f) < 1e-3f);
+  // Exact free fall: z = -g t^2 / 2 = -5. Semi-implicit Euler lands within ~1% of that.
+  CHECK(std::fabs(ps.Particles()[0].position.z + 5.0f) < 0.1f);
+  CHECK(std::fabs(ps.Particles()[0].velocity.z + 10.0f) < 1e-3f);
+}
+
+TEST_CASE("default gravity pulls down -z") {
+  const ParticleSystem ps;
+  CHECK((ps.gravity.x == 0.0f && ps.gravity.y == 0.0f && ps.gravity.z < 0.0f));
+  CHECK(BurstSettings{}.direction == wlw::kUp);
 }
 
 TEST_CASE("drag is frame rate independent") {
@@ -89,12 +95,36 @@ TEST_CASE("drag is frame rate independent") {
 TEST_CASE("directions stay in the cone") {
   ParticleSystem ps;
   BurstSettings s = Fixed(200);
-  s.direction = glm::vec3(0.0f, 2.0f, 0.0f);  // not unit length on purpose
-  s.spread_degrees = 30.0f;
+  s.direction = glm::vec3(0.0f, 0.0f, 2.0f);  // not unit length on purpose
+  s.spread = 30.0f * wlw::kDegToRad;
   ps.Burst(s, glm::vec3(0.0f));
-  const float cos_limit = std::cos(glm::radians(30.0f)) - 1e-4f;
-  for (const auto& p : ps.Particles()) CHECK(glm::dot(glm::normalize(p.velocity), glm::vec3(0, 1, 0)) >= cos_limit);
+  const float cos_limit = std::cos(30.0f * wlw::kDegToRad) - 1e-4f;
+  for (const auto& p : ps.Particles()) CHECK(glm::dot(glm::normalize(p.velocity), glm::vec3(0, 0, 1)) >= cos_limit);
 }
+
+#if !WLW_NO_DEPRECATED
+TEST_CASE("0.3 degree settings still work") {
+  // The deprecated spread_degrees / spin_max win when set: the same particles as the radians.
+  BurstSettings radians = Fixed(50);
+  radians.spread = 30.0f * wlw::kDegToRad;
+  radians.max_spin = 90.0f * wlw::kDegToRad;
+  BurstSettings degrees = Fixed(50);
+  degrees.spread = 0.0f;
+  degrees.max_spin = 0.0f;
+  WLW_DISABLE_DEPRECATION_WARNINGS_BEGIN
+  degrees.spread_degrees = 30.0f;
+  degrees.spin_max = 90.0f;
+  WLW_DISABLE_DEPRECATION_WARNINGS_END
+  ParticleSystem a(64, 7u), b(64, 7u);
+  a.Burst(radians, glm::vec3(0.0f));
+  b.Burst(degrees, glm::vec3(0.0f));
+  REQUIRE(a.Count() == b.Count());
+  for (size_t i = 0; i < a.Count(); ++i) {
+    CHECK(glm::length(a.Particles()[i].velocity - b.Particles()[i].velocity) < 1e-5f);
+    CHECK(glm::length(a.Particles()[i].angular_velocity - b.Particles()[i].angular_velocity) < 1e-5f);
+  }
+}
+#endif
 
 TEST_CASE("delay and instances") {
   ParticleSystem ps;
@@ -128,14 +158,14 @@ TEST_CASE("write to matches the matrices glm builds") {
   // translate / rotate / scale (what BuildInstances did before 1.6), the same colours as PackColor.
   ParticleSystem ps(300, 5u);
   BurstSettings s = Fixed(100);
-  s.spread_degrees = 180.0f;
-  s.spin_max = 2000.0f;
+  s.spread = wlw::kPi;
+  s.max_spin = 35.0f;  // radians per second
   s.lifetime_min = s.lifetime_max = 10.0f;
   s.size_start = 2.0f;
   s.size_end = 0.1f;
   s.brightness_jitter = 0.6f;
   for (int i = 0; i < 3; ++i) ps.Burst(s, glm::vec3(static_cast<float>(i) * 4.0f, 1.0f, -2.0f));
-  for (int frame = 0; frame < 30; ++frame) ps.Update(1.0f / 30.0f);  // rotations up to ~2000 degrees
+  for (int frame = 0; frame < 30; ++frame) ps.Update(1.0f / 30.0f);  // turns of up to ~35 radians
 
   wlw::scene::MultiMeshInstance3D node;
   ps.WriteTo(node);
@@ -144,9 +174,9 @@ TEST_CASE("write to matches the matrices glm builds") {
   for (size_t i = 0; i < ps.Count(); ++i) {
     const ParticleSystem::Particle& p = ps.Particles()[i];
     glm::mat4 m = glm::translate(glm::mat4(1.0f), p.position);
-    m = glm::rotate(m, glm::radians(p.rotation.x), glm::vec3(1, 0, 0));
-    m = glm::rotate(m, glm::radians(p.rotation.y), glm::vec3(0, 1, 0));
-    m = glm::rotate(m, glm::radians(p.rotation.z), glm::vec3(0, 0, 1));
+    m = glm::rotate(m, p.angles.x, glm::vec3(1, 0, 0));
+    m = glm::rotate(m, p.angles.y, glm::vec3(0, 1, 0));
+    m = glm::rotate(m, p.angles.z, glm::vec3(0, 0, 1));
     m = glm::scale(m, glm::vec3(p.Size()));
     const glm::mat4 written = node.Instances()[i].Transform();
     for (int c = 0; c < 4; ++c) {
@@ -178,14 +208,14 @@ TEST_CASE("emit exactly") {
 TEST_CASE("floor bounce and edge") {
   ParticleSystem system(4);
   system.drag = 0.0f;
-  system.gravity = {0.0f, -10.0f, 0.0f};
+  system.gravity = {0.0f, 0.0f, -10.0f};
   system.floor = ParticleSystem::Floor{0.0f, {-1.0f, -1.0f}, {1.0f, 1.0f}, 0.5f, 0.5f};
   ParticleSystem::Particle p;
   p.size_start = p.size_end = 0.2f;
   p.lifetime = 10.0f;
   // Dropped onto the floor from 1 unit up: it lands, bounces back up slower, and ends up resting
   // on top (its bottom on the floor), never below.
-  p.position = {0.0f, 1.0f, 0.0f};
+  p.position = {0.0f, 0.0f, 1.0f};
   p.velocity = {0.5f, 0.0f, 0.0f};  // and drifting sideways
   system.Emit(p);
   float lowest = 1e9f, peak_after_bounce = 0.0f;
@@ -193,9 +223,9 @@ TEST_CASE("floor bounce and edge") {
   for (int i = 0; i < 600; ++i) {
     system.Update(1.0f / 120.0f);
     const ParticleSystem::Particle& q = system.Particles()[0];
-    lowest = std::min(lowest, q.position.y);
-    if (q.velocity.y > 0.0f) bounced = true;
-    if (bounced) peak_after_bounce = std::max(peak_after_bounce, q.position.y);
+    lowest = std::min(lowest, q.position.z);
+    if (q.velocity.z > 0.0f) bounced = true;
+    if (bounced) peak_after_bounce = std::max(peak_after_bounce, q.position.z);
     if (q.position.x > 0.9f) break;  // stay on the floor for this part
   }
   CHECK((bounced && lowest >= 0.1f - 1e-3f));                     // never sank in: the cube's half size above
@@ -208,20 +238,20 @@ TEST_CASE("floor bounce and edge") {
   edge.floor = system.floor;
   edge.drag = 0.0f;
   ParticleSystem::Particle off = p;
-  off.position = {3.0f, 1.0f, 0.0f};
+  off.position = {3.0f, 0.0f, 1.0f};
   off.velocity = {0.0f, 0.0f, 0.0f};
   edge.Emit(off);
   for (int i = 0; i < 120; ++i) edge.Update(1.0f / 60.0f);
-  CHECK(edge.Particles()[0].position.y < -1.0f);
+  CHECK(edge.Particles()[0].position.z < -1.0f);
   // And one that fell below, moving back over the floor, doesn't pop up through it.
   ParticleSystem under(1);
   under.floor = system.floor;
   ParticleSystem::Particle below = p;
-  below.position = {0.0f, -0.5f, 0.0f};
+  below.position = {0.0f, 0.0f, -0.5f};
   below.velocity = {0.0f, 0.0f, 0.0f};
   under.Emit(below);
   under.Update(1.0f / 60.0f);
-  CHECK(under.Particles()[0].position.y < -0.5f);
+  CHECK(under.Particles()[0].position.z < -0.5f);
 }
 
 // ---- SpriteBatch: the 16-byte dots ----

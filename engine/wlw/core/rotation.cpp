@@ -59,17 +59,17 @@ Quat LookRotation(const Vec3& forward, const Vec3& up) {
   const float length_squared = glm::dot(forward, forward);
   if (length_squared < 1e-12f) return Quat(1.0f, 0.0f, 0.0f, 0.0f);
   const Vec3 f = forward / std::sqrt(length_squared);
-  Vec3 u = SafeNormalize(up, Vec3(0.0f, 1.0f, 0.0f));
+  Vec3 u = SafeNormalize(up, kUp);
   if (glm::length(glm::cross(f, u)) < 1e-4f) {
-    // Parallel: the other up keeps the sign, so straight down (0, -1, 0) with up +Y turns +Y to -Z (a pitch of
-    // -90°, what the old Euler-based light aiming gave).
+    // Parallel: the other up keeps the sign, so straight down (0, 0, -1) with up +Z turns +Z to +Y (a pitch of
+    // -90 degrees: the top of the picture is then forward).
     const float sign = glm::dot(f, u) > 0.0f ? 1.0f : -1.0f;
-    u = (std::abs(u.z) < 0.9f ? Vec3(0.0f, 0.0f, 1.0f) : Vec3(0.0f, 1.0f, 0.0f)) * sign;
+    u = (std::abs(u.y) < 0.9f ? kBack : kUp) * sign;
   }
-  // Columns: right, up, back (-forward), a right-handed basis.
+  // Columns: right, forward, up, a right-handed basis (X x Y = Z).
   const Vec3 right = glm::normalize(glm::cross(f, u));
   const Vec3 true_up = glm::cross(right, f);
-  return glm::normalize(glm::quat_cast(Mat3(right, true_up, -f)));
+  return glm::normalize(glm::quat_cast(Mat3(right, f, true_up)));
 }
 
 }  // namespace wlw

@@ -54,7 +54,7 @@ void ParticleBenchmarks(bench::Context& ctx) {
   fx::BurstSettings burst;
   burst.count_min = burst.count_max = 100;
   burst.lifetime_min = burst.lifetime_max = 1e9f;
-  burst.spread_degrees = 70.0f;
+  burst.spread = 70.0f * kDegToRad;
   burst.position_jitter = 0.5f;
   for (int i = 0; i < kParticles / 100; ++i) system.Burst(burst, glm::vec3(static_cast<float>(i % 10), 0.0f, 0.0f));
   system.floor = fx::ParticleSystem::Floor{.height = -1.0f, .min = {-20.0f, -20.0f}, .max = {20.0f, 20.0f}};

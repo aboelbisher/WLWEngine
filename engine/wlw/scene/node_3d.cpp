@@ -64,11 +64,11 @@ Vec3 Node3D::GetEulerAngles(EulerOrder order) const {
 }
 
 void Node3D::Rotate(const Vec3& axis, float radians) {
-  SetRotation(rotation_ * glm::angleAxis(radians, SafeNormalize(axis, Vec3(0.0f, 1.0f, 0.0f))));
+  SetRotation(rotation_ * glm::angleAxis(radians, SafeNormalize(axis, kUp)));
 }
 
 void Node3D::RotateWorld(const Vec3& axis, float radians) {
-  const Quat turn = glm::angleAxis(radians, SafeNormalize(axis, Vec3(0.0f, 1.0f, 0.0f)));
+  const Quat turn = glm::angleAxis(radians, SafeNormalize(axis, kUp));
   SetWorldRotation(turn * GetWorldRotation());
 }
 
@@ -115,9 +115,9 @@ void Node3D::SetWorldRotation(const Quat& rotation) {
   SetRotation(parent_ ? glm::inverse(parent_->GetWorldRotation()) * rotation : rotation);
 }
 
-Vec3 Node3D::Forward() const { return SafeNormalize(-Vec3(GetWorldMatrix()[2]), Vec3(0.0f, 0.0f, -1.0f)); }
-Vec3 Node3D::Right() const { return SafeNormalize(Vec3(GetWorldMatrix()[0]), Vec3(1.0f, 0.0f, 0.0f)); }
-Vec3 Node3D::Up() const { return SafeNormalize(Vec3(GetWorldMatrix()[1]), Vec3(0.0f, 1.0f, 0.0f)); }
+Vec3 Node3D::Forward() const { return SafeNormalize(Vec3(GetWorldMatrix()[1]), kForward); }
+Vec3 Node3D::Right() const { return SafeNormalize(Vec3(GetWorldMatrix()[0]), kRight); }
+Vec3 Node3D::Up() const { return SafeNormalize(Vec3(GetWorldMatrix()[2]), kUp); }
 
 void Node3D::MarkWorldDirty() {
   if (world_dirty_) return;  // the invariant: everything under it is marked already

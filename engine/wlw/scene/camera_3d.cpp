@@ -28,11 +28,12 @@ Mat4 Camera3D::GetViewMatrix() const {
   const Mat4& world = GetWorldMatrix();
   // The world transform's rotation and position, inverted: R^T and -R^T * p. R = its axes orthonormalized
   // (Gram-Schmidt from the back axis, so the camera looks exactly along Forward(); then up, then right): scale
-  // is dropped, and so is the shear a non-uniformly scaled parent puts on a rotated child.
-  const Vec3 z = SafeNormalize(Vec3(world[2]), Vec3(0.0f, 0.0f, 1.0f));
-  const Vec3 up = Vec3(world[1]);
+  // is dropped, and so is the shear a non-uniformly scaled parent puts on a rotated child. R also turns the
+  // node's axes into GL's view space: its right (+X) stays x, its up (+Z) becomes y, its back (-Y) becomes z.
+  const Vec3 z = SafeNormalize(-Vec3(world[1]), kBack);
+  const Vec3 up = Vec3(world[2]);
   Vec3 y = SafeNormalize(up - glm::dot(up, z) * z, Vec3(0.0f));
-  if (y == Vec3(0.0f)) y = SafeNormalize(glm::cross(z, Vec3(world[0])), Vec3(0.0f, 1.0f, 0.0f));  // up along z
+  if (y == Vec3(0.0f)) y = SafeNormalize(glm::cross(z, Vec3(world[0])), kUp);  // up along the view direction
   const Vec3 x = glm::cross(y, z);
   const Vec3 p(world[3]);
   Mat4 view(1.0f);

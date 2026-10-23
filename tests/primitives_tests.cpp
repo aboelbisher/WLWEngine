@@ -60,18 +60,18 @@ TEST_CASE("plain cube still closed") {
 }
 
 TEST_CASE("plane") {
-  // 4 corners, 2 triangles, both facing up (counter-clockwise seen from above), spanning the size.
+  // 4 corners, 2 triangles, both facing up (+Z, counter-clockwise seen from above), width along X, depth along Y.
   const auto mesh = utils::createPlaneWithNormals(4.0f, 2.0f);
   const auto& v = mesh->GetVertices();
   const auto& index = mesh->GetIndices();
   CHECK((v.size() == 4 && index.size() == 6));
   for (size_t i = 0; i + 2 < index.size(); i += 3) {
     const glm::vec3 a = v[index[i]].position, b = v[index[i + 1]].position, c = v[index[i + 2]].position;
-    CHECK(glm::cross(b - a, c - a).y > 0.0f);
+    CHECK(glm::cross(b - a, c - a).z > 0.0f);
   }
   for (const auto& vertex : v)
-    CHECK((Near(vertex.normal.y, 1.0f) && Near(std::abs(vertex.position.x), 2.0f) &&
-           Near(std::abs(vertex.position.z), 1.0f)));
+    CHECK((Near(vertex.normal.z, 1.0f) && Near(std::abs(vertex.position.x), 2.0f) &&
+           Near(std::abs(vertex.position.y), 1.0f) && vertex.position.z == 0.0f));
 }
 
 TEST_SUITE_END();

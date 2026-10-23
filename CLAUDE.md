@@ -26,7 +26,8 @@ engine/wlw/
   anim/       ease.h (Penner easing curves), tween.h (Tween<T>: value-type tweens the game owns and samples),
               shake.h (trauma-based screen shake: trauma decays, offset = trauma^2 x smooth noise)
   fx/         ParticleSystem: CPU simulation (fixed capacity, swap-remove, bursts, Emit = one exact particle,
-              optional Floor rectangle they bounce on and fall past); WriteTo(MultiMeshInstance3D&) = WriteInstances, rows of
+              optional Floor rectangle in XY at a height in z they bounce on and fall past; gravity -Z; BurstSettings::spread /
+              max_spin and Particle::angles / angular_velocity in radians); WriteTo(MultiMeshInstance3D&) = WriteInstances, rows of
               T*Rx*Ry*Rz*S in closed form with core::SinCos (5k: ~120 us MSVC Release). FlowParticles (flow_particles.h):
               10-20k dots along paths (liquid in pipes; not a fluid sim), SoA arrays, paths resampled evenly (O(1)
               lookup), SetNext routing (round robin; none = fade out), SetStop = a gate dots queue behind (the line
@@ -66,7 +67,8 @@ engine/wlw/
               WLW_VERSION (major*10000+minor*100+patch), WLW_VERSION_AT_LEAST(maj, min, patch)
   core/       math.h (wlw::Vec2/3/4, IVec, Quat, Mat3/4 = glm; kPi/kTau/kDegToRad; Lerp, InverseLerp, Remap, Saturate, SmoothStep, MoveTowards, ExpDecay, WrapAngle/AngleDifference/LerpAngle, SafeNormalize, Perp, Cross(Vec2), Rotate(Vec2), DistanceToSegment; core::SinCos = one reduction + Cephes polynomials, 1.2e-7, branchless quadrants; glm config in third_party/CMakeLists.txt: GLM_ENABLE_EXPERIMENTAL, CTOR_INIT off = default Vec3/Mat4 uninitialised, measured), color.h (wlw::Color = floats as authored (sRGB-encoded, converted when 13.1 shades linear): Hex/HexRgba constexpr, Parse/ToHex, WithAlpha replaces, Faded multiplies, Darkened/Lightened, ToLinear/FromLinear exact curve, operators; Color32 RGBA8 Packed/FromPacked, UnitToByte; colors::kWhite...), geometry.h (wlw::AABB, Sphere, Ray, Plane, Frustum, Rect (= ui::Rect); Overlaps(a, b) incl. conservative frustum tests; Raycast(ray, plane/box (slab)/sphere/triangle (Möller-Trumbore)) = distance, 0 inside; TransformBox = Arvo: exact box of a moved box; Union; the engine's scene/ headers write wlw::AABB etc. qualified, so a game including the 0.3 shim header collision.h first still compiles them), FixedTimestep, frame_pacing.h (PlanPacing(target, refresh) = vsync interval or limiter,
               2% tolerance; FrameLimiter = fixed schedule, exact average, restarts after a stall), Random (SplitMix64: deterministic everywhere, state saveable), log.h (WLW_LOG(Category, Level, fmt...): levels Verbose..Fatal, categories LogCore/App/Render/Shader/Audio/Platform/UI/FX (+ kit LogKit, games WLW_LOG_CATEGORY), compile-time stripping, SetLogFilter("Render=Verbose,*=Warning") / env WLW_LOG, sinks: platform, RecentLogs ring (512), StartLogFile (debug builds: <save dir>/log.txt, previous run log.txt.prev), AddLogSink; LogThreadId), assert.h (WLW_ASSERT debug-only fatal, WLW_VERIFY always evaluated: logs + returns false, WLW_UNREACHABLE; SetAssertHandler for tests), cvar.h (CVar<bool/int/float/std::string>{"r.name", default, help, flags Saved/ReadOnly/Cheat, range}: dotted lowercase names; sources in order code default < wlw.cfg (assets) < <save dir>/cvars.cfg (Saved, written when changed) < command line +name value / Android --es wlw "a=1;b=2" < console; unknown names wait for registration; OnChange; game thread), console.h (ConsoleCommand RAII, ExecuteConsoleLine, built-ins help/find/set/reset/exec (+quit from Application), CompleteConsoleName, ConsoleModel), profile.h (WLW_PROFILE_SCOPE/FUNCTION/SCOPE_DYNAMIC/TEXT/FRAME/PLOT/THREAD_NAME/MESSAGE -> Tracy + Android ATrace; only with the CMake option WLW_PROFILE, else empty with unevaluated arguments; one zone per scope; see "Profiling"), type_name.h (TypeName<T>() at compile time: "wlw::app::System"; System::Name() for zones), build_info.h (GetBuildInfo: version, git commit + dirty, build type; BuildInfoText logged at startup and in the engine panel; cmake/GitInfo.cmake), deprecated.h (WLW_DEPRECATED(0.3, "Use X") shims, WLW_DISABLE_DEPRECATION_WARNINGS_BEGIN/END, option WLW_NO_DEPRECATED; see "Versioning"), normal_matrix.h (NormalMatrix(mat3/mat4) = cofactor normal matrix, sign-fixed for mirrors), rotation.h (EulerOrder,
-              QuatFromEuler, EulerFromQuat, LookRotation(forward, up) with a fallback up), mesh/model; vector2.h, vector3.h, collision.h = 0.3 deprecation shims only
+              QuatFromEuler, EulerFromQuat (default kDefaultEulerOrder = ZXY: yaw, pitch, roll), LookRotation(forward, up) = +Y to
+              forward, +Z towards up, with a fallback up), axes in math.h (kRight/kForward/kUp/..., kModelFront = -Y, FromYUp/ToYUp), mesh/model; vector2.h, vector3.h, collision.h = 0.3 deprecation shims only
   input/      Input: keys (pressed vs held; text-editing keys + Grave), Text() (typed code points), pointer (mouse/first
               finger), swipes, taps; pointer and keyboard can be blocked (debug UI), Raw* queries ignore that
   math/       ExactCover: Knuth's Algorithm X with Dancing Links (exact cover search, counting, hints);
@@ -165,9 +167,9 @@ engine/wlw/
               are depth-tested but not written. An opaque material writes alpha 1 (no BLEND variant).
   scene/      Node3D (node.h + node_3d.cpp; a plain class, no 2D nodes): position + Quat + scale, local (T*R*S) and world
               matrices cached, a change marks the subtree dirty (stops at marked nodes; invariant dirty => descendants
-              dirty); GetWorldMatrix (const ref), SetEulerAngles/GetEulerAngles (core/rotation.h EulerOrder, default YXZ =
-              Ry*Rx*Rz; the angles set are kept as given), Rotate/RotateWorld, Translate (own axes)/TranslateWorld,
-              LookAt, world getters/setters, Forward/Right/Up. Children = vector of shared_ptr in order (AddChild,
+              dirty); GetWorldMatrix (const ref), SetEulerAngles/GetEulerAngles (core/rotation.h EulerOrder, default ZXY =
+              Rz*Rx*Ry; the angles set are kept as given), Rotate/RotateWorld, Translate (own axes)/TranslateWorld,
+              LookAt, world getters/setters, Forward/Right/Up (+Y / +X / +Z). Children = vector of shared_ptr in order (AddChild,
               MoveChild, RemoveChild(node), RemoveFromParent, Reparent(keep_world); loops refused), raw parent; names
               (FindChild, GetNode("A/B/..")), random 64-bit ids (SetId, Scene::FindById), layers mask vs
               Camera3D::SetCullMask (CullScene). Scene::Root() holds the top-level nodes; ForEachNode = every node,
@@ -200,12 +202,12 @@ engine/wlw/
               The driver: DrawWindow -> DrawViewport(each) -> gather, shadow pass, main pass, post passes, canvas.
               RenderingDriver::ReadPixels(target) = a target's picture as RGBA8, top row first (stalls: tests,
               screenshots); GpuName() = GL_RENDERER.
-              Camera3D (camera_3d.h) is a node: looks down -Z, view = inverse of its world transform orthonormalized (Gram-Schmidt
-              from the back axis: no scale/shear from parents); SetPerspective(fov_y radians, near, far) / SetOrthographic(size,
+              Camera3D (camera_3d.h) is a node: looks along its +Y, +Z up on screen; view = inverse of its world transform
+              orthonormalized (Gram-Schmidt from the back axis: no scale/shear from parents) and turned into GL's view space; SetPerspective(fov_y radians, near, far) / SetOrthographic(size,
               near, far); the aspect is never stored: GetProjectionMatrix(aspect), GetViewProjectionMatrix, GetFrustum(aspect),
               VisibleSize(aspect, distance), ScreenPointToRay(point, size) / WorldToScreen(world, size) (Input::SurfaceSize());
               fit modes on a frame (size tall, SetFrameAspect wide): KeepHeight (default) / KeepWidth / Contain / Cover; cull
-              mask. Default viewport camera: origin, -Z, 60 deg, 0.1-1000. The renderer passes the viewport's aspect
+              mask. Default viewport camera: origin, looking along +Y, 60 deg, 0.1-1000. The renderer passes the viewport's aspect
               (SetCameraMatrices) and never writes into cameras. camera_controllers.h: FlyController (FlyInput: move, look,
               boost; pitch clamp, damped velocity), OrbitController (OrbitInput: rotate, pan, zoom; Frame(box), Snap; ortho zoom
               = size), FollowController (offset world/target space, look offset, position/rotation lag): plain objects with input
@@ -235,7 +237,8 @@ engine/wlw/
               The UI canvas is Window::GetScreen().GetCanvas(); an offscreen viewport's canvas is drawn into its texture.
               Canvas layers (viewport.h, like Unity Canvas render modes + sort order): AddCanvasLayer({mode, order}); Picture
               = part of the picture (after 3D, before post passes), Overlay = on top after them; GetCanvas() = Overlay 0.
-  utils/      image/glTF loaders, texture cache, primitives.h (procedural cube, bevelled cube, sphere, gem meshes),
+  utils/      image/glTF loaders (glTF turned from Y up: models face -Y), texture cache, primitives.h (procedural cube,
+              bevelled cube, sphere, cylinder, gem, pyramid frustum, plane = XY ground; Z up, CCW outward faces),
               textures.h (procedural textures: RadialFalloffTexture = a soft (1-d²)² dot for glows, particles, metaballs)
 kit/wlw/kit/  wlw::kit: game-level building blocks shared by games (separate target on top of the engine; the
               engine never includes it). SaveStore (JSON file, atomic write, .bak fallback, versions + migrations),
@@ -246,7 +249,7 @@ kit/wlw/kit/  wlw::kit: game-level building blocks shared by games (separate tar
               (UMP consent, load/show/retry); games add that dir to their sourceSets and depend on play-services-ads + UMP
 samples/      small games, built only when the engine is the top-level project (desktop):
               snake/ (Snake + its rules tests)
-tests/        engine unit tests (no window/GPU: cameras (view = inverse world, fit modes, frustum, fly/orbit/follow controllers), node kinds, quality levels (down/up, back-off, settle, frame-time-only, lock, saved,
+tests/        engine unit tests (no window/GPU: conventions (axes, turns, camera on screen, lights, particles, primitive windings, glTF front), cameras (view = inverse world, fit modes, frustum, fly/orbit/follow controllers), node kinds, quality levels (down/up, back-off, settle, frame-time-only, lock, saved,
               budget from the target, render scales), frame pacing (plans per target/refresh, limiter schedule), draw order (sort keys), sky (rays, place in the order), scene gather + cull, transform (Euler orders, look rotation, matrix cache, hierarchy, names, ids, layers, 0.3 shims), normal matrices (cofactor vs inverse-transpose, mirrors, flat), shader system (preprocessor, embedded files in every variant, std140 layout, lights, variants, UI kinds), systems (order, starting, Back), blending (depth-write rule, canvas batches, images, falloff texture), resources (made without a GPU, updates, alive list), post passes (planning, ping-pong, named inputs, chain targets, effects, render-scale upscale), viewports (scenes, sizes, render scale, update modes), anim, audio, core (random, atomic files, bridge queue), exact cover, search (bitboards, minimax, expectimax), gf2 (Lights Out), shader text splitting, lighting (light nodes, shadow-box fitting), fx, instances (layout, PackColor = lround, SinCos, Arvo boxes vs corners, WriteInstances, cached bounds, shims), input, kit, picking, primitives, ui (canvas, safe area, widgets), screens, profile macros + TypeName, version macros + build info + deprecated shims; CTest "deprecations" runs cmake/CheckDeprecations.cmake). doctest: one binary wlw_tests, a TEST_SUITE per file, shared main test_main.cpp,
               test_helpers.h (Near = absolute tolerance); compound checks in double parentheses CHECK((a && b));
               each TEST_CASE is its own CTest test (cases run in parallel processes: no shared temp files);
@@ -278,6 +281,17 @@ cmake/WLWHelpers.cmake  wlw_add_game(), wlw_add_assets(), wlw_set_warnings(), wl
 cmake/ClangFormat.cmake the format check / fix (pinned clang-format, see "Building")
 vcpkg/ + vcpkg.json     GLFW only (desktop); everything else is vendored in third_party/ (D13)
 ```
+
+## Conventions (core/math.h; Roadmap 2.4, D1)
+- **Z up, +Y forward, +X right, right-handed** (Right x Forward = Up), like Blender / O3DE / CryEngine. Meters,
+  radians, seconds. Constants `kRight`, `kForward`, `kUp` (and `kLeft`, `kBack`, `kDown`); `kModelFront` = -Y.
+- Positive turns are counter-clockwise looking down the axis (a positive yaw about +Z turns +Y towards -X). Euler
+  default ZXY = yaw (z), pitch (x), roll (y). Nodes, lights and cameras face their +Y; cameras have +Z up on screen.
+- Front faces wind counter-clockwise seen from outside (tested for every primitive; culling is still off).
+- Y-up data is turned at the door: glTF on import (`FromYUp`: +Y -> +Z, -Z -> +Y, its +Z front -> -Y), cube maps
+  sampled with `ToYUp` (skybox images keep the usual layout). Only GL's view space looks down -Z (Camera3D's view).
+- 2D (Canvas, screen points, Input): x right, y down, origin top-left; texture uv (0, 0) = the image's top row.
+- Tests: the `conventions` suite (CPU) + `gpu: axes` / `gpu: cube faces` (pixel probes).
 
 ## Rules
 - **Platform code stays in `engine/wlw/platform/<os>/`.** Nothing else may include GLFW, EGL,

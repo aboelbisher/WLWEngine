@@ -32,11 +32,11 @@ TEST_CASE("lights are nodes") {
   // Shadows are opt-in, for lights and for geometry.
   CHECK((!sun->CastsShadows() && !mesh.CastsShadow() && !mesh.ReceivesShadow()));
   // A directional light points straight down by default.
-  CHECK(NearVec(sun->GetDirection(), {0.0f, -1.0f, 0.0f}));
+  CHECK(NearVec(sun->GetDirection(), kDown));
 }
 
 TEST_CASE("set direction") {
-  // SetDirection turns the node so its forward axis (-Z) points that way, for any direction.
+  // SetDirection turns the node so its forward axis (+Y) points that way, for any direction.
   scene::DirectionalLight3D light;
   const glm::vec3 directions[] = {{-0.5f, -1.0f, -0.7f}, {0.0f, 0.0f, -1.0f}, {1.0f, 0.0f, 0.0f},
                                   {0.3f, 0.9f, 0.1f},    {0.0f, -1.0f, 0.0f}, {-1.0f, -1.0f, 1.0f}};
@@ -44,13 +44,13 @@ TEST_CASE("set direction") {
     light.SetDirection(d);
     CHECK(NearVec(light.GetDirection(), glm::normalize(d), 1e-3f));
   }
-  // A parent's rotation turns the light with it: under a parent turned 90 degrees around Y,
-  // a light pointing along -Z ends up pointing along -X.
+  // A parent's rotation turns the light with it: under a parent turned 90 degrees around Z (a yaw),
+  // a light pointing along +Y ends up pointing along -X.
   auto parent = std::make_shared<scene::Node3D>();
   auto child = std::make_shared<scene::DirectionalLight3D>();
-  child->SetDirection({0.0f, 0.0f, -1.0f});
+  child->SetDirection(kForward);
   parent->AddChild(child);
-  parent->SetEulerAngles(glm::radians(wlw::Vec3(0.0f, 90.0f, 0.0f)), wlw::EulerOrder::XYZ);
+  parent->SetEulerAngles(glm::radians(wlw::Vec3(0.0f, 0.0f, 90.0f)));
   CHECK(NearVec(child->GetDirection(), {-1.0f, 0.0f, 0.0f}, 1e-3f));
 }
 
@@ -60,7 +60,7 @@ TEST_CASE("spot light cone in radians") {
   spot.SetInnerAngle(0.2f);
   spot.SetOuterAngle(0.3f);
   CHECK((spot.GetInnerAngle() == 0.2f && spot.GetOuterAngle() == 0.3f));
-  CHECK(NearVec(spot.GetDirection(), {0.0f, -1.0f, 0.0f}));
+  CHECK(NearVec(spot.GetDirection(), kDown));
 }
 
 #if !WLW_NO_DEPRECATED
@@ -93,20 +93,20 @@ TEST_CASE("shadow box contains the bounds") {
 
 TEST_CASE("shadow box is stable") {
   // Looking straight down, a box 8 x 12 wide maps to a square of 12 (rounded up to half units).
-  const AABB bounds{{-4.0f, 0.0f, -6.0f}, {4.0f, 1.0f, 6.0f}};
-  const scene::ShadowFrustum f = scene::FitDirectionalShadow({0.0f, -1.0f, 0.0f}, bounds, 1024);
+  const AABB bounds{{-4.0f, -6.0f, 0.0f}, {4.0f, 6.0f, 1.0f}};
+  const scene::ShadowFrustum f = scene::FitDirectionalShadow(kDown, bounds, 1024);
   CHECK(Near(f.texel_world, 12.0f / 1024.0f));
   // Moving the bounds by less than a texel keeps the box exactly where it was: no shimmer.
   AABB moved = bounds;
   moved.min.x += 0.001f;
   moved.max.x += 0.001f;
-  const scene::ShadowFrustum g = scene::FitDirectionalShadow({0.0f, -1.0f, 0.0f}, moved, 1024);
+  const scene::ShadowFrustum g = scene::FitDirectionalShadow(kDown, moved, 1024);
   CHECK(g.ViewProjection() == f.ViewProjection());
   // Moving it by 10.5 texels moves the box by exactly 10 (whole texels only).
   moved = bounds;
   moved.min.x += 10.5f * f.texel_world;
   moved.max.x += 10.5f * f.texel_world;
-  const scene::ShadowFrustum h = scene::FitDirectionalShadow({0.0f, -1.0f, 0.0f}, moved, 1024);
+  const scene::ShadowFrustum h = scene::FitDirectionalShadow(kDown, moved, 1024);
   const glm::vec4 a = f.ViewProjection() * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
   const glm::vec4 b = h.ViewProjection() * glm::vec4(10.0f * f.texel_world, 0.0f, 0.0f, 1.0f);
   CHECK((Near(a.x, b.x, 1e-3f) && Near(a.y, b.y, 1e-3f)));

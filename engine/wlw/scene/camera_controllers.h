@@ -15,7 +15,7 @@ class Camera3D;
 
 // ---- Fly: free movement, like a first-person camera or the editor's right-mouse fly mode ----
 struct FlyInput {
-  Vec3 move{0.0f};  // along the camera's axes, each -1..1: x = right, y = up, z = forward
+  Vec3 move{0.0f};  // along the camera's axes, each -1..1: x = right, y = forward, z = up
   Vec2 look{0.0f};  // turn in radians this frame: x = to the right, y = up
   bool boost = false;
 };
@@ -29,7 +29,7 @@ class FlyController {
 
   // Takes the camera's current heading (yaw and pitch) so the first Update doesn't snap it.
   void Attach(const Node3D& camera);
-  // Turns and moves `camera` (its world transform): yaw about world +Y, pitch about its own X, no roll.
+  // Turns and moves `camera` (its world transform): yaw about world +Z, pitch about its own X, no roll.
   void Update(Node3D& camera, const FlyInput& input, float dt);
 
   float Yaw() const { return yaw_; }
@@ -54,7 +54,7 @@ struct OrbitInput {
 class OrbitController {
  public:
   Vec3 pivot{0.0f};
-  float yaw = 0.0f;        // radians about world +Y (0 = the camera on +Z, looking down -Z)
+  float yaw = 0.0f;        // radians about world +Z (0 = the camera on -Y of the pivot, looking along +Y)
   float pitch = -0.4f;     // radians (negative = looking down at the pivot)
   float distance = 10.0f;  // from the pivot
   float min_distance = 0.05f;
@@ -82,10 +82,10 @@ class OrbitController {
 // ---- Follow: trails a target node, like a third-person or chase camera ----
 class FollowController {
  public:
-  Vec3 offset{0.0f, 5.0f, 10.0f};       // where the camera sits relative to the target
+  Vec3 offset{0.0f, -10.0f, 5.0f};      // where the camera sits relative to the target (behind and above)
   bool offset_in_target_space = false;  // true: the offset turns with the target (behind a car); false: world axes
   Vec3 look_offset{0.0f};               // the point looked at = the target's position + this (world axes)
-  Vec3 up{0.0f, 1.0f, 0.0f};
+  Vec3 up = kUp;
   float position_lag = 8.0f;  // how fast the camera catches up (1/s; 0 = rigidly attached)
   float rotation_lag = 0.0f;  // how fast it turns to the target (1/s; 0 = always looking straight at it)
 

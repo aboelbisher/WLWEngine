@@ -65,7 +65,7 @@ class Window {
   }
 
   // ---- What it shows ----
-  // The screen: its scene (empty at first), camera (a default Camera3D until SetCamera: at the origin looking down -Z)
+  // The screen: its scene (empty at first), camera (a default Camera3D until SetCamera: at the origin looking along +Y)
   // and the canvas the game's UI is drawn on (Application::OnRenderUI).
   Viewport& GetScreen() { return *screen_; }
   const Viewport& GetScreen() const { return *screen_; }

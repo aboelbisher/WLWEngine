@@ -3,7 +3,15 @@
 // The engine's maths: glm behind short wlw names (Roadmap D1), constants, and the small helpers every game
 // otherwise writes again (lerp, smoothstep, angle wrapping, safe normalize, segment distance).
 //
-// Conventions (D1; Roadmap 2.4 makes the defaults follow them): radians, Y up, right-handed, -Z forward, meters.
+// Conventions (D1, Roadmap 2.4), the same in every engine system and expected from every game:
+//   Z up, +Y forward, +X right, right-handed (Right x Forward = Up), like Blender, O3DE and CryEngine.
+//   Meters, radians, seconds. A positive turn about an axis is counter-clockwise looking down that axis at the
+//   origin (a positive yaw about +Z turns +Y towards -X). Front faces wind counter-clockwise (seen from outside).
+//   A model faces -Y (kModelFront: towards a camera looking along +Y), as glTF's +Z front becomes on import.
+//   Cameras look along their +Y with +Z up on screen; only the GPU's view space is GL's (looking down -Z, +Y up:
+//   Camera3D's view matrix turns one into the other). Cube maps keep the usual Y-up layout of skybox images.
+//   2D (ui::Canvas, screen points, Input): x right, y DOWN, origin top-left; texture uv (0, 0) = the first row
+//   uploaded (an image's top row). Colours are sRGB-encoded as authored (core/color.h).
 // Clip space is GL's (z in -1..1). glm is configured once, in CMake (wlw_glm's INTERFACE definitions), so the
 // engine and every game see the same types:
 //   GLM_ENABLE_EXPERIMENTAL the gtx headers (matrix_decompose, ...)
@@ -36,6 +44,21 @@ inline constexpr float kTau = 2.0f * kPi;  // a full turn
 inline constexpr float kHalfPi = 0.5f * kPi;
 inline constexpr float kDegToRad = kPi / 180.0f;  // degrees * kDegToRad = radians
 inline constexpr float kRadToDeg = 180.0f / kPi;  // radians * kRadToDeg = degrees
+
+// ---- The world's axes (see Conventions above) ----
+inline constexpr Vec3 kRight{1.0f, 0.0f, 0.0f};
+inline constexpr Vec3 kLeft{-1.0f, 0.0f, 0.0f};
+inline constexpr Vec3 kForward{0.0f, 1.0f, 0.0f};
+inline constexpr Vec3 kBack{0.0f, -1.0f, 0.0f};
+inline constexpr Vec3 kUp{0.0f, 0.0f, 1.0f};
+inline constexpr Vec3 kDown{0.0f, 0.0f, -1.0f};
+inline constexpr Vec3 kModelFront{0.0f, -1.0f, 0.0f};  // the way a model faces (glTF's +Z front, imported)
+
+// A point or direction from a Y-up file (glTF, OBJ: +Y up, -Z forward) in the engine's axes: a quarter turn about
+// X, so +Y -> +Z and -Z -> +Y. Lengths and handedness stay.
+constexpr Vec3 FromYUp(const Vec3& v) { return {v.x, -v.z, v.y}; }
+// Back: the engine's axes into a Y-up file's (and GL's view space: x, y up, -z forward).
+constexpr Vec3 ToYUp(const Vec3& v) { return {v.x, v.z, -v.y}; }
 
 // ---- Scalars (most work on vectors and colours too: anything with + - and * float) ----
 
@@ -103,15 +126,15 @@ V SafeNormalize(const V& v, const V& fallback) {
   return length_squared > 1e-12f ? v / std::sqrt(length_squared) : fallback;
 }
 
-// v turned a quarter turn counter-clockwise in a Y-up plane ((1, 0) -> (0, 1)). On a Y-down screen (Canvas)
-// that is clockwise.
+// v turned a quarter turn counter-clockwise in a plane with y up ((1, 0) -> (0, 1); the ground XY seen from
+// above). On a y-down screen (Canvas) that is clockwise.
 constexpr Vec2 Perp(const Vec2& v) { return {-v.y, v.x}; }
 
-// The 2D cross product: z of the 3D cross product. > 0 when b is counter-clockwise of a (Y up), 0 when they're
+// The 2D cross product: z of the 3D cross product. > 0 when b is counter-clockwise of a (y up), 0 when they're
 // parallel; |result| = the area of the parallelogram they span.
 constexpr float Cross(const Vec2& a, const Vec2& b) { return a.x * b.y - a.y * b.x; }
 
-// v turned by `radians`, counter-clockwise in a Y-up plane.
+// v turned by `radians`, counter-clockwise in a plane with y up.
 inline Vec2 Rotate(const Vec2& v, float radians) {
   const float c = std::cos(radians);
   const float s = std::sin(radians);

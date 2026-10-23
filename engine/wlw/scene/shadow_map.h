@@ -33,7 +33,7 @@ struct ShadowFrustum {
 inline ShadowFrustum FitDirectionalShadow(const glm::vec3& direction, const wlw::AABB& casters,
                                           const wlw::AABB& receivers, int map_size) {
   const glm::vec3 d = glm::normalize(direction);
-  const glm::vec3 up = std::abs(d.y) > 0.99f ? glm::vec3(0.0f, 0.0f, -1.0f) : glm::vec3(0.0f, 1.0f, 0.0f);
+  const glm::vec3 up = std::abs(d.z) > 0.99f ? kForward : kUp;  // the light's map keeps world up (or forward) up
   ShadowFrustum frustum;
   frustum.view = glm::lookAt(-d, glm::vec3(0.0f), up);  // through the origin: the same for any bounds
 
