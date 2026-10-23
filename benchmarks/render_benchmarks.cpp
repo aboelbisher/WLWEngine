@@ -10,6 +10,7 @@
 #include "wlw/rendering/instance_buffer.h"
 #include "wlw/rendering/render_list.h"
 #include "wlw/rendering/scene_gather.h"
+#include "wlw/scene/geometry_instance.h"
 #include "wlw/scene/light.h"
 #include "wlw/scene/node.h"
 #include "wlw/scene/scene.h"
@@ -27,14 +28,14 @@ std::shared_ptr<scene::Scene> GridScene(int count) {
   model->meshes.push_back(utils::createCubeWithNormals(0.8f));
   const int side = static_cast<int>(std::ceil(std::sqrt(static_cast<float>(count))));
   for (int i = 0; i < count; ++i) {
-    auto node = std::make_shared<scene::Node3D>();
+    auto node = std::make_shared<scene::MeshInstance3D>();
     node->SetModel(model);
     node->SetPosition({static_cast<float>(i % side - side / 2), 0.0f, static_cast<float>(i / side - side / 2)});
     node->SetCastsShadow(i % 4 == 0);
     node->SetReceivesShadow(true);
     scene->Root().AddChild(node);
   }
-  auto sun = std::make_shared<scene::DirectionalLight>();
+  auto sun = std::make_shared<scene::DirectionalLight3D>();
   sun->SetCastsShadows(true);
   scene->Root().AddChild(sun);
   return scene;
@@ -140,7 +141,7 @@ void InstanceBoundsBenchmark(bench::Context& ctx) {
   // 5k copies with random rotations, scales and positions (a particle field): one op = one write +
   // the bounds the renderer asks for after it.
   constexpr size_t kCopies = 5000;
-  scene::Node3D node;
+  scene::MultiMeshInstance3D node;
   auto model = std::make_shared<core::Model<core::Vertex3D>>();
   model->meshes.push_back(utils::createCubeWithNormals(1.0f));
   node.SetModel(model);

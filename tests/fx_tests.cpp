@@ -11,6 +11,7 @@
 #include "test_helpers.h"
 #include "wlw/fx/flow_particles.h"
 #include "wlw/fx/particle_system.h"
+#include "wlw/scene/geometry_instance.h"
 #include "wlw/scene/node.h"
 #include "wlw/scene/sprite_batch.h"
 
@@ -105,10 +106,9 @@ TEST_CASE("delay and instances") {
   s.lifetime_min = s.lifetime_max = 1.0f;
   ps.Burst(s, glm::vec3(1.0f, 2.0f, 3.0f));
 
-  wlw::scene::Node3D node;
+  wlw::scene::MultiMeshInstance3D node;
   ps.Update(0.25f);
   ps.WriteTo(node);
-  CHECK(node.IsInstanced());
   CHECK(node.InstanceCount() == 0);                                  // still delayed: invisible...
   CHECK(ps.Particles()[0].position == glm::vec3(1.0f, 2.0f, 3.0f));  // ...and not moving
 
@@ -137,7 +137,7 @@ TEST_CASE("write to matches the matrices glm builds") {
   for (int i = 0; i < 3; ++i) ps.Burst(s, glm::vec3(static_cast<float>(i) * 4.0f, 1.0f, -2.0f));
   for (int frame = 0; frame < 30; ++frame) ps.Update(1.0f / 30.0f);  // rotations up to ~2000 degrees
 
-  wlw::scene::Node3D node;
+  wlw::scene::MultiMeshInstance3D node;
   ps.WriteTo(node);
   REQUIRE(node.InstanceCount() == ps.Count());
   float worst = 0.0f;
@@ -235,7 +235,8 @@ TEST_CASE("sprite batch") {
 
   wlw::scene::SpriteBatch batch(3);
   std::shared_ptr<wlw::scene::Node3D> as_node = std::make_shared<wlw::scene::SpriteBatch>(1);
-  CHECK((as_node->AsSpriteBatch() != nullptr && wlw::scene::Node3D().AsSpriteBatch() == nullptr));
+  CHECK((as_node->Kind() == wlw::scene::NodeKind::SpriteBatch &&
+         wlw::scene::Node3D().Kind() == wlw::scene::NodeKind::Node));
   CHECK((batch.GetMaterial() && batch.GetMaterial()->blend == wlw::rendering::BlendMode::Additive));
   const uint64_t before = batch.Version();
   auto out = batch.Write(5);

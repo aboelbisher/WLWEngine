@@ -26,7 +26,7 @@ engine/wlw/
   anim/       ease.h (Penner easing curves), tween.h (Tween<T>: value-type tweens the game owns and samples),
               shake.h (trauma-based screen shake: trauma decays, offset = trauma^2 x smooth noise)
   fx/         ParticleSystem: CPU simulation (fixed capacity, swap-remove, bursts, Emit = one exact particle,
-              optional Floor rectangle they bounce on and fall past); WriteTo(node) = Node::WriteInstances, rows of
+              optional Floor rectangle they bounce on and fall past); WriteTo(MultiMeshInstance3D&) = WriteInstances, rows of
               T*Rx*Ry*Rz*S in closed form with core::SinCos (5k: ~120 us MSVC Release). FlowParticles (flow_particles.h):
               10-20k dots along paths (liquid in pipes; not a fluid sim), SoA arrays, paths resampled evenly (O(1)
               lookup), SetNext routing (round robin; none = fade out), SetStop = a gate dots queue behind (the line
@@ -171,14 +171,19 @@ engine/wlw/
               MoveChild, RemoveChild(node), RemoveFromParent, Reparent(keep_world); loops refused), raw parent; names
               (FindChild, GetNode("A/B/..")), random 64-bit ids (SetId, Scene::FindById), layers mask vs
               Camera3D::SetCullMask (CullScene). Scene::Root() holds the top-level nodes; ForEachNode = every node,
-              depth first. Also on Node3D until 2.3: model/material, instancing = one draw call for N copies: WriteInstances(count)
-              -> span of rendering::Instance (instance_buffer.h, 52 B = the transform's top 3 rows + RGBA8 tint, Godot's GLES3
-              layout; GLSL twin wlw/instance.glsl: aInstanceRow0..2 at locations 4-6, aInstanceTint at 7, InstancePosition /
-              InstanceNormal / InstanceTransform), first min(old, count) kept, version++ per write; Instances(), ReserveInstances,
-              ClearInstances; InstanceBounds() = node-space box of all copies, cached until a write or the model's box changes,
-              SetInstanceBounds(box) overrides it (Godot custom_aabb); GetAABB = Arvo TransformBox per mesh / of the bounds.
-              GetModel/GetMaterial return const refs. Shims (0.2): InstanceData, SetInstances(vector), GetInstances).
-              SpriteBatch (sprite_batch.h, a Node3D like LightNode; AsSpriteBatch): N soft dots in one draw call, 16-byte
+              depth first. Node3D draws nothing (280 B); node TYPES (Godot's tree) each set a 1-byte NodeKind in their
+              constructor and the gather switches on Kind() (no virtual call per node): Node / MeshInstance / MultiMeshInstance /
+              SpriteBatch / Light / Camera. geometry_instance.h: GeometryInstance3D = model + material (GetModel/GetMaterial
+              const refs; the mesh's material wins) + SetCastsShadow / SetReceivesShadow (default off) + LocalBounds /
+              WorldBounds (Arvo TransformBox per mesh / of the instance bounds; nothing to draw = 0.1 box at the node) +
+              HasGeometry; MeshInstance3D = drawn once; MultiMeshInstance3D = one draw call for N copies (the copies live on
+              the node, no MultiMesh resource): WriteInstances(count) -> span of rendering::Instance (instance_buffer.h, 52 B =
+              the transform's top 3 rows + RGBA8 tint, Godot's GLES3 layout; GLSL twin wlw/instance.glsl: aInstanceRow0..2 at
+              locations 4-6, aInstanceTint at 7, InstancePosition / InstanceNormal / InstanceTransform), first min(old, count)
+              kept, version++ per write, 0 copies = not drawn; Instances(), ReserveInstances, ClearInstances; InstanceBounds()
+              = node-space box of all copies, cached until a write or the model's box changes, SetInstanceBounds(box)
+              overrides it (Godot custom_aabb). Shim (0.2): rendering::InstanceData.
+              SpriteBatch (sprite_batch.h, a Node3D with its own material): N soft dots in one draw call, 16-byte
               SpriteInstance (xy on the node's z=0 plane, size, RGBA8; an Instance is 52 B), Write(count) fills in
               place, SetBounds/FitBounds = culling box (no per-dot bounds), Additive by default (never sorted). GL:
               GLSpriteBuffer (own VAO, no vertex buffer: corners from gl_VertexID, strip of 4 x instances),
@@ -195,10 +200,20 @@ engine/wlw/
               The driver: DrawWindow -> DrawViewport(each) -> gather, shadow pass, main pass, post passes, canvas.
               RenderingDriver::ReadPixels(target) = a target's picture as RGBA8, top row first (stalls: tests,
               screenshots); GpuName() = GL_RENDERER.
-              cameras (FollowCamera = perspective, OrthographicCamera = parallel/top-down;
-              Camera3D::ScreenPointToRay for picking, fed with Input::SurfaceSize()).
-              Lights are nodes (light.h: DirectionalLight / PointLight / SpotLight, added with AddNode); nodes opt in to
-              SetCastsShadow / SetReceivesShadow; shadow_map.h fits the light's box to the casters (texel-snapped)
+              Camera3D (camera_3d.h) is a node: looks down -Z, view = inverse of its world transform orthonormalized (Gram-Schmidt
+              from the back axis: no scale/shear from parents); SetPerspective(fov_y radians, near, far) / SetOrthographic(size,
+              near, far); the aspect is never stored: GetProjectionMatrix(aspect), GetViewProjectionMatrix, GetFrustum(aspect),
+              VisibleSize(aspect, distance), ScreenPointToRay(point, size) / WorldToScreen(world, size) (Input::SurfaceSize());
+              fit modes on a frame (size tall, SetFrameAspect wide): KeepHeight (default) / KeepWidth / Contain / Cover; cull
+              mask. Default viewport camera: origin, -Z, 60 deg, 0.1-1000. The renderer passes the viewport's aspect
+              (SetCameraMatrices) and never writes into cameras. camera_controllers.h: FlyController (FlyInput: move, look,
+              boost; pitch clamp, damped velocity), OrbitController (OrbitInput: rotate, pan, zoom; Frame(box), Snap; ortho zoom
+              = size), FollowController (offset world/target space, look offset, position/rotation lag): plain objects with input
+              structs, ExpDecay smoothing (1 step = 10 steps), tested without a window. Shim (0.3): OrthographicCamera
+              (SetVisibleArea = size + frame aspect + Contain, SetTarget/SetUp/SetPosition re-aim with LookAt).
+              Lights are nodes (light.h: Light3D -> DirectionalLight3D / PointLight3D / SpotLight3D (SetInnerAngle /
+              SetOuterAngle, radians); shim (0.3): DirectionalLight); geometry opts in to SetCastsShadow / SetReceivesShadow;
+              shadow_map.h fits the light's box to the casters (texel-snapped)
   ui/         Two layers, like the big engines (Godot RenderingServer canvas vs Control nodes, Slate draw elements vs UMG):
               A. Canvas = the 2D DRAW LIST only: virtual units (reference size fits the screen), FillRect (rounded), Line,
                  Text (Font: TTF -> SDF atlas; batches hold the Font's shared_ptr until drawn), Image(rect, texture, ImageStyle{tint, uv, blend}) = sprites, ShaderRect (a
@@ -231,7 +246,7 @@ kit/wlw/kit/  wlw::kit: game-level building blocks shared by games (separate tar
               (UMP consent, load/show/retry); games add that dir to their sourceSets and depend on play-services-ads + UMP
 samples/      small games, built only when the engine is the top-level project (desktop):
               snake/ (Snake + its rules tests)
-tests/        engine unit tests (no window/GPU: quality levels (down/up, back-off, settle, frame-time-only, lock, saved,
+tests/        engine unit tests (no window/GPU: cameras (view = inverse world, fit modes, frustum, fly/orbit/follow controllers), node kinds, quality levels (down/up, back-off, settle, frame-time-only, lock, saved,
               budget from the target, render scales), frame pacing (plans per target/refresh, limiter schedule), draw order (sort keys), sky (rays, place in the order), scene gather + cull, transform (Euler orders, look rotation, matrix cache, hierarchy, names, ids, layers, 0.3 shims), normal matrices (cofactor vs inverse-transpose, mirrors, flat), shader system (preprocessor, embedded files in every variant, std140 layout, lights, variants, UI kinds), systems (order, starting, Back), blending (depth-write rule, canvas batches, images, falloff texture), resources (made without a GPU, updates, alive list), post passes (planning, ping-pong, named inputs, chain targets, effects, render-scale upscale), viewports (scenes, sizes, render scale, update modes), anim, audio, core (random, atomic files, bridge queue), exact cover, search (bitboards, minimax, expectimax), gf2 (Lights Out), shader text splitting, lighting (light nodes, shadow-box fitting), fx, instances (layout, PackColor = lround, SinCos, Arvo boxes vs corners, WriteInstances, cached bounds, shims), input, kit, picking, primitives, ui (canvas, safe area, widgets), screens, profile macros + TypeName, version macros + build info + deprecated shims; CTest "deprecations" runs cmake/CheckDeprecations.cmake). doctest: one binary wlw_tests, a TEST_SUITE per file, shared main test_main.cpp,
               test_helpers.h (Near = absolute tolerance); compound checks in double parentheses CHECK((a && b));
               each TEST_CASE is its own CTest test (cases run in parallel processes: no shared temp files);
@@ -389,10 +404,9 @@ changes didn't break anything; keep it building when the engine API changes.
 - The glTF loader still reads files with `fopen`, so glTF models don't load from APK assets yet.
 - Only one directional light casts shadows (point/spot shadows need cube/perspective maps).
 - glTF materials ignore baseColorFactor (materials have no colour yet; it used to go into the removed per-material light).
-- Node world bounds (GetAABB) are recomputed once per frame per node (world matrices are cached since 2.2); render lists are
+- Node world bounds (WorldBounds) are recomputed once per frame per node (world matrices are cached since 2.2); render lists are
   rebuilt every frame (no cached draw commands for static nodes, unlike Unreal). Fine for hundreds of nodes.
 - No shader program cache on disk yet (glProgramBinary): every launch compiles its variants (~25-60 ms on the emulator).
-- A viewport's default camera is an `FPSCamera`; games normally replace it with `SetCamera()`.
 - Shadows: one shadow map shared by every viewport (each viewport's shadow pass redraws it).
 - Touch input uses only the first finger (no multi-touch yet).
 - GPU time needs EXT_disjoint_timer_query on phones (Pixel 4 / Adreno 640 has it; the emulator doesn't). Phone

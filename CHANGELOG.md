@@ -21,6 +21,52 @@ then it's deleted (listed under **Removed**).
   Arc). Only the glyph corners turn; the SDF anti-aliasing holds (abs-derivative width: ~8% softer at 5°,
   ~16% at 10°, ~41% at 45°). The shadow keeps its on-screen offset. Asked for by Threadlock (World 2's pinned order slips).
 
+### Node types (Roadmap 2.3)
+`Node3D` draws nothing now: what a node is comes from its type, like Godot's node tree. Each type sets a 1-byte
+`NodeKind` in its constructor (`Node3D::Kind()`), and the renderer's gather switches on it instead of making two
+virtual calls (`AsSpriteBatch`, `AsLight`) per node per frame.
+- `scene/geometry_instance.h`: `GeometryInstance3D` (model, material, `SetCastsShadow` / `SetReceivesShadow`,
+  `LocalBounds`, `WorldBounds`, `HasGeometry`) -> `MeshInstance3D` (drawn once) and `MultiMeshInstance3D` (1.6's
+  `WriteInstances` API and cached `InstanceBounds`; no copies = not drawn). The mesh's material still wins over the
+  node's and shadows stay opt-in: every golden image is unchanged.
+- Lights: `Light3D` (was `LightNode`) -> `DirectionalLight3D`, `PointLight3D`, `SpotLight3D` (cone in radians:
+  `SetInnerAngle` / `SetOuterAngle`). `SpriteBatch` keeps its API and has its own material.
+- `Camera3D` is a node: placed, turned and parented like any other; looks down -Z; the view is the inverse of its
+  world transform, orthonormalized (a scaled parent doesn't squash the picture). `SetPerspective(fov_y, near, far)`
+  (radians) / `SetOrthographic(size, near, far)`. The aspect is passed in, never stored:
+  `GetProjectionMatrix(aspect)`, `GetViewProjectionMatrix`, `GetFrustum(aspect)`, `VisibleSize(aspect, distance)`,
+  `ScreenPointToRay(point, size)`, `WorldToScreen(world, size)`, so they are right before the first frame and the
+  renderer no longer writes each viewport's size into the camera. Fit modes on a frame (`size` tall,
+  `SetFrameAspect` wide): `KeepHeight` (default), `KeepWidth`, `Contain`, `Cover`. The default viewport camera is
+  a `Camera3D` at the origin looking down -Z, 60 degrees, 0.1-1000 (was an `FPSCamera` with Z up).
+- `scene/camera_controllers.h`: `FlyController`, `OrbitController` (`Frame(box)`, orthographic zoom = size),
+  `FollowController` (offset in world or target space, look offset, position / rotation lag). Plain objects fed
+  input structs (a System or the editor maps keys to them); frame-rate independent smoothing (`ExpDecay`).
+- `fx::ParticleSystem::WriteTo` takes a `MultiMeshInstance3D&`.
+- Sizes (MSVC x64): `Node3D` 448 -> 280 B, `MeshInstance3D` 320, `DirectionalLight3D` 496 -> 328, `SpriteBatch`
+  512 -> 360, `Camera3D` 312; `MultiMeshInstance3D` 448.
+- Benchmarks (Windows MSVC Release, alternating runs against main): render/gather 10k 175.6 -> 168.3 us (-4%, median
+  of 6; within run-to-run noise), everything else unchanged.
+- **Breaking:**
+  - `Node3D` loses `SetModel/GetModel`, `SetMaterial/GetMaterial`, `SetCastsShadow`, `SetReceivesShadow`, the
+    instancing API, `GetAABB` and `IsInstanced` (no shim: a thin one can't exist, see ROADMAP 2.3; Bluzzle's patch
+    is ~10 lines). `GetAABB` is `WorldBounds`.
+  - `Camera3D` is a concrete node, not an interface: `GetProjectionMatrix` takes the aspect, `GetViewMatrix` is
+    const and returns a value. `CameraMovement`, `ProcessKeyboard`, `ProcessMouseMovement`, `UpdateSize` and
+    `Window::ProcessMouseMovement` (GLFW's mouse-look hook) are gone.
+  - `LightNode`, `PointLight`, `SpotLight` (`SetCone` in degrees) renamed without a shim (no game used them).
+  - `SpriteBatch::GetMaterial` / `SetMaterial` are its own (it isn't a mesh node).
+- **Migration:** a drawn `make_shared<Node3D>()` -> `make_shared<MeshInstance3D>()`; a node fed by `WriteInstances`
+  or `ParticleSystem::WriteTo` -> `MultiMeshInstance3D` (drop `WriteInstances(0)` used to switch it to instanced);
+  `DirectionalLight` -> `DirectionalLight3D`; `SetCone(inner_deg, outer_deg)` -> `SetInnerAngle` / `SetOuterAngle`
+  in radians; `OrthographicCamera` -> `Camera3D` with `SetOrthographic(height, near, far)`,
+  `SetFrameAspect(width / height)`, `SetFitMode(Contain)`, `SetPosition` + `LookAt(target, up)`; `FollowCamera` ->
+  a `Camera3D` + `FollowController` (or `LookAt` once for a fixed target).
+- **Deprecated** (removed in 0.4): `DirectionalLight` (alias), `OrthographicCamera` (a `Camera3D` subclass with the
+  old `SetVisibleArea` / `SetTarget` / `SetUp`; matches the 0.3 matrices).
+- **Removed:** `FPSCamera` (`fps_camera.h/.cpp`), `FollowCamera` (`follow_camera.h`), the 0.2 shims
+  `Node3D::SetInstances` / `GetInstances` (`ParticleSystem::BuildInstances` stays until 0.3).
+
 ### Transform and Node3D (Roadmap 2.2)
 `Node3D` is a plain class now (the `Node<T>` template, `Node2D`, `Triangle2D` and `Vertex2D` are gone; 2D lives on
 the Canvas), with a cached quaternion transform, an ordered hierarchy, names, ids and render layers, and its code in

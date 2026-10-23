@@ -13,6 +13,7 @@ add_executable(wlw_tests
   anim_tests.cpp
   audio_tests.cpp
   blend_tests.cpp
+  camera_tests.cpp
   color_tests.cpp
   console_tests.cpp
   core_tests.cpp

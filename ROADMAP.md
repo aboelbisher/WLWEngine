@@ -7,11 +7,14 @@ around the editor and iOS ("Why this order"). Work goes one step at a time, in o
 stable: commits name them ("Roadmap 4.3b: ..."). Commits and CHANGELOG entries from before 2026-10-21
 use the old numbers: "Old numbering" at the end maps them.
 
-**Current step:** 2.3 Node types (plan in chat first) · **Updated:** 2026-10-23
+**Current step:** 2.4 Conventions (plan in chat first) · **Updated:** 2026-10-23
 
-**Next session:** plan 2.3 in chat and wait for the OK. The 0.2 shims stay through v0.2.x and go before v0.3.0; the 0.3
-  ones (2.1: core::Vector2/3, core::Color, scene::AABB...; 2.2: SetRotation(degrees), GetModelMatrix, AddNode,
-  IterateOverNodes) stay through v0.3.x; the games move off them in 2.8.
+**Next session:** plan 2.4 in chat and wait for the OK (mostly docs + tests now: 2.3's Camera3D and SpotLight3D already
+  use radians and -Z forward). The 0.2 shims stay through v0.2.x and go before v0.3.0; the 0.3 ones (2.1:
+  core::Vector2/3, core::Color, scene::AABB...; 2.2: SetRotation(degrees), GetModelMatrix, AddNode, IterateOverNodes;
+  2.3: DirectionalLight, OrthographicCamera) stay through v0.3.x; the games move off them in 2.8. Bluzzle needs a
+  ~10-line patch for 2.3 (Node3D -> MeshInstance3D / MultiMeshInstance3D; no shim for the drawing API): kept on a
+  local, unpushed Bluzzle branch for checks in 2.4-2.7, committed in 2.8.
 
 Where things stand (2026-10-21):
 - Done: Phase 0 = v0.1.0 (2026-10-15), Phase 1 = v0.2.0 (2026-10-18), each step one squashed commit on main named
@@ -260,7 +263,7 @@ The editor shows and edits what this phase defines, so it comes first.
   `GetNode(path)`; a 64-bit id per node, unique in its scene (scene files, undo and node references use it: D15);
   a render layer mask. The `Node<T>` template, Node2D, Vertex2D and Triangle2D are removed; Scene gets a root node.
   Hot transform code moves into .cpp files.
-- [ ] **2.3 Node types.** Node3D keeps only transform, hierarchy, visibility and layers. New:
+- [x] **2.3 Node types.** *(done 2026-10-23, commit "Roadmap 2.3: node types"; Node3D 448 -> 280 B, lights 496 -> 328 B; gather switches on a 1-byte NodeKind instead of 2 virtual calls per node; Windows A/B: gather 10k -4%, the rest unchanged)* Node3D keeps only transform, hierarchy, visibility and layers. New:
   MeshInstance3D, MultiMeshInstance3D, SpriteBatch, DirectionalLight3D, PointLight3D, SpotLight3D,
   Camera3D (perspective and orthographic with fit modes, `ScreenPointToRay`, `WorldToScreen`,
   frustum). Fly, orbit and follow camera controllers (the editor camera reuses fly and orbit).
@@ -270,7 +273,8 @@ The editor shows and edits what this phase defines, so it comes first.
   `shared_ptr`; const-ref getters; removal by object instead of int ids; renderer-only methods
   behind an internal accessor; Screens get `App()`; AppConfig grouped (window, graphics, audio).
 - [ ] **2.6 Legacy removal.** `WLWEngine`, `RenderingDriver::SetViewport/Clear/AttachWindow`,
-  `Window::ProcessMouseMovement/SetIsActive`, FPSCamera and FollowCamera, TextureManager, GEMINI.md
+  `Window::SetIsActive`, TextureManager, GEMINI.md (FPSCamera, FollowCamera and
+  `Window::ProcessMouseMovement` went in 2.3)
   (each deletion confirmed with the owner).
 - [ ] **2.7 Platform-driven frame.** `Application::Init/Frame/Shutdown`; `Run()` loops on desktop
   and Android; `WLW_MAIN` unchanged. The editor (3.2) drives frames through it, and the shape must also fit iOS

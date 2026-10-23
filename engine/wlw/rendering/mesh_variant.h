@@ -23,7 +23,7 @@ struct MeshDraw {
   bool textured = false;
   bool scene_lit = false;        // the viewport's scene has visible light nodes
   bool shadow_active = false;    // ...and a shadow map was drawn this frame
-  bool receives_shadow = false;  // the node opted in (Node3D::SetReceivesShadow)
+  bool receives_shadow = false;  // the node opted in (GeometryInstance3D::SetReceivesShadow)
   bool blends = false;           // its material isn't BlendMode::Opaque
 };
 

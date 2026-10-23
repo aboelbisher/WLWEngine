@@ -140,10 +140,12 @@ add_library(wlw STATIC
   wlw/rendering/texture.h
   wlw/rendering/vertex_buffer.h
 
+  wlw/scene/camera_3d.cpp
   wlw/scene/camera_3d.h
-  wlw/scene/follow_camera.h
-  wlw/scene/fps_camera.cpp
-  wlw/scene/fps_camera.h
+  wlw/scene/camera_controllers.cpp
+  wlw/scene/camera_controllers.h
+  wlw/scene/geometry_instance.cpp
+  wlw/scene/geometry_instance.h
   wlw/scene/light.h
   wlw/scene/node.h
   wlw/scene/node_3d.cpp

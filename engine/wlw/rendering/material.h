@@ -41,7 +41,7 @@ class Material {
   std::optional<bool> depth_write;
 
   float metallic = 0.0f;
-  float shininess = 32.0f;  // specular highlight sharpness under scene lights (LightNode)
+  float shininess = 32.0f;  // specular highlight sharpness under scene lights (Light3D)
   float roughness = 1.0f;
   std::string name;
 

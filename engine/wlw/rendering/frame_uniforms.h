@@ -57,34 +57,33 @@ inline glm::vec4 AttenuationFor(float range) {
 // Packs the visible light nodes into `frame` by type, in order, at most kMaxLightsPerType of each
 // (the rest are dropped). `shadow_light` (one of `lights`, or null) is the light whose shadow map
 // is drawn: it must be directional; its index goes to light_counts.w.
-inline void SetFrameLights(FrameUniforms& frame, const std::vector<const scene::LightNode*>& lights,
-                           const scene::LightNode* shadow_light) {
+inline void SetFrameLights(FrameUniforms& frame, const std::vector<const scene::Light3D*>& lights,
+                           const scene::Light3D* shadow_light) {
   frame.light_counts = {0, 0, 0, -1};
-  for (const scene::LightNode* light : lights) {
+  for (const scene::Light3D* light : lights) {
     const glm::vec3 color = light->GetColor().Rgb() * light->GetIntensity();
     const glm::vec3 position = light->GetWorldPosition();
     switch (light->GetType()) {
-      case scene::LightNode::Type::Directional: {
+      case scene::Light3D::Type::Directional: {
         int& count = frame.light_counts.x;
         if (count >= kMaxLightsPerType) break;
         if (light == shadow_light) frame.light_counts.w = count;
         frame.directional[count++] = {glm::vec4(light->GetDirection(), light->GetAmbient()), glm::vec4(color, 0.0f)};
         break;
       }
-      case scene::LightNode::Type::Point: {
+      case scene::Light3D::Type::Point: {
         int& count = frame.light_counts.y;
         if (count >= kMaxLightsPerType) break;
-        const float range = static_cast<const scene::PointLight*>(light)->GetRange();
+        const float range = static_cast<const scene::PointLight3D*>(light)->GetRange();
         frame.point[count++] = {glm::vec4(position, light->GetAmbient()), glm::vec4(color, 0.0f),
                                 AttenuationFor(range)};
         break;
       }
-      case scene::LightNode::Type::Spot: {
+      case scene::Light3D::Type::Spot: {
         int& count = frame.light_counts.z;
         if (count >= kMaxLightsPerType) break;
-        const auto* spot = static_cast<const scene::SpotLight*>(light);
-        const glm::vec4 cone(std::cos(glm::radians(spot->GetInnerDegrees())),
-                             std::cos(glm::radians(spot->GetOuterDegrees())), 0.0f, 0.0f);
+        const auto* spot = static_cast<const scene::SpotLight3D*>(light);
+        const glm::vec4 cone(std::cos(spot->GetInnerAngle()), std::cos(spot->GetOuterAngle()), 0.0f, 0.0f);
         frame.spot[count++] = {glm::vec4(position, light->GetAmbient()), glm::vec4(light->GetDirection(), 0.0f),
                                glm::vec4(color, 0.0f), AttenuationFor(spot->GetRange()), cone};
         break;

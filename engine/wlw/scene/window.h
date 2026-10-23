@@ -58,18 +58,6 @@ class Window {
   input::Input& GetInput() { return input_; }
   const input::Input& GetInput() const { return input_; }
 
-  // Feeds mouse-look to the screen's camera (FPS camera); called by platforms that capture the cursor.
-  void ProcessMouseMovement(double xpos, double ypos) {
-    if (first_mouse_) {
-      last_mouse_ = {static_cast<float>(xpos), static_cast<float>(ypos)};
-      first_mouse_ = false;
-    }
-    const float xoffset = static_cast<float>(xpos) - last_mouse_.x;
-    const float yoffset = last_mouse_.y - static_cast<float>(ypos);
-    last_mouse_ = {static_cast<float>(xpos), static_cast<float>(ypos)};
-    if (const auto& camera = screen_->GetCamera()) camera->ProcessMouseMovement(xoffset, yoffset);
-  }
-
   void SetIsActive(bool is_active) { is_active_ = is_active; }
 
   Vec2 GetSize() const {
@@ -77,8 +65,8 @@ class Window {
   }
 
   // ---- What it shows ----
-  // The screen: its scene (empty at first), camera (an FPSCamera until SetCamera) and the canvas
-  // the game's UI is drawn on (Application::OnRenderUI).
+  // The screen: its scene (empty at first), camera (a default Camera3D until SetCamera: at the origin looking down -Z)
+  // and the canvas the game's UI is drawn on (Application::OnRenderUI).
   Viewport& GetScreen() { return *screen_; }
   const Viewport& GetScreen() const { return *screen_; }
 
@@ -164,8 +152,6 @@ class Window {
  protected:
   Vec2 size_;  // drawable size in pixels (updated by the platform on resize)
   input::Input input_;
-  bool first_mouse_ = true;
-  Vec2 last_mouse_{0, 0};
 
   bool is_active_ = true;
 

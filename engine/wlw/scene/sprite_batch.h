@@ -39,14 +39,15 @@ namespace wlw::scene {
 class SpriteBatch : public Node3D {
  public:
   // `capacity`: the most dots it holds; reserved now, never grown (Write cuts at it).
-  explicit SpriteBatch(size_t capacity = 4096) : capacity_(capacity) {
+  explicit SpriteBatch(size_t capacity = 4096) : Node3D(NodeKind::SpriteBatch), capacity_(capacity) {
     sprites_.reserve(capacity);
-    auto material = rendering::Material::Create();
-    material->blend = rendering::BlendMode::Additive;
-    SetMaterial(std::move(material));
+    material_ = rendering::Material::Create();
+    material_->blend = rendering::BlendMode::Additive;
   }
 
-  SpriteBatch* AsSpriteBatch() override { return this; }
+  // Blending, and the dots' shape when it has a texture (see above).
+  void SetMaterial(std::shared_ptr<rendering::Material> material) { material_ = std::move(material); }
+  const std::shared_ptr<rendering::Material>& GetMaterial() const { return material_; }
 
   // This frame's dots: the returned span (`count` long, at most Capacity()) is written in place, so
   // nothing is copied on the way to the GPU upload. Its old contents are unspecified. Marks the
@@ -101,6 +102,7 @@ class SpriteBatch : public Node3D {
 
  private:
   size_t capacity_;
+  std::shared_ptr<rendering::Material> material_;
   std::vector<rendering::SpriteInstance> sprites_;
   uint64_t version_ = 0;
   glm::vec2 bounds_min_{0.0f}, bounds_max_{0.0f};

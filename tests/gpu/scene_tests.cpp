@@ -17,9 +17,9 @@
 #include "wlw/rendering/shader_material.h"
 #include "wlw/rendering/texture.h"
 #include "wlw/scene/camera_3d.h"
+#include "wlw/scene/geometry_instance.h"
 #include "wlw/scene/light.h"
 #include "wlw/scene/node.h"
-#include "wlw/scene/orthographic_camera.h"
 #include "wlw/scene/post_effects.h"
 #include "wlw/scene/sprite_batch.h"
 #include "wlw/ui/canvas.h"
@@ -35,30 +35,24 @@ using gpu_tests::MakeViewport;
 
 namespace {
 
-// A perspective camera that never moves (45 degrees, looking from `eye` at `target`).
-class FixedCamera : public scene::Camera3D {
- public:
-  FixedCamera(const Vec3& eye, const Vec3& target) : eye_(eye), target_(target) { Update(); }
-  void SetPosition(const Vec3& position) override { eye_ = position, Update(); }
-  void SetTarget(const Vec3& target) override { target_ = target, Update(); }
-  void UpdateSize(const Vec2& size) override {
-    projection_ = glm::perspective(glm::radians(45.0f), size.x / size.y, 0.1f, 100.0f);
-  }
-  const Vec3& GetPosition() const override { return eye_; }
-  const glm::mat4& GetViewMatrix() override { return view_; }
-  const glm::mat4& GetProjectionMatrix() override { return projection_; }
-  void ProcessKeyboard(scene::CameraMovement, float) override {}
-  void ProcessMouseMovement(float, float, bool) override {}
+// A perspective camera (45 degrees, looking from `eye` at `target`).
+std::shared_ptr<scene::Camera3D> FixedCamera(const Vec3& eye, const Vec3& target) {
+  auto camera = scene::Camera3D::Create();
+  camera->SetPerspective(glm::radians(45.0f), 0.1f, 100.0f);
+  camera->SetPosition(eye);
+  camera->LookAt(target);
+  return camera;
+}
 
- private:
-  void Update() {
-    view_ = glm::lookAt(glm::vec3(eye_.x, eye_.y, eye_.z), glm::vec3(target_.x, target_.y, target_.z),
-                        glm::vec3(0.0f, 1.0f, 0.0f));
-  }
-  Vec3 eye_, target_;
-  glm::mat4 view_{1.0f};
-  glm::mat4 projection_ = glm::perspective(glm::radians(45.0f), 1.0f, 0.1f, 100.0f);
-};
+// An orthographic camera from `eye` looking at `target`, `size` x `size` world units in view.
+std::shared_ptr<scene::Camera3D> OrthoCamera(const Vec3& eye, const Vec3& target, float size) {
+  auto camera = scene::Camera3D::Create();
+  camera->SetOrthographic(size, 0.1f, 50.0f);
+  camera->SetFitMode(scene::Camera3D::FitMode::Contain);
+  camera->SetPosition(eye);
+  camera->LookAt(target);
+  return camera;
+}
 
 using Model = core::Model<core::Vertex3D>;
 
@@ -68,9 +62,10 @@ std::shared_ptr<Model> MakeModel(std::shared_ptr<core::Mesh<core::Vertex3D>> mes
   return model;
 }
 
-std::shared_ptr<scene::Node3D> AddMesh(scene::Viewport& viewport, std::shared_ptr<core::Mesh<core::Vertex3D>> mesh,
-                                       std::shared_ptr<rendering::Material> material, const Vec3& position) {
-  auto node = std::make_shared<scene::Node3D>();
+template <typename T = scene::MeshInstance3D>
+std::shared_ptr<T> AddMesh(scene::Viewport& viewport, std::shared_ptr<core::Mesh<core::Vertex3D>> mesh,
+                           std::shared_ptr<rendering::Material> material, const Vec3& position) {
+  auto node = std::make_shared<T>();
   node->SetModel(MakeModel(std::move(mesh)));
   node->SetMaterial(std::move(material));
   node->SetPosition(position);
@@ -78,8 +73,8 @@ std::shared_ptr<scene::Node3D> AddMesh(scene::Viewport& viewport, std::shared_pt
   return node;
 }
 
-std::shared_ptr<scene::DirectionalLight> AddSun(scene::Viewport& viewport, float ambient = 0.25f) {
-  auto sun = std::make_shared<scene::DirectionalLight>();
+std::shared_ptr<scene::DirectionalLight3D> AddSun(scene::Viewport& viewport, float ambient = 0.25f) {
+  auto sun = std::make_shared<scene::DirectionalLight3D>();
   sun->SetDirection({-0.4f, -1.0f, -0.6f});
   sun->SetAmbient(ambient);
   viewport.GetScene()->Root().AddChild(sun);
@@ -90,9 +85,9 @@ std::shared_ptr<rendering::Material> Opaque() { return rendering::Material::Crea
 
 // A cube, a bevelled cube and a sphere under a sun and an orange point light.
 void AddLitCubes(scene::Viewport& viewport) {
-  viewport.SetCamera(std::make_shared<FixedCamera>(Vec3{0, 3, 7}, Vec3{0, 0, 0}));
+  viewport.SetCamera(FixedCamera(Vec3{0, 3, 7}, Vec3{0, 0, 0}));
   AddSun(viewport);
-  auto point = std::make_shared<scene::PointLight>();
+  auto point = std::make_shared<scene::PointLight3D>();
   point->SetPosition({2.0f, 1.5f, 2.0f});
   point->SetColor({1.0f, 0.6f, 0.2f});
   point->SetRange(6.0f);
@@ -141,7 +136,7 @@ TEST_CASE("render scale with post") {
   // the last one writes the full-size picture (no extra copy). A Picture layer is drawn into the
   // small picture (bloomed, soft); the Overlay layer stays sharp.
   auto viewport = MakeViewport();
-  viewport->SetCamera(std::make_shared<FixedCamera>(Vec3{0, 2, 6}, Vec3{0, 0, 0}));
+  viewport->SetCamera(FixedCamera(Vec3{0, 2, 6}, Vec3{0, 0, 0}));
   AddSun(*viewport, 0.9f);
   AddMesh(*viewport, utils::createCubeWithNormals(1.0f, Color{1.0f, 1.0f, 1.0f, 1.0f}), Opaque(), {-1.2f, 0, 0});
   AddMesh(*viewport, utils::createCubeWithNormals(1.0f, Color{0.2f, 0.25f, 0.6f, 1.0f}), Opaque(), {1.2f, 0, 0});
@@ -160,7 +155,7 @@ TEST_CASE("render scale with post") {
 
 TEST_CASE("shadows") {
   auto viewport = MakeViewport();
-  viewport->SetCamera(std::make_shared<FixedCamera>(Vec3{0, 5, 6}, Vec3{0, 0, 0}));
+  viewport->SetCamera(FixedCamera(Vec3{0, 5, 6}, Vec3{0, 0, 0}));
   AddSun(*viewport, 0.3f)->SetCastsShadows(true);
   auto ground = AddMesh(*viewport, utils::createPlaneWithNormals(8.0f, 8.0f, Color{0.7f, 0.7f, 0.75f, 1.0f}), Opaque(),
                         {0, 0, 0});
@@ -177,7 +172,7 @@ TEST_CASE("shadows") {
 TEST_CASE("transparency") {
   // Two see-through cubes over an opaque one: drawn back to front after it, blended, no depth writes.
   auto viewport = MakeViewport();
-  viewport->SetCamera(std::make_shared<FixedCamera>(Vec3{0, 2, 6}, Vec3{0, 0, 0}));
+  viewport->SetCamera(FixedCamera(Vec3{0, 2, 6}, Vec3{0, 0, 0}));
   AddSun(*viewport, 0.4f);
   AddMesh(*viewport, utils::createCubeWithNormals(1.5f, Color{0.9f, 0.9f, 0.2f, 1.0f}), Opaque(), {0, 0, -2});
   auto glass = rendering::Material::Create();
@@ -191,9 +186,9 @@ TEST_CASE("transparency") {
 TEST_CASE("instancing") {
   // One node, 25 tinted copies: one draw call.
   auto viewport = MakeViewport();
-  viewport->SetCamera(std::make_shared<FixedCamera>(Vec3{0, 7, 7}, Vec3{0, 0, 0}));
+  viewport->SetCamera(FixedCamera(Vec3{0, 7, 7}, Vec3{0, 0, 0}));
   AddSun(*viewport);
-  auto node = AddMesh(*viewport, utils::createCubeWithNormals(0.7f), Opaque(), {0, 0, 0});
+  auto node = AddMesh<scene::MultiMeshInstance3D>(*viewport, utils::createCubeWithNormals(0.7f), Opaque(), {0, 0, 0});
   std::span<rendering::Instance> copies = node->WriteInstances(25);
   for (int z = 0; z < 5; ++z) {
     for (int x = 0; x < 5; ++x) {
@@ -209,12 +204,7 @@ TEST_CASE("instancing") {
 TEST_CASE("sprites") {
   // A SpriteBatch: soft additive dots in one call, overlapping ones add up.
   auto viewport = MakeViewport();
-  auto camera = scene::OrthographicCamera::Create();
-  camera->SetPosition({0, 0, 10});
-  camera->SetTarget({0, 0, 0});
-  camera->SetVisibleArea(10.0f, 10.0f);
-  camera->SetClipPlanes(0.1f, 50.0f);
-  viewport->SetCamera(camera);
+  viewport->SetCamera(OrthoCamera({0, 0, 10}, {0, 0, 0}, 10.0f));
   auto dots = std::make_shared<scene::SpriteBatch>(256);
   viewport->GetScene()->Root().AddChild(dots);
   constexpr int kDots = 120;
@@ -263,7 +253,7 @@ TEST_CASE("skybox") {
   // before the see-through cube, which blends over both. Three faces meet in the corner the camera
   // looks at.
   auto viewport = MakeViewport();
-  viewport->SetCamera(std::make_shared<FixedCamera>(Vec3{-3.0f, 1.5f, -3.0f}, Vec3{0, 0, 0}));
+  viewport->SetCamera(FixedCamera(Vec3{-3.0f, 1.5f, -3.0f}, Vec3{0, 0, 0}));
   viewport->GetScene()->SetSkybox(TestCubemap());
   AddSun(*viewport, 0.4f);
   AddMesh(*viewport, utils::createCubeWithNormals(1.2f, Color{0.9f, 0.9f, 0.9f, 1.0f}), Opaque(), {0, 0, 0});
@@ -277,12 +267,7 @@ TEST_CASE("skybox") {
 TEST_CASE("skybox orthographic") {
   // An orthographic camera's sky covers the whole viewport too.
   auto viewport = MakeViewport();
-  auto camera = scene::OrthographicCamera::Create();
-  camera->SetPosition({-6.0f, 3.0f, -6.0f});
-  camera->SetTarget({0, 0, 0});
-  camera->SetVisibleArea(4.0f, 4.0f);
-  camera->SetClipPlanes(0.1f, 50.0f);
-  viewport->SetCamera(camera);
+  viewport->SetCamera(OrthoCamera({-6.0f, 3.0f, -6.0f}, {0, 0, 0}, 4.0f));
   viewport->GetScene()->SetSkybox(TestCubemap());
   AddSun(*viewport, 0.4f);
   AddMesh(*viewport, utils::createCubeWithNormals(1.2f, Color{0.9f, 0.9f, 0.9f, 1.0f}), Opaque(), {0, 0, 0});
@@ -294,7 +279,7 @@ TEST_CASE("skybox without depth buffer") {
   auto viewport =
       scene::Viewport::Create({.name = "golden", .depth = false, .clear = Color{0.08f, 0.09f, 0.14f, 1.0f}});
   viewport->SetSize(gpu_tests::kSize, gpu_tests::kSize);
-  viewport->SetCamera(std::make_shared<FixedCamera>(Vec3{0, 4, 4}, Vec3{0, 0, 0}));
+  viewport->SetCamera(FixedCamera(Vec3{0, 4, 4}, Vec3{0, 0, 0}));
   viewport->GetScene()->SetSkybox(TestCubemap());
   AddSun(*viewport, 0.4f);
   AddMesh(*viewport, utils::createPlaneWithNormals(3.0f, 3.0f, Color{0.9f, 0.9f, 0.9f, 1.0f}), Opaque(), {0, 0, 0});
@@ -304,7 +289,7 @@ TEST_CASE("skybox without depth buffer") {
 TEST_CASE("post chain bloom") {
   // Bright shapes glowing: bright pass, blur at a quarter size, combined onto the picture.
   auto viewport = MakeViewport();
-  viewport->SetCamera(std::make_shared<FixedCamera>(Vec3{0, 2, 6}, Vec3{0, 0, 0}));
+  viewport->SetCamera(FixedCamera(Vec3{0, 2, 6}, Vec3{0, 0, 0}));
   AddSun(*viewport, 0.9f);
   AddMesh(*viewport, utils::createCubeWithNormals(1.0f, Color{1.0f, 1.0f, 1.0f, 1.0f}), Opaque(), {-1.2f, 0, 0});
   AddMesh(*viewport, utils::createCubeWithNormals(1.0f, Color{0.2f, 0.25f, 0.6f, 1.0f}), Opaque(), {1.2f, 0, 0});
@@ -341,17 +326,16 @@ namespace {
 // Nodes whose transforms turn normals in every way the renderer handles: an uneven scale, a mirror,
 // a parent's uneven scale under a child's rotation (shear), and instanced copies squashed and mirrored
 // under a scaled node. Returns the nodes that draw.
-std::vector<std::shared_ptr<scene::Node3D>> AddTransformedShapes(scene::Viewport& viewport,
-                                                                 const std::shared_ptr<rendering::Material>& material) {
-  std::vector<std::shared_ptr<scene::Node3D>> drawn;
-  auto add = [&](std::shared_ptr<core::Mesh<core::Vertex3D>> mesh, const Vec3& position, const Vec3& rotation,
-                 const Vec3& scale) {
-    auto node = AddMesh(viewport, std::move(mesh), material, position);
+std::vector<std::shared_ptr<scene::GeometryInstance3D>> AddTransformedShapes(
+    scene::Viewport& viewport, const std::shared_ptr<rendering::Material>& material) {
+  std::vector<std::shared_ptr<scene::GeometryInstance3D>> drawn;
+  auto place = [&](const std::shared_ptr<scene::GeometryInstance3D>& node, const Vec3& rotation, const Vec3& scale) {
     node->SetEulerAngles(glm::radians(rotation), wlw::EulerOrder::XYZ);
     node->SetScale(scale);
     drawn.push_back(node);
-    return node;
   };
+  auto add = [&](std::shared_ptr<core::Mesh<core::Vertex3D>> mesh, const Vec3& position, const Vec3& rotation,
+                 const Vec3& scale) { place(AddMesh(viewport, std::move(mesh), material, position), rotation, scale); };
   add(utils::createSphereWithNormals(0.7f, 16, 32), {-1.5f, 1.1f, 0}, {0, 0, 25}, {1.6f, 0.6f, 1.0f});
   add(utils::createBeveledCubeWithNormals(), {-1.5f, -1.1f, 0}, {20, 45, 10}, {-1.0f, 0.8f, 1.2f});
 
@@ -360,14 +344,16 @@ std::vector<std::shared_ptr<scene::Node3D>> AddTransformedShapes(scene::Viewport
   parent->SetEulerAngles(glm::radians(wlw::Vec3(0, 0, 40)), wlw::EulerOrder::XYZ);
   parent->SetScale({1.7f, 0.6f, 1.0f});
   viewport.GetScene()->Root().AddChild(parent);
-  auto child = std::make_shared<scene::Node3D>();
+  auto child = std::make_shared<scene::MeshInstance3D>();
   child->SetModel(MakeModel(utils::createCubeWithNormals(0.9f, Color{0.3f, 0.8f, 0.4f, 1.0f})));
   child->SetMaterial(material);
   child->SetEulerAngles(glm::radians(wlw::Vec3(30, 35, 0)), wlw::EulerOrder::XYZ);
   parent->AddChild(child);
   drawn.push_back(child);
 
-  auto copies = add(utils::createSphereWithNormals(0.4f, 12, 24), {1.5f, -1.1f, 0}, {0, 0, 0}, {1.3f, 1.0f, 1.0f});
+  auto copies = AddMesh<scene::MultiMeshInstance3D>(viewport, utils::createSphereWithNormals(0.4f, 12, 24), material,
+                                                    {1.5f, -1.1f, 0});
+  place(copies, {0, 0, 0}, {1.3f, 1.0f, 1.0f});
   std::span<rendering::Instance> instances = copies->WriteInstances(3);
   instances[0].SetTransform(glm::scale(glm::translate(glm::mat4(1.0f), {-0.7f, 0, 0}), {1.0f, 0.4f, 1.0f}));
   instances[1].SetTransform(glm::scale(glm::rotate(glm::mat4(1.0f), 0.6f, {0, 0, 1}), {-0.8f, 1.2f, 1.0f}));
@@ -378,7 +364,7 @@ std::vector<std::shared_ptr<scene::Node3D>> AddTransformedShapes(scene::Viewport
 
 // The same shapes with every transform baked into the vertices on the CPU, normals with the textbook
 // transpose(inverse(m)): what the renderer's normals must match.
-void AddBakedShapes(scene::Viewport& viewport, const std::vector<std::shared_ptr<scene::Node3D>>& shapes) {
+void AddBakedShapes(scene::Viewport& viewport, const std::vector<std::shared_ptr<scene::GeometryInstance3D>>& shapes) {
   auto bake = [&](const core::Mesh<core::Vertex3D>& mesh, const std::shared_ptr<rendering::Material>& material,
                   const glm::mat4& world) {
     const glm::mat3 normal_matrix = glm::transpose(glm::inverse(glm::mat3(world)));
@@ -397,8 +383,13 @@ void AddBakedShapes(scene::Viewport& viewport, const std::vector<std::shared_ptr
   for (const auto& shape : shapes) {
     const glm::mat4 world = shape->GetWorldMatrix();
     for (const auto& mesh : shape->GetModel()->meshes) {
-      if (!shape->IsInstanced()) bake(*mesh, shape->GetMaterial(), world);
-      for (const auto& copy : shape->Instances()) bake(*mesh, shape->GetMaterial(), world * copy.Transform());
+      if (shape->Kind() != scene::NodeKind::MultiMeshInstance) {
+        bake(*mesh, shape->GetMaterial(), world);
+        continue;
+      }
+      for (const auto& copy : static_cast<const scene::MultiMeshInstance3D&>(*shape).Instances()) {
+        bake(*mesh, shape->GetMaterial(), world * copy.Transform());
+      }
     }
   }
 }
@@ -406,9 +397,9 @@ void AddBakedShapes(scene::Viewport& viewport, const std::vector<std::shared_ptr
 // Draws the shapes twice, moved by their transforms and baked, lit by a sun and a point light.
 void CheckNormalsMatchBaked(const std::string& name, const std::shared_ptr<rendering::Material>& material) {
   auto light = [](scene::Viewport& viewport) {
-    viewport.SetCamera(std::make_shared<FixedCamera>(Vec3{0, 0.5f, 8}, Vec3{0, 0, 0}));
+    viewport.SetCamera(FixedCamera(Vec3{0, 0.5f, 8}, Vec3{0, 0, 0}));
     AddSun(viewport);
-    auto point = std::make_shared<scene::PointLight>();
+    auto point = std::make_shared<scene::PointLight3D>();
     point->SetPosition({0.0f, 0.0f, 2.5f});
     point->SetColor({1.0f, 0.6f, 0.2f});
     point->SetRange(6.0f);

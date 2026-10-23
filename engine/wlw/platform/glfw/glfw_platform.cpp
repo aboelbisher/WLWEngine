@@ -352,12 +352,7 @@ class GlfwWindow : public Window {
       From(w)->input_.OnPointerUp((float)x, (float)y);
   }
 
-  static void OnCursorPos(GLFWwindow* w, double x, double y) {
-    From(w)->input_.OnPointerMove((float)x, (float)y);
-    if (glfwGetInputMode(w, GLFW_CURSOR) == GLFW_CURSOR_DISABLED) {
-      From(w)->ProcessMouseMovement(x, y);  // mouse-look only when the cursor is captured
-    }
-  }
+  static void OnCursorPos(GLFWwindow* w, double x, double y) { From(w)->input_.OnPointerMove((float)x, (float)y); }
 
   static void OnFramebufferSize(GLFWwindow* w, int width, int height) {
     GlfwWindow* self = From(w);

@@ -40,7 +40,7 @@ void SnakeApp::OnStart() {
 
   // Tilted, with a tight highlight: seen from straight above, an overhead sun would put a
   // specular highlight on every top face and wash the colours out.
-  auto sun = std::make_shared<scene::DirectionalLight>();
+  auto sun = std::make_shared<scene::DirectionalLight3D>();
   sun->SetDirection({-0.5f, -1.0f, -0.7f});
   sun->SetAmbient(0.35f);
   App().Window().GetScreen().GetScene()->Root().AddChild(sun);
@@ -54,15 +54,14 @@ void SnakeApp::OnStart() {
 
   BuildBoard();
 
-  food_node_ = std::make_shared<scene::Node3D>();
+  food_node_ = std::make_shared<scene::MeshInstance3D>();
   food_node_->SetModel(food_model_);
   food_node_->SetMaterial(material_);
   App().Window().GetScreen().GetScene()->Root().AddChild(food_node_);
 
-  particle_node_ = std::make_shared<scene::Node3D>();
+  particle_node_ = std::make_shared<scene::MultiMeshInstance3D>();          // no copies until the first sparkle
   particle_node_->SetModel(MakeModel(utils::createCubeWithNormals(1.0f)));  // white: tinted per particle
   particle_node_->SetMaterial(material_);
-  particle_node_->WriteInstances(0);  // instanced: no copies until the first sparkle
   App().Window().GetScreen().GetScene()->Root().AddChild(particle_node_);
 
   SetupCameras();
@@ -79,19 +78,24 @@ void SnakeApp::SetupCameras() {
 
   // Main camera: straight down at the board, no perspective. Screen "up" is -z on the board, so
   // the up vector is {0, 0, -1}; the usual {0, 1, 0} would be parallel to the view direction.
-  ortho_camera_ = scene::OrthographicCamera::Create();
-  ortho_camera_->SetPosition({center, 30.0f, center});
-  ortho_camera_->SetTarget({center, 0.0f, center});
-  ortho_camera_->SetUp({0.0f, 0.0f, -1.0f});
+  // Contain: the whole board (plus a margin) stays visible on any aspect ratio.
   const float board_with_margin = kGridSize + 2.0f;
-  ortho_camera_->SetVisibleArea(board_with_margin, board_with_margin);  // fitted to any aspect ratio
-  ortho_camera_->SetClipPlanes(1.0f, 60.0f);
+  ortho_camera_ = scene::Camera3D::Create();
+  ortho_camera_->SetOrthographic(board_with_margin, 1.0f, 60.0f);
+  ortho_camera_->SetFitMode(scene::Camera3D::FitMode::Contain);
+  ortho_camera_->SetPosition({center, 30.0f, center});
+  ortho_camera_->LookAt({center, 0.0f, center}, {0.0f, 0.0f, -1.0f});
 
-  // For comparison (P key): the earlier tilted perspective view.
-  auto center_node = std::make_shared<scene::Node3D>();
-  center_node->SetPosition({center, 0.0f, center});
-  perspective_camera_ = scene::FollowCamera::Create(center_node);
-  FitPerspectiveCameraToScreen();
+  // For comparison (P key): a tilted perspective view (~68 degrees down). Contain keeps the smaller of the two
+  // fields of view at 45 degrees, so backing off until half the board fits that angle frames it on any screen.
+  perspective_camera_ = scene::Camera3D::Create();
+  perspective_camera_->SetPerspective(glm::radians(45.0f), 0.1f, 100.0f);
+  perspective_camera_->SetFitMode(scene::Camera3D::FitMode::Contain);
+  const float half_board = kGridSize / 2.0f + 1.0f;  // + margin
+  const float distance = half_board / std::tan(glm::radians(45.0f) / 2.0f);
+  const Vec3 direction = glm::normalize(Vec3(0.0f, 22.0f, 9.0f));
+  perspective_camera_->SetPosition(Vec3(center, 0.0f, center) + direction * distance);
+  perspective_camera_->LookAt({center, 0.0f, center});
 
   App().Window().GetScreen().SetCamera(ortho_camera_);
 }
@@ -101,7 +105,7 @@ void SnakeApp::BuildBoard() {
   auto tile_b = MakeModel(wlw::utils::createCubeWithNormals(1.0f, Color{0.24f, 0.52f, 0.29f, 1.0f}));
   for (int z = 0; z < kGridSize; ++z) {
     for (int x = 0; x < kGridSize; ++x) {
-      auto tile = std::make_shared<wlw::scene::Node3D>();
+      auto tile = std::make_shared<wlw::scene::MeshInstance3D>();
       tile->SetModel((x + z) % 2 == 0 ? tile_a : tile_b);
       tile->SetMaterial(material_);
       tile->SetScale({1.0f, 0.1f, 1.0f});
@@ -161,8 +165,7 @@ void SnakeApp::OnFixedUpdate(float dt) {
 // ---------------------------------------------------------------------------------------------
 void SnakeApp::OnUpdate(float dt) {
   ReadInput();
-  FitPerspectiveCameraToScreen();  // the orthographic camera fits itself (SetVisibleArea)
-  food_spin_ += 120.0f * dt;       // degrees per second: purely visual, so per-frame dt is fine
+  food_spin_ += 120.0f * dt;  // degrees per second: purely visual, so per-frame dt is fine
   particles_.Update(dt);
 }
 
@@ -204,20 +207,6 @@ void SnakeApp::ReadInput() {
       case Swipe::Right: game_.QueueTurn({1, 0}); break;
     }
   }
-}
-
-// Keeps the whole board visible in the perspective view on any aspect ratio. With perspective the
-// visible area depends on distance and field of view, so the camera backs off until the board fits.
-void SnakeApp::FitPerspectiveCameraToScreen() {
-  const wlw::Vec2 size = App().Window().GetSize();
-  if (size.x <= 0 || size.y <= 0) return;
-  const float aspect = size.x / size.y;
-  const float vertical_fov = glm::radians(45.0f);  // FollowCamera's field of view
-  const float horizontal_fov = 2.0f * std::atan(std::tan(vertical_fov / 2.0f) * aspect);
-  const float half_board = kGridSize / 2.0f + 1.0f;  // + margin
-  const float distance = half_board / std::tan(std::min(vertical_fov, horizontal_fov) / 2.0f);
-  const glm::vec3 direction = glm::normalize(glm::vec3(0.0f, 22.0f, 9.0f));  // ~68 degrees down
-  perspective_camera_->SetOffset({direction.x * distance, direction.y * distance, direction.z * distance});
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -269,7 +258,7 @@ void SnakeApp::SyncSnakeNodes(float t) {
 
 SnakeApp::NodePtr SnakeApp::AcquireSegmentNode(size_t index) {
   while (segment_nodes_.size() <= index) {
-    auto node = std::make_shared<wlw::scene::Node3D>();
+    auto node = std::make_shared<wlw::scene::MeshInstance3D>();
     node->SetModel(body_model_);  // meshes/models are shared by all segments: one GPU copy
     node->SetMaterial(material_);
     App().Window().GetScreen().GetScene()->Root().AddChild(node);

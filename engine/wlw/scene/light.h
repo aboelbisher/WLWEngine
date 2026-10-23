@@ -1,6 +1,7 @@
 #pragma once
 
 #include "wlw/core/color.h"
+#include "wlw/core/deprecated.h"
 #include "wlw/core/math.h"
 #include "wlw/core/rotation.h"
 #include "wlw/scene/node.h"
@@ -20,14 +21,13 @@ struct ShadowSettings {
 // scene with them (up to kMaxLights of each type).
 //
 // Directional and spot lights shine along the node's forward axis, -Z, turned by its rotation.
-// SetDirection is the convenient way to aim them.
-class LightNode : public Node3D {
+// SetDirection is the convenient way to aim them. Like Godot's Light3D.
+class Light3D : public Node3D {
  public:
   enum class Type { Directional = 0, Point = 1, Spot = 2 };
   static constexpr int kMaxLights = 4;  // of each type (rendering::kMaxLightsPerType)
 
   Type GetType() const { return type_; }
-  const LightNode* AsLight() const override { return this; }
 
   // Alpha is ignored. Values past 1 are fine (or use the intensity).
   void SetColor(const Color& color) { color_ = color; }
@@ -53,7 +53,7 @@ class LightNode : public Node3D {
   ShadowSettings shadow;
 
  protected:
-  explicit LightNode(Type type) : type_(type) {}
+  explicit Light3D(Type type) : Node3D(NodeKind::Light), type_(type) {}
 
  private:
   Type type_;
@@ -64,15 +64,15 @@ class LightNode : public Node3D {
 };
 
 // Parallel rays from far away, like the sun: only the direction matters, not the position.
-class DirectionalLight : public LightNode {
+class DirectionalLight3D : public Light3D {
  public:
-  DirectionalLight() : LightNode(Type::Directional) { SetDirection({0.0f, -1.0f, 0.0f}); }
+  DirectionalLight3D() : Light3D(Type::Directional) { SetDirection({0.0f, -1.0f, 0.0f}); }
 };
 
 // A bulb: shines in every direction from the node's position, fading out by `range`.
-class PointLight : public LightNode {
+class PointLight3D : public Light3D {
  public:
-  PointLight() : LightNode(Type::Point) {}
+  PointLight3D() : Light3D(Type::Point) {}
   void SetRange(float range) { range_ = range; }
   float GetRange() const { return range_; }
 
@@ -80,24 +80,26 @@ class PointLight : public LightNode {
   float range_ = 10.0f;
 };
 
-// A cone from the node's position along its direction: full brightness inside `inner_degrees`,
-// fading to nothing at `outer_degrees` (half-angles).
-class SpotLight : public LightNode {
+// A cone from the node's position along its direction: full brightness inside the inner angle, fading to nothing at
+// the outer angle (half-angles from the axis, in radians).
+class SpotLight3D : public Light3D {
  public:
-  SpotLight() : LightNode(Type::Spot) { SetDirection({0.0f, -1.0f, 0.0f}); }
+  SpotLight3D() : Light3D(Type::Spot) { SetDirection({0.0f, -1.0f, 0.0f}); }
   void SetRange(float range) { range_ = range; }
   float GetRange() const { return range_; }
-  void SetCone(float inner_degrees, float outer_degrees) {
-    inner_degrees_ = inner_degrees;
-    outer_degrees_ = outer_degrees;
-  }
-  float GetInnerDegrees() const { return inner_degrees_; }
-  float GetOuterDegrees() const { return outer_degrees_; }
+  void SetInnerAngle(float radians) { inner_angle_ = radians; }
+  float GetInnerAngle() const { return inner_angle_; }
+  void SetOuterAngle(float radians) { outer_angle_ = radians; }
+  float GetOuterAngle() const { return outer_angle_; }
 
  private:
   float range_ = 10.0f;
-  float inner_degrees_ = 12.5f;
-  float outer_degrees_ = 17.5f;
+  float inner_angle_ = 12.5f * kDegToRad;
+  float outer_angle_ = 17.5f * kDegToRad;
 };
+
+#if !WLW_NO_DEPRECATED
+using DirectionalLight WLW_DEPRECATED(0.3, "Use DirectionalLight3D") = DirectionalLight3D;
+#endif
 
 }  // namespace wlw::scene

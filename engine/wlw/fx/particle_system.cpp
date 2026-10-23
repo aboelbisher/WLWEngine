@@ -128,7 +128,7 @@ void WriteInstance(const ParticleSystem::Particle& p, float size, rendering::Ins
 
 }  // namespace
 
-void ParticleSystem::WriteTo(scene::Node3D& node) const {
+void ParticleSystem::WriteTo(scene::MultiMeshInstance3D& node) const {
   WLW_PROFILE_SCOPE("ParticleSystem::WriteTo");
   node.ReserveInstances(capacity_);  // allocates once: later writes stay within it
   const std::span<rendering::Instance> out = node.WriteInstances(particles_.size());
@@ -145,7 +145,7 @@ void ParticleSystem::WriteTo(scene::Node3D& node) const {
 #if !WLW_NO_DEPRECATED
 WLW_DISABLE_DEPRECATION_WARNINGS_BEGIN
 void ParticleSystem::BuildInstances(std::vector<rendering::InstanceData>& out) const {
-  scene::Node3D node;  // the copies as WriteTo makes them, then the old 80-byte form
+  scene::MultiMeshInstance3D node;  // the copies as WriteTo makes them, then the old 80-byte form
   WriteTo(node);
   out.clear();
   for (const rendering::Instance& instance : node.Instances()) {

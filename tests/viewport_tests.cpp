@@ -7,7 +7,7 @@
 #include <vector>
 
 #include "test_helpers.h"
-#include "wlw/scene/orthographic_camera.h"
+#include "wlw/scene/camera_3d.h"
 #include "wlw/scene/scene.h"
 #include "wlw/scene/viewport.h"
 #include "wlw/scene/window.h"
@@ -71,7 +71,7 @@ TEST_CASE("viewport shows a shared scene") {
   world->Root().AddChild(std::make_shared<scene::Node3D>());
   CHECK((main_view->GetScene()->NodeCount() == 1 && minimap->GetScene()->NodeCount() == 1));  // same world
 
-  auto camera = std::make_shared<scene::OrthographicCamera>();
+  auto camera = scene::Camera3D::Create();
   minimap->SetCamera(camera);
   CHECK(minimap->GetCamera() == camera);
   CHECK(main_view->GetCamera() != nullptr);  // a default camera until SetCamera

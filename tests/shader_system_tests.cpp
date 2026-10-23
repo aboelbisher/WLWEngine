@@ -192,17 +192,18 @@ TEST_CASE("frame block layout") {
 }
 
 TEST_CASE("frame lights") {
-  auto sun = std::make_shared<wlw::scene::DirectionalLight>();
+  auto sun = std::make_shared<wlw::scene::DirectionalLight3D>();
   sun->SetDirection({0.0f, -1.0f, 0.0f});
   sun->SetColor({1.0f, 0.5f, 0.25f});
   sun->SetIntensity(2.0f);
   sun->SetAmbient(0.3f);
-  auto fill = std::make_shared<wlw::scene::DirectionalLight>();
-  auto bulb = std::make_shared<wlw::scene::PointLight>();
+  auto fill = std::make_shared<wlw::scene::DirectionalLight3D>();
+  auto bulb = std::make_shared<wlw::scene::PointLight3D>();
   bulb->SetPosition({1.0f, 2.0f, 3.0f});
   bulb->SetRange(10.0f);
-  auto spot = std::make_shared<wlw::scene::SpotLight>();
-  spot->SetCone(10.0f, 20.0f);
+  auto spot = std::make_shared<wlw::scene::SpotLight3D>();
+  spot->SetInnerAngle(glm::radians(10.0f));
+  spot->SetOuterAngle(glm::radians(20.0f));
 
   FrameUniforms frame;
   SetFrameLights(frame, {fill.get(), bulb.get(), sun.get(), spot.get()}, sun.get());
@@ -216,10 +217,10 @@ TEST_CASE("frame lights") {
          Near(frame.spot[0].cone.y, std::cos(glm::radians(20.0f)))));
 
   // No shadow light: w = -1. More than the block holds: the extra ones are dropped.
-  std::vector<std::shared_ptr<wlw::scene::DirectionalLight>> many(6);
-  std::vector<const wlw::scene::LightNode*> lights;
+  std::vector<std::shared_ptr<wlw::scene::DirectionalLight3D>> many(6);
+  std::vector<const wlw::scene::Light3D*> lights;
   for (auto& light : many) {
-    light = std::make_shared<wlw::scene::DirectionalLight>();
+    light = std::make_shared<wlw::scene::DirectionalLight3D>();
     lights.push_back(light.get());
   }
   SetFrameLights(frame, lights, many[5].get());

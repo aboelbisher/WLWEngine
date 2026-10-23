@@ -23,7 +23,7 @@ WLW_DEPRECATED(0.3, "Use Color32::FromPacked(packed).ToColor()") inline Color Un
 }
 #endif
 
-// One copy of a mesh in an instanced draw (see Node::WriteInstances): 52 bytes, the layout Godot's
+// One copy of a mesh in an instanced draw (see MultiMeshInstance3D::WriteInstances): 52 bytes, the layout Godot's
 // GLES3 renderer uses. `rows` are the top 3 rows of the copy's affine 4x4 transform, relative to the
 // node (the 4th row is always 0 0 0 1, so it isn't stored): rows[i].w is the translation's i-th
 // component. `color` (RGBA8, Color32::Packed) multiplies the mesh's vertex colours (white mesh + tint =

@@ -33,6 +33,7 @@
 #include "wlw/rendering/scene_gather.h"
 #include "wlw/rendering/sky.h"
 #include "wlw/rendering/gl_state_cache.h"
+#include "wlw/scene/geometry_instance.h"
 #include "wlw/scene/light.h"
 #include "wlw/scene/shadow_map.h"
 #include "wlw/scene/sprite_batch.h"
@@ -170,8 +171,8 @@ class GLRenderingDriver : public RenderingDriver {
   // What one viewport draws, gathered from its scene before any drawing starts.
   // The scene part (lights, drawables, sprites, shadow boxes) is GL-free: scene_gather.h.
   struct Frame : SceneGather {
-    const scene::LightNode* shadow_light = nullptr;  // the directional light that casts shadows, if any
-    bool shadow_active = false;                      // a shadow map is drawn this frame
+    const scene::Light3D* shadow_light = nullptr;  // the directional light that casts shadows, if any
+    bool shadow_active = false;                    // a shadow map is drawn this frame
     scene::ShadowFrustum shadow_frustum;
 
     // Empties it for the next viewport, keeping the lists' memory (no allocations per frame).
@@ -247,28 +248,39 @@ class GLRenderingDriver : public RenderingDriver {
       Frame frame;
       bool any_caster = false;
       viewport.GetScene()->ForEachNode([&](scene::Node3D& node) {
-        if (const scene::SpriteBatch* sprites = node.AsSpriteBatch()) {
-          SpriteProgramFor(SpriteTexture(*sprites) != nullptr);
-          return;
-        }
-        if (const scene::LightNode* light = node.AsLight()) {
-          frame.lights.push_back(light);
-          const bool shadows = light->CastsShadows() && light->GetType() == scene::LightNode::Type::Directional;
-          if (shadows && frame.shadow_light == nullptr) frame.shadow_light = light;
-        } else if (node.GetModel() && !node.GetModel()->meshes.empty()) {
-          frame.drawables.push_back({&node, {}});
-          any_caster |= node.CastsShadow();
+        switch (node.Kind()) {
+          case scene::NodeKind::SpriteBatch:
+            SpriteProgramFor(SpriteTexture(static_cast<const scene::SpriteBatch&>(node)) != nullptr);
+            break;
+          case scene::NodeKind::Light: {
+            const auto* light = static_cast<const scene::Light3D*>(&node);
+            frame.lights.push_back(light);
+            const bool shadows = light->CastsShadows() && light->GetType() == scene::Light3D::Type::Directional;
+            if (shadows && frame.shadow_light == nullptr) frame.shadow_light = light;
+            break;
+          }
+          case scene::NodeKind::MeshInstance:
+          case scene::NodeKind::MultiMeshInstance: {
+            auto& geometry = static_cast<scene::GeometryInstance3D&>(node);
+            if (geometry.GetModel() && !geometry.GetModel()->meshes.empty()) {
+              frame.drawables.push_back({&geometry, {}});
+              any_caster |= geometry.CastsShadow();
+            }
+            break;
+          }
+          case scene::NodeKind::Node:
+          case scene::NodeKind::Camera: break;
         }
       });
       frame.shadow_active = frame.shadow_light != nullptr && any_caster;  // as if the map can be made
       for (const Frame::Drawable& drawable : frame.drawables) {
-        scene::Node3D* node = drawable.node;
+        scene::GeometryInstance3D* node = drawable.node;
         for (const auto& mesh : node->GetModel()->meshes) {
           if (!DrawableShaderMaterial(mesh->GetMaterial()) && !DrawableShaderMaterial(node->GetMaterial())) {
             MeshProgramFor(MeshVariantKey(DrawFor(*node, *mesh, frame)));
           }
         }
-        if (frame.shadow_active && node->CastsShadow()) ShadowProgramFor(node->IsInstanced());
+        if (frame.shadow_active && node->CastsShadow()) ShadowProgramFor(IsMultiMesh(*node));
       }
     };
     for (const auto& [_, viewport] : window.GetViewports()) warm(*viewport);
@@ -325,13 +337,12 @@ class GLRenderingDriver : public RenderingDriver {
     const auto start = Clock::now();
     if (draw_scene) {
       WLW_PROFILE_SCOPE("Gather");
-      // The viewport's shape, not the render size: a scaled picture is stretched back to it.
-      if (pixels.x > 0 && pixels.y > 0) {  // a minimized window has no size
-        camera->UpdateSize({static_cast<float>(pixels.x), static_cast<float>(pixels.y)});
-      }
+      // The viewport's shape, not the render size: a scaled picture is stretched back to it. A minimized window
+      // has no size.
+      const float aspect = pixels.y > 0 ? static_cast<float>(pixels.x) / static_cast<float>(pixels.y) : 1.0f;
       GatherScene(*scene, frame_);
       PrepareShadow(frame_);
-      SetCameraMatrices(*camera);
+      SetCameraMatrices(*camera, aspect);
       BuildDrawList(frame_, stats);
     }
     const auto gathered = Clock::now();
@@ -347,7 +358,9 @@ class GLRenderingDriver : public RenderingDriver {
       {
         WLW_PROFILE_SCOPE("Upload");
         UploadFrame(*camera, frame_);
-        for (NodeSlot& slot : node_slots_) slot.instances = PrepareInstances(*slot.node, &stats);
+        for (NodeSlot& slot : node_slots_) {
+          if (slot.node) slot.instances = PrepareInstances(*slot.node, &stats);
+        }
       }
       if (frame_.shadow_active) DrawShadowMap(frame_);
     }
@@ -361,7 +374,7 @@ class GLRenderingDriver : public RenderingDriver {
     }
     if (clear_bits) glClear(clear_bits);
 
-    if (draw_scene) DrawMainPass(*scene, *camera, frame_, has_depth, stats);
+    if (draw_scene) DrawMainPass(*scene, frame_, has_depth, stats);
     const auto submitted = Clock::now();
 
     auto micros = [](Clock::duration d) { return std::chrono::duration<float, std::micro>(d).count(); };
@@ -567,9 +580,9 @@ class GLRenderingDriver : public RenderingDriver {
     rendering::GatherScene(scene, frame);  // the scene walk (scene_gather.h)
 
     // The shadow light: the first directional light that casts shadows.
-    for (const scene::LightNode* light : frame.lights) {
+    for (const scene::Light3D* light : frame.lights) {
       if (!light->CastsShadows()) continue;
-      if (light->GetType() != scene::LightNode::Type::Directional) {
+      if (light->GetType() != scene::Light3D::Type::Directional) {
         if (!warned_shadow_type_)
           WLW_LOG(LogRender, Warning, "Only directional lights cast shadows (for now): ignoring the others");
         warned_shadow_type_ = true;
@@ -582,27 +595,28 @@ class GLRenderingDriver : public RenderingDriver {
   // The shadow light's box around the casters, and the shadow map to draw it into.
   void PrepareShadow(Frame& frame) {
     if (frame.shadow_light == nullptr || !frame.has_casters) return;
-    const scene::LightNode& light = *frame.shadow_light;
+    const scene::Light3D& light = *frame.shadow_light;
     if (!EnsureShadowMap(light.shadow.map_size)) return;
     frame.shadow_frustum = scene::FitDirectionalShadow(
         light.GetDirection(), frame.casters, frame.has_receivers ? frame.receivers : frame.casters, shadow_map_size_);
     frame.shadow_active = true;
   }
 
-  // This viewport's camera, for culling and depth (BuildDrawList): no GL.
-  void SetCameraMatrices(scene::Camera3D& camera) {
+  // This viewport's camera at its aspect, for culling and depth (BuildDrawList), the frame block and the sky: no GL.
+  void SetCameraMatrices(const scene::Camera3D& camera, float aspect) {
     scene_view_ = camera.GetViewMatrix();
-    scene_view_projection_ = camera.GetProjectionMatrix() * scene_view_;
+    scene_projection_ = camera.GetProjectionMatrix(aspect);
+    scene_view_projection_ = scene_projection_ * scene_view_;
     scene_cull_mask_ = camera.GetCullMask();
   }
 
   // --- 2. FRAME: the per-frame uniform block, read by every program this viewport draws with ---
-  void UploadFrame(scene::Camera3D& camera, const Frame& frame) {
+  void UploadFrame(const scene::Camera3D& camera, const Frame& frame) {
     FrameUniforms block;
-    block.view = camera.GetViewMatrix();
-    block.projection = camera.GetProjectionMatrix();
-    block.view_projection = block.projection * block.view;
-    const Vec3 position = camera.GetPosition();
+    block.view = scene_view_;
+    block.projection = scene_projection_;
+    block.view_projection = scene_view_projection_;
+    const Vec3 position = camera.GetWorldPosition();
     // The projection tells the two kinds apart: w is 1 for orthographic (no divide by depth), -z for
     // perspective. Row 2 of the view matrix is the camera's backward axis in world space.
     block.camera_position = {position, block.projection[3][3] == 1.0f ? 1.0f : 0.0f};
@@ -627,7 +641,7 @@ class GLRenderingDriver : public RenderingDriver {
     CullScene(frame, scene_view_, scene_view_projection_, visible_, scene_cull_mask_);
     stats.culled_nodes += visible_.culled;
     for (const VisibleSet::Node& visible : visible_.nodes) {
-      scene::Node3D* node = visible.node;
+      scene::GeometryInstance3D* node = visible.node;
       const float depth = visible.depth;
       const auto slot = static_cast<uint32_t>(node_slots_.size());
       // Instance data goes to the GPU after sorting (DrawViewport).
@@ -674,11 +688,10 @@ class GLRenderingDriver : public RenderingDriver {
       if (program.id == 0) continue;  // didn't compile (logged)
 
       DrawItem item;
-      item.node = batch;
       item.sprites = batch;
       item.sprite_program = &program;
       item.node_slot = static_cast<uint32_t>(node_slots_.size());
-      node_slots_.push_back({batch, sprites.model, glm::mat3(1.0f), nullptr});
+      node_slots_.push_back({nullptr, sprites.model, glm::mat3(1.0f), nullptr});
       item.material = batch->GetMaterial().get();
       item.blend = item.material ? item.material->blend : BlendMode::Additive;
       item.depth_write = item.material ? item.material->DepthWrite() : false;
@@ -706,9 +719,9 @@ class GLRenderingDriver : public RenderingDriver {
     glEnable(GL_POLYGON_OFFSET_FILL);
     glPolygonOffset(1.5f, 3.0f);
     for (const Frame::Drawable& drawable : frame.drawables) {
-      scene::Node3D* node = drawable.node;
+      scene::GeometryInstance3D* node = drawable.node;
       if (!node->CastsShadow()) continue;
-      const ShadowProgram& program = ShadowProgramFor(node->IsInstanced());
+      const ShadowProgram& program = ShadowProgramFor(IsMultiMesh(*node));
       if (program.id == 0) continue;
       state_.UseProgram(program.id);
       glUniformMatrix4fv(program.model, 1, GL_FALSE, glm::value_ptr(node->GetWorldMatrix()));
@@ -721,12 +734,12 @@ class GLRenderingDriver : public RenderingDriver {
 
   // The sky (sky.h): one triangle at depth 1.0, drawn where the depth buffer still holds the clear
   // value (LEQUAL), or everywhere into a target without depth. No depth writes.
-  void DrawSky(const WCubemap& skybox, scene::Camera3D& camera) {
+  void DrawSky(const WCubemap& skybox) {
     WLW_PROFILE_SCOPE("Sky");
     state_.SetDepthWrite(false);
     state_.SetBlendMode(BlendMode::Opaque);
     state_.UseProgram(skybox_program_);
-    const glm::mat4 ray = SkyRayMatrix(camera.GetViewMatrix(), camera.GetProjectionMatrix());
+    const glm::mat4 ray = SkyRayMatrix(scene_view_, scene_projection_);
     glUniformMatrix4fv(skybox_ray_, 1, GL_FALSE, glm::value_ptr(ray));
     BindGLTexture(skybox, 0);  // a cubemap target: unit 0's 2D texture (the cache's) stays bound
     glDepthFunc(GL_LEQUAL);
@@ -737,8 +750,7 @@ class GLRenderingDriver : public RenderingDriver {
   }
 
   // --- 5. MAIN PASS: the draw list in key order, the sky after the opaque draws ---
-  void DrawMainPass(const scene::Scene& scene, scene::Camera3D& camera, const Frame& frame, bool has_depth,
-                    scene::RenderStats& stats) {
+  void DrawMainPass(const scene::Scene& scene, const Frame& frame, bool has_depth, scene::RenderStats& stats) {
     WLW_PROFILE_SCOPE("Main pass");
     WLW_PROFILE_GPU_ZONE("Main pass");
     // The shadow map on texture unit 1 (unit 0: the mesh's texture; units 2+: ShaderMaterials').
@@ -751,7 +763,7 @@ class GLRenderingDriver : public RenderingDriver {
     const WCubemap* skybox = scene.GetSkybox().get();
     const size_t sky_position = skybox ? SkyDrawPosition(draw_order_, has_depth) : draw_order_.size() + 1;
     for (size_t i = 0; i < draw_order_.size(); ++i) {
-      if (i == sky_position) DrawSky(*skybox, camera);
+      if (i == sky_position) DrawSky(*skybox);
       const DrawOrder& order = draw_order_[i];
       const DrawItem& item = draw_items_[order.item];
       const NodeSlot& slot = node_slots_[item.node_slot];
@@ -764,7 +776,7 @@ class GLRenderingDriver : public RenderingDriver {
         continue;
       }
       if (item.custom) {
-        UseShaderMaterial(*item.custom, *item.custom_program, slot, item.node->IsInstanced());
+        UseShaderMaterial(*item.custom, *item.custom_program, slot, IsMultiMesh(*item.node));
       } else {
         const MeshProgram& program = *item.program;
         state_.UseProgram(program.id);
@@ -775,7 +787,7 @@ class GLRenderingDriver : public RenderingDriver {
       }
       DrawMesh(*item.node, *item.mesh, slot.instances, &stats);
     }
-    if (sky_position == draw_order_.size()) DrawSky(*skybox, camera);  // nothing transparent
+    if (sky_position == draw_order_.size()) DrawSky(*skybox);  // nothing transparent
 
     state_.SetBlendMode(BlendMode::Opaque);  // back to the defaults for whatever draws next
     state_.SetDepthWrite(true);
@@ -783,9 +795,9 @@ class GLRenderingDriver : public RenderingDriver {
 
   // The draw's features, which pick its shader variant.
   template <typename MeshT>
-  static MeshDraw DrawFor(const scene::Node3D& node, const MeshT& mesh, const Frame& frame) {
+  static MeshDraw DrawFor(const scene::GeometryInstance3D& node, const MeshT& mesh, const Frame& frame) {
     MeshDraw draw;
-    draw.instanced = node.IsInstanced();
+    draw.instanced = IsMultiMesh(node);
     draw.textured = TexturedMaterial(node, mesh) != nullptr;
     draw.scene_lit = !frame.lights.empty();
     draw.shadow_active = frame.shadow_active;
@@ -796,35 +808,40 @@ class GLRenderingDriver : public RenderingDriver {
 
   // The material that decides a mesh's look: its own, else its node's (the mesh's wins).
   template <typename MeshT>
-  static const Material* EffectiveMaterial(const scene::Node3D& node, const MeshT& mesh) {
+  static const Material* EffectiveMaterial(const scene::GeometryInstance3D& node, const MeshT& mesh) {
     if (const auto& material = mesh.GetMaterial()) return material.get();
     return node.GetMaterial().get();
   }
   // The material whose texture the mesh shows: its own if it has one, else its node's.
   template <typename MeshT>
-  static const Material* TexturedMaterial(const scene::Node3D& node, const MeshT& mesh) {
+  static const Material* TexturedMaterial(const scene::GeometryInstance3D& node, const MeshT& mesh) {
     if (const auto& material = mesh.GetMaterial(); material && material->HasTexture()) return material.get();
     if (const auto& material = node.GetMaterial(); material && material->HasTexture()) return material.get();
     return nullptr;
   }
   template <typename MeshT>
-  static BlendMode EffectiveMaterialBlend(const scene::Node3D& node, const MeshT& mesh) {
+  static BlendMode EffectiveMaterialBlend(const scene::GeometryInstance3D& node, const MeshT& mesh) {
     const Material* material = EffectiveMaterial(node, mesh);
     return material ? material->blend : BlendMode::Opaque;
   }
   template <typename MeshT>
-  static bool EffectiveDepthWrite(const scene::Node3D& node, const MeshT& mesh) {
+  static bool EffectiveDepthWrite(const scene::GeometryInstance3D& node, const MeshT& mesh) {
     const Material* material = EffectiveMaterial(node, mesh);
     return material ? material->DepthWrite() : true;
   }
 
-  // An instanced node's per-copy data on the GPU (uploaded only when it changed: Upload compares
-  // versions); null for a plain node.
-  static GLInstanceBuffer* PrepareInstances(scene::Node3D& node, scene::RenderStats* stats = nullptr) {
-    if (!node.IsInstanced()) return nullptr;
-    if (!node.GetInstanceBuffer()) node.SetInstanceBuffer(std::make_unique<GLInstanceBuffer>());
-    auto* buffer = static_cast<GLInstanceBuffer*>(node.GetInstanceBuffer());
-    const size_t bytes = buffer->Upload(node.Instances(), node.GetInstancesVersion());
+  static bool IsMultiMesh(const scene::GeometryInstance3D& node) {
+    return node.Kind() == scene::NodeKind::MultiMeshInstance;
+  }
+
+  // A multi-mesh's per-copy data on the GPU (uploaded only when it changed: Upload compares
+  // versions); null for a MeshInstance3D.
+  static GLInstanceBuffer* PrepareInstances(scene::GeometryInstance3D& node, scene::RenderStats* stats = nullptr) {
+    if (!IsMultiMesh(node)) return nullptr;
+    auto& multimesh = static_cast<scene::MultiMeshInstance3D&>(node);
+    if (!multimesh.GetInstanceBuffer()) multimesh.SetInstanceBuffer(std::make_unique<GLInstanceBuffer>());
+    auto* buffer = static_cast<GLInstanceBuffer*>(multimesh.GetInstanceBuffer());
+    const size_t bytes = buffer->Upload(multimesh.Instances(), multimesh.GetInstancesVersion());
     if (stats) stats->instance_bytes += static_cast<int>(bytes);
     return buffer;
   }
@@ -853,7 +870,7 @@ class GLRenderingDriver : public RenderingDriver {
 
   // Draws one mesh with whatever program is in use: once, or once per copy (one call either way).
   template <typename MeshT>
-  void DrawMesh(scene::Node3D& node, MeshT& mesh, GLInstanceBuffer* instances, scene::RenderStats* stats) {
+  void DrawMesh(scene::GeometryInstance3D& node, MeshT& mesh, GLInstanceBuffer* instances, scene::RenderStats* stats) {
     if (!mesh.GetVertexBuffer()) mesh.SetVertexBuffer(device_->CreateVertexBuffer(mesh.GetVertices()));
     if (!mesh.GetIndexBuffer()) mesh.SetIndexBuffer(device_->CreateIndexBuffer(mesh.GetIndices()));
     const auto* vertex_buffer = mesh.GetVertexBuffer();
@@ -862,7 +879,7 @@ class GLRenderingDriver : public RenderingDriver {
     index_buffer->Bind();
     const auto index_count = static_cast<GLsizei>(mesh.GetIndices().size());
     if (instances) {
-      const auto count = static_cast<GLsizei>(node.InstanceCount());
+      const auto count = static_cast<GLsizei>(static_cast<scene::MultiMeshInstance3D&>(node).InstanceCount());
       instances->Attach();
       glDrawElementsInstanced(GL_TRIANGLES, index_count, GL_UNSIGNED_INT, nullptr, count);
       GLInstanceBuffer::Detach();
@@ -911,7 +928,7 @@ class GLRenderingDriver : public RenderingDriver {
 
   // One mesh to draw this frame (main pass), made by BuildDrawList; drawn in the order of its key.
   struct DrawItem {
-    scene::Node3D* node = nullptr;
+    scene::GeometryInstance3D* node = nullptr;  // the mesh's node (null for sprites)
     core::Mesh<core::Vertex3D>* mesh = nullptr;
     uint32_t node_slot = 0;                         // its node's per-frame data (node_slots_)
     const Material* material = nullptr;             // the material deciding its look (mesh's, else node's)
@@ -926,10 +943,10 @@ class GLRenderingDriver : public RenderingDriver {
   };
   // What a node's meshes share, worked out once per frame.
   struct NodeSlot {
-    scene::Node3D* node = nullptr;
-    glm::mat4 model{1.0f};                  // world matrix (walks the parents once)
-    glm::mat3 normal_matrix{1.0f};          // core::NormalMatrix(model) (instanced: the node's part)
-    GLInstanceBuffer* instances = nullptr;  // instanced nodes (set just before drawing)
+    scene::GeometryInstance3D* node = nullptr;  // null for a sprite batch
+    glm::mat4 model{1.0f};                      // world matrix (walks the parents once)
+    glm::mat3 normal_matrix{1.0f};              // core::NormalMatrix(model) (instanced: the node's part)
+    GLInstanceBuffer* instances = nullptr;      // instanced nodes (set just before drawing)
   };
 
   // The engine's 3D shader for a variant key: compiled the first time it's needed, then cached.
@@ -1100,8 +1117,9 @@ class GLRenderingDriver : public RenderingDriver {
   std::vector<DrawOrder> draw_order_;
   bool warmed_up_ = false;
 
-  // This viewport's camera (set by UploadFrame), for culling and sorting.
+  // This viewport's camera (set by SetCameraMatrices), for culling, sorting, the frame block and the sky.
   glm::mat4 scene_view_{1.0f};
+  glm::mat4 scene_projection_{1.0f};
   glm::mat4 scene_view_projection_{1.0f};
   uint32_t scene_cull_mask_ = 0xFFFFFFFFu;  // the camera's layers
 

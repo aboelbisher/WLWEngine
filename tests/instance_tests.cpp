@@ -1,6 +1,6 @@
 // Tests for instancing (Roadmap 1.6): rendering::Instance (52 bytes: layout, transforms, Color32),
-// core::SinCos, TransformBox and InstanceBounds against brute-force corners, Node::WriteInstances
-// and the node's cached instance bounds, plain nodes' boxes, and the deprecated shims.
+// core::SinCos, TransformBox and InstanceBounds against brute-force corners,
+// MultiMeshInstance3D::WriteInstances and its cached instance bounds, mesh nodes' boxes, and the deprecated shims.
 #include <algorithm>
 #include <bit>
 #include <cmath>
@@ -23,7 +23,7 @@
 #include "wlw/core/random.h"
 #include "wlw/fx/particle_system.h"
 #include "wlw/rendering/instance_buffer.h"
-#include "wlw/scene/node.h"
+#include "wlw/scene/geometry_instance.h"
 
 TEST_SUITE_BEGIN("instances");
 
@@ -192,12 +192,11 @@ TEST_CASE("instance bounds match the corners of every copy") {
 }
 
 TEST_CASE("write instances keeps, adds and trims copies") {
-  scene::Node3D node;
-  CHECK_FALSE(node.IsInstanced());
+  scene::MultiMeshInstance3D node;
+  CHECK(node.Kind() == scene::NodeKind::MultiMeshInstance);
   const uint64_t version = node.GetInstancesVersion();
 
   std::span<Instance> copies = node.WriteInstances(3);
-  CHECK(node.IsInstanced());
   CHECK(node.InstanceCount() == 3);
   CHECK(node.GetInstancesVersion() == version + 1);
   for (const Instance& copy : copies) CHECK((copy.Transform() == glm::mat4(1.0f) && copy.color == 0xFFFFFFFFu));
@@ -217,24 +216,26 @@ TEST_CASE("write instances keeps, adds and trims copies") {
   CHECK(node.WriteInstances(7).data() == storage);  // within the reserve: no reallocation
   CHECK(node.WriteInstances(100).data() == storage);
 
+  node.SetModel(ModelOf({{{0, 0, 0}, {1, 1, 1}}}));
+  CHECK(node.HasGeometry());
   node.WriteInstances(0);
-  CHECK(node.IsInstanced());  // instanced with no copies: draws nothing
+  CHECK_FALSE(node.HasGeometry());  // no copies: draws nothing
   node.ClearInstances();
-  CHECK_FALSE(node.IsInstanced());
   CHECK(node.InstanceCount() == 0);
 }
 
 TEST_CASE("instance bounds are cached and follow the copies and the model") {
-  scene::Node3D node;
+  scene::MultiMeshInstance3D node;
   node.SetModel(ModelOf({{{-1, -1, -1}, {1, 1, 1}}, {{2, 0, 0}, {3, 1, 1}}}));  // model box (-1,-1,-1)..(3,1,1)
   node.SetPosition({5, 0, 0});
   std::span<Instance> copies = node.WriteInstances(2);
   copies[1].SetTransform(glm::translate(glm::mat4(1.0f), {0, 10, 0}));
   CHECK(SameBox(node.InstanceBounds(), {{-1, -1, -1}, {3, 11, 1}}));
-  CHECK(SameBox(node.GetAABB(), {{4, -1, -1}, {8, 11, 1}}));  // + the node's position
+  CHECK(SameBox(node.LocalBounds(), node.InstanceBounds()));
+  CHECK(SameBox(node.WorldBounds(), {{4, -1, -1}, {8, 11, 1}}));  // + the node's position
 
   node.SetPosition({0, 0, 0});  // moving the node keeps the node-space bounds
-  CHECK(SameBox(node.GetAABB(), {{-1, -1, -1}, {3, 11, 1}}));
+  CHECK(SameBox(node.WorldBounds(), {{-1, -1, -1}, {3, 11, 1}}));
 
   copies = node.WriteInstances(2);  // a write recomputes them
   copies[1].SetTransform(glm::scale(glm::mat4(1.0f), {2, 2, 2}));
@@ -248,18 +249,18 @@ TEST_CASE("instance bounds are cached and follow the copies and the model") {
   node.SetInstanceBounds(AABB{{-5, -5, -5}, {5, 5, 5}});  // the game's own box wins
   CHECK(SameBox(node.InstanceBounds(), {{-5, -5, -5}, {5, 5, 5}}));
   node.SetPosition({1, 0, 0});
-  CHECK(SameBox(node.GetAABB(), {{-4, -5, -5}, {6, 5, 5}}));
+  CHECK(SameBox(node.WorldBounds(), {{-4, -5, -5}, {6, 5, 5}}));
   node.SetInstanceBounds(std::nullopt);  // computed again
   CHECK(SameBox(node.InstanceBounds(), {{0, 0, 0}, {0, 0, 0}}));
 
   node.WriteInstances(0);  // no copies: the small box at the node, as before
-  CHECK(SameBox(node.GetAABB(), AABB::FromCenterSize({1, 0, 0}, Vec3(0.1f))));
+  CHECK(SameBox(node.WorldBounds(), AABB::FromCenterSize({1, 0, 0}, Vec3(0.1f))));
 }
 
 TEST_CASE("instanced node box matches the corners of every copy in world space") {
   core::Random rng(17);
   scene::Node3D parent;
-  auto node = std::make_shared<scene::Node3D>();
+  auto node = std::make_shared<scene::MultiMeshInstance3D>();
   parent.AddChild(node);
   parent.SetEulerAngles(glm::radians(wlw::Vec3(20, -35, 50)), wlw::EulerOrder::XYZ);
   parent.SetScale({1.0f, -2.0f, 0.5f});
@@ -276,14 +277,14 @@ TEST_CASE("instanced node box matches the corners of every copy in world space")
   }
   // Two Arvo steps (per copy, then the node) can only be looser than the copies' own corners, never
   // tighter: it must contain them.
-  const AABB aabb = node->GetAABB();
+  const AABB aabb = node->WorldBounds();
   CHECK((aabb.min.x <= low.x + 1e-3f && aabb.min.y <= low.y + 1e-3f && aabb.min.z <= low.z + 1e-3f));
   CHECK((aabb.max.x >= high.x - 1e-3f && aabb.max.y >= high.y - 1e-3f && aabb.max.z >= high.z - 1e-3f));
 }
 
-TEST_CASE("plain node box matches the corners of each mesh") {
+TEST_CASE("mesh node box matches the corners of each mesh") {
   scene::Node3D parent;
-  auto node = std::make_shared<scene::Node3D>();
+  auto node = std::make_shared<scene::MeshInstance3D>();
   parent.AddChild(node);
   parent.SetPosition({3, -1, 2});
   parent.SetEulerAngles(glm::radians(wlw::Vec3(0, 0, 25)), wlw::EulerOrder::XYZ);
@@ -295,11 +296,12 @@ TEST_CASE("plain node box matches the corners of each mesh") {
   glm::vec3 low(std::numeric_limits<float>::max()), high(std::numeric_limits<float>::lowest());
   GrowByCorners(world, a, low, high);
   GrowByCorners(world, b, low, high);
-  CHECK(SameBox(node->GetAABB(), {{low.x, low.y, low.z}, {high.x, high.y, high.z}}));
+  CHECK(SameBox(node->WorldBounds(), {{low.x, low.y, low.z}, {high.x, high.y, high.z}}));
+  CHECK(SameBox(node->LocalBounds(), {{-1, -1, -1}, {3, 4, 3}}));
 }
 
 TEST_CASE("model and material getters return the node's own pointers") {
-  scene::Node3D node;
+  scene::MeshInstance3D node;
   auto model = ModelOf({{{0, 0, 0}, {1, 1, 1}}});
   node.SetModel(model);
   CHECK(node.GetModel() == model);
@@ -312,24 +314,7 @@ TEST_CASE("model and material getters return the node's own pointers") {
 #if !WLW_NO_DEPRECATED
 WLW_DISABLE_DEPRECATION_WARNINGS_BEGIN
 TEST_CASE("deprecated instance shims") {
-  scene::Node3D node;
-  std::vector<rendering::InstanceData> old(2);
-  old[1].transform = glm::translate(glm::mat4(1.0f), {1, 2, 3});
-  old[1].tint = {2.0f, 0.5f, -1.0f, 1.0f};  // tints are clamped to 0..1 now
-  node.SetInstances(old);
-  CHECK(node.InstanceCount() == 2);
-  CHECK(node.Instances()[1].Transform() == old[1].transform);
-
-  const std::vector<rendering::InstanceData> back = node.GetInstances();
-  REQUIRE(back.size() == 2);
-  CHECK(back[1].transform == old[1].transform);
-  CHECK(back[1].tint.r == 1.0f);
-  CHECK(Near(back[1].tint.g, 128.0f / 255.0f));
-  CHECK(back[1].tint.b == 0.0f);
-
-  node.SetInstances({});
-  CHECK((node.IsInstanced() && node.InstanceCount() == 0));
-
+  scene::MultiMeshInstance3D node;
   fx::ParticleSystem particles(64, 3u);
   fx::BurstSettings burst;
   burst.count_min = burst.count_max = 20;

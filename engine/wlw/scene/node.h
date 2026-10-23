@@ -3,29 +3,39 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
-#include <optional>
-#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
 
 #include "wlw/core/deprecated.h"
-#include "wlw/core/geometry.h"
 #include "wlw/core/math.h"
-#include "wlw/core/model.h"
 #include "wlw/core/rotation.h"
-#include "wlw/core/vertex_3d.h"
-#include "wlw/rendering/instance_buffer.h"
-#include "wlw/rendering/material.h"
 
 namespace wlw::scene {
 
-class LightNode;    // light.h: a node that is a light source
-class SpriteBatch;  // sprite_batch.h: a node that draws many soft dots in one call
+// What a node is, so code that must tell the types apart (the renderer's gather) switches on one byte instead of
+// making a virtual call per node. Each class sets it in its constructor; reflection (Roadmap 4.1) will give the full
+// type. Like Godot's RenderingServer instance types.
+enum class NodeKind : uint8_t {
+  Node,               // Node3D itself: a group / pivot, draws nothing
+  MeshInstance,       // MeshInstance3D (geometry_instance.h)
+  MultiMeshInstance,  // MultiMeshInstance3D (geometry_instance.h)
+  SpriteBatch,        // SpriteBatch (sprite_batch.h)
+  Light,              // Light3D and its types (light.h)
+  Camera,             // Camera3D (camera_3d.h)
+};
 
 // A node of the 3D scene graph: a transform (position, rotation, scale; LOCAL = relative to the parent), children,
-// a name, an id, render layers and visibility. For now it also carries what it draws (model, material, instanced
-// copies) and its shadow flags; Roadmap 2.3 moves those into node types (MeshInstance3D...).
+// a name, an id, render layers and visibility. It draws nothing itself: the types built on it do (the tree below,
+// like Godot's):
+//
+//   Node3D                      group / pivot
+//   ├─ GeometryInstance3D       model, material, shadow flags, bounds (geometry_instance.h)
+//   │  ├─ MeshInstance3D        draws its model once
+//   │  └─ MultiMeshInstance3D   draws it once per copy, in one draw call
+//   ├─ SpriteBatch              thousands of soft dots in one draw call (sprite_batch.h)
+//   ├─ Light3D                  DirectionalLight3D, PointLight3D, SpotLight3D (light.h)
+//   └─ Camera3D                 a view into the scene (camera_3d.h)
 //
 // The transform is cached: the local matrix (T * R * S) is built when first asked for after a change, the world
 // matrix (parent's world * local) the same way. A change marks the node and everything under it, stopping at
@@ -38,19 +48,10 @@ class SpriteBatch;  // sprite_batch.h: a node that draws many soft dots in one c
 // the children of its Root().
 class Node3D {
  public:
-  Node3D();
+  Node3D() : Node3D(NodeKind::Node) {}
   Node3D(const Node3D&) = delete;             // children hold a back-pointer to their parent,
   Node3D& operator=(const Node3D&) = delete;  // so copying would leave them pointing at the wrong node
   virtual ~Node3D();
-
-  // ---- Model / material ----
-  // By reference: no reference-count traffic per call (the renderer asks every node every frame).
-  // A reference held across SetModel / SetMaterial sees the new one.
-  const std::shared_ptr<core::Model<core::Vertex3D>>& GetModel() const { return model_; }
-  void SetModel(std::shared_ptr<core::Model<core::Vertex3D>> model) { model_ = std::move(model); }
-
-  void SetMaterial(std::shared_ptr<rendering::Material> material) { material_ = std::move(material); }
-  const std::shared_ptr<rendering::Material>& GetMaterial() const { return material_; }
 
   // ---- Local transform (relative to the parent) ----
   void SetPosition(const Vec3& position) {
@@ -153,65 +154,8 @@ class Node3D {
   void SetLayers(uint32_t layers) { layers_ = layers; }
   uint32_t GetLayers() const { return layers_; }
 
-  // ---- Instancing ----
-  // Draws the node's model once per instance, all in ONE draw call (GPU instancing), each copy
-  // with its own transform (relative to the node) and colour tint (rendering::Instance, 52 bytes).
-  // For many copies of the same mesh - particles, crowds, tiles.
-  //
-  // WriteInstances(count) switches the node to instanced drawing (0 copies draw nothing) and returns
-  // its `count` copies to fill in place, like SpriteBatch::Write: the first min(old, count) keep
-  // their values, new ones start as identity + white. The span is valid until the next
-  // WriteInstances / ReserveInstances / ClearInstances. Fill it right away: only a call counts as a
-  // change (the renderer uploads again, the bounds are recomputed), so to change copies later, write
-  // again (the same count keeps their values). Once per frame, not per copy.
-  //   std::span<rendering::Instance> copies = node->WriteInstances(n);
-  //   for (size_t i = 0; i < n; ++i) copies[i] = rendering::Instance::FromTransform(m[i], tint);
-  // (fx::ParticleSystem::WriteTo does this for particles.) ClearInstances() switches back to drawing
-  // the model once.
-  std::span<rendering::Instance> WriteInstances(size_t count) {
-    instances_.resize(count);
-    instanced_ = true;
-    ++instances_version_;
-    return instances_;
-  }
-  // Room for `count` copies, so writes up to it never reallocate (a particle system's capacity).
-  void ReserveInstances(size_t count) { instances_.reserve(count); }
-  void ClearInstances() {
-    instances_.clear();
-    instanced_ = false;
-    ++instances_version_;
-  }
-  bool IsInstanced() const { return instanced_; }
-  std::span<const rendering::Instance> Instances() const { return instances_; }
-  size_t InstanceCount() const { return instances_.size(); }
-  // For the renderer: bumped by every change, so it re-uploads only when something changed.
-  uint64_t GetInstancesVersion() const { return instances_version_; }
-
-  // The box around every copy, in the node's space: SetInstanceBounds' box if one is set, else
-  // computed from the copies (each copy's transform applied to the model's box) and cached until the
-  // copies or the model's box change. Culling uses it (GetAABB), so a moving node costs nothing; for
-  // copies that never move, one write = one computation.
-  wlw::AABB InstanceBounds() const;
-  // A fixed node-space box for the copies instead of the computed one (like Godot's custom_aabb):
-  // skips the computation when the game knows where its copies can go (a particle field's volume),
-  // or makes a vertex shader's displacement visible to culling. nullopt = computed again.
-  void SetInstanceBounds(std::optional<wlw::AABB> box) { custom_instance_bounds_ = box; }
-
-  rendering::WInstanceBuffer* GetInstanceBuffer() const { return instance_buffer_.get(); }
-  void SetInstanceBuffer(std::unique_ptr<rendering::WInstanceBuffer> buffer) { instance_buffer_ = std::move(buffer); }
-
-  // ---- Shadows ----
-  // Opt-in per node (both default to false): a caster blocks the light of shadow-casting lights
-  // (it's drawn into their shadow maps), a receiver shows the shadows that fall on it.
-  void SetCastsShadow(bool casts) { casts_shadow_ = casts; }
-  bool CastsShadow() const { return casts_shadow_; }
-  void SetReceivesShadow(bool receives) { receives_shadow_ = receives; }
-  bool ReceivesShadow() const { return receives_shadow_; }
-
-  // Light sources are nodes too (LightNode); the renderer asks every node whether it is one.
-  virtual const LightNode* AsLight() const { return nullptr; }
-  // Sprite batches are nodes too (SpriteBatch); the renderer draws them its own way.
-  virtual SpriteBatch* AsSpriteBatch() { return nullptr; }
+  // What the node is (set by its class).
+  NodeKind Kind() const { return kind_; }
 
   // ---- Visibility ----
   // Hidden nodes (and everything under them) are skipped by the renderer but stay in the scene.
@@ -220,11 +164,6 @@ class Node3D {
   void SetVisible(bool visible) { visible_ = visible; }
   bool IsVisible() const { return visible_; }
   bool IsVisibleInHierarchy() const;
-
-  // World-space bounding box of this node's model (children not included). For an instanced node,
-  // the box around all its instances (InstanceBounds, cached). Each box is moved to world space by
-  // Arvo's method (wlw::TransformBox: exact for a box, 2 matrix-vector products instead of 8).
-  wlw::AABB GetAABB() const;
 
 #if !WLW_NO_DEPRECATED
   WLW_DISABLE_DEPRECATION_WARNINGS_BEGIN
@@ -235,29 +174,15 @@ class Node3D {
   Mat4 GetModelMatrix() const { return GetWorldMatrix(); }
   WLW_DEPRECATED(0.3, "Use AddChild(node)")
   void AddNode(std::shared_ptr<Node3D> node) { AddChild(std::move(node)); }
-
-  WLW_DEPRECATED(0.2, "Use WriteInstances(count) and fill the span")
-  void SetInstances(const std::vector<rendering::InstanceData>& instances) {
-    std::span<rendering::Instance> out = WriteInstances(instances.size());
-    for (size_t i = 0; i < instances.size(); ++i) {
-      out[i] = rendering::Instance::FromTransform(instances[i].transform, instances[i].tint);
-    }
-  }
-  WLW_DEPRECATED(0.2, "Use Instances() (rendering::Instance: 3 rows + RGBA8)")
-  std::vector<rendering::InstanceData> GetInstances() const {
-    std::vector<rendering::InstanceData> copies;
-    copies.reserve(instances_.size());
-    for (const rendering::Instance& instance : instances_) {
-      copies.push_back({instance.Transform(), Color32::FromPacked(instance.color).ToColor()});
-    }
-    return copies;
-  }
   WLW_DISABLE_DEPRECATION_WARNINGS_END
 #else
   // glm's Quat converts implicitly from a Vec3 of Euler angles (radians): without this, a 0.2-style
   // SetRotation(Vec3(0, 90, 0)) would still compile and turn by 90 radians.
   void SetRotation(const Vec3&) = delete;
 #endif
+
+ protected:
+  explicit Node3D(NodeKind kind);
 
  private:
   void MarkLocalDirty() {
@@ -267,22 +192,6 @@ class Node3D {
   void MarkWorldDirty();
   bool IsAncestorOf(const Node3D& node) const;
   void DetachChildAt(size_t index);
-
-  // The box around all the model's meshes, in the node's space (a point at 0 without any).
-  wlw::AABB ModelBox() const;
-
-  std::shared_ptr<core::Model<core::Vertex3D>> model_;
-  std::shared_ptr<rendering::Material> material_;
-
-  bool instanced_ = false;
-  std::vector<rendering::Instance> instances_;
-  uint64_t instances_version_ = 0;
-  std::unique_ptr<rendering::WInstanceBuffer> instance_buffer_;
-  std::optional<wlw::AABB> custom_instance_bounds_;
-  // InstanceBounds' cache: valid while the copies' version and the model's box are these.
-  mutable wlw::AABB instance_bounds_{};
-  mutable wlw::AABB instance_bounds_model_box_{};
-  mutable uint64_t instance_bounds_version_ = UINT64_MAX;
 
   Vec3 position_{0.0f};
   Quat rotation_{1.0f, 0.0f, 0.0f, 0.0f};
@@ -299,8 +208,7 @@ class Node3D {
   mutable bool world_dirty_ = false;
 
   bool visible_ = true;
-  bool casts_shadow_ = false;
-  bool receives_shadow_ = false;
+  NodeKind kind_ = NodeKind::Node;
   uint32_t layers_ = 1;
   uint64_t id_;
   std::string name_;

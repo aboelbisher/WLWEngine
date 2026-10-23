@@ -4,6 +4,8 @@
 
 #include "test_helpers.h"
 #include "wlw/rendering/scene_gather.h"
+#include "wlw/scene/camera_3d.h"
+#include "wlw/scene/geometry_instance.h"
 #include "wlw/scene/light.h"
 #include "wlw/scene/scene.h"
 #include "wlw/scene/sprite_batch.h"
@@ -25,8 +27,9 @@ std::shared_ptr<core::Model<core::Vertex3D>> CubeModel() {
   return model;
 }
 
-std::shared_ptr<scene::Node3D> Cube(const Vec3& position) {
-  auto node = std::make_shared<scene::Node3D>();
+template <typename T = scene::MeshInstance3D>
+std::shared_ptr<T> Cube(const Vec3& position) {
+  auto node = std::make_shared<T>();
   node->SetModel(CubeModel());
   node->SetPosition(position);
   return node;
@@ -47,10 +50,14 @@ TEST_CASE("gather collects drawables lights and sprites") {
   hidden->SetVisible(false);
   hidden->AddChild(Cube({2, 0, 0}));  // hidden with its parent
   scene.Root().AddChild(hidden);
-  auto empty_instanced = Cube({3, 0, 0});
-  empty_instanced->WriteInstances(0);
+  auto empty_instanced = Cube<scene::MultiMeshInstance3D>({3, 0, 0});  // no copies: nothing to draw
   scene.Root().AddChild(empty_instanced);
-  scene.Root().AddChild(std::make_shared<scene::DirectionalLight>());
+  auto instanced = Cube<scene::MultiMeshInstance3D>({4, 0, 0});
+  instanced->WriteInstances(2);
+  scene.Root().AddChild(instanced);
+  scene.Root().AddChild(std::make_shared<scene::MeshInstance3D>());  // no model
+  scene.Root().AddChild(std::make_shared<scene::DirectionalLight3D>());
+  scene.Root().AddChild(std::make_shared<scene::Camera3D>());  // draws nothing
   auto dots = std::make_shared<scene::SpriteBatch>(4);
   dots->Write(1)[0] = {};
   scene.Root().AddChild(dots);
@@ -58,8 +65,9 @@ TEST_CASE("gather collects drawables lights and sprites") {
 
   SceneGather gather;
   GatherScene(scene, gather);
-  CHECK(gather.drawables.size() == 1);
+  REQUIRE(gather.drawables.size() == 2);
   CHECK(gather.drawables[0].node == cube.get());
+  CHECK(gather.drawables[1].node == instanced.get());
   CHECK(gather.lights.size() == 1);
   CHECK(gather.sprites.size() == 1);
   CHECK((!gather.has_casters && !gather.has_receivers));
@@ -122,7 +130,7 @@ TEST_CASE("cull normal matrices") {
   scene::Scene scene;
   auto scaled = Cube({0, 0, 0});
   scaled->SetScale({2.0f, 1.0f, 1.0f});
-  auto instanced = Cube({1, 0, 0});
+  auto instanced = Cube<scene::MultiMeshInstance3D>({1, 0, 0});
   instanced->SetScale({2.0f, 1.0f, 1.0f});
   instanced->WriteInstances(1);
   scene.Root().AddChild(scaled);

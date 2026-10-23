@@ -5,6 +5,8 @@
 #include <glm/glm.hpp>
 
 #include "test_helpers.h"
+#include "wlw/core/deprecated.h"
+#include "wlw/scene/geometry_instance.h"
 #include "wlw/scene/light.h"
 #include "wlw/scene/shadow_map.h"
 
@@ -21,20 +23,21 @@ bool NearVec(const glm::vec3& a, const glm::vec3& b, float tolerance = 1e-4f) {
 }  // namespace
 
 TEST_CASE("lights are nodes") {
-  auto sun = std::make_shared<scene::DirectionalLight>();
-  auto bulb = std::make_shared<scene::PointLight>();
-  scene::Node3D plain;
-  CHECK((sun->AsLight() == sun.get() && bulb->AsLight() == bulb.get() && plain.AsLight() == nullptr));
-  CHECK((sun->GetType() == scene::LightNode::Type::Directional && bulb->GetType() == scene::LightNode::Type::Point));
+  auto sun = std::make_shared<scene::DirectionalLight3D>();
+  auto bulb = std::make_shared<scene::PointLight3D>();
+  scene::MeshInstance3D mesh;
+  CHECK((sun->Kind() == scene::NodeKind::Light && bulb->Kind() == scene::NodeKind::Light &&
+         mesh.Kind() == scene::NodeKind::MeshInstance && scene::Node3D().Kind() == scene::NodeKind::Node));
+  CHECK((sun->GetType() == scene::Light3D::Type::Directional && bulb->GetType() == scene::Light3D::Type::Point));
   // Shadows are opt-in, for lights and for geometry.
-  CHECK((!sun->CastsShadows() && !plain.CastsShadow() && !plain.ReceivesShadow()));
+  CHECK((!sun->CastsShadows() && !mesh.CastsShadow() && !mesh.ReceivesShadow()));
   // A directional light points straight down by default.
   CHECK(NearVec(sun->GetDirection(), {0.0f, -1.0f, 0.0f}));
 }
 
 TEST_CASE("set direction") {
   // SetDirection turns the node so its forward axis (-Z) points that way, for any direction.
-  scene::DirectionalLight light;
+  scene::DirectionalLight3D light;
   const glm::vec3 directions[] = {{-0.5f, -1.0f, -0.7f}, {0.0f, 0.0f, -1.0f}, {1.0f, 0.0f, 0.0f},
                                   {0.3f, 0.9f, 0.1f},    {0.0f, -1.0f, 0.0f}, {-1.0f, -1.0f, 1.0f}};
   for (const glm::vec3& d : directions) {
@@ -44,12 +47,31 @@ TEST_CASE("set direction") {
   // A parent's rotation turns the light with it: under a parent turned 90 degrees around Y,
   // a light pointing along -Z ends up pointing along -X.
   auto parent = std::make_shared<scene::Node3D>();
-  auto child = std::make_shared<scene::DirectionalLight>();
+  auto child = std::make_shared<scene::DirectionalLight3D>();
   child->SetDirection({0.0f, 0.0f, -1.0f});
   parent->AddChild(child);
   parent->SetEulerAngles(glm::radians(wlw::Vec3(0.0f, 90.0f, 0.0f)), wlw::EulerOrder::XYZ);
   CHECK(NearVec(child->GetDirection(), {-1.0f, 0.0f, 0.0f}, 1e-3f));
 }
+
+TEST_CASE("spot light cone in radians") {
+  scene::SpotLight3D spot;
+  CHECK((Near(spot.GetInnerAngle(), glm::radians(12.5f)) && Near(spot.GetOuterAngle(), glm::radians(17.5f))));
+  spot.SetInnerAngle(0.2f);
+  spot.SetOuterAngle(0.3f);
+  CHECK((spot.GetInnerAngle() == 0.2f && spot.GetOuterAngle() == 0.3f));
+  CHECK(NearVec(spot.GetDirection(), {0.0f, -1.0f, 0.0f}));
+}
+
+#if !WLW_NO_DEPRECATED
+WLW_DISABLE_DEPRECATION_WARNINGS_BEGIN
+TEST_CASE("deprecated light names") {
+  std::shared_ptr<scene::DirectionalLight> sun = std::make_shared<scene::DirectionalLight>();
+  std::shared_ptr<scene::DirectionalLight3D> same = sun;  // the same type
+  CHECK(same->GetType() == scene::Light3D::Type::Directional);
+}
+WLW_DISABLE_DEPRECATION_WARNINGS_END
+#endif
 
 TEST_CASE("shadow box contains the bounds") {
   // Every corner of the bounds lands inside the light's box (clip space -1..1 on all axes).

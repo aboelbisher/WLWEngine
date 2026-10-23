@@ -16,6 +16,7 @@
 #include "wlw/core/random.h"
 #include "wlw/core/rotation.h"
 #include "wlw/rendering/scene_gather.h"
+#include "wlw/scene/geometry_instance.h"
 #include "wlw/scene/light.h"
 #include "wlw/scene/node.h"
 #include "wlw/scene/scene.h"
@@ -333,7 +334,7 @@ TEST_CASE("layers: the camera's cull mask") {
   auto model = std::make_shared<core::Model<core::Vertex3D>>();
   model->meshes.push_back(utils::createCubeWithNormals(1.0f));
   scene::Scene scene;
-  auto a = std::make_shared<Node3D>(), b = std::make_shared<Node3D>();
+  auto a = std::make_shared<scene::MeshInstance3D>(), b = std::make_shared<scene::MeshInstance3D>();
   a->SetModel(model);
   b->SetModel(model);
   b->SetLayers(1u << 3);
@@ -359,7 +360,7 @@ TEST_CASE("the gather skips hidden branches, depth first in child order") {
   model->meshes.push_back(utils::createCubeWithNormals(1.0f));
   scene::Scene scene;
   auto make = [&] {
-    auto node = std::make_shared<Node3D>();
+    auto node = std::make_shared<scene::MeshInstance3D>();
     node->SetModel(model);
     return node;
   };
@@ -412,7 +413,7 @@ WLW_DISABLE_DEPRECATION_WARNINGS_END
 #endif
 
 TEST_CASE("lights aim with a look rotation") {
-  scene::DirectionalLight light;
+  scene::DirectionalLight3D light;
   CHECK(NearVec(light.GetDirection(), {0, -1, 0}));  // the default: straight down
   CHECK(NearVec(light.Up(), {0, 0, -1}));            // as the old Euler aiming had it
   light.SetDirection({0, 1, 0});

@@ -6,7 +6,7 @@
 #include "bench.h"
 #include "wlw/fx/flow_particles.h"
 #include "wlw/fx/particle_system.h"
-#include "wlw/scene/node.h"
+#include "wlw/scene/geometry_instance.h"
 #include "wlw/scene/sprite_batch.h"
 
 using namespace wlw;
@@ -63,7 +63,7 @@ void ParticleBenchmarks(bench::Context& ctx) {
     system.Update(1.0f / 60.0f);
     bench::Context::Keep(system.Count());
   });
-  scene::Node3D node;  // (the name is older than WriteTo: before 1.6 it timed BuildInstances)
+  scene::MultiMeshInstance3D node;  // (the name is older than WriteTo: before 1.6 it timed BuildInstances)
   ctx.Run("fx/particles instances 5k", [&] {
     system.WriteTo(node);
     bench::Context::Keep(node.InstanceCount());

@@ -10,7 +10,8 @@
 
 namespace wlw::scene {
 class Scene;
-class LightNode;
+class GeometryInstance3D;
+class Light3D;
 class SpriteBatch;
 }  // namespace wlw::scene
 
@@ -24,30 +25,31 @@ namespace wlw::rendering {
 // Everything a viewport's scene holds this frame. The lists are reused: Clear() keeps their memory.
 struct SceneGather {
   struct Drawable {
-    scene::Node3D* node;
-    AABB box;  // world bounds, computed once per frame (GetAABB walks every mesh / copy)
+    scene::GeometryInstance3D* node;
+    AABB box;  // world bounds, computed once per frame (WorldBounds walks every mesh / copy)
   };
   struct Sprites {
     scene::SpriteBatch* batch;
     AABB box;  // world bounds (its SetBounds box through its transform)
   };
-  std::vector<const scene::LightNode*> lights;  // visible light nodes
-  std::vector<Drawable> drawables;              // visible nodes with something to draw
-  std::vector<Sprites> sprites;                 // visible sprite batches with dots (no shadows)
-  AABB casters{}, receivers{};                  // around every shadow caster / receiver
+  std::vector<const scene::Light3D*> lights;  // visible light nodes
+  std::vector<Drawable> drawables;            // visible mesh / multi-mesh nodes with something to draw
+  std::vector<Sprites> sprites;               // visible sprite batches with dots (no shadows)
+  AABB casters{}, receivers{};                // around every shadow caster / receiver
   bool has_casters = false, has_receivers = false;
 
   void Clear();
 };
 
 // Walks `scene` once (depth first, hidden branches skipped): visible lights, drawables (with their world boxes), sprite
-// batches, and the boxes around shadow casters and receivers. Appends to `out` (Clear it first).
+// batches, and the boxes around shadow casters and receivers. Appends to `out` (Clear it first). The node types are
+// told apart by Node3D::Kind() (no virtual call per node).
 void GatherScene(const scene::Scene& scene, SceneGather& out);
 
 // What the camera sees, with what drawing it needs, worked out once per node.
 struct VisibleSet {
   struct Node {
-    scene::Node3D* node;
+    scene::GeometryInstance3D* node;
     glm::mat4 model;          // world matrix (Node3D::GetWorldMatrix, cached)
     glm::mat3 normal_matrix;  // core::NormalMatrix(model) (normal_matrix.h); instanced: the node's part
     float depth;              // box centre's distance in front of the camera, along its view direction

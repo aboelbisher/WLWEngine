@@ -32,11 +32,9 @@ uint64_t NewNodeId() {
   }
 }
 
-bool SameBox(const wlw::AABB& a, const wlw::AABB& b) { return a.min == b.min && a.max == b.max; }
-
 }  // namespace
 
-Node3D::Node3D() : id_(NewNodeId()) {}
+Node3D::Node3D(NodeKind kind) : kind_(kind), id_(NewNodeId()) {}
 
 Node3D::~Node3D() {
   for (const std::shared_ptr<Node3D>& child : children_) {
@@ -247,40 +245,6 @@ Node3D* Node3D::GetNode(std::string_view path) const {
 void Node3D::SetId(uint64_t id) {
   if (!WLW_VERIFY(id != 0, "SetId: 0 is not a valid node id")) return;
   id_ = id;
-}
-
-// ---- Bounds ----
-
-wlw::AABB Node3D::ModelBox() const {
-  if (!model_ || model_->meshes.empty()) return {{0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}};
-  wlw::AABB box = model_->meshes.front()->GetLocalAABB();
-  for (size_t i = 1; i < model_->meshes.size(); ++i) box = wlw::Union(box, model_->meshes[i]->GetLocalAABB());
-  return box;
-}
-
-wlw::AABB Node3D::InstanceBounds() const {
-  if (custom_instance_bounds_) return *custom_instance_bounds_;
-  const wlw::AABB model_box = ModelBox();
-  if (instance_bounds_version_ != instances_version_ || !SameBox(instance_bounds_model_box_, model_box)) {
-    instance_bounds_ = rendering::InstanceBounds(instances_, model_box);
-    instance_bounds_model_box_ = model_box;
-    instance_bounds_version_ = instances_version_;
-  }
-  return instance_bounds_;
-}
-
-wlw::AABB Node3D::GetAABB() const {
-  const Mat4& world = GetWorldMatrix();
-  if (!model_ || model_->meshes.empty() || (instanced_ && instances_.empty())) {
-    return wlw::AABB::FromCenterSize(Vec3(world[3]), Vec3(0.1f));
-  }
-  if (instanced_) return wlw::TransformBox(world, InstanceBounds());
-  // Mesh by mesh: as tight as the 8 corners of each (a union box first would grow under rotation).
-  wlw::AABB box = wlw::TransformBox(world, model_->meshes.front()->GetLocalAABB());
-  for (size_t i = 1; i < model_->meshes.size(); ++i) {
-    box = wlw::Union(box, wlw::TransformBox(world, model_->meshes[i]->GetLocalAABB()));
-  }
-  return box;
 }
 
 }  // namespace wlw::scene

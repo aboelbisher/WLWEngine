@@ -6,9 +6,8 @@
 #include "snake_game.h"
 #include "wlw/app/application.h"
 #include "wlw/rendering/material.h"
-#include "wlw/scene/follow_camera.h"
-#include "wlw/scene/node.h"
-#include "wlw/scene/orthographic_camera.h"
+#include "wlw/scene/camera_3d.h"
+#include "wlw/scene/geometry_instance.h"
 #include "wlw/fx/particle_system.h"
 
 namespace snake {
@@ -30,14 +29,13 @@ class SnakeApp : public wlw::app::System {
 
  private:
   using Model = std::shared_ptr<wlw::core::Model<wlw::core::Vertex3D>>;
-  using NodePtr = std::shared_ptr<wlw::scene::Node3D>;
+  using NodePtr = std::shared_ptr<wlw::scene::MeshInstance3D>;
 
   void BuildBoard();
   void ReadInput();
   void Restart();
   void EatBurst();
   void SetupCameras();
-  void FitPerspectiveCameraToScreen();
   void SyncSnakeNodes(float t);  // game state -> pooled segment nodes
   NodePtr AcquireSegmentNode(size_t index);
   void UpdateTitle();
@@ -59,9 +57,9 @@ class SnakeApp : public wlw::app::System {
   NodePtr food_node_;
   // Sparkles when the snake eats: one instanced node draws every particle in one call.
   wlw::fx::ParticleSystem particles_{256};
-  NodePtr particle_node_;
-  std::shared_ptr<wlw::scene::OrthographicCamera> ortho_camera_;
-  std::shared_ptr<wlw::scene::FollowCamera> perspective_camera_;
+  std::shared_ptr<wlw::scene::MultiMeshInstance3D> particle_node_;
+  std::shared_ptr<wlw::scene::Camera3D> ortho_camera_;
+  std::shared_ptr<wlw::scene::Camera3D> perspective_camera_;
 };
 
 }  // namespace snake

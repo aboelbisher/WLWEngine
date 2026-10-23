@@ -3,7 +3,7 @@
 #include <algorithm>
 
 #include "wlw/core/normal_matrix.h"
-#include "wlw/scene/camera_3d.h"
+#include "wlw/scene/geometry_instance.h"
 #include "wlw/scene/light.h"
 #include "wlw/scene/scene.h"
 #include "wlw/scene/sprite_batch.h"
@@ -37,21 +37,26 @@ namespace {
 
 // What one visible node adds (its children not included).
 void GatherOne(scene::Node3D& node, SceneGather& out) {
-  if (scene::SpriteBatch* sprites = node.AsSpriteBatch()) {
-    if (!sprites->Empty()) out.sprites.push_back({sprites, sprites->WorldBounds()});
-    return;
+  switch (node.Kind()) {
+    case scene::NodeKind::MeshInstance:
+    case scene::NodeKind::MultiMeshInstance: {
+      auto& geometry = static_cast<scene::GeometryInstance3D&>(node);
+      if (!geometry.HasGeometry()) return;  // no model, or a multi-mesh with zero copies
+      const AABB box = geometry.WorldBounds();
+      out.drawables.push_back({&geometry, box});
+      if (geometry.CastsShadow()) Grow(out.casters, out.has_casters, box);
+      if (geometry.ReceivesShadow()) Grow(out.receivers, out.has_receivers, box);
+      return;
+    }
+    case scene::NodeKind::SpriteBatch: {
+      auto& sprites = static_cast<scene::SpriteBatch&>(node);
+      if (!sprites.Empty()) out.sprites.push_back({&sprites, sprites.WorldBounds()});
+      return;
+    }
+    case scene::NodeKind::Light: out.lights.push_back(static_cast<const scene::Light3D*>(&node)); return;
+    case scene::NodeKind::Node:
+    case scene::NodeKind::Camera: return;
   }
-  if (const scene::LightNode* light = node.AsLight()) {
-    out.lights.push_back(light);
-    return;
-  }
-  const auto& model = node.GetModel();
-  if (model == nullptr || model->meshes.empty()) return;
-  if (node.IsInstanced() && node.InstanceCount() == 0) return;  // instanced with zero copies
-  const AABB box = node.GetAABB();
-  out.drawables.push_back({&node, box});
-  if (node.CastsShadow()) Grow(out.casters, out.has_casters, box);
-  if (node.ReceivesShadow()) Grow(out.receivers, out.has_receivers, box);
 }
 
 // A node, then its children: depth first in child order, a hidden node's whole branch skipped at once.
@@ -72,7 +77,7 @@ void CullScene(const SceneGather& gather, const glm::mat4& view, const glm::mat4
   out.Clear();
   const Frustum frustum = Frustum::FromMatrix(view_projection);
   for (const SceneGather::Drawable& drawable : gather.drawables) {
-    scene::Node3D* node = drawable.node;
+    scene::GeometryInstance3D* node = drawable.node;
     if ((node->GetLayers() & cull_mask) == 0) continue;  // not on the camera's layers: not counted as culled
     if (!Overlaps(frustum, drawable.box)) {
       ++out.culled;

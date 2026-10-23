@@ -11,7 +11,7 @@
 #include "wlw/core/deprecated.h"
 #include "wlw/core/random.h"
 #include "wlw/rendering/instance_buffer.h"
-#include "wlw/scene/node.h"
+#include "wlw/scene/geometry_instance.h"
 
 namespace wlw::fx {
 
@@ -36,7 +36,7 @@ struct BurstSettings {
 };
 
 // A CPU particle simulation that outputs GPU instances: the particles of all bursts are drawn as
-// copies of one mesh in a single instanced draw call (WriteTo: Node::WriteInstances).
+// copies of one mesh in a single instanced draw call (WriteTo: MultiMeshInstance3D::WriteInstances).
 //
 // Storage is one contiguous array with a fixed capacity. A dead particle is replaced by the last
 // one ("swap-remove"): O(1), no gaps, no allocation per particle. Bursts beyond the capacity are
@@ -72,7 +72,7 @@ class ParticleSystem {
   // Makes `node` draw one copy of its model per visible particle (alive, not delayed, size > 0):
   // node.WriteInstances, filled in place (52 bytes each). Call once per frame after Update. The
   // first call reserves the system's capacity in the node, so later ones never allocate.
-  void WriteTo(scene::Node3D& node) const;
+  void WriteTo(scene::MultiMeshInstance3D& node) const;
 
 #if !WLW_NO_DEPRECATED
   WLW_DISABLE_DEPRECATION_WARNINGS_BEGIN

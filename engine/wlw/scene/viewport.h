@@ -14,7 +14,6 @@
 #include "wlw/rendering/post_pass.h"
 #include "wlw/rendering/render_target.h"
 #include "wlw/scene/camera_3d.h"
-#include "wlw/scene/fps_camera.h"
 #include "wlw/scene/scene.h"
 #include "wlw/ui/canvas.h"
 
@@ -239,7 +238,7 @@ class Viewport {
   std::shared_ptr<rendering::RenderTarget> target_;
   ViewportSettings settings_;
   std::shared_ptr<Scene> scene_ = Scene::Create();
-  std::shared_ptr<Camera3D> camera_ = FPSCamera::Create();
+  std::shared_ptr<Camera3D> camera_ = Camera3D::Create();
   ui::Canvas canvas_;
   // Every 2D layer in drawing order: Picture ones, then Overlay ones, each by order. The default
   // one (canvas_) has no `owned` canvas.
