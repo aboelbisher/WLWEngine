@@ -7,7 +7,6 @@
 #include <algorithm>
 #include <glm/glm.hpp>
 
-#include "wlw/core/vertex_2d.h"
 #include "wlw/core/vertex_3d.h"
 #include "wlw/rendering/material.h"
 #include "wlw/rendering/vertex_buffer.h"
@@ -17,7 +16,7 @@
 namespace wlw::core {
 
 template <typename T>
-concept OnlyVerticesTypes = std::is_same_v<T, core::Vertex2D> || std::is_same_v<T, core::Vertex3D>;
+concept OnlyVerticesTypes = std::is_same_v<T, core::Vertex3D>;
 
 template <OnlyVerticesTypes T>
 class Mesh {

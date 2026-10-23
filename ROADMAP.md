@@ -7,10 +7,11 @@ around the editor and iOS ("Why this order"). Work goes one step at a time, in o
 stable: commits name them ("Roadmap 4.3b: ..."). Commits and CHANGELOG entries from before 2026-10-21
 use the old numbers: "Old numbering" at the end maps them.
 
-**Current step:** 2.2 Transform and Node3D (plan in chat first) · **Updated:** 2026-10-23
+**Current step:** 2.3 Node types (plan in chat first) · **Updated:** 2026-10-23
 
-**Next session:** plan 2.2 in chat and wait for the OK. The 0.2 shims stay through v0.2.x and go before v0.3.0; the 0.3
-  ones (2.1: core::Vector2/3, core::Color, scene::AABB...) stay through v0.3.x; the games move off them in 2.8.
+**Next session:** plan 2.3 in chat and wait for the OK. The 0.2 shims stay through v0.2.x and go before v0.3.0; the 0.3
+  ones (2.1: core::Vector2/3, core::Color, scene::AABB...; 2.2: SetRotation(degrees), GetModelMatrix, AddNode,
+  IterateOverNodes) stay through v0.3.x; the games move off them in 2.8.
 
 Where things stand (2026-10-21):
 - Done: Phase 0 = v0.1.0 (2026-10-15), Phase 1 = v0.2.0 (2026-10-18), each step one squashed commit on main named
@@ -39,9 +40,8 @@ Where things stand (2026-10-21):
   case, and test cvars are static with unique "test.<case>.*" names.
 - Benchmarks: CLAUDE.md "Benchmarks". Performance steps run them before and after with `--baseline` on desktop +
   Linux CI; phone runs are optional and pinned to one fast core (Pixel 4: `taskset 80`). Known hot spots:
-  render/gather 10k = 1.86 ms on the Pixel 4 (world matrices recomputed per node: 2.2, 9.5), transform/move flat
-  10k = 1.3 ms (2.2). Header-only engine code (node.h transforms) stays -O0 in a game's Debug build until 2.2
-  moves it into .cpp files.
+  render/gather 10k = 1.86 ms on the Pixel 4 before 2.2 (world matrices now cached; world boxes still recomputed
+  per node per frame: 9.5). 2.2 moved the node transforms into node_3d.cpp (optimized in games' Debug builds).
 - Local machine: `build/win-debug` and `build/win-release` from a VS 18 dev shell (`build/windows-debug` is stale).
   The Android preset builds locally with `ANDROID_NDK_HOME=%LOCALAPPDATA%\Android\Sdk\ndk\30.0.16248370`. WSL Ubuntu
   has no compilers: Linux is checked by CI only.
@@ -254,9 +254,9 @@ The editor shows and edits what this phase defines, so it comes first.
   `core::Vector2/3` replaced (0.3 shims). `Color`: RGBA as authored (sRGB-encoded; see D8), hex and text, exact sRGB
   conversions, operators, `Lerp`, `WithAlpha`, `Color32`. Geometry (AABB, Sphere, Ray, Plane, Frustum, Rect) with
   `Overlaps` and `Raycast` in namespace `wlw`.
-- [ ] **2.2 Transform and Node3D.** Position + quaternion + scale; local and world matrices cached
+- [x] **2.2 Transform and Node3D.** *(done 2026-10-23, commit "Roadmap 2.2: transform and Node3D"; Windows A/B vs main: render/gather 10k -54%, transform/move flat 10k -71%, read nested 10k -87%)* Position + quaternion + scale; local and world matrices cached
   with dirty propagation; children in a vector (a stable order: the hierarchy panel and scene files show it);
-  `SetParent(keep_world)`, `LookAt`, `Rotate`, world getters and setters, Euler helpers; names, `FindChild` and
+  `Reparent(keep_world)`, `LookAt`, `Rotate`, world getters and setters, Euler helpers; names, `FindChild` and
   `GetNode(path)`; a 64-bit id per node, unique in its scene (scene files, undo and node references use it: D15);
   a render layer mask. The `Node<T>` template, Node2D, Vertex2D and Triangle2D are removed; Scene gets a root node.
   Hot transform code moves into .cpp files.

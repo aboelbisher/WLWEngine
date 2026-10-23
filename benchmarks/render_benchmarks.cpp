@@ -32,11 +32,11 @@ std::shared_ptr<scene::Scene> GridScene(int count) {
     node->SetPosition({static_cast<float>(i % side - side / 2), 0.0f, static_cast<float>(i / side - side / 2)});
     node->SetCastsShadow(i % 4 == 0);
     node->SetReceivesShadow(true);
-    scene->AddNode(node);
+    scene->Root().AddChild(node);
   }
   auto sun = std::make_shared<scene::DirectionalLight>();
   sun->SetCastsShadows(true);
-  scene->AddNode(sun);
+  scene->Root().AddChild(sun);
   return scene;
 }
 
@@ -90,8 +90,8 @@ void RenderBenchmarks(bench::Context& ctx, int count, const char* size) {
   });
 }
 
-// Moving nodes and reading their world matrices: flat (top-level nodes) and nested (chains of 4,
-// so every GetModelMatrix walks its parents).
+// Moving nodes and reading their world matrices: flat (top-level nodes) and nested (chains of 4:
+// turning a root dirties its chain). "read nested" reads the same matrices with nothing moved.
 void TransformBenchmarks(bench::Context& ctx, int count, const char* size) {
   const std::string suffix = std::string(" ") + size;
   std::vector<std::shared_ptr<scene::Node3D>> flat;
@@ -102,8 +102,8 @@ void TransformBenchmarks(bench::Context& ctx, int count, const char* size) {
     float sum = 0.0f;
     for (size_t i = 0; i < flat.size(); ++i) {
       flat[i]->SetPosition({static_cast<float>(i), t, 0.0f});
-      flat[i]->SetRotation({0.0f, t * 10.0f, 0.0f});
-      sum += flat[i]->GetModelMatrix()[3].y;
+      flat[i]->SetRotation(glm::angleAxis(t * 10.0f, Vec3(0.0f, 1.0f, 0.0f)));
+      sum += flat[i]->GetWorldMatrix()[3].y;
     }
     bench::Context::Keep(sum);
   });
@@ -116,16 +116,22 @@ void TransformBenchmarks(bench::Context& ctx, int count, const char* size) {
     for (int depth = 1; depth < 4; ++depth) {
       auto child = std::make_shared<scene::Node3D>();
       child->SetPosition({0.0f, 1.0f, 0.0f});
-      parent->AddNode(child);
+      parent->AddChild(child);
       all.push_back(child);
       parent = child;
     }
   }
   ctx.Run("transform/move nested" + suffix, [&] {
     t += 0.01f;
-    for (auto& root : roots) root->SetRotation({0.0f, t * 10.0f, 0.0f});
+    for (auto& root : roots) root->SetRotation(glm::angleAxis(t * 10.0f, Vec3(0.0f, 1.0f, 0.0f)));
     float sum = 0.0f;
-    for (auto& node : all) sum += node->GetModelMatrix()[3].x;
+    for (auto& node : all) sum += node->GetWorldMatrix()[3].x;
+    bench::Context::Keep(sum);
+  });
+  // Nothing moves: what the world-matrix cache saves on a static scene.
+  ctx.Run("transform/read nested" + suffix, [&] {
+    float sum = 0.0f;
+    for (auto& node : all) sum += node->GetWorldMatrix()[3].x;
     bench::Context::Keep(sum);
   });
 }

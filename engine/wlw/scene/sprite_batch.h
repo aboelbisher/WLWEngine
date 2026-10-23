@@ -26,7 +26,7 @@ namespace wlw::scene {
 // dot per frame and the renderer makes one instanced call for all of them.
 //
 //   auto dots = std::make_shared<scene::SpriteBatch>(20000);
-//   viewport->GetScene()->AddNode(dots);
+//   viewport->GetScene()->Root().AddChild(dots);
 //   // every frame (or let fx::FlowParticles::WriteTo do it):
 //   std::span<rendering::SpriteInstance> out = dots->Write(count);
 //   ... fill out[i] ...
@@ -78,7 +78,7 @@ class SpriteBatch : public Node3D {
   glm::vec2 BoundsMax() const { return bounds_max_; }
   // The bounds in world space (through the node's transform and its parents').
   wlw::AABB WorldBounds() const {
-    const glm::mat4 world = GetModelMatrix();
+    const glm::mat4& world = GetWorldMatrix();
     glm::vec3 lo(std::numeric_limits<float>::max()), hi(std::numeric_limits<float>::lowest());
     for (const glm::vec2 corner :
          {bounds_min_, bounds_max_, glm::vec2(bounds_min_.x, bounds_max_.y), glm::vec2(bounds_max_.x, bounds_min_.y)}) {

@@ -84,7 +84,7 @@ struct ViewportSettings {
 //   auto view = scene::Viewport::Create({.format = TextureFormat::RGBA16F, .depth = false});
 //   view->SetSizeFromScreen(0.5f);          // half resolution, follows rotation / resizes
 //   view->SetCamera(top_down_camera);
-//   view->GetScene()->AddNode(particles);   // its own scene; or SetScene(shared_world)
+//   view->GetScene()->Root().AddChild(particles);   // its own scene; or SetScene(shared_world)
 //   window.AddViewport(view);
 //   material->SetParam("uPicture", view->GetTexture());
 class Viewport {

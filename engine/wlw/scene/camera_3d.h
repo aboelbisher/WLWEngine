@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <memory>
 
 #include <glm/gtc/matrix_transform.hpp>
@@ -38,6 +39,11 @@ class Camera3D {
   virtual void ProcessKeyboard(CameraMovement direction, float deltaTime) = 0;
   virtual void ProcessMouseMovement(float xoffset, float yoffset, bool constrainPitch = true) = 0;
 
+  // The render layers this camera draws (Node3D::SetLayers): a node is drawn when it shares a bit with the mask.
+  // Default: every layer. A minimap camera can leave out the player's effects, a UI-model camera see only its own.
+  void SetCullMask(uint32_t mask) { cull_mask_ = mask; }
+  uint32_t GetCullMask() const { return cull_mask_; }
+
   // The world-space ray "under" a screen point: every world point on it is drawn at that
   // point. Raycast it against something (a Plane, an AABB...) to find what the
   // finger/cursor is over. `screen_size` must be in the same units as `screen_point`
@@ -70,5 +76,8 @@ class Camera3D {
     const glm::vec3 ndc = glm::vec3(clip) / clip.w;  // the perspective divide
     return {(ndc.x + 1.0f) * 0.5f * screen_size.x, (1.0f - ndc.y) * 0.5f * screen_size.y, ndc.z};
   }
+
+ private:
+  uint32_t cull_mask_ = 0xFFFFFFFFu;
 };
 }  // namespace wlw::scene

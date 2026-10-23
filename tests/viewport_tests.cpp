@@ -41,22 +41,23 @@ TEST_CASE("scene") {
   auto a = std::make_shared<scene::Node3D>();
   auto b = std::make_shared<scene::Node3D>();
   auto child = std::make_shared<scene::Node3D>();
-  a->AddNode(child);
-  const int id_a = scene->AddNode(a);
-  scene->AddNode(b);
+  a->AddChild(child);
+  scene->Root().AddChild(a);
+  scene->Root().AddChild(b);
   CHECK(scene->NodeCount() == 2);
+  CHECK((a->GetParent() == &scene->Root() && child->GetParent() == a.get()));
 
-  // Top-level nodes first, then their children.
+  // Depth first in child order: a node, then its children, then its next sibling.
   std::vector<scene::Node3D*> visited;
-  scene->IterateOverNodes([&](const std::shared_ptr<scene::Node3D>& node) { visited.push_back(node.get()); });
-  CHECK(visited.size() == 3);
-  CHECK(visited.back() == child.get());
+  scene->ForEachNode([&](scene::Node3D& node) { visited.push_back(&node); });
+  CHECK(visited == std::vector<scene::Node3D*>{a.get(), child.get(), b.get()});
+  CHECK(scene->FindById(child->GetId()) == child.get());
+  CHECK(scene->FindById(12345) == nullptr);
 
-  scene->RemoveNode(id_a);
-  CHECK(scene->NodeCount() == 1);
+  CHECK(a->RemoveFromParent() == a);
+  CHECK((scene->NodeCount() == 1 && a->GetParent() == nullptr && child->GetParent() == a.get()));
   scene->Clear();
-  CHECK((scene->NodeCount() == 0 && scene->GetSkybox() == nullptr));
-  CHECK(scene->AddNode(a) == 0);  // ids start over after Clear
+  CHECK((scene->NodeCount() == 0 && scene->GetSkybox() == nullptr && b->GetParent() == nullptr));
 }
 
 TEST_CASE("viewport shows a shared scene") {
@@ -67,7 +68,7 @@ TEST_CASE("viewport shows a shared scene") {
       (main_view->GetScene() != nullptr && main_view->GetScene() != minimap->GetScene()));  // each starts with its own
   main_view->SetScene(world);
   minimap->SetScene(world);
-  world->AddNode(std::make_shared<scene::Node3D>());
+  world->Root().AddChild(std::make_shared<scene::Node3D>());
   CHECK((main_view->GetScene()->NodeCount() == 1 && minimap->GetScene()->NodeCount() == 1));  // same world
 
   auto camera = std::make_shared<scene::OrthographicCamera>();
@@ -180,7 +181,7 @@ TEST_CASE("window viewports") {
   CHECK((window.GetViewports().size() == 2 && window.GetViewports()[1].second == third));
 
   // Shutdown: scenes and viewports are let go (the game may still hold its own references).
-  window.GetScreen().GetScene()->AddNode(std::make_shared<scene::Node3D>());
+  window.GetScreen().GetScene()->Root().AddChild(std::make_shared<scene::Node3D>());
   window.ReleaseScenes();
   CHECK((window.GetViewports().empty() && window.GetScreen().GetScene() == nullptr));
 }

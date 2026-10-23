@@ -70,7 +70,7 @@ struct ThresholdSettings {
 //
 //   auto liquid = scene::Viewport::Create({.format = TextureFormat::RGBA16F, .depth = false});
 //   liquid->SetSizeFromScreen(0.5f);              // half resolution: 4x fewer pixels to fill
-//   liquid->GetScene()->AddNode(dots);            // a SpriteBatch, Additive
+//   liquid->GetScene()->Root().AddChild(dots);   // a SpriteBatch, Additive
 //   scene::AddBlur(*liquid, {.scale = 1.0f, .format = TextureFormat::RGBA16F});  // RGBA16F all the way:
 //   scene::AddThreshold(*liquid, {.threshold = 0.45f});                          // RGBA8 clips colour x density
 //                                                                                // at 1 and the middles go white

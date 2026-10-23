@@ -41,20 +41,20 @@ const glm::mat4 kViewProjection = glm::perspective(glm::radians(60.0f), 1.0f, 0.
 TEST_CASE("gather collects drawables lights and sprites") {
   scene::Scene scene;
   auto cube = Cube({0, 0, 0});
-  scene.AddNode(cube);
-  scene.AddNode(std::make_shared<scene::Node3D>());  // nothing to draw
+  scene.Root().AddChild(cube);
+  scene.Root().AddChild(std::make_shared<scene::Node3D>());  // nothing to draw
   auto hidden = Cube({1, 0, 0});
   hidden->SetVisible(false);
-  hidden->AddNode(Cube({2, 0, 0}));  // hidden with its parent
-  scene.AddNode(hidden);
+  hidden->AddChild(Cube({2, 0, 0}));  // hidden with its parent
+  scene.Root().AddChild(hidden);
   auto empty_instanced = Cube({3, 0, 0});
   empty_instanced->WriteInstances(0);
-  scene.AddNode(empty_instanced);
-  scene.AddNode(std::make_shared<scene::DirectionalLight>());
+  scene.Root().AddChild(empty_instanced);
+  scene.Root().AddChild(std::make_shared<scene::DirectionalLight>());
   auto dots = std::make_shared<scene::SpriteBatch>(4);
   dots->Write(1)[0] = {};
-  scene.AddNode(dots);
-  scene.AddNode(std::make_shared<scene::SpriteBatch>(4));  // no dots
+  scene.Root().AddChild(dots);
+  scene.Root().AddChild(std::make_shared<scene::SpriteBatch>(4));  // no dots
 
   SceneGather gather;
   GatherScene(scene, gather);
@@ -75,8 +75,8 @@ TEST_CASE("gather grows shadow boxes") {
   auto b = Cube({3, 1, 0});
   b->SetCastsShadow(true);
   b->SetReceivesShadow(true);
-  scene.AddNode(a);
-  scene.AddNode(b);
+  scene.Root().AddChild(a);
+  scene.Root().AddChild(b);
   SceneGather gather;
   GatherScene(scene, gather);
   REQUIRE((gather.has_casters && gather.has_receivers));
@@ -92,10 +92,10 @@ TEST_CASE("cull keeps what the camera sees") {
   auto behind = Cube({0, 0, 20});  // behind the camera
   auto aside = Cube({50, 0, 0});   // far outside the side planes
   auto near = Cube({0, 0, 5});
-  scene.AddNode(front);
-  scene.AddNode(behind);
-  scene.AddNode(aside);
-  scene.AddNode(near);
+  scene.Root().AddChild(front);
+  scene.Root().AddChild(behind);
+  scene.Root().AddChild(aside);
+  scene.Root().AddChild(near);
   SceneGather gather;
   GatherScene(scene, gather);
 
@@ -125,8 +125,8 @@ TEST_CASE("cull normal matrices") {
   auto instanced = Cube({1, 0, 0});
   instanced->SetScale({2.0f, 1.0f, 1.0f});
   instanced->WriteInstances(1);
-  scene.AddNode(scaled);
-  scene.AddNode(instanced);
+  scene.Root().AddChild(scaled);
+  scene.Root().AddChild(instanced);
   SceneGather gather;
   GatherScene(scene, gather);
   VisibleSet visible;
@@ -149,8 +149,8 @@ TEST_CASE("cull sprite batches") {
   outside->Write(1)[0] = {};
   outside->SetBounds({-1, -1}, {1, 1});
   outside->SetPosition({0, 0, 30});
-  scene.AddNode(inside);
-  scene.AddNode(outside);
+  scene.Root().AddChild(inside);
+  scene.Root().AddChild(outside);
   SceneGather gather;
   GatherScene(scene, gather);
   VisibleSet visible;

@@ -61,12 +61,13 @@ add_library(wlw STATIC
   wlw/core/mesh.h
   wlw/core/normal_matrix.h
   wlw/core/random.h
+  wlw/core/rotation.cpp
+  wlw/core/rotation.h
   wlw/core/model.h
   wlw/core/profile.cpp
   wlw/core/profile.h
   wlw/core/vector2.h
   wlw/core/vector3.h
-  wlw/core/vertex_2d.h
   wlw/core/vertex_3d.h
 
   wlw/fx/flow_particles.cpp
@@ -145,14 +146,14 @@ add_library(wlw STATIC
   wlw/scene/fps_camera.h
   wlw/scene/light.h
   wlw/scene/node.h
+  wlw/scene/node_3d.cpp
   wlw/scene/orthographic_camera.h
   wlw/scene/post_effects.cpp
   wlw/scene/post_effects.h
+  wlw/scene/scene.cpp
   wlw/scene/scene.h
   wlw/scene/shadow_map.h
   wlw/scene/sprite_batch.h
-  wlw/scene/triangle_2d.cpp
-  wlw/scene/triangle_2d.h
   wlw/scene/viewport.h
   wlw/scene/window.h
 

@@ -246,18 +246,18 @@ class GLRenderingDriver : public RenderingDriver {
       if (!viewport.GetScene()) return;
       Frame frame;
       bool any_caster = false;
-      viewport.GetScene()->IterateOverNodes([&](const std::shared_ptr<scene::Node3D>& node) {
-        if (const scene::SpriteBatch* sprites = node->AsSpriteBatch()) {
+      viewport.GetScene()->ForEachNode([&](scene::Node3D& node) {
+        if (const scene::SpriteBatch* sprites = node.AsSpriteBatch()) {
           SpriteProgramFor(SpriteTexture(*sprites) != nullptr);
           return;
         }
-        if (const scene::LightNode* light = node->AsLight()) {
+        if (const scene::LightNode* light = node.AsLight()) {
           frame.lights.push_back(light);
           const bool shadows = light->CastsShadows() && light->GetType() == scene::LightNode::Type::Directional;
           if (shadows && frame.shadow_light == nullptr) frame.shadow_light = light;
-        } else if (node->GetModel() && !node->GetModel()->meshes.empty()) {
-          frame.drawables.push_back({node.get(), {}});
-          any_caster |= node->CastsShadow();
+        } else if (node.GetModel() && !node.GetModel()->meshes.empty()) {
+          frame.drawables.push_back({&node, {}});
+          any_caster |= node.CastsShadow();
         }
       });
       frame.shadow_active = frame.shadow_light != nullptr && any_caster;  // as if the map can be made
@@ -593,6 +593,7 @@ class GLRenderingDriver : public RenderingDriver {
   void SetCameraMatrices(scene::Camera3D& camera) {
     scene_view_ = camera.GetViewMatrix();
     scene_view_projection_ = camera.GetProjectionMatrix() * scene_view_;
+    scene_cull_mask_ = camera.GetCullMask();
   }
 
   // --- 2. FRAME: the per-frame uniform block, read by every program this viewport draws with ---
@@ -623,7 +624,7 @@ class GLRenderingDriver : public RenderingDriver {
   // --- 3. DRAW LIST: one item per visible mesh, each with its sort key (render_list.h) ---
   void BuildDrawList(const Frame& frame, scene::RenderStats& stats) {
     // Culling, depths and matrices: GL-free (scene_gather.h).
-    CullScene(frame, scene_view_, scene_view_projection_, visible_);
+    CullScene(frame, scene_view_, scene_view_projection_, visible_, scene_cull_mask_);
     stats.culled_nodes += visible_.culled;
     for (const VisibleSet::Node& visible : visible_.nodes) {
       scene::Node3D* node = visible.node;
@@ -710,7 +711,7 @@ class GLRenderingDriver : public RenderingDriver {
       const ShadowProgram& program = ShadowProgramFor(node->IsInstanced());
       if (program.id == 0) continue;
       state_.UseProgram(program.id);
-      glUniformMatrix4fv(program.model, 1, GL_FALSE, glm::value_ptr(node->GetModelMatrix()));
+      glUniformMatrix4fv(program.model, 1, GL_FALSE, glm::value_ptr(node->GetWorldMatrix()));
       GLInstanceBuffer* instances = PrepareInstances(*node);
       for (const auto& mesh : node->GetModel()->meshes) DrawMesh(*node, *mesh, instances, nullptr);
     }
@@ -1102,6 +1103,7 @@ class GLRenderingDriver : public RenderingDriver {
   // This viewport's camera (set by UploadFrame), for culling and sorting.
   glm::mat4 scene_view_{1.0f};
   glm::mat4 scene_view_projection_{1.0f};
+  uint32_t scene_cull_mask_ = 0xFFFFFFFFu;  // the camera's layers
 
   // Shadows (see DrawShadowMap).
   GLuint shadow_framebuffer_ = 0;

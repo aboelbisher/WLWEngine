@@ -46,8 +46,8 @@ TEST_CASE("set direction") {
   auto parent = std::make_shared<scene::Node3D>();
   auto child = std::make_shared<scene::DirectionalLight>();
   child->SetDirection({0.0f, 0.0f, -1.0f});
-  parent->AddNode(child);
-  parent->SetRotation({0.0f, 90.0f, 0.0f});
+  parent->AddChild(child);
+  parent->SetEulerAngles(glm::radians(wlw::Vec3(0.0f, 90.0f, 0.0f)), wlw::EulerOrder::XYZ);
   CHECK(NearVec(child->GetDirection(), {-1.0f, 0.0f, 0.0f}, 1e-3f));
 }
 

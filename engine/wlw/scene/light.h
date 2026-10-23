@@ -1,10 +1,8 @@
 #pragma once
 
-#include <cmath>
-
-#include <glm/glm.hpp>
-
 #include "wlw/core/color.h"
+#include "wlw/core/math.h"
+#include "wlw/core/rotation.h"
 #include "wlw/scene/node.h"
 
 namespace wlw::scene {
@@ -16,7 +14,7 @@ struct ShadowSettings {
   float strength = 0.6f;  // 0 = no darkening, 1 = only the ambient light is left in shadow
 };
 
-// A light source is a node: added to the scene with Window::AddNode like geometry, moved and
+// A light source is a node: added to a scene (Root().AddChild) like geometry, moved and
 // turned like any node (and with its parent), hidden with SetVisible(false). It has no model, so
 // nothing is drawn for it; the renderer gathers the visible lights every frame and lights the
 // scene with them (up to kMaxLights of each type).
@@ -42,17 +40,11 @@ class LightNode : public Node3D {
   void SetAmbient(float ambient) { ambient_ = ambient; }
   float GetAmbient() const { return ambient_; }
 
-  // Points the light's forward axis (-Z) along `direction` by setting the node's rotation.
-  void SetDirection(const glm::vec3& direction) {
-    const glm::vec3 d = glm::normalize(direction);
-    // The node rotates by X, then Y, then Z (Node::UpdateLocalMatrix). Z doesn't move the -Z axis;
-    // Y turns it to (-sin y, 0, -cos y); X then tilts that to (-sin y, cos y sin x, -cos y cos x).
-    const float y = std::asin(glm::clamp(-d.x, -1.0f, 1.0f));
-    const float x = std::atan2(d.y, -d.z);
-    SetRotation({glm::degrees(x), glm::degrees(y), 0.0f});
-  }
+  // Points the light's forward axis (-Z) along `direction` (needn't be normalized) by setting the node's local
+  // rotation (LookRotation with +Y up; straight up or down works too).
+  void SetDirection(const Vec3& direction) { SetRotation(LookRotation(direction)); }
   // The world-space direction the light shines in (includes the parents' rotations).
-  glm::vec3 GetDirection() const { return glm::normalize(glm::mat3(GetModelMatrix()) * glm::vec3(0.0f, 0.0f, -1.0f)); }
+  Vec3 GetDirection() const { return Forward(); }
 
   // Casting shadows makes the renderer draw the shadow casters from this light into a shadow
   // map every frame. Directional lights only (for now); one per scene.

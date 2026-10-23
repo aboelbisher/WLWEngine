@@ -43,7 +43,7 @@ void SnakeApp::OnStart() {
   auto sun = std::make_shared<scene::DirectionalLight>();
   sun->SetDirection({-0.5f, -1.0f, -0.7f});
   sun->SetAmbient(0.35f);
-  App().Window().GetScreen().GetScene()->AddNode(sun);
+  App().Window().GetScreen().GetScene()->Root().AddChild(sun);
   material_ = rendering::Material::Create();
   material_->shininess = 64.0f;
 
@@ -57,13 +57,13 @@ void SnakeApp::OnStart() {
   food_node_ = std::make_shared<scene::Node3D>();
   food_node_->SetModel(food_model_);
   food_node_->SetMaterial(material_);
-  App().Window().GetScreen().GetScene()->AddNode(food_node_);
+  App().Window().GetScreen().GetScene()->Root().AddChild(food_node_);
 
   particle_node_ = std::make_shared<scene::Node3D>();
   particle_node_->SetModel(MakeModel(utils::createCubeWithNormals(1.0f)));  // white: tinted per particle
   particle_node_->SetMaterial(material_);
   particle_node_->WriteInstances(0);  // instanced: no copies until the first sparkle
-  App().Window().GetScreen().GetScene()->AddNode(particle_node_);
+  App().Window().GetScreen().GetScene()->Root().AddChild(particle_node_);
 
   SetupCameras();
 
@@ -106,7 +106,7 @@ void SnakeApp::BuildBoard() {
       tile->SetMaterial(material_);
       tile->SetScale({1.0f, 0.1f, 1.0f});
       tile->SetPosition({(float)x, -0.05f, (float)z});
-      App().Window().GetScreen().GetScene()->AddNode(tile);
+      App().Window().GetScreen().GetScene()->Root().AddChild(tile);
     }
   }
 }
@@ -233,7 +233,7 @@ void SnakeApp::OnRender(float alpha) {
   const Cell food = game_.Food();
   const float bob = 0.1f * std::sin(glm::radians(food_spin_ * 2.0f));
   food_node_->SetPosition({(float)food.x, 0.55f + bob, (float)food.z});
-  food_node_->SetRotation({0.0f, food_spin_, 0.0f});
+  food_node_->SetRotation(glm::angleAxis(glm::radians(food_spin_), wlw::Vec3(0.0f, 1.0f, 0.0f)));
 
   particles_.WriteTo(*particle_node_);
 }
@@ -272,7 +272,7 @@ SnakeApp::NodePtr SnakeApp::AcquireSegmentNode(size_t index) {
     auto node = std::make_shared<wlw::scene::Node3D>();
     node->SetModel(body_model_);  // meshes/models are shared by all segments: one GPU copy
     node->SetMaterial(material_);
-    App().Window().GetScreen().GetScene()->AddNode(node);
+    App().Window().GetScreen().GetScene()->Root().AddChild(node);
     segment_nodes_.push_back(node);
   }
   return segment_nodes_[index];

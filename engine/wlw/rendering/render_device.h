@@ -4,7 +4,6 @@
 #include <memory>
 #include <vector>
 
-#include "wlw/core/vertex_2d.h"
 #include "wlw/core/vertex_3d.h"
 #include "wlw/rendering/index_buffer.h"
 #include "wlw/rendering/vertex_buffer.h"
@@ -18,7 +17,6 @@ class RenderDevice {
  public:
   virtual ~RenderDevice() = default;
 
-  virtual std::unique_ptr<core::WVertexBuffer> CreateVertexBuffer(const std::vector<core::Vertex2D>& vertices) = 0;
   virtual std::unique_ptr<core::WVertexBuffer> CreateVertexBuffer(const std::vector<core::Vertex3D>& vertices) = 0;
 
   virtual std::unique_ptr<core::WIndexBuffer> CreateIndexBuffer(const std::vector<uint32_t>& indices) = 0;

@@ -21,6 +21,54 @@ then it's deleted (listed under **Removed**).
   Arc). Only the glyph corners turn; the SDF anti-aliasing holds (abs-derivative width: ~8% softer at 5°,
   ~16% at 10°, ~41% at 45°). The shadow keeps its on-screen offset. Asked for by Threadlock (World 2's pinned order slips).
 
+### Transform and Node3D (Roadmap 2.2)
+`Node3D` is a plain class now (the `Node<T>` template, `Node2D`, `Triangle2D` and `Vertex2D` are gone; 2D lives on
+the Canvas), with a cached quaternion transform, an ordered hierarchy, names, ids and render layers, and its code in
+`scene/node_3d.cpp` (so games' Debug builds get it optimized, `WLW_OPTIMIZE_ENGINE_IN_DEBUG`).
+- Transform: position + `Quat` + scale. The local matrix (T * R * S, built directly from the quaternion) and the
+  world matrix are cached; a change marks the node and its subtree, stopping at nodes already marked, so moving a
+  node costs nothing until a matrix is read. `GetWorldMatrix()` (const ref), `GetLocalMatrix()`,
+  `GetWorldPosition/Rotation/Scale`, `SetWorldPosition/Rotation`, `Forward/Right/Up` (world), `Rotate(axis, rad)`
+  (own axis) / `RotateWorld`, `Translate` (own axes) / `TranslateWorld`, `LookAt(target, up)`.
+- Euler angles (`wlw/core/rotation.h`): `EulerOrder` XYZ...ZYX, named by the product (YXZ = Ry * Rx * Rz, the
+  default, like Godot and Unity), `QuatFromEuler`, `EulerFromQuat`, `LookRotation(forward, up)` (a fallback up
+  when they're parallel, so straight up/down works). `Node3D::SetEulerAngles(radians, order)` /
+  `GetEulerAngles(order)`: the angles set come back exactly as given (an inspector shows 190°, not (180, -10, 180))
+  until the rotation changes another way.
+- Hierarchy: children in a `std::vector` (insertion order; `MoveChild(child, index)`), `AddChild` (takes the node
+  from its old parent; loops refused), `RemoveChild(node)` / `RemoveFromParent()` (return the node),
+  `Reparent(new_parent, keep_world = true)`, `GetIndex`, `ChildCount`.
+- Names: `SetName`, `FindChild(name, recursive = true)`, `GetNode("Arm/Hand")` with `..` and `.`. Ids: a random
+  64-bit id per node (never 0, thread-safe generator), `SetId` for loading, `Scene::FindById`; unique in
+  practice, checked by scene loading in Phase 4. Layers: `Node3D::SetLayers(mask)` (default bit 0) +
+  `Camera3D::SetCullMask(mask)` (default all), checked in `CullScene`; lights and shadows ignore them.
+- `Scene::Root()`: top-level nodes are its children. `Scene::ForEachNode(f)` = every node, hidden too, depth
+  first. The renderer's gather walks the tree directly (raw pointers, hidden branches skipped at once) instead of
+  a level-by-level walk with `shared_ptr` copies through `std::function`.
+- `LightNode::SetDirection` is a `LookRotation` (the default straight-down light keeps the old orientation);
+  `GetDirection()` = `Forward()`.
+- Benchmarks (Windows MSVC Release, median of alternating runs against main): render/gather 10k 467 -> 217 us
+  (-54%), gather 1k -46%, transform/move flat 10k 1167 -> 335 us (-71%), move nested 10k -23%, new
+  transform/read nested 10k (nothing moved) 230 -> 30 us (-87%); cull and sort unchanged; render/instance bounds
+  5k reads ~10% slower with its hot loop (instance_buffer.cpp) untouched (code placement).
+- Draw order: the gather is depth first in child order (was level by level, and top-level nodes came out of an
+  `unordered_map` in an order that differed between compilers). Equal sort keys and lights past 4 per type
+  follow it.
+- **Breaking:**
+  - `GetRotation()` returns a `Quat` (was degrees). `GetChildren()` returns the vector of children. `Translate`
+    moves along the node's own axes (was the parent's: use `TranslateWorld` or `SetPosition` for that).
+  - Gone without a shim: `Node::RemoveNode(int)` and `Scene::RemoveNode(int)` (use `RemoveChild(node)` /
+    `node->RemoveFromParent()`), `Scene::GetNodes()`, `Nodes2DMap`, `Nodes3DMap`, `Node<T>`, `Node2D`,
+    `Triangle2D`, `core::Vertex2D` and its vertex-buffer path. `AddNode` returns nothing (ids are gone).
+  - With `WLW_NO_DEPRECATED`, `SetRotation(Vec3)` is deleted (glm would otherwise turn a Vec3 into a quaternion
+    from radians silently).
+- **Migration:** `SetRotation({x, y, z})` in degrees -> `SetEulerAngles(glm::radians(Vec3(x, y, z)),
+  EulerOrder::XYZ)` (the same matrix) or, for one axis, `SetRotation(glm::angleAxis(radians, axis))`;
+  `GetModelMatrix()` -> `GetWorldMatrix()`; `scene->AddNode(n)` -> `scene->Root().AddChild(n)`;
+  `node->AddNode(n)` -> `node->AddChild(n)`; `IterateOverNodes` -> `ForEachNode([](Node3D& node) {...})`.
+- **Deprecated** (removed in 0.4): `Node3D::SetRotation(Vec3 degrees)` (the old T * Rx * Ry * Rz * S matrix within
+  float rounding), `Node3D::GetModelMatrix`, `Node3D::AddNode`, `Scene::AddNode`, `Scene::IterateOverNodes`.
+
 ### Math, colour, geometry (Roadmap 2.1)
 One set of value types in namespace `wlw`, replacing the hand-written `core::Vector2/3` and the bare `core::Color`,
 plus the helpers both games had written again (Threadlock had 5 `Distance`, 7 normalise-with-fallback and 3 `Box`

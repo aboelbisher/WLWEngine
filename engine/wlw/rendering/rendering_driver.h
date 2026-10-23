@@ -6,7 +6,6 @@
 #include <array>
 #include "wlw/rendering/index_buffer.h"
 #include "wlw/rendering/vertex_buffer.h"
-#include "wlw/core/vertex_2d.h"
 #include "wlw/core/vertex_3d.h"
 #include "wlw/utils/image_loader.h"
 #include "wlw/rendering/texture.h"

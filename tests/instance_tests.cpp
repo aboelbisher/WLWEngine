@@ -260,11 +260,11 @@ TEST_CASE("instanced node box matches the corners of every copy in world space")
   core::Random rng(17);
   scene::Node3D parent;
   auto node = std::make_shared<scene::Node3D>();
-  parent.AddNode(node);
-  parent.SetRotation({20, -35, 50});
+  parent.AddChild(node);
+  parent.SetEulerAngles(glm::radians(wlw::Vec3(20, -35, 50)), wlw::EulerOrder::XYZ);
   parent.SetScale({1.0f, -2.0f, 0.5f});
   node->SetPosition({1, 2, 3});
-  node->SetRotation({10, 80, -30});
+  node->SetEulerAngles(glm::radians(wlw::Vec3(10, 80, -30)), wlw::EulerOrder::XYZ);
   const AABB box{{-0.5f, -0.2f, 0.0f}, {0.5f, 0.7f, 1.5f}};
   node->SetModel(ModelOf({box}));
   std::span<Instance> copies = node->WriteInstances(40);
@@ -272,7 +272,7 @@ TEST_CASE("instanced node box matches the corners of every copy in world space")
   for (Instance& copy : copies) {
     const glm::mat4 m = RandomAffine(rng);
     copy.SetTransform(m);
-    GrowByCorners(node->GetModelMatrix() * m, box, low, high);
+    GrowByCorners(node->GetWorldMatrix() * m, box, low, high);
   }
   // Two Arvo steps (per copy, then the node) can only be looser than the copies' own corners, never
   // tighter: it must contain them.
@@ -284,14 +284,14 @@ TEST_CASE("instanced node box matches the corners of every copy in world space")
 TEST_CASE("plain node box matches the corners of each mesh") {
   scene::Node3D parent;
   auto node = std::make_shared<scene::Node3D>();
-  parent.AddNode(node);
+  parent.AddChild(node);
   parent.SetPosition({3, -1, 2});
-  parent.SetRotation({0, 0, 25});
-  node->SetRotation({40, 15, 70});
+  parent.SetEulerAngles(glm::radians(wlw::Vec3(0, 0, 25)), wlw::EulerOrder::XYZ);
+  node->SetEulerAngles(glm::radians(wlw::Vec3(40, 15, 70)), wlw::EulerOrder::XYZ);
   node->SetScale({1.5f, -0.5f, 2.0f});  // mirrored
   const AABB a{{-1, -1, -1}, {0, 0, 0}}, b{{2, 2, 2}, {3, 4, 3}};
   node->SetModel(ModelOf({a, b}));
-  const glm::mat4 world = node->GetModelMatrix();
+  const glm::mat4 world = node->GetWorldMatrix();
   glm::vec3 low(std::numeric_limits<float>::max()), high(std::numeric_limits<float>::lowest());
   GrowByCorners(world, a, low, high);
   GrowByCorners(world, b, low, high);

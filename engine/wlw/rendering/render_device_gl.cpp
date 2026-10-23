@@ -9,10 +9,6 @@ namespace wlw::rendering {
 
 class GLRenderDevice : public RenderDevice {
  public:
-  std::unique_ptr<core::WVertexBuffer> CreateVertexBuffer(const std::vector<core::Vertex2D>& vertices) override {
-    return std::make_unique<core::GLVertexBuffer>(vertices);
-  }
-
   std::unique_ptr<core::WVertexBuffer> CreateVertexBuffer(const std::vector<core::Vertex3D>& vertices) override {
     return std::make_unique<core::GLVertexBuffer>(vertices);
   }

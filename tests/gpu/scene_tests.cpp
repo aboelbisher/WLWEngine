@@ -74,7 +74,7 @@ std::shared_ptr<scene::Node3D> AddMesh(scene::Viewport& viewport, std::shared_pt
   node->SetModel(MakeModel(std::move(mesh)));
   node->SetMaterial(std::move(material));
   node->SetPosition(position);
-  viewport.GetScene()->AddNode(node);
+  viewport.GetScene()->Root().AddChild(node);
   return node;
 }
 
@@ -82,7 +82,7 @@ std::shared_ptr<scene::DirectionalLight> AddSun(scene::Viewport& viewport, float
   auto sun = std::make_shared<scene::DirectionalLight>();
   sun->SetDirection({-0.4f, -1.0f, -0.6f});
   sun->SetAmbient(ambient);
-  viewport.GetScene()->AddNode(sun);
+  viewport.GetScene()->Root().AddChild(sun);
   return sun;
 }
 
@@ -96,12 +96,13 @@ void AddLitCubes(scene::Viewport& viewport) {
   point->SetPosition({2.0f, 1.5f, 2.0f});
   point->SetColor({1.0f, 0.6f, 0.2f});
   point->SetRange(6.0f);
-  viewport.GetScene()->AddNode(point);
+  viewport.GetScene()->Root().AddChild(point);
   auto material = Opaque();
   material->shininess = 32.0f;
   AddMesh(viewport, utils::createCubeWithNormals(1.2f, Color{0.9f, 0.3f, 0.3f, 1.0f}), material, {-1.8f, 0, 0})
-      ->SetRotation({0, 30, 0});
-  AddMesh(viewport, utils::createBeveledCubeWithNormals(), material, {0, 0, 0})->SetRotation({20, 45, 0});
+      ->SetEulerAngles(glm::radians(wlw::Vec3(0, 30, 0)), wlw::EulerOrder::XYZ);
+  AddMesh(viewport, utils::createBeveledCubeWithNormals(), material, {0, 0, 0})
+      ->SetEulerAngles(glm::radians(wlw::Vec3(20, 45, 0)), wlw::EulerOrder::XYZ);
   AddMesh(viewport, utils::createSphereWithNormals(0.7f, 16, 32), material, {1.8f, 0, 0});
 }
 
@@ -215,7 +216,7 @@ TEST_CASE("sprites") {
   camera->SetClipPlanes(0.1f, 50.0f);
   viewport->SetCamera(camera);
   auto dots = std::make_shared<scene::SpriteBatch>(256);
-  viewport->GetScene()->AddNode(dots);
+  viewport->GetScene()->Root().AddChild(dots);
   constexpr int kDots = 120;
   std::span<rendering::SpriteInstance> out = dots->Write(kDots);
   for (int i = 0; i < kDots; ++i) {
@@ -346,7 +347,7 @@ std::vector<std::shared_ptr<scene::Node3D>> AddTransformedShapes(scene::Viewport
   auto add = [&](std::shared_ptr<core::Mesh<core::Vertex3D>> mesh, const Vec3& position, const Vec3& rotation,
                  const Vec3& scale) {
     auto node = AddMesh(viewport, std::move(mesh), material, position);
-    node->SetRotation(rotation);
+    node->SetEulerAngles(glm::radians(rotation), wlw::EulerOrder::XYZ);
     node->SetScale(scale);
     drawn.push_back(node);
     return node;
@@ -356,14 +357,14 @@ std::vector<std::shared_ptr<scene::Node3D>> AddTransformedShapes(scene::Viewport
 
   auto parent = std::make_shared<scene::Node3D>();
   parent->SetPosition({1.5f, 1.1f, 0});
-  parent->SetRotation({0, 0, 40});
+  parent->SetEulerAngles(glm::radians(wlw::Vec3(0, 0, 40)), wlw::EulerOrder::XYZ);
   parent->SetScale({1.7f, 0.6f, 1.0f});
-  viewport.GetScene()->AddNode(parent);
+  viewport.GetScene()->Root().AddChild(parent);
   auto child = std::make_shared<scene::Node3D>();
   child->SetModel(MakeModel(utils::createCubeWithNormals(0.9f, Color{0.3f, 0.8f, 0.4f, 1.0f})));
   child->SetMaterial(material);
-  child->SetRotation({30, 35, 0});
-  parent->AddNode(child);
+  child->SetEulerAngles(glm::radians(wlw::Vec3(30, 35, 0)), wlw::EulerOrder::XYZ);
+  parent->AddChild(child);
   drawn.push_back(child);
 
   auto copies = add(utils::createSphereWithNormals(0.4f, 12, 24), {1.5f, -1.1f, 0}, {0, 0, 0}, {1.3f, 1.0f, 1.0f});
@@ -394,7 +395,7 @@ void AddBakedShapes(scene::Viewport& viewport, const std::vector<std::shared_ptr
     AddMesh(viewport, baked, material, {0, 0, 0});
   };
   for (const auto& shape : shapes) {
-    const glm::mat4 world = shape->GetModelMatrix();
+    const glm::mat4 world = shape->GetWorldMatrix();
     for (const auto& mesh : shape->GetModel()->meshes) {
       if (!shape->IsInstanced()) bake(*mesh, shape->GetMaterial(), world);
       for (const auto& copy : shape->Instances()) bake(*mesh, shape->GetMaterial(), world * copy.Transform());
@@ -411,7 +412,7 @@ void CheckNormalsMatchBaked(const std::string& name, const std::shared_ptr<rende
     point->SetPosition({0.0f, 0.0f, 2.5f});
     point->SetColor({1.0f, 0.6f, 0.2f});
     point->SetRange(6.0f);
-    viewport.GetScene()->AddNode(point);
+    viewport.GetScene()->Root().AddChild(point);
   };
   auto transformed = MakeViewport();
   light(*transformed);
