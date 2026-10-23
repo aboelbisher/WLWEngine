@@ -55,17 +55,23 @@ class Mesh {
 
   void SetMaterial(const std::shared_ptr<rendering::Material>& material) { material_ = material; }
 
-  std::shared_ptr<rendering::Material> GetMaterial() const { return material_; }
-
-  void SetVertexBuffer(std::unique_ptr<WVertexBuffer> vertex_buffer) { vertex_buffer_ = std::move(vertex_buffer); }
-
-  const WVertexBuffer* GetVertexBuffer() const { return vertex_buffer_.get(); }
-
-  void SetIndexBuffer(std::unique_ptr<WIndexBuffer> index_buffer) { index_buffer_ = std::move(index_buffer); }
-
-  const WIndexBuffer* GetIndexBuffer() const { return index_buffer_.get(); }
+  const std::shared_ptr<rendering::Material>& GetMaterial() const { return material_; }
 
   std::string name = "";
+
+  // For the renderer, not games: the GPU buffers it made for this mesh.
+  class InternalAccess {
+   public:
+    explicit InternalAccess(Mesh& mesh) : mesh_(mesh) {}
+    void SetVertexBuffer(std::unique_ptr<WVertexBuffer> buffer) const { mesh_.vertex_buffer_ = std::move(buffer); }
+    const WVertexBuffer* GetVertexBuffer() const { return mesh_.vertex_buffer_.get(); }
+    void SetIndexBuffer(std::unique_ptr<WIndexBuffer> buffer) const { mesh_.index_buffer_ = std::move(buffer); }
+    const WIndexBuffer* GetIndexBuffer() const { return mesh_.index_buffer_.get(); }
+
+   private:
+    Mesh& mesh_;
+  };
+  InternalAccess Internal() { return InternalAccess(*this); }
 
  protected:
   std::vector<T> vertices_;

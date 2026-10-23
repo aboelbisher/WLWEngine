@@ -9,6 +9,8 @@
 #include <utility>
 #include <vector>
 
+#include "wlw/core/connection.h"
+
 // Console variables (cvars), like Unreal's IConsoleVariable / Source's ConVar: a named, typed setting
 // with a default and a help line, settable from code, config files, the command line, adb and the
 // in-game console, without a rebuild.
@@ -74,10 +76,9 @@ class CVarBase {
   CVarSetResult SetFromText(std::string_view text, CVarSource source);
   virtual void Reset() = 0;
 
-  // Called after every change of value (not when a Set leaves it the same). Returns an id for
-  // RemoveOnChange.
-  int OnChange(std::function<void()> callback);
-  void RemoveOnChange(int id);
+  // Called after every change of value (not when a Set leaves it the same). Keep the Connection to
+  // unhook it (Disconnect) before the cvar goes away; dropping it leaves the callback on.
+  core::Connection OnChange(std::function<void()> callback);
 
   // Once the game has started, ReadOnly cvars refuse changes (the Application calls it after startup).
   static void SetStarted(bool started);
@@ -97,8 +98,7 @@ class CVarBase {
  private:
   friend std::string SavedCVarText();
   std::optional<std::string> player_value_;  // Saved cvars: the last value from code, the console or the user file
-  std::vector<std::pair<int, std::function<void()>>> callbacks_;
-  int next_callback_ = 0;
+  core::CallbackList<> callbacks_;
 };
 
 // Parsing used by every cvar (and the tests): bools take 1/0, true/false, on/off, yes/no.

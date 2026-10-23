@@ -2,7 +2,7 @@
 
 #include <string>
 
-// Frame pacing: a frame-rate target (AppConfig::target_fps, Application::SetTargetFps) turned into
+// Frame pacing: a frame-rate target (AppConfig::graphics.target_fps, Application::SetTargetFps) turned into
 // how frames are presented, like Unity's Application.targetFrameRate or Unreal's t.MaxFPS.
 //
 // Android hands the target to Swappy (platform/android), which times each frame to the display's

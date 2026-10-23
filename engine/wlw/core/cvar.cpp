@@ -146,18 +146,10 @@ void CVarBase::Changed(CVarSource source) {
     player_value_ = ValueText();
     if (source != CVarSource::UserFile) GetRegistry().saved_changed = true;
   }
-  const auto callbacks = callbacks_;  // a callback may remove itself
-  for (const auto& [_, callback] : callbacks) callback();
+  callbacks_.Call();
 }
 
-int CVarBase::OnChange(std::function<void()> callback) {
-  callbacks_.emplace_back(next_callback_, std::move(callback));
-  return next_callback_++;
-}
-
-void CVarBase::RemoveOnChange(int id) {
-  std::erase_if(callbacks_, [id](const auto& callback) { return callback.first == id; });
-}
+core::Connection CVarBase::OnChange(std::function<void()> callback) { return callbacks_.Add(std::move(callback)); }
 
 void CVarBase::SetStarted(bool started) { GetRegistry().started = started; }
 

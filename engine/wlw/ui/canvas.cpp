@@ -42,6 +42,17 @@ void Canvas::AddQuad(const Font* font, const glm::vec2 (&corners)[4], const glm:
   for (int i = 0; i < 4; ++i) vertices_.push_back({corners[i], uvs[i], color, params});
 }
 
+namespace {
+
+// What a batch holds its font by: a shared reference when the font is owned by a shared_ptr (the caller may
+// drop its font before the draw), else a plain pointer (a uniquely owned font must outlive the draw).
+std::shared_ptr<const Font> KeepFont(const Font& font) {
+  if (std::shared_ptr<const Font> shared = font.weak_from_this().lock()) return shared;
+  return std::shared_ptr<const Font>(std::shared_ptr<const Font>(), &font);  // aliasing, owns nothing
+}
+
+}  // namespace
+
 UIBatch& Canvas::BatchFor(const Font* font, const std::shared_ptr<rendering::WTexture2D>* texture,
                           rendering::BlendMode blend) {
   // Batching: keep adding to the current run unless this quad needs another blend mode or samples
@@ -55,13 +66,13 @@ UIBatch& Canvas::BatchFor(const Font* font, const std::shared_ptr<rendering::WTe
     const bool last_samples = last.font != nullptr || last.texture != nullptr;
     const bool same_texture = last.font.get() == font && last.texture.get() == image;
     if (!last.material && last.blend == blend && (!samples || !last_samples || same_texture)) {
-      if (font && !last.font) last.font = font->shared_from_this();  // a run of rectangles becomes a text run...
-      if (image && !last.texture) last.texture = *texture;           // ...or an image run
+      if (font && !last.font) last.font = KeepFont(*font);  // a run of rectangles becomes a text run...
+      if (image && !last.texture) last.texture = *texture;  // ...or an image run
       return last;
     }
   }
   UIBatch batch;
-  if (font) batch.font = font->shared_from_this();  // the caller may drop its font before the draw
+  if (font) batch.font = KeepFont(*font);
   if (image) batch.texture = *texture;
   batch.first_quad = QuadCount();
   batch.blend = blend;

@@ -106,26 +106,39 @@ class Shader : public Resource {
 
   // From its text. Checked now (shader_type, fragment(), braces: errors are logged and IsValid()
   // is false); compiled by the renderer before the first frame (warm-up) or when first drawn.
-  static std::shared_ptr<Shader> Create(const std::string& code, const std::string& name = "custom shader");
+  static std::unique_ptr<Shader> Create(const std::string& code, const std::string& name = "custom shader");
   // From a file (read with platform::ReadFile, so it works inside the APK too). A missing file is
   // logged and gives an invalid shader.
-  static std::shared_ptr<Shader> FromFile(const std::string& path);
+  static std::unique_ptr<Shader> FromFile(const std::string& path);
 
   Target GetTarget() const { return source_.target; }
   // False if its text is wrong or it didn't compile (both logged).
   bool IsValid() const { return source_.ok && !failed_; }
   const std::string& Name() const { return name_; }  // in error messages
 
-  // ---- For the renderer ----
-  const ShaderSource& Source() const { return source_; }
-  void MarkFailed() const { failed_ = true; }  // didn't compile: drawn as invalid from now on
-
-  Shader(ShaderSource source, std::string name);  // use Create
+  class InternalAccess;
+  InternalAccess Internal() const;
 
  private:
+  Shader(ShaderSource source, std::string name);  // use Create
+
   ShaderSource source_;
   std::string name_;
   mutable bool failed_ = false;
 };
+
+// For the renderer, not games.
+class Shader::InternalAccess : public Resource::InternalAccess {
+ public:
+  explicit InternalAccess(const Shader& shader) : Resource::InternalAccess(shader), shader_(shader) {}
+
+  const ShaderSource& Source() const { return shader_.source_; }
+  void MarkFailed() const { shader_.failed_ = true; }  // didn't compile: drawn as invalid from now on
+
+ private:
+  const Shader& shader_;
+};
+
+inline Shader::InternalAccess Shader::Internal() const { return InternalAccess(*this); }
 
 }  // namespace wlw::rendering

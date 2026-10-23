@@ -158,7 +158,7 @@ void ProcessNode(const tinygltf::Model& model, const tinygltf::Node& node, const
   }
 }
 
-std::shared_ptr<core::Model<core::Vertex3D>> GLTFLoader::LoadModel(const std::string& filename, bool normalize) {
+std::unique_ptr<core::Model<core::Vertex3D>> GLTFLoader::LoadModel(const std::string& filename, bool normalize) {
   WLW_PROFILE_SCOPE("Load glTF");
   WLW_PROFILE_TEXT(filename.data(), filename.size());
   tinygltf::Model model;
@@ -216,7 +216,7 @@ std::shared_ptr<core::Model<core::Vertex3D>> GLTFLoader::LoadModel(const std::st
     }
   }
 
-  auto out = std::make_shared<core::Model<core::Vertex3D>>();
+  auto out = std::make_unique<core::Model<core::Vertex3D>>();
   out->textures = gpu_textures;
   out->materials = materials;
   out->meshes = meshes;

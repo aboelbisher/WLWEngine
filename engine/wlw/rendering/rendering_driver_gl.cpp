@@ -82,7 +82,7 @@ class GLRenderingDriver : public RenderingDriver {
             reinterpret_cast<const char*>(glGetString(GL_VENDOR)),
             reinterpret_cast<const char*>(glGetString(GL_RENDERER)),
             reinterpret_cast<const char*>(glGetString(GL_VERSION)));
-    window->SetFragmentPrecision(DescribeFragmentPrecision());
+    window->Internal().SetFragmentPrecision(DescribeFragmentPrecision());
     WLW_LOG(LogRender, Info, "  Fragment mediump: %s", window->FragmentPrecision().c_str());
 
     skybox_program_ = BuildEngineProgram("skybox.vert", "skybox.frag");
@@ -114,7 +114,7 @@ class GLRenderingDriver : public RenderingDriver {
 
     // GPU timing, if this GPU can (gpu_timer.h).
     if (auto queries = CreateGLGpuQueries()) gpu_timer_ = std::make_unique<GpuTimer>(std::move(queries));
-    window->SetGpuTimingSupported(gpu_timer_ != nullptr);
+    window->Internal().SetGpuTimingSupported(gpu_timer_ != nullptr);
     StartGpuProfiler();  // the profiler's GPU zones (gl_gpu_profile.h), profile builds only
 
     glEnable(GL_DEPTH_TEST);
@@ -132,7 +132,7 @@ class GLRenderingDriver : public RenderingDriver {
   std::string GpuName() const override { return gpu_name_; }
 
   std::vector<uint8_t> ReadPixels(RenderTarget& target) override {
-    if (target.Gpu() == nullptr) return {};  // never drawn into
+    if (target.Internal().Gpu() == nullptr) return {};  // never drawn into
     const int width = target.Width(), height = target.Height();
     const size_t texels = static_cast<size_t>(width) * height;
     std::vector<uint8_t> pixels(texels * 4);
@@ -206,22 +206,22 @@ class GLRenderingDriver : public RenderingDriver {
       ApplyGpuSamples(*window);
     }
 
-    for (const auto& [_, viewport] : window->GetViewports()) {
-      RenderTarget* target = viewport->GetTarget();
-      if (target == nullptr) continue;  // only the window's own GetScreen() draws to the screen
+    for (const auto& viewport : window->Viewports()) {
+      RenderTarget* target = viewport->Internal().GetTarget();
+      if (target == nullptr) continue;  // only the window's own MainViewport() draws to the screen
       const glm::ivec2 pixels = viewport->PixelSize(screen_pixels);
-      if (!viewport->BeginDraw(pixels)) continue;
+      if (!viewport->Internal().BeginDraw(pixels)) continue;
       target->SetSize(pixels.x, pixels.y);
       DrawViewport(*viewport, pixels, GLFramebuffer(*target), target->Settings().depth);
     }
 
-    DrawViewport(window->GetScreen(), {static_cast<int>(screen_pixels.x), static_cast<int>(screen_pixels.y)},
+    DrawViewport(window->MainViewport(), {static_cast<int>(screen_pixels.x), static_cast<int>(screen_pixels.y)},
                  static_cast<GLuint>(screen_framebuffer), window->ScreenHasDepth());
     if (timing_) gpu_timer_->End();
     {
       WLW_PROFILE_SCOPE("Overlays");
       WLW_PROFILE_GPU_ZONE("Overlays");
-      window->DrawOverlays();  // e.g. the debug UI: on top of everything (not timed)
+      window->Internal().DrawOverlays();  // e.g. the debug UI: on top of everything (not timed)
     }
     // The screen's depth (and stencil) end with the frame: not written back to memory.
     glBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(screen_framebuffer));
@@ -283,8 +283,8 @@ class GLRenderingDriver : public RenderingDriver {
         if (frame.shadow_active && node->CastsShadow()) ShadowProgramFor(IsMultiMesh(*node));
       }
     };
-    for (const auto& [_, viewport] : window.GetViewports()) warm(*viewport);
-    warm(window.GetScreen());
+    for (const auto& viewport : window.Viewports()) warm(*viewport);
+    warm(window.MainViewport());
     // Every game shader and texture alive now (canvas shaders too: no scene says they're needed).
     const int custom = PrepareAliveResources();
     warmed_up_ = true;
@@ -302,8 +302,9 @@ class GLRenderingDriver : public RenderingDriver {
     WLW_PROFILE_SCOPE("Viewport");
 #if WLW_PROFILE
     char label[32];
-    const int label_size = viewport.IsScreen() ? std::snprintf(label, sizeof(label), "screen")
-                                               : std::snprintf(label, sizeof(label), "offscreen %u", viewport.Id());
+    const int label_size = viewport.IsScreen()
+                               ? std::snprintf(label, sizeof(label), "screen")
+                               : std::snprintf(label, sizeof(label), "offscreen %u", viewport.Internal().Id());
     WLW_PROFILE_TEXT(label, static_cast<size_t>(label_size));
 #endif
     using Clock = std::chrono::steady_clock;
@@ -317,8 +318,8 @@ class GLRenderingDriver : public RenderingDriver {
     GLuint scene_framebuffer = destination;
     if (needs_picture && pixels.x > 0 && pixels.y > 0) {
       const scene::ViewportSettings& settings = viewport.Settings();
-      post = &viewport.Post().Prepare(pixels, {settings.format, settings.smooth, settings.depth}, render);
-      scene_framebuffer = GLFramebuffer(viewport.Post().SceneTarget());
+      post = &viewport.Post().Internal().Prepare(pixels, {settings.format, settings.smooth, settings.depth}, render);
+      scene_framebuffer = GLFramebuffer(viewport.Post().Internal().SceneTarget());
       has_depth = settings.depth;
     }
     const std::shared_ptr<scene::Scene>& scene = viewport.GetScene();
@@ -353,7 +354,7 @@ class GLRenderingDriver : public RenderingDriver {
     const auto sorted = Clock::now();
     // GPU work from here on: the frame block, instance data, the shadow and main passes.
     glBindFramebuffer(GL_FRAMEBUFFER, scene_framebuffer);  // (the shadow pass returns to it)
-    TimeSection(viewport.Id(), GpuSection::Kind::Scene);
+    TimeSection(viewport.Internal().Id(), GpuSection::Kind::Scene);
     if (draw_scene) {
       {
         WLW_PROFILE_SCOPE("Upload");
@@ -392,9 +393,9 @@ class GLRenderingDriver : public RenderingDriver {
     auto draw_layers = [&](scene::CanvasMode mode, glm::ivec2 size) {
       bool timed = false;
       const glm::vec2 layer_pixels{static_cast<float>(size.x), static_cast<float>(size.y)};
-      viewport.ForEachCanvasLayer(mode, [&](const ui::Canvas& canvas) {
+      viewport.Internal().ForEachCanvasLayer(mode, [&](const ui::Canvas& canvas) {
         if (canvas.QuadCount() == 0) return;
-        if (!timed) TimeSection(viewport.Id(), GpuSection::Kind::Canvas);
+        if (!timed) TimeSection(viewport.Internal().Id(), GpuSection::Kind::Canvas);
         timed = true;
         WLW_PROFILE_SCOPE("Canvas");
         WLW_PROFILE_GPU_ZONE("Canvas");
@@ -409,9 +410,9 @@ class GLRenderingDriver : public RenderingDriver {
       // Nothing reads the scene picture's depth after its 3D: not written back to memory.
       if (has_depth) stats.invalidations += Invalidate(scene_framebuffer, /*color=*/false, /*depth=*/true);
       const auto post_start = Clock::now();
-      stats.invalidations += DrawPostPasses(viewport.Post(), *post, destination, viewport.Id());
+      stats.invalidations += DrawPostPasses(viewport.Post(), *post, destination, viewport.Internal().Id());
       stats.post_passes = static_cast<int>(post->steps.size());
-      stats.post_targets = viewport.Post().TargetCount();
+      stats.post_targets = viewport.Post().Internal().TargetCount();
       stats.post_us = micros(Clock::now() - post_start);
     }
     draw_layers(scene::CanvasMode::Overlay, pixels);
@@ -420,7 +421,7 @@ class GLRenderingDriver : public RenderingDriver {
       glBindFramebuffer(GL_FRAMEBUFFER, destination);
       stats.invalidations += Invalidate(destination, /*color=*/false, /*depth=*/true);
     }
-    viewport.SetRenderStats(stats);
+    viewport.Internal().SetRenderStats(stats);
   }
 
   // A render size the GPU can draw into: past its largest texture (a big render scale on a big
@@ -475,12 +476,12 @@ class GLRenderingDriver : public RenderingDriver {
     if (gpu_samples_.empty()) return;
     float frame_ms = 0.0f;
     for (const GpuSample& sample : gpu_samples_) frame_ms += sample.ms;
-    window.SetGpuFrameMs(SmoothMs(window.GpuFrameMs(), frame_ms));
+    window.Internal().SetGpuFrameMs(SmoothMs(window.GpuFrameMs(), frame_ms));
     auto apply = [this](scene::Viewport& viewport) {
       float scene_ms = -1.0f, post_ms = -1.0f, canvas_ms = -1.0f;
       raw_pass_ms_.clear();
       for (const GpuSample& sample : gpu_samples_) {
-        if (sample.section.viewport != viewport.Id()) continue;
+        if (sample.section.viewport != viewport.Internal().Id()) continue;
         auto add = [&sample](float& total) { total = std::max(total, 0.0f) + sample.ms; };
         switch (sample.section.kind) {
           case GpuSection::Kind::Scene: add(scene_ms); break;
@@ -495,15 +496,15 @@ class GLRenderingDriver : public RenderingDriver {
         }
       }
       if (scene_ms < 0.0f && canvas_ms < 0.0f) return;  // not drawn that frame
-      scene::GpuStats& stats = viewport.MutableGpuStats();
+      scene::GpuStats& stats = viewport.Internal().MutableGpuStats();
       stats.scene_ms = scene_ms < 0.0f ? -1.0f : SmoothMs(stats.scene_ms, scene_ms);
       stats.canvas_ms = canvas_ms < 0.0f ? -1.0f : SmoothMs(stats.canvas_ms, canvas_ms);
       stats.post_ms = post_ms < 0.0f ? -1.0f : SmoothMs(stats.post_ms, post_ms);
       stats.pass_ms.resize(raw_pass_ms_.size(), -1.0f);
       for (size_t i = 0; i < raw_pass_ms_.size(); ++i) stats.pass_ms[i] = SmoothMs(stats.pass_ms[i], raw_pass_ms_[i]);
     };
-    for (const auto& [_, viewport] : window.GetViewports()) apply(*viewport);
-    apply(window.GetScreen());
+    for (const auto& viewport : window.Viewports()) apply(*viewport);
+    apply(window.MainViewport());
   }
 
   // --- POST PASSES: full-screen shaders from the scene picture to `destination` (post_pass.h) ---
@@ -522,7 +523,8 @@ class GLRenderingDriver : public RenderingDriver {
       WLW_PROFILE_SCOPE_DYNAMIC(pass.name.empty() ? "Post pass" : pass.name.c_str());
       WLW_PROFILE_GPU_ZONE_DYNAMIC(pass.name.empty() ? "Post pass" : pass.name.c_str());
       TimeSection(viewport_id, GpuSection::Kind::PostPass, static_cast<int>(index));
-      const GLuint output = step.output == kDestination ? destination : GLFramebuffer(chain.Target(step.output));
+      const GLuint output =
+          step.output == kDestination ? destination : GLFramebuffer(chain.Internal().Target(step.output));
       glBindFramebuffer(GL_FRAMEBUFFER, output);
       glViewport(0, 0, step.size.x, step.size.y);
       // The pass overwrites every pixel: the old picture needn't be loaded first.
@@ -541,17 +543,17 @@ class GLRenderingDriver : public RenderingDriver {
       }
       state_.UseProgram(shader->Program());
 
-      const WTexture2D& source = *chain.TextureOf(step.source);
+      const WTexture2D& source = *chain.Internal().TextureOf(step.source);
       BindGLTexture(source, 0);
       glUniform1i(shader->Location("uSource"), 0);
-      BindGLTexture(*chain.TextureOf(kSceneTarget), 1);
+      BindGLTexture(*chain.Internal().TextureOf(kSceneTarget), 1);
       glUniform1i(shader->Location("uScene"), 1);
       glUniform2f(shader->Location("uTexel"), 1.0f / static_cast<float>(source.Width()),
                   1.0f / static_cast<float>(source.Height()));
       glUniform2f(shader->Location("uOutputSize"), static_cast<float>(step.size.x), static_cast<float>(step.size.y));
       int unit = 2;
       for (const auto& [uniform, texture] : step.inputs) {
-        BindGLTexture(*chain.TextureOf(texture), static_cast<unsigned int>(unit));
+        BindGLTexture(*chain.Internal().TextureOf(texture), static_cast<unsigned int>(unit));
         glUniform1i(shader->Location(uniform), unit);
         ++unit;
       }
@@ -839,9 +841,10 @@ class GLRenderingDriver : public RenderingDriver {
   static GLInstanceBuffer* PrepareInstances(scene::GeometryInstance3D& node, scene::RenderStats* stats = nullptr) {
     if (!IsMultiMesh(node)) return nullptr;
     auto& multimesh = static_cast<scene::MultiMeshInstance3D&>(node);
-    if (!multimesh.GetInstanceBuffer()) multimesh.SetInstanceBuffer(std::make_unique<GLInstanceBuffer>());
-    auto* buffer = static_cast<GLInstanceBuffer*>(multimesh.GetInstanceBuffer());
-    const size_t bytes = buffer->Upload(multimesh.Instances(), multimesh.GetInstancesVersion());
+    if (!multimesh.Internal().GetInstanceBuffer())
+      multimesh.Internal().SetInstanceBuffer(std::make_unique<GLInstanceBuffer>());
+    auto* buffer = static_cast<GLInstanceBuffer*>(multimesh.Internal().GetInstanceBuffer());
+    const size_t bytes = buffer->Upload(multimesh.Instances(), multimesh.Internal().GetInstancesVersion());
     if (stats) stats->instance_bytes += static_cast<int>(bytes);
     return buffer;
   }
@@ -850,9 +853,10 @@ class GLRenderingDriver : public RenderingDriver {
   // A sprite batch: its dots to the GPU if they changed (16 bytes each), then one instanced call.
   void DrawSprites(const DrawItem& item, const glm::mat4& model, scene::RenderStats& stats) {
     scene::SpriteBatch& batch = *item.sprites;
-    if (!batch.GetSpriteBuffer()) batch.SetSpriteBuffer(std::make_unique<GLSpriteBuffer>(batch.Capacity()));
-    auto* buffer = static_cast<GLSpriteBuffer*>(batch.GetSpriteBuffer());
-    stats.instance_bytes += static_cast<int>(buffer->Upload(batch.Sprites(), batch.Version()));
+    if (!batch.Internal().GetSpriteBuffer())
+      batch.Internal().SetSpriteBuffer(std::make_unique<GLSpriteBuffer>(batch.Capacity()));
+    auto* buffer = static_cast<GLSpriteBuffer*>(batch.Internal().GetSpriteBuffer());
+    stats.instance_bytes += static_cast<int>(buffer->Upload(batch.Sprites(), batch.Internal().Version()));
     state_.UseProgram(item.sprite_program->id);
     glUniformMatrix4fv(item.sprite_program->model, 1, GL_FALSE, glm::value_ptr(model));
     if (item.texture) state_.BindTexture0(item.texture);
@@ -865,16 +869,18 @@ class GLRenderingDriver : public RenderingDriver {
   // The texture shaping a batch's dots (its material's), else null: the shader's own falloff.
   static const WTexture* SpriteTexture(const scene::SpriteBatch& batch) {
     const auto& material = batch.GetMaterial();
-    return material && material->HasTexture() ? material->GetTexture() : nullptr;
+    return material && material->HasTexture() ? material->GetTexture().get() : nullptr;
   }
 
   // Draws one mesh with whatever program is in use: once, or once per copy (one call either way).
   template <typename MeshT>
   void DrawMesh(scene::GeometryInstance3D& node, MeshT& mesh, GLInstanceBuffer* instances, scene::RenderStats* stats) {
-    if (!mesh.GetVertexBuffer()) mesh.SetVertexBuffer(device_->CreateVertexBuffer(mesh.GetVertices()));
-    if (!mesh.GetIndexBuffer()) mesh.SetIndexBuffer(device_->CreateIndexBuffer(mesh.GetIndices()));
-    const auto* vertex_buffer = mesh.GetVertexBuffer();
-    const auto* index_buffer = mesh.GetIndexBuffer();
+    if (!mesh.Internal().GetVertexBuffer())
+      mesh.Internal().SetVertexBuffer(device_->CreateVertexBuffer(mesh.GetVertices()));
+    if (!mesh.Internal().GetIndexBuffer())
+      mesh.Internal().SetIndexBuffer(device_->CreateIndexBuffer(mesh.GetIndices()));
+    const auto* vertex_buffer = mesh.Internal().GetVertexBuffer();
+    const auto* index_buffer = mesh.Internal().GetIndexBuffer();
     vertex_buffer->Bind();
     index_buffer->Bind();
     const auto index_count = static_cast<GLsizei>(mesh.GetIndices().size());

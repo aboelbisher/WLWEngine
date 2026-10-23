@@ -37,7 +37,7 @@ float CheckClosedSolid(const core::Mesh<core::Vertex3D>& mesh) {
 
 TEST_CASE("beveled cube") {
   const float size = 2.0f, bevel = 0.25f;
-  const auto mesh = utils::createBeveledCubeWithNormals(size, bevel, {1, 0, 0, 1});
+  const auto mesh = utils::BeveledCubeMesh(size, bevel, {1, 0, 0, 1});
   // 6 faces x 2 triangles + 12 edge strips x 2 + 8 corners x 1 = 44 triangles.
   CHECK(mesh->GetVertices().size() == 44 * 3);
   CHECK(mesh->GetIndices().size() == mesh->GetVertices().size());
@@ -55,13 +55,13 @@ TEST_CASE("beveled cube") {
 
 TEST_CASE("plain cube still closed") {
   // The original cube, as a reference for what CheckClosedSolid accepts.
-  const auto mesh = utils::createCubeWithNormals(2.0f);
+  const auto mesh = utils::CubeMesh(2.0f);
   CHECK(Near(CheckClosedSolid(*mesh), 8.0f, 1e-3f));
 }
 
 TEST_CASE("plane") {
   // 4 corners, 2 triangles, both facing up (+Z, counter-clockwise seen from above), width along X, depth along Y.
-  const auto mesh = utils::createPlaneWithNormals(4.0f, 2.0f);
+  const auto mesh = utils::PlaneMesh(4.0f, 2.0f);
   const auto& v = mesh->GetVertices();
   const auto& index = mesh->GetIndices();
   CHECK((v.size() == 4 && index.size() == 6));

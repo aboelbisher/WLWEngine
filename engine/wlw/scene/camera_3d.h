@@ -15,10 +15,10 @@ namespace wlw::scene {
 // through one (Viewport::SetCamera); it needn't be in the scene's tree (a free camera's world transform is its local
 // one).
 //
-//   auto camera = scene::Camera3D::Create();
+//   std::shared_ptr<scene::Camera3D> camera = scene::Camera3D::Create();
 //   camera->SetPosition({0.0f, -10.0f, 5.0f});  // behind and above the origin
 //   camera->LookAt({0.0f, 0.0f, 0.0f});
-//   window->GetScreen().SetCamera(camera);
+//   window->MainViewport().SetCamera(camera);
 //
 // Two projections: perspective (SetPerspective: a vertical field of view, things shrink with distance) and
 // orthographic (SetOrthographic: a size in world units, parallel rays; top-down, side-on and isometric games, editor
@@ -41,7 +41,7 @@ class Camera3D : public Node3D {
 
   // At the origin looking along +Y, +Z up: perspective, 60 degrees vertically, 0.1 to 1000 m.
   Camera3D() : Node3D(NodeKind::Camera) {}
-  static std::shared_ptr<Camera3D> Create() { return std::make_shared<Camera3D>(); }
+  static std::unique_ptr<Camera3D> Create() { return std::make_unique<Camera3D>(); }
 
   // ---- Projection ----
   // `fov_y`: the frame's full vertical angle in radians. Near and far: distances along the view direction (> 0).

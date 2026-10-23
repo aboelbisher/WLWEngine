@@ -34,7 +34,7 @@ engine/wlw/
               grows back up the path), emitters; WriteTo(SpriteBatch) packs 16 B/dot + bounds. SetDensity(0..1) scales emitters + queue packing (count only;
               the game sets dot_size, e.g. x 1/density^0.25; queues track their length, no gap on a change). Emulator, -O2, 20k dots:
               Update ~30 us, WriteTo ~95 us; Pixel 4 (-O2): Update ~195 us, WriteTo ~950 us (the phone's real cost)
-  debug/      DebugUI: Dear ImGui (third_party/imgui) fed from Input, drawn via Window::SetOverlay; games add
+  debug/      DebugUI: Dear ImGui (third_party/imgui) fed from Input, drawn as a window overlay (Window::Internal().AddOverlay); games add
               panels in System::OnDebugUI() (#if WLW_DEBUG_UI); the engine's own window is debug::EnginePanel (a
               System the Application adds first) then debug::CVarPanel (every cvar by prefix, typed widgets, reset).
               F1 / "Debug" button. Console (console_window.h, owned by DebugUI): ` key / "Console" button: the log
@@ -50,7 +50,11 @@ engine/wlw/
               = the services) and push Screens. SystemList = the testable dispatch. Time (time.h): Delta, RealDelta,
               FixedStep, Alpha, SinceStart, SetScale (hit-stop / slow motion via core/time_scale.h), Fps.
               entry_point.h: WLW_MAIN(make_app) with the game's MakeApp() (builds the Application, adds its systems),
-              Screen + ScreenStack (game states: deferred push/pop/replace, overlays, fades, Back routing)
+              Screen + ScreenStack (game states: deferred push/pop/replace, overlays, fades, Back routing; Screen::App()
+              = the services, protected, valid from OnEnter). AppConfig = name (save folder + default window title) +
+              groups window{title, size, stats_in_title} / graphics{target_fps, screen_depth} / audio{enabled,
+              max_voices} / time{fixed_step, max_frame_time} / ui{reference_size}; ResolveAppConfig (tested) fills the
+              defaults (window title = name)
               Quality (quality.h, App().Quality(); like Unity QualitySettings + Adaptive Performance): the game defines
               N levels (Configure, OnChange = apply a tier; Lock/Unlock for menus/tests), the engine picks one: GPU ms
               (timer queries, turned on by Configure) or late frames > budget x down_at / slow_frame_at for 2 s = down,
@@ -60,13 +64,13 @@ engine/wlw/
               Budget (BudgetMs) = settings' budget_ms, or 0 (default) = the frame time of the paced rate (SetTargetFrameMs).
               QualitySettings::render_scales = the screen's render scale per level (Quality::RenderScale; the Application
               sets it on the screen when it changes, just before drawing; empty = left to the game)
-              Frame pacing: AppConfig::target_fps (60; 0 = display rate, -1 = uncapped) / App().SetTargetFps / cvar
+              Frame pacing: AppConfig::graphics.target_fps (60; 0 = display rate, -1 = uncapped) / App().SetTargetFps / cvar
               r.target_fps -> Window::SetTargetFps (platform: Swappy on Android, vsync interval or limiter on desktop;
               core/frame_pacing.h). Window: PacedFps, RefreshRate, PacingMethod (engine panel: target buttons + these)
   version.h   GENERATED from project(VERSION) (template version.h.in): WLW_VERSION_MAJOR/MINOR/PATCH, WLW_VERSION_STRING,
               WLW_VERSION (major*10000+minor*100+patch), WLW_VERSION_AT_LEAST(maj, min, patch)
   core/       math.h (wlw::Vec2/3/4, IVec, Quat, Mat3/4 = glm; kPi/kTau/kDegToRad; Lerp, InverseLerp, Remap, Saturate, SmoothStep, MoveTowards, ExpDecay, WrapAngle/AngleDifference/LerpAngle, SafeNormalize, Perp, Cross(Vec2), Rotate(Vec2), DistanceToSegment; core::SinCos = one reduction + Cephes polynomials, 1.2e-7, branchless quadrants; glm config in third_party/CMakeLists.txt: GLM_ENABLE_EXPERIMENTAL, CTOR_INIT off = default Vec3/Mat4 uninitialised, measured), color.h (wlw::Color = floats as authored (sRGB-encoded, converted when 13.1 shades linear): Hex/HexRgba constexpr, Parse/ToHex, WithAlpha replaces, Faded multiplies, Darkened/Lightened, ToLinear/FromLinear exact curve, operators; Color32 RGBA8 Packed/FromPacked, UnitToByte; colors::kWhite...), geometry.h (wlw::AABB, Sphere, Ray, Plane, Frustum, Rect (= ui::Rect); Overlaps(a, b) incl. conservative frustum tests; Raycast(ray, plane/box (slab)/sphere/triangle (Möller-Trumbore)) = distance, 0 inside; TransformBox = Arvo: exact box of a moved box; Union; the engine's scene/ headers write wlw::AABB etc. qualified, so a game including the 0.3 shim header collision.h first still compiles them), FixedTimestep, frame_pacing.h (PlanPacing(target, refresh) = vsync interval or limiter,
-              2% tolerance; FrameLimiter = fixed schedule, exact average, restarts after a stall), Random (SplitMix64: deterministic everywhere, state saveable), log.h (WLW_LOG(Category, Level, fmt...): levels Verbose..Fatal, categories LogCore/App/Render/Shader/Audio/Platform/UI/FX (+ kit LogKit, games WLW_LOG_CATEGORY), compile-time stripping, SetLogFilter("Render=Verbose,*=Warning") / env WLW_LOG, sinks: platform, RecentLogs ring (512), StartLogFile (debug builds: <save dir>/log.txt, previous run log.txt.prev), AddLogSink; LogThreadId), assert.h (WLW_ASSERT debug-only fatal, WLW_VERIFY always evaluated: logs + returns false, WLW_UNREACHABLE; SetAssertHandler for tests), cvar.h (CVar<bool/int/float/std::string>{"r.name", default, help, flags Saved/ReadOnly/Cheat, range}: dotted lowercase names; sources in order code default < wlw.cfg (assets) < <save dir>/cvars.cfg (Saved, written when changed) < command line +name value / Android --es wlw "a=1;b=2" < console; unknown names wait for registration; OnChange; game thread), console.h (ConsoleCommand RAII, ExecuteConsoleLine, built-ins help/find/set/reset/exec (+quit from Application), CompleteConsoleName, ConsoleModel), profile.h (WLW_PROFILE_SCOPE/FUNCTION/SCOPE_DYNAMIC/TEXT/FRAME/PLOT/THREAD_NAME/MESSAGE -> Tracy + Android ATrace; only with the CMake option WLW_PROFILE, else empty with unevaluated arguments; one zone per scope; see "Profiling"), type_name.h (TypeName<T>() at compile time: "wlw::app::System"; System::Name() for zones), build_info.h (GetBuildInfo: version, git commit + dirty, build type; BuildInfoText logged at startup and in the engine panel; cmake/GitInfo.cmake), deprecated.h (WLW_DEPRECATED(0.3, "Use X") shims, WLW_DISABLE_DEPRECATION_WARNINGS_BEGIN/END, option WLW_NO_DEPRECATED; see "Versioning"), normal_matrix.h (NormalMatrix(mat3/mat4) = cofactor normal matrix, sign-fixed for mirrors), rotation.h (EulerOrder,
+              2% tolerance; FrameLimiter = fixed schedule, exact average, restarts after a stall), Random (SplitMix64: deterministic everywhere, state saveable), log.h (WLW_LOG(Category, Level, fmt...): levels Verbose..Fatal, categories LogCore/App/Render/Shader/Audio/Platform/UI/FX (+ kit LogKit, games WLW_LOG_CATEGORY), compile-time stripping, SetLogFilter("Render=Verbose,*=Warning") / env WLW_LOG, sinks: platform, RecentLogs ring (512), StartLogFile (debug builds: <save dir>/log.txt, previous run log.txt.prev), AddLogSink -> core::Connection; LogThreadId), assert.h (WLW_ASSERT debug-only fatal, WLW_VERIFY always evaluated: logs + returns false, WLW_UNREACHABLE; SetAssertHandler for tests), cvar.h (CVar<bool/int/float/std::string>{"r.name", default, help, flags Saved/ReadOnly/Cheat, range}: dotted lowercase names; sources in order code default < wlw.cfg (assets) < <save dir>/cvars.cfg (Saved, written when changed) < command line +name value / Android --es wlw "a=1;b=2" < console; unknown names wait for registration; OnChange -> core::Connection; game thread), connection.h (Connection: copyable handle, Disconnect/Connected, safe after the source died; ScopedConnection = RAII; CallbackList<Args...> = one-thread list, safe to change while calling), console.h (ConsoleCommand RAII, ExecuteConsoleLine, built-ins help/find/set/reset/exec (+quit from Application), CompleteConsoleName, ConsoleModel), profile.h (WLW_PROFILE_SCOPE/FUNCTION/SCOPE_DYNAMIC/TEXT/FRAME/PLOT/THREAD_NAME/MESSAGE -> Tracy + Android ATrace; only with the CMake option WLW_PROFILE, else empty with unevaluated arguments; one zone per scope; see "Profiling"), type_name.h (TypeName<T>() at compile time: "wlw::app::System"; System::Name() for zones), build_info.h (GetBuildInfo: version, git commit + dirty, build type; BuildInfoText logged at startup and in the engine panel; cmake/GitInfo.cmake), deprecated.h (WLW_DEPRECATED(0.3, "Use X") shims, WLW_DISABLE_DEPRECATION_WARNINGS_BEGIN/END, option WLW_NO_DEPRECATED; see "Versioning"), normal_matrix.h (NormalMatrix(mat3/mat4) = cofactor normal matrix, sign-fixed for mirrors), rotation.h (EulerOrder,
               QuatFromEuler, EulerFromQuat (default kDefaultEulerOrder = ZXY: yaw, pitch, roll), LookRotation(forward, up) = +Y to
               forward, +Z towards up, with a fallback up), axes in math.h (kRight/kForward/kUp/..., kModelFront = -Y, FromYUp/ToYUp), mesh/model; vector2.h, vector3.h, collision.h = 0.3 deprecation shims only
   input/      Input: keys (pressed vs held; text-editing keys + Grave), Text() (typed code points), pointer (mouse/first
@@ -124,7 +128,7 @@ engine/wlw/
               NO DEVICE IN GAME CODE (gpu_resource.h): textures (WTexture2D::Create / FromImage, WCubemap::Create), shaders
               and render targets are plain CPU objects made with their own Create (no GL context: usable in tests), like
               Mesh; the renderer makes their GPU side on first use (gl_resources.h: GLTexture, GLShaderFor, GLFramebuffer)
-              and WarmUp prepares every alive one (Resource::ForEachAlive). RenderDevice = mesh buffers, engine-internal.
+              and WarmUp prepares every alive one (Resource::InternalAccess::ForEachAlive: an intrusive list, filled by Resource's constructor). RenderDevice = mesh buffers, engine-internal.
               Post passes (post_pass.h): Viewport::AddPostPass({material (shader_type post), scale, format, name, inputs});
               with passes the 3D draws into the scene picture, PlanPostChain (CPU, tested) ping-pongs pooled targets, the
               last pass writes the destination (screen or viewport texture), then the Overlay canvas layers (UI not post-processed).
@@ -141,7 +145,7 @@ engine/wlw/
               at GL_MAX_TEXTURE_SIZE. Screen: QualitySettings::render_scales, cvar r.render_scale = SetRenderScaleOverride
               (wins while > 0), engine panel buttons. RenderStats::render_width/height. RTX 5080, 2560x1440, 24 blended
               lit layers: 3D 2.20 ms at 1, 1.21 at 0.75, 0.53 at 0.5 (= the pixel count); the upscale copy 0.017 ms.
-              AppConfig::screen_depth / WindowOptions::depth = false: no depth buffer on the screen surface (memory saved
+              AppConfig::graphics.screen_depth / WindowOptions::depth = false: no depth buffer on the screen surface (memory saved
               when the screen is always scaled / post-processed); the screen then always draws through its scene picture.
               Framebuffer invalidation (GLES glInvalidateFramebuffer, nothing on desktop GL 3.3): depth after the 3D,
               each post output before it's drawn (DONT_CARE load), the screen's depth/stencil before swap;
@@ -196,8 +200,8 @@ engine/wlw/
               Viewport::Create({format, depth, smooth, clear}) draws into a RenderTarget (rendering/render_target.h,
               an FBO; RGBA16F falls back to RGBA8 if the GPU can't), GetTexture() -> any ShaderMaterial; SetSizeFromScreen /
               SetSize; UpdateMode Always / Once / Disabled. Several viewports may share a Scene.
-              Window = surface + input + GetScreen() (its root viewport: scene, camera, the game UI canvas) +
-              AddViewport (offscreen, drawn before the screen in the order added) + overlays (debug UI).
+              Window = surface + input + MainViewport() (the screen: scene, camera, the game UI canvas) +
+              AddViewport / RemoveViewport(viewport) / Viewports() (offscreen, drawn before the screen in the order added) + overlays (debug UI).
               Window::Create(size, title, {.visible = false}) = a hidden window (desktop): just a GL context.
               The driver: DrawWindow -> DrawViewport(each) -> gather, shadow pass, main pass, post passes, canvas.
               RenderingDriver::ReadPixels(target) = a target's picture as RGBA8, top row first (stalls: tests,
@@ -234,10 +238,10 @@ engine/wlw/
                  IconToggle, Switch, SettingRow, LinkRow, Card (mode tiles: caller draws the art), Dialog (scrim, slide-in,
                  close X / tap outside), Segmented, Chip, Stars; the older font+ButtonStyle Button/Toggle/Panel still work),
                  layout.h (Centered, Inset, Row, Column).
-              The UI canvas is Window::GetScreen().GetCanvas(); an offscreen viewport's canvas is drawn into its texture.
+              The UI canvas is Window::MainViewport().GetCanvas(); an offscreen viewport's canvas is drawn into its texture.
               Canvas layers (viewport.h, like Unity Canvas render modes + sort order): AddCanvasLayer({mode, order}); Picture
               = part of the picture (after 3D, before post passes), Overlay = on top after them; GetCanvas() = Overlay 0.
-  utils/      image/glTF loaders (glTF turned from Y up: models face -Y), texture cache, primitives.h (procedural cube,
+  utils/      image/glTF loaders (glTF turned from Y up: models face -Y), texture cache, primitives.h (CubeMesh, BeveledCubeMesh, SphereMesh, CylinderMesh, GemMesh, PyramidFrustumMesh, PlaneMesh: procedural cube,
               bevelled cube, sphere, cylinder, gem, pyramid frustum, plane = XY ground; Z up, CCW outward faces),
               textures.h (procedural textures: RadialFalloffTexture = a soft (1-d²)² dot for glows, particles, metaballs)
 kit/wlw/kit/  wlw::kit: game-level building blocks shared by games (separate target on top of the engine; the
@@ -250,7 +254,7 @@ kit/wlw/kit/  wlw::kit: game-level building blocks shared by games (separate tar
 samples/      small games, built only when the engine is the top-level project (desktop):
               snake/ (Snake + its rules tests)
 tests/        engine unit tests (no window/GPU: conventions (axes, turns, camera on screen, lights, particles, primitive windings, glTF front), cameras (view = inverse world, fit modes, frustum, fly/orbit/follow controllers), node kinds, quality levels (down/up, back-off, settle, frame-time-only, lock, saved,
-              budget from the target, render scales), frame pacing (plans per target/refresh, limiter schedule), draw order (sort keys), sky (rays, place in the order), scene gather + cull, transform (Euler orders, look rotation, matrix cache, hierarchy, names, ids, layers, 0.3 shims), normal matrices (cofactor vs inverse-transpose, mirrors, flat), shader system (preprocessor, embedded files in every variant, std140 layout, lights, variants, UI kinds), systems (order, starting, Back), blending (depth-write rule, canvas batches, images, falloff texture), resources (made without a GPU, updates, alive list), post passes (planning, ping-pong, named inputs, chain targets, effects, render-scale upscale), viewports (scenes, sizes, render scale, update modes), anim, audio, core (random, atomic files, bridge queue), exact cover, search (bitboards, minimax, expectimax), gf2 (Lights Out), shader text splitting, lighting (light nodes, shadow-box fitting), fx, instances (layout, PackColor = lround, SinCos, Arvo boxes vs corners, WriteInstances, cached bounds, shims), input, kit, picking, primitives, ui (canvas, safe area, widgets), screens, profile macros + TypeName, version macros + build info + deprecated shims; CTest "deprecations" runs cmake/CheckDeprecations.cmake). doctest: one binary wlw_tests, a TEST_SUITE per file, shared main test_main.cpp,
+              budget from the target, render scales), frame pacing (plans per target/refresh, limiter schedule), draw order (sort keys), sky (rays, place in the order), scene gather + cull, transform (Euler orders, look rotation, matrix cache, hierarchy, names, ids, layers, 0.3 shims), normal matrices (cofactor vs inverse-transpose, mirrors, flat), shader system (preprocessor, embedded files in every variant, std140 layout, lights, variants, UI kinds), systems (order, starting, Back), blending (depth-write rule, canvas batches, images, falloff texture), resources (made without a GPU, updates, alive list: owned any way, made / destroyed during a walk), connections (disconnect, scoped, changes while calling), app config (groups, defaults), post passes (planning, ping-pong, named inputs, chain targets, effects, render-scale upscale), viewports (scenes, sizes, render scale, update modes), anim, audio, core (random, atomic files, bridge queue), exact cover, search (bitboards, minimax, expectimax), gf2 (Lights Out), shader text splitting, lighting (light nodes, shadow-box fitting), fx, instances (layout, PackColor = lround, SinCos, Arvo boxes vs corners, WriteInstances, cached bounds, shims), input, kit, picking, primitives, ui (canvas, safe area, widgets), screens, profile macros + TypeName, version macros + build info + deprecated shims; CTest "deprecations" runs cmake/CheckDeprecations.cmake). doctest: one binary wlw_tests, a TEST_SUITE per file, shared main test_main.cpp,
               test_helpers.h (Near = absolute tolerance); compound checks in double parentheses CHECK((a && b));
               each TEST_CASE is its own CTest test (cases run in parallel processes: no shared temp files);
               test data in tests/data/, also top-level only. tests/support/ = wlw_test_support (image_compare.h: PNG
@@ -331,16 +335,36 @@ vcpkg/ + vcpkg.json     GLFW only (desktop); everything else is vendored in thir
   the Android CI job builds without it and fails on one.
 - **Don't delete files without asking the owner first.**
 
+## API rules (Roadmap 2.5)
+- **Every `Create()` / factory returns `std::unique_ptr`** (`FromFile`, `FromImage`, `Load`, `LoadModel`, the
+  primitives' `*Mesh` too): the caller picks unique or shared (`std::shared_ptr<T> x = T::Create()`; the reverse
+  conversion doesn't exist). Only a function returning something another owner also keeps (a cache, the material
+  a viewport holds) returns `shared_ptr`. Registration of live objects happens in constructors, never through a
+  `shared_ptr` / `weak_ptr` made at creation (Resource's alive list). "Use Create" constructors are private.
+- **Getters return const references** to what the object holds (`const std::shared_ptr<T>&`, `const T&`), not copies.
+- **Remove by object**, like `Node3D::RemoveChild`: `RemoveViewport(viewport)` (pointer in, the removed
+  `shared_ptr` out), `RemoveCanvasLayer(canvas)`; no int ids.
+- **Callbacks return a `core::Connection`** (`AddLogSink`, `CVar::OnChange`, window overlays): a plain handle;
+  dropping it keeps the callback; `Disconnect()` removes it (safe after the source is gone); `ScopedConnection`
+  for RAII. A source keeps its callbacks in a `core::CallbackList` (one thread) or its own locked list.
+- **Engine-only methods go behind `x.Internal()`**: a small `InternalAccess` class at the bottom of the same
+  header (nested, so it reaches the private members) for what the platform, the renderer or the Application call
+  (Window, Viewport, Canvas::BeginFrame, Resource / textures / shaders / render targets, Mesh buffers, instance and
+  sprite buffers, PostChain, Input feeding, ScreenStack's frame, Quality's feeding). Games never call
+  `Internal()`; tests may.
+- Accessor naming is left as it is (`GetCanvas` / `GetInput` next to `Root` / `Post` / `Settings`).
+
 ## Versioning
 SemVer below 1.0 (minor = may break, patch = fixes only); **one minor version per finished roadmap phase**
 (Phase 0 = v0.1.0, Phase 1 = v0.2.0...). The version lives in one place: `project(WLWengine VERSION x.y.z)` in
 the top-level `CMakeLists.txt` -> generated `wlw/version.h` + `core::GetBuildInfo()`. Between tags it stays at
 the last release (the build info's git commit tells builds apart).
-- **Changing an API:** keep the old name as a thin forwarding shim, `WLW_DEPRECATED(<next release>, "Use X")`
-  inside `#if !WLW_NO_DEPRECATED`, and list it under **Deprecated** in CHANGELOG.md. The old implementation is
-  still deleted within its phase; only the shim stays, through exactly one release. The CTest test
-  `deprecations` fails once a shim is older than the current version: delete it then (CHANGELOG: **Removed**).
-  Engine code never calls a shim; tests of a shim wrap it in `WLW_DISABLE_DEPRECATION_WARNINGS_BEGIN/END`.
+- **Changing an API: no deprecation shims** (owner, 2026-10-24: nothing published uses the engine yet). Rename or
+  replace it directly, update every caller (engine, tests, Snake), and list it in CHANGELOG.md under **Breaking**
+  with a **Migration** line; the games move in their own step. Shims made before that rule (`WLW_DEPRECATED` in
+  core/deprecated.h, `#if !WLW_NO_DEPRECATED`; the CTest test `deprecations` checks their versions) are left
+  for removal (CHANGELOG: **Removed**). Engine code never calls a shim; tests of one wrap it in
+  `WLW_DISABLE_DEPRECATION_WARNINGS_BEGIN/END`.
 - **Releasing** (after the phase's last step is merged): bump `project(VERSION)`, delete expired shims, turn
   CHANGELOG's "Unreleased" into `## x.y.z (date): Phase N, <name>` with a summary + **Breaking** / **Deprecated**
   lists, commit "Release vx.y.z", then `git tag -a vx.y.z -m "WLWengine x.y.z"`, `git push origin vx.y.z` and

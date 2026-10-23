@@ -27,6 +27,7 @@ add_library(wlw STATIC
 
   wlw/audio/audio.cpp
   wlw/audio/audio.h
+  wlw/audio/audio_config.h
   wlw/audio/miniaudio_impl.cpp
   wlw/audio/mixer.cpp
   wlw/audio/mixer.h
@@ -49,6 +50,7 @@ add_library(wlw STATIC
   wlw/core/build_info.h
   wlw/app/engine_cvars.h
   wlw/core/console.cpp
+  wlw/core/connection.h
   wlw/core/console.h
   wlw/core/cvar.cpp
   wlw/core/cvar.h

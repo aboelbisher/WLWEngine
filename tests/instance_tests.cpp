@@ -194,16 +194,16 @@ TEST_CASE("instance bounds match the corners of every copy") {
 TEST_CASE("write instances keeps, adds and trims copies") {
   scene::MultiMeshInstance3D node;
   CHECK(node.Kind() == scene::NodeKind::MultiMeshInstance);
-  const uint64_t version = node.GetInstancesVersion();
+  const uint64_t version = node.Internal().GetInstancesVersion();
 
   std::span<Instance> copies = node.WriteInstances(3);
   CHECK(node.InstanceCount() == 3);
-  CHECK(node.GetInstancesVersion() == version + 1);
+  CHECK(node.Internal().GetInstancesVersion() == version + 1);
   for (const Instance& copy : copies) CHECK((copy.Transform() == glm::mat4(1.0f) && copy.color == 0xFFFFFFFFu));
   for (size_t i = 0; i < 3; ++i) copies[i].rows[0].w = static_cast<float>(i + 1);
 
   copies = node.WriteInstances(5);  // grows: the first 3 kept, new ones identity + white
-  CHECK(node.GetInstancesVersion() == version + 2);
+  CHECK(node.Internal().GetInstancesVersion() == version + 2);
   CHECK(copies[2].rows[0].w == 3.0f);
   CHECK(copies[4].Transform() == glm::mat4(1.0f));
 

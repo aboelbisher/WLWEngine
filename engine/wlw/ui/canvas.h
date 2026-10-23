@@ -81,16 +81,13 @@ struct UIBatch {
 // calls as possible - one per font, rectangles join whichever batch is current.
 //
 // Coordinates are virtual units with (0, 0) top-left and y down. The screen is scaled so that
-// the app's reference size (AppConfig::ui_reference_size) fits on screen; the longer side gets
+// the app's reference size (AppConfig::ui.reference_size) fits on screen; the longer side gets
 // extra room, so lay out relative to Size() (and the UI's safe area: ui::UIContext), not to fixed
 // numbers.
 //
 // It only draws: widgets, input and screen geometry are the UI layer's (ui_context.h, widgets.h).
 class Canvas {
  public:
-  // Empties it, sized for `framebuffer_pixels` with `reference` units fitting (see above).
-  void BeginFrame(glm::vec2 framebuffer_pixels, glm::vec2 reference);
-
   glm::vec2 Size() const { return size_; }  // the whole area it covers, in units
   float PixelsPerUnit() const { return pixels_per_unit_; }
   glm::vec2 FromPixels(glm::vec2 pixels) const { return pixels / pixels_per_unit_; }
@@ -134,7 +131,14 @@ class Canvas {
   size_t QuadCount() const { return vertices_.size() / 4; }
   glm::mat4 Projection() const;  // units -> clip space
 
+  class InternalAccess;
+  // Engine-only parts (the Application's): see InternalAccess below.
+  InternalAccess Internal();
+
  private:
+  // Empties it, sized for `framebuffer_pixels` with `reference` units fitting (see above).
+  void BeginFrame(glm::vec2 framebuffer_pixels, glm::vec2 reference);
+
   // The batch for a quad sampling `font`'s atlas, `texture`, or nothing (both null).
   UIBatch& BatchFor(const Font* font, const std::shared_ptr<rendering::WTexture2D>* texture,
                     rendering::BlendMode blend = rendering::BlendMode::Alpha);
@@ -153,5 +157,19 @@ class Canvas {
   std::vector<UIBatch> batches_;
   std::vector<GlyphQuad> glyph_scratch_;  // reused: no allocation per Text() call
 };
+
+// For the engine (the Application begins every canvas's frame), not games.
+class Canvas::InternalAccess {
+ public:
+  explicit InternalAccess(Canvas& canvas) : canvas_(canvas) {}
+  void BeginFrame(glm::vec2 framebuffer_pixels, glm::vec2 reference) const {
+    canvas_.BeginFrame(framebuffer_pixels, reference);
+  }
+
+ private:
+  Canvas& canvas_;
+};
+
+inline Canvas::InternalAccess Canvas::Internal() { return InternalAccess(*this); }
 
 }  // namespace wlw::ui

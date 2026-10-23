@@ -8,6 +8,8 @@
 #include <string_view>
 #include <vector>
 
+#include "wlw/core/connection.h"
+
 // Logging, like Unreal's UE_LOG: a CATEGORY (which system speaks) and a LEVEL (how important).
 //
 //   WLW_LOG(LogRender, Warning, "texture %s is %dx%d", name, w, h);   // printf-style, checked by the compiler
@@ -80,9 +82,9 @@ std::vector<std::string> LogCategoryNames();
 // ---- Sinks ----
 using LogSink = std::function<void(const LogRecord&)>;
 // Called for every record that passes the filters, on the thread that logged, never two at once. A
-// sink must not log (that record would be dropped). Returns an id for RemoveLogSink.
-int AddLogSink(LogSink sink);
-void RemoveLogSink(int id);
+// sink must not log (that record would be dropped). Disconnect the returned Connection (from any
+// thread, but not from inside a sink) to remove it; once Disconnect returns, the sink isn't called again.
+core::Connection AddLogSink(LogSink sink);
 // The platform's output (stdout/stderr, logcat): on unless turned off (e.g. a quiet test).
 void SetPlatformLogOutput(bool on);
 

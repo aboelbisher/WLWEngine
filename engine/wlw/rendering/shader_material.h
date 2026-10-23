@@ -31,8 +31,8 @@ class ShaderMaterial : public Material {
   explicit ShaderMaterial(std::shared_ptr<Shader> shader) : shader_(std::move(shader)) {
     if (shader_ && shader_->GetTarget() == Shader::Target::Canvas) blend = BlendMode::Alpha;
   }
-  static std::shared_ptr<ShaderMaterial> Create(std::shared_ptr<Shader> shader) {
-    return std::make_shared<ShaderMaterial>(std::move(shader));
+  static std::unique_ptr<ShaderMaterial> Create(std::shared_ptr<Shader> shader) {
+    return std::make_unique<ShaderMaterial>(std::move(shader));
   }
 
   const std::shared_ptr<Shader>& GetShader() const { return shader_; }

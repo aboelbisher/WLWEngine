@@ -332,7 +332,7 @@ TEST_CASE("ids: random, never 0, settable") {
 
 TEST_CASE("layers: the camera's cull mask") {
   auto model = std::make_shared<core::Model<core::Vertex3D>>();
-  model->meshes.push_back(utils::createCubeWithNormals(1.0f));
+  model->meshes.push_back(utils::CubeMesh(1.0f));
   scene::Scene scene;
   auto a = std::make_shared<scene::MeshInstance3D>(), b = std::make_shared<scene::MeshInstance3D>();
   a->SetModel(model);
@@ -357,7 +357,7 @@ TEST_CASE("layers: the camera's cull mask") {
 
 TEST_CASE("the gather skips hidden branches, depth first in child order") {
   auto model = std::make_shared<core::Model<core::Vertex3D>>();
-  model->meshes.push_back(utils::createCubeWithNormals(1.0f));
+  model->meshes.push_back(utils::CubeMesh(1.0f));
   scene::Scene scene;
   auto make = [&] {
     auto node = std::make_shared<scene::MeshInstance3D>();

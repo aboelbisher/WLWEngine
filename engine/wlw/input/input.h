@@ -97,7 +97,11 @@ class Input {
   bool RawKeyReleased(Key key) const { return keys_released_[Index(key)]; }
   const std::vector<uint32_t>& RawText() const { return text_; }
 
-  // ---- Feeding (for the platform layer) ----
+  class InternalAccess;
+  // Feeding it (the platform layer's): see InternalAccess below.
+  InternalAccess Internal();
+
+ private:
   void BeginFrame();  // clear per-frame events; called before polling the OS
   void OnKey(Key key, bool down);
   void OnText(uint32_t codepoint);  // a typed character
@@ -107,7 +111,6 @@ class Input {
   void SetSurfaceSize(float width, float height);  // swipe distance is relative to screen size
   void SetTouchScreen(bool touch) { touch_screen_ = touch; }
 
- private:
   static constexpr size_t kKeyCount = static_cast<size_t>(Key::Count);
   static size_t Index(Key key) { return static_cast<size_t>(key); }
   static inline const std::vector<Swipe> kNoSwipes;
@@ -135,5 +138,26 @@ class Input {
   Vec2 surface_size_{720.0f, 1280.0f};
   float surface_min_side_ = 720.0f;
 };
+
+// For the platform layer (and input tests), not games: the OS's events go in here.
+class Input::InternalAccess {
+ public:
+  explicit InternalAccess(Input& input) : input_(input) {}
+
+  void BeginFrame() const { input_.BeginFrame(); }  // clear per-frame events; called before polling the OS
+  void OnKey(Key key, bool down) const { input_.OnKey(key, down); }
+  void OnText(uint32_t codepoint) const { input_.OnText(codepoint); }  // a typed character
+  void OnPointerDown(float x, float y) const { input_.OnPointerDown(x, y); }
+  void OnPointerMove(float x, float y) const { input_.OnPointerMove(x, y); }
+  void OnPointerUp(float x, float y) const { input_.OnPointerUp(x, y); }
+  // Swipe distance is relative to the screen's size.
+  void SetSurfaceSize(float width, float height) const { input_.SetSurfaceSize(width, height); }
+  void SetTouchScreen(bool touch) const { input_.SetTouchScreen(touch); }
+
+ private:
+  Input& input_;
+};
+
+inline Input::InternalAccess Input::Internal() { return InternalAccess(*this); }
 
 }  // namespace wlw::input

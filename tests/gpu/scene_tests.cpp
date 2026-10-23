@@ -6,6 +6,7 @@
 #include <cmath>
 #include <memory>
 #include <span>
+#include <utility>
 #include <vector>
 
 #include <glm/glm.hpp>
@@ -95,11 +96,11 @@ void AddLitCubes(scene::Viewport& viewport) {
   viewport.GetScene()->Root().AddChild(point);
   auto material = Opaque();
   material->shininess = 32.0f;
-  AddMesh(viewport, utils::createCubeWithNormals(1.2f, Color{0.9f, 0.3f, 0.3f, 1.0f}), material, {-1.8f, 0, 0})
+  AddMesh(viewport, utils::CubeMesh(1.2f, Color{0.9f, 0.3f, 0.3f, 1.0f}), material, {-1.8f, 0, 0})
       ->SetEulerAngles(glm::radians(wlw::Vec3(0, 0, 30)), wlw::EulerOrder::XZY);
-  AddMesh(viewport, utils::createBeveledCubeWithNormals(), material, {0, 0, 0})
+  AddMesh(viewport, utils::BeveledCubeMesh(), material, {0, 0, 0})
       ->SetEulerAngles(glm::radians(wlw::Vec3(20, 0, 45)), wlw::EulerOrder::XZY);
-  AddMesh(viewport, utils::createSphereWithNormals(0.7f, 16, 32), material, {1.8f, 0, 0});
+  AddMesh(viewport, utils::SphereMesh(0.7f, 16, 32), material, {1.8f, 0, 0});
 }
 
 // White text and a thin line along the bottom: what stays sharp at any render scale (Overlay).
@@ -124,7 +125,7 @@ TEST_CASE("render scale") {
   AddLitCubes(*viewport);
   viewport->SetRenderScale(0.5f);
   const float size = gpu_tests::kSize;
-  viewport->BeginCanvases({size, size}, {size, size});
+  viewport->Internal().BeginCanvases({size, size}, {size, size});
   const auto font = ui::Font::Load(WLW_TEST_FONT);
   REQUIRE(font != nullptr);
   AddSharpLabel(viewport->GetCanvas(), *font, "x0.5");
@@ -139,13 +140,13 @@ TEST_CASE("render scale with post") {
   auto viewport = MakeViewport();
   viewport->SetCamera(FixedCamera(Vec3{0, -6, 2}, Vec3{0, 0, 0}));
   AddSun(*viewport, 0.9f);
-  AddMesh(*viewport, utils::createCubeWithNormals(1.0f, Color{1.0f, 1.0f, 1.0f, 1.0f}), Opaque(), {-1.2f, 0, 0});
-  AddMesh(*viewport, utils::createCubeWithNormals(1.0f, Color{0.2f, 0.25f, 0.6f, 1.0f}), Opaque(), {1.2f, 0, 0});
+  AddMesh(*viewport, utils::CubeMesh(1.0f, Color{1.0f, 1.0f, 1.0f, 1.0f}), Opaque(), {-1.2f, 0, 0});
+  AddMesh(*viewport, utils::CubeMesh(1.0f, Color{0.2f, 0.25f, 0.6f, 1.0f}), Opaque(), {1.2f, 0, 0});
   scene::AddBloom(*viewport, {.threshold = 0.7f, .strength = 1.0f});
   viewport->SetRenderScale(0.5f);
   ui::Canvas& picture = viewport->AddCanvasLayer({.mode = scene::CanvasMode::Picture});
   const float size = gpu_tests::kSize;
-  viewport->BeginCanvases({size, size}, {size, size});
+  viewport->Internal().BeginCanvases({size, size}, {size, size});
   picture.Circle({128, 52}, 18, Color{1.0f, 0.95f, 0.6f, 1.0f});
   const auto font = ui::Font::Load(WLW_TEST_FONT);
   REQUIRE(font != nullptr);
@@ -158,11 +159,10 @@ TEST_CASE("shadows") {
   auto viewport = MakeViewport();
   viewport->SetCamera(FixedCamera(Vec3{0, -6, 5}, Vec3{0, 0, 0}));
   AddSun(*viewport, 0.3f)->SetCastsShadows(true);
-  auto ground = AddMesh(*viewport, utils::createPlaneWithNormals(8.0f, 8.0f, Color{0.7f, 0.7f, 0.75f, 1.0f}), Opaque(),
-                        {0, 0, 0});
+  auto ground = AddMesh(*viewport, utils::PlaneMesh(8.0f, 8.0f, Color{0.7f, 0.7f, 0.75f, 1.0f}), Opaque(), {0, 0, 0});
   ground->SetReceivesShadow(true);
   for (int i = 0; i < 3; ++i) {
-    auto cube = AddMesh(*viewport, utils::createCubeWithNormals(1.0f, Color{0.3f, 0.6f, 0.9f, 1.0f}), Opaque(),
+    auto cube = AddMesh(*viewport, utils::CubeMesh(1.0f, Color{0.3f, 0.6f, 0.9f, 1.0f}), Opaque(),
                         {-1.5f + 1.5f * i, 0.5f - 0.5f * i, 0.5f + 0.5f * i});
     cube->SetCastsShadow(true);
     cube->SetReceivesShadow(true);
@@ -175,12 +175,12 @@ TEST_CASE("transparency") {
   auto viewport = MakeViewport();
   viewport->SetCamera(FixedCamera(Vec3{0, -6, 2}, Vec3{0, 0, 0}));
   AddSun(*viewport, 0.4f);
-  AddMesh(*viewport, utils::createCubeWithNormals(1.5f, Color{0.9f, 0.9f, 0.2f, 1.0f}), Opaque(), {0, 2, 0});
+  AddMesh(*viewport, utils::CubeMesh(1.5f, Color{0.9f, 0.9f, 0.2f, 1.0f}), Opaque(), {0, 2, 0});
   auto glass = rendering::Material::Create();
   glass->blend = rendering::BlendMode::Alpha;
   std::shared_ptr<rendering::Material> shared_glass = std::move(glass);
-  AddMesh(*viewport, utils::createCubeWithNormals(1.5f, Color{1.0f, 0.2f, 0.2f, 0.5f}), shared_glass, {-0.6f, 0, 0});
-  AddMesh(*viewport, utils::createCubeWithNormals(1.5f, Color{0.2f, 0.4f, 1.0f, 0.5f}), shared_glass, {0.6f, -1, 0});
+  AddMesh(*viewport, utils::CubeMesh(1.5f, Color{1.0f, 0.2f, 0.2f, 0.5f}), shared_glass, {-0.6f, 0, 0});
+  AddMesh(*viewport, utils::CubeMesh(1.5f, Color{0.2f, 0.4f, 1.0f, 0.5f}), shared_glass, {0.6f, -1, 0});
   CheckGolden("transparency", viewport);
 }
 
@@ -189,7 +189,7 @@ TEST_CASE("instancing") {
   auto viewport = MakeViewport();
   viewport->SetCamera(FixedCamera(Vec3{0, -7, 7}, Vec3{0, 0, 0}));
   AddSun(*viewport);
-  auto node = AddMesh<scene::MultiMeshInstance3D>(*viewport, utils::createCubeWithNormals(0.7f), Opaque(), {0, 0, 0});
+  auto node = AddMesh<scene::MultiMeshInstance3D>(*viewport, utils::CubeMesh(0.7f), Opaque(), {0, 0, 0});
   std::span<rendering::Instance> copies = node->WriteInstances(25);
   for (int z = 0; z < 5; ++z) {
     for (int x = 0; x < 5; ++x) {
@@ -258,11 +258,10 @@ TEST_CASE("skybox") {
   viewport->SetCamera(FixedCamera(Vec3{-3.0f, 3.0f, 1.5f}, Vec3{0, 0, 0}));
   viewport->GetScene()->SetSkybox(TestCubemap());
   AddSun(*viewport, 0.4f);
-  AddMesh(*viewport, utils::createCubeWithNormals(1.2f, Color{0.9f, 0.9f, 0.9f, 1.0f}), Opaque(), {0, 0, 0});
+  AddMesh(*viewport, utils::CubeMesh(1.2f, Color{0.9f, 0.9f, 0.9f, 1.0f}), Opaque(), {0, 0, 0});
   auto glass = rendering::Material::Create();
   glass->blend = rendering::BlendMode::Alpha;
-  AddMesh(*viewport, utils::createCubeWithNormals(1.0f, Color{1.0f, 1.0f, 1.0f, 0.5f}), std::move(glass),
-          {-0.3f, 0.9f, -0.9f});
+  AddMesh(*viewport, utils::CubeMesh(1.0f, Color{1.0f, 1.0f, 1.0f, 0.5f}), std::move(glass), {-0.3f, 0.9f, -0.9f});
   CheckGolden("skybox", viewport);
 }
 
@@ -272,19 +271,19 @@ TEST_CASE("skybox orthographic") {
   viewport->SetCamera(OrthoCamera({-6.0f, 6.0f, 3.0f}, {0, 0, 0}, 4.0f));
   viewport->GetScene()->SetSkybox(TestCubemap());
   AddSun(*viewport, 0.4f);
-  AddMesh(*viewport, utils::createCubeWithNormals(1.2f, Color{0.9f, 0.9f, 0.9f, 1.0f}), Opaque(), {0, 0, 0});
+  AddMesh(*viewport, utils::CubeMesh(1.2f, Color{0.9f, 0.9f, 0.9f, 1.0f}), Opaque(), {0, 0, 0});
   CheckGolden("skybox_ortho", viewport);
 }
 
 TEST_CASE("skybox without depth buffer") {
   // A viewport without depth: the sky is drawn first, so the floor is drawn over it.
-  auto viewport =
+  std::shared_ptr<scene::Viewport> viewport =
       scene::Viewport::Create({.name = "golden", .depth = false, .clear = Color{0.08f, 0.09f, 0.14f, 1.0f}});
   viewport->SetSize(gpu_tests::kSize, gpu_tests::kSize);
   viewport->SetCamera(FixedCamera(Vec3{0, -4, 4}, Vec3{0, 0, 0}));
   viewport->GetScene()->SetSkybox(TestCubemap());
   AddSun(*viewport, 0.4f);
-  AddMesh(*viewport, utils::createPlaneWithNormals(3.0f, 3.0f, Color{0.9f, 0.9f, 0.9f, 1.0f}), Opaque(), {0, 0, 0});
+  AddMesh(*viewport, utils::PlaneMesh(3.0f, 3.0f, Color{0.9f, 0.9f, 0.9f, 1.0f}), Opaque(), {0, 0, 0});
   CheckGolden("skybox_no_depth", viewport);
 }
 
@@ -293,8 +292,8 @@ TEST_CASE("post chain bloom") {
   auto viewport = MakeViewport();
   viewport->SetCamera(FixedCamera(Vec3{0, -6, 2}, Vec3{0, 0, 0}));
   AddSun(*viewport, 0.9f);
-  AddMesh(*viewport, utils::createCubeWithNormals(1.0f, Color{1.0f, 1.0f, 1.0f, 1.0f}), Opaque(), {-1.2f, 0, 0});
-  AddMesh(*viewport, utils::createCubeWithNormals(1.0f, Color{0.2f, 0.25f, 0.6f, 1.0f}), Opaque(), {1.2f, 0, 0});
+  AddMesh(*viewport, utils::CubeMesh(1.0f, Color{1.0f, 1.0f, 1.0f, 1.0f}), Opaque(), {-1.2f, 0, 0});
+  AddMesh(*viewport, utils::CubeMesh(1.0f, Color{0.2f, 0.25f, 0.6f, 1.0f}), Opaque(), {1.2f, 0, 0});
   scene::AddBloom(*viewport, {.threshold = 0.7f, .strength = 1.0f});
   CheckGolden("post_bloom", viewport);
 }
@@ -304,7 +303,7 @@ TEST_CASE("canvas") {
   auto viewport = MakeViewport();
   viewport->SetScene(nullptr);
   const float size = gpu_tests::kSize;
-  viewport->BeginCanvases({size, size}, {size, size});
+  viewport->Internal().BeginCanvases({size, size}, {size, size});
   ui::Canvas& canvas = viewport->GetCanvas();
   canvas.FillRect({{12, 12}, {244, 92}}, Color{0.95f, 0.55f, 0.2f, 1.0f}, 18.0f);
   canvas.FillRect({{24, 104}, {120, 200}}, Color{0.2f, 0.7f, 0.5f, 0.6f});
@@ -313,7 +312,7 @@ TEST_CASE("canvas") {
   canvas.Triangle({30, 244}, {90, 210}, {110, 250}, Color{0.9f, 0.2f, 0.4f, 1.0f});
   canvas.Line({130, 240}, {240, 205}, 4.0f, Color{0.9f, 0.9f, 0.3f, 1.0f});
   canvas.Arc({60, 150}, 26, 8, 0.5f, 3.5f, Color{1.0f, 0.9f, 0.9f, 1.0f});
-  const auto glow = utils::RadialFalloffTexture(64);
+  const std::shared_ptr<rendering::WTexture2D> glow = utils::RadialFalloffTexture(64);
   canvas.Image({{150, 180}, {250, 256}}, glow,
                {.tint = {1.0f, 0.5f, 0.1f, 1.0f}, .blend = rendering::BlendMode::Additive});
   const auto font = ui::Font::Load(WLW_TEST_FONT);
@@ -338,8 +337,8 @@ std::vector<std::shared_ptr<scene::GeometryInstance3D>> AddTransformedShapes(
   };
   auto add = [&](std::shared_ptr<core::Mesh<core::Vertex3D>> mesh, const Vec3& position, const Vec3& rotation,
                  const Vec3& scale) { place(AddMesh(viewport, std::move(mesh), material, position), rotation, scale); };
-  add(utils::createSphereWithNormals(0.7f, 16, 32), {-1.5f, 0, 1.1f}, {0, -25, 0}, {1.6f, 1.0f, 0.6f});
-  add(utils::createBeveledCubeWithNormals(), {-1.5f, 0, -1.1f}, {20, -10, 45}, {-1.0f, 1.2f, 0.8f});
+  add(utils::SphereMesh(0.7f, 16, 32), {-1.5f, 0, 1.1f}, {0, -25, 0}, {1.6f, 1.0f, 0.6f});
+  add(utils::BeveledCubeMesh(), {-1.5f, 0, -1.1f}, {20, -10, 45}, {-1.0f, 1.2f, 0.8f});
 
   auto parent = std::make_shared<scene::Node3D>();
   parent->SetPosition({1.5f, 0, 1.1f});
@@ -347,14 +346,14 @@ std::vector<std::shared_ptr<scene::GeometryInstance3D>> AddTransformedShapes(
   parent->SetScale({1.7f, 1.0f, 0.6f});
   viewport.GetScene()->Root().AddChild(parent);
   auto child = std::make_shared<scene::MeshInstance3D>();
-  child->SetModel(MakeModel(utils::createCubeWithNormals(0.9f, Color{0.3f, 0.8f, 0.4f, 1.0f})));
+  child->SetModel(MakeModel(utils::CubeMesh(0.9f, Color{0.3f, 0.8f, 0.4f, 1.0f})));
   child->SetMaterial(material);
   child->SetEulerAngles(glm::radians(wlw::Vec3(30, 0, 35)), wlw::EulerOrder::XZY);
   parent->AddChild(child);
   drawn.push_back(child);
 
-  auto copies = AddMesh<scene::MultiMeshInstance3D>(viewport, utils::createSphereWithNormals(0.4f, 12, 24), material,
-                                                    {1.5f, 0, -1.1f});
+  auto copies =
+      AddMesh<scene::MultiMeshInstance3D>(viewport, utils::SphereMesh(0.4f, 12, 24), material, {1.5f, 0, -1.1f});
   place(copies, {0, 0, 0}, {1.3f, 1.0f, 1.0f});
   std::span<rendering::Instance> instances = copies->WriteInstances(3);
   instances[0].SetTransform(glm::scale(glm::translate(glm::mat4(1.0f), {-0.7f, 0, 0}), {1.0f, 1.0f, 0.4f}));
@@ -427,7 +426,7 @@ TEST_CASE("normals match inverse-transpose") {
   SUBCASE("engine shader") { CheckNormalsMatchBaked("normals_lit", lit); }
   SUBCASE("game shader") {
     // A mesh shader without vertex() (the engine's WorldNormal), showing the normal as a colour.
-    const auto shader = rendering::Shader::Create(R"(shader_type mesh;
+    const std::shared_ptr<rendering::Shader> shader = rendering::Shader::Create(R"(shader_type mesh;
 void fragment() {
   FragColor = vec4(normalize(vNormal) * 0.5 + 0.5, 1.0);
 }
@@ -466,12 +465,12 @@ TEST_CASE("axes") {
   auto viewport = MakeViewport();
   auto camera = scene::Camera3D::Create();
   camera->SetPerspective(glm::radians(60.0f), 0.1f, 100.0f);
-  viewport->SetCamera(camera);
+  viewport->SetCamera(std::move(camera));
   AddSun(*viewport, 1.0f);
-  AddMesh(*viewport, utils::createCubeWithNormals(1.0f, Color{0.1f, 0.1f, 0.9f, 1.0f}), Opaque(), {0, 6, 0});
-  AddMesh(*viewport, utils::createCubeWithNormals(1.0f, Color{0.9f, 0.1f, 0.1f, 1.0f}), Opaque(), {2, 6, 0});
-  AddMesh(*viewport, utils::createCubeWithNormals(1.0f, Color{0.1f, 0.9f, 0.1f, 1.0f}), Opaque(), {0, 6, 2});
-  AddMesh(*viewport, utils::createCubeWithNormals(1.0f, Color{1.0f, 1.0f, 1.0f, 1.0f}), Opaque(), {0, -6, 0});
+  AddMesh(*viewport, utils::CubeMesh(1.0f, Color{0.1f, 0.1f, 0.9f, 1.0f}), Opaque(), {0, 6, 0});
+  AddMesh(*viewport, utils::CubeMesh(1.0f, Color{0.9f, 0.1f, 0.1f, 1.0f}), Opaque(), {2, 6, 0});
+  AddMesh(*viewport, utils::CubeMesh(1.0f, Color{0.1f, 0.9f, 0.1f, 1.0f}), Opaque(), {0, 6, 2});
+  AddMesh(*viewport, utils::CubeMesh(1.0f, Color{1.0f, 1.0f, 1.0f, 1.0f}), Opaque(), {0, -6, 0});
   const testing::Image image = gpu_tests::Render(viewport);
   REQUIRE(!image.Empty());
   // 6 m away the view is 2 * 6 * tan(30) = 6.93 m tall: 2 m off the middle is 74 pixels.
@@ -505,7 +504,7 @@ TEST_CASE("cube faces") {
     auto camera = scene::Camera3D::Create();
     camera->SetPerspective(glm::radians(60.0f), 0.1f, 100.0f);
     camera->LookAt(look.direction);
-    viewport->SetCamera(camera);
+    viewport->SetCamera(std::move(camera));
     const testing::Image image = gpu_tests::Render(viewport);
     REQUIRE(!image.Empty());
     CHECK(NearestColor(image.Pixel(100, 100), colors) == look.face);

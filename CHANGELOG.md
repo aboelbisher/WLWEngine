@@ -5,8 +5,9 @@ the old step numbers (ROADMAP.md "Old numbering" maps them).
 
 Versions follow SemVer below 1.0: a minor version may break the API, a patch only fixes. One minor version per
 finished roadmap phase, each tagged `vX.Y.Z` on `main` with a GitHub Release; games pin their engine submodule
-to a tag. Renamed or replaced APIs keep a `WLW_DEPRECATED` shim for one release (listed under **Deprecated**),
-then it's deleted (listed under **Removed**).
+to a tag. Until a game ships, APIs change without deprecation shims (the owner's call, 2026-10-24): every change is
+listed under **Breaking** with its **Migration**. Shims added before that (`WLW_DEPRECATED`, listed under
+**Deprecated**) are deleted (listed under **Removed**).
 
 ## Unreleased
 
@@ -20,6 +21,64 @@ then it's deleted (listed under **Removed**).
 - `ui::TextStyle::rotation`: Canvas text turned about its alignment point (radians, clockwise on screen, like
   Arc). Only the glyph corners turn; the SDF anti-aliasing holds (abs-derivative width: ~8% softer at 5°,
   ~16% at 10°, ~41% at 45°). The shadow keeps its on-screen offset. Asked for by Threadlock (World 2's pinned order slips).
+
+### API consistency (Roadmap 2.5)
+One set of rules for the public API (CLAUDE.md "API rules"): factories hand over `unique_ptr`, getters return const
+references, things are removed by object, callbacks return a `core::Connection`, and what only the engine calls
+sits behind `x.Internal()`.
+- **Factories return `std::unique_ptr`** (the owner's rule: the call site picks unique or shared; the reverse
+  conversion doesn't exist): `Material`, `ShaderMaterial`, `Shader::Create` / `FromFile`, `WTexture2D::Create` /
+  `FromImage`, `WCubemap::Create`, `RenderTarget::Create`, `Font::Load` / `FromMemory`, `GLTFLoader::LoadModel`,
+  `Scene`, `Viewport`, `Camera3D`, `MeshInstance3D`, `MultiMeshInstance3D`, `OrthographicCamera` (shim),
+  `utils::RadialFalloffTexture` and the new primitive `*Mesh` functions. Shared caches keep `shared_ptr`
+  (`scene::AddThreshold`'s material, `TextureManager`). Their "use Create" constructors are private now.
+- **Resources register in their constructor**: the alive list (`RenderingDriver::WarmUp`) is an intrusive list of
+  raw pointers, filled by `Resource`'s constructor and emptied by its destructor, so a resource is found however
+  it is owned (before, one made with `make_shared` was missed). A walk may make or destroy resources.
+- **Fonts**: held by a `shared_ptr`, a font is still kept alive by the Canvas until its text is drawn; held by a
+  `unique_ptr` (what `Load` returns), the batch only points at it, so it must outlive the frame's draw.
+- **`core::Connection`** (`core/connection.h`, like boost.signals2 / entt): a copyable handle with `Disconnect()` /
+  `Connected()`, safe after its source is gone; dropping it keeps the callback. `ScopedConnection` disconnects
+  when destroyed; `CallbackList<Args...>` is the one-thread list behind them (callbacks may disconnect or add while
+  it calls). `AddLogSink` (thread-safe: once `Disconnect` returns, the sink isn't called again), `CVar::OnChange`
+  and window overlays return one.
+- **`Window::MainViewport()`** (was `GetScreen()`); `RemoveViewport(const Viewport*)` returns the removed
+  `shared_ptr` (like `Node3D::RemoveChild`); `Viewports()` lists them (was `GetViewports()`, pairs with ids).
+- **Const-ref getters**: `Mesh::GetMaterial`, `Material::GetTexture` (was a raw pointer), `Viewport::GetTexture`.
+- **`x.Internal()`**: engine-only methods moved into a small `InternalAccess` class per type: `Window`
+  (screen depth, GPU timing results, fragment precision, `ReleaseScenes`, overlays), `Viewport` (`Id`,
+  `GetTarget`, `BeginDraw`, render / GPU stats, canvas layers' frame), `Canvas::BeginFrame`, `Resource`
+  (`Gpu` / `SetGpu`, `ForEachAlive`), `WTexture2D` / `WCubemap` (pixels, faces, version), `RenderTarget::SetFormat`,
+  `Shader` (`Source`, `MarkFailed`), `Mesh` buffers, `MultiMeshInstance3D` / `SpriteBatch` buffers and versions,
+  `PostChain` (`Prepare`, targets), `Input` feeding (`BeginFrame`, `OnKey`, `OnText`, `OnPointer*`,
+  `SetSurfaceSize`, `SetTouchScreen`), `ScreenStack`'s frame (`Update`, `Render`, `Back`, `EndFrame`...) and
+  `Quality`'s feeding (`SetSaveFile`, `SetTargetFrameMs`, `Update`). Games called none of them.
+- **`Screen::App()`**: the app's services from a screen (protected, valid from `OnEnter`), like `System::App()`.
+- **`AppConfig` grouped**: `name` (the save folder for quality.txt, cvars.cfg and the debug log, and the default
+  window title) + `window` {`title`, `size`, `stats_in_title`}, `graphics` {`target_fps`, `screen_depth`}, `audio`
+  {`enabled` (false = no device), `max_voices`}, `time` {`fixed_step`, `max_frame_time`}, `ui` {`reference_size`}.
+  `ResolveAppConfig` (tested) fills the defaults; `audio::Audio` takes an `AudioConfig`.
+- **Primitives**: `utils::CubeMesh`, `BeveledCubeMesh`, `SphereMesh`, `CylinderMesh`, `GemMesh`,
+  `PyramidFrustumMesh`, `PlaneMesh` (were `createXxxWithNormals`).
+- Tests: suites `connection` and `app_config`; the alive list (owned any way, made / destroyed during a walk),
+  removal by object, a uniquely owned font in a Canvas. Every golden image is unchanged.
+- No deprecation shims (the owner's call: nothing published uses the engine yet); every rename is breaking.
+- **Breaking:** factory return types; `AddLogSink` / `OnChange` return a
+  `Connection` (`RemoveLogSink`, `RemoveOnChange` are gone); `Window::AddOverlay` / `RemoveOverlay`,
+  `GetViewports`, `ReleaseScenes` and the other engine-only methods above moved behind `Internal()`; reading
+  `Window::GetScreen` and `RemoveViewport(int)` are gone (`AddViewport` returns nothing); the flat `AppConfig`
+  fields are gone; `utils::createXxxWithNormals` are gone; `Material::GetTexture`
+  returns `const std::shared_ptr<WTexture>&`; `Audio()` takes an `AudioConfig`.
+- **Migration:** `auto x = T::Create()` that is then shared (passed to `SetScene`, `SetCamera`, `AddViewport`,
+  `ShaderMaterial::Create`, kept twice...): write `std::shared_ptr<T> x = T::Create()`, or pass
+  `std::move(x)`. Members already declared `shared_ptr` take the result as they are. `int id = AddLogSink(...)`
+  -> `core::Connection c = AddLogSink(...)`, `RemoveLogSink(id)` -> `c.Disconnect()` (same for `OnChange`).
+  `GetScreen()` -> `MainViewport()`; `RemoveViewport(id)` -> `RemoveViewport(viewport.get())`;
+  `config.title = "X"` -> `config.name = "X"` (also the window title), `window_size` -> `window.size`,
+  `ui_reference_size` -> `ui.reference_size`, `fixed_timestep` -> `time.fixed_step`, `target_fps` ->
+  `graphics.target_fps`, `screen_depth` -> `graphics.screen_depth`, `show_stats_in_title` ->
+  `window.stats_in_title` (reading them too: `App().Config().fixed_timestep` -> `.time.fixed_step`);
+  `createCubeWithNormals(...)` -> `CubeMesh(...)` (and the others; they return `unique_ptr`).
 
 ### Conventions (Roadmap 2.4)
 The engine is **Z up** now: +Z up, +Y forward, +X right, right-handed (Right x Forward = Up), meters, radians, like

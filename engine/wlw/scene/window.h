@@ -1,4 +1,5 @@
 #pragma once
+#include <algorithm>
 #include <memory>
 #include <string>
 #include <functional>
@@ -6,6 +7,7 @@
 #include <vector>
 
 #include "wlw/core/color.h"
+#include "wlw/core/connection.h"
 #include "wlw/core/math.h"
 #include "wlw/scene/viewport.h"
 #include "wlw/input/input.h"
@@ -27,7 +29,7 @@ struct WindowOptions {
 };
 
 // A drawable surface (the OS window / the phone's screen) + its input + what it shows: the
-// screen viewport (GetScreen(): a Scene seen through a camera, with the game's UI canvas over
+// main viewport (MainViewport(): a Scene seen through a camera, with the game's UI canvas over
 // it) and any offscreen viewports, drawn into their textures before the screen (AddViewport).
 // The platform layer implements the OS-specific part (platform/<os>/<os>_platform.cpp);
 // nothing in this header depends on GLFW, EGL or any OS API.
@@ -65,45 +67,30 @@ class Window {
   }
 
   // ---- What it shows ----
-  // The screen: its scene (empty at first), camera (a default Camera3D until SetCamera: at the origin looking along +Y)
-  // and the canvas the game's UI is drawn on (Application::OnRenderUI).
-  Viewport& GetScreen() { return *screen_; }
-  const Viewport& GetScreen() const { return *screen_; }
+  // The main viewport, drawn to the screen: its scene (empty at first), camera (a default Camera3D
+  // until SetCamera: at the origin looking along +Y) and the canvas the game's UI is drawn on
+  // (Application::OnRenderUI).
+  Viewport& MainViewport() { return *screen_; }
+  const Viewport& MainViewport() const { return *screen_; }
 
   // Offscreen viewports, drawn every frame (as their update mode says) before the screen, in the
-  // order added. Returns an id for RemoveViewport.
-  int AddViewport(std::shared_ptr<Viewport> viewport) {
-    viewports_.push_back({next_viewport_id_, std::move(viewport)});
-    return next_viewport_id_++;
+  // order added.
+  void AddViewport(std::shared_ptr<Viewport> viewport) { viewports_.push_back(std::move(viewport)); }
+  // Takes `viewport` out of the window and returns it (null if it wasn't added), like
+  // Node3D::RemoveChild.
+  std::shared_ptr<Viewport> RemoveViewport(const Viewport* viewport) {
+    const auto it =
+        std::find_if(viewports_.begin(), viewports_.end(),
+                     [viewport](const std::shared_ptr<Viewport>& entry) { return entry.get() == viewport; });
+    if (it == viewports_.end()) return nullptr;
+    std::shared_ptr<Viewport> removed = std::move(*it);
+    viewports_.erase(it);
+    return removed;
   }
-  void RemoveViewport(int id) {
-    std::erase_if(viewports_, [id](const auto& entry) { return entry.first == id; });
-  }
-  const std::vector<std::pair<int, std::shared_ptr<Viewport>>>& GetViewports() const { return viewports_; }
-
-  // Drops the scenes and viewports (their GPU resources, if nothing else holds them): the engine
-  // calls it at shutdown while the GL context still exists.
-  void ReleaseScenes() {
-    viewports_.clear();
-    screen_->SetScene(nullptr);
-  }
-
-  // Layers drawn on top of the screen (after its UI canvas), just before the frame is presented,
-  // in the order they were added (e.g. the debug UI). Returns an id for RemoveOverlay.
-  int AddOverlay(std::function<void()> draw) {
-    overlays_.push_back({next_overlay_id_, std::move(draw)});
-    return next_overlay_id_++;
-  }
-  void RemoveOverlay(int id) {
-    std::erase_if(overlays_, [id](const auto& overlay) { return overlay.first == id; });
-  }
-  void DrawOverlays() const {
-    for (const auto& [_, draw] : overlays_) draw();
-  }
+  const std::vector<std::shared_ptr<Viewport>>& Viewports() const { return viewports_; }
 
   // Whether the screen surface has a depth buffer (WindowOptions::depth).
   bool ScreenHasDepth() const { return screen_depth_; }
-  void SetScreenHasDepth(bool has) { screen_depth_ = has; }  // for the platform
 
   // ---- GPU timing (rendering/gpu_timer.h) ----
   // Measures the GPU's time per viewport (Viewport::GetGpuStats) and per frame. On in debug
@@ -116,14 +103,10 @@ class Window {
   // The GPU's time for everything measured in a frame (the viewports' 3D, post passes and
   // canvases; not the debug UI), smoothed, in ms; -1 until measured.
   float GpuFrameMs() const { return gpu_frame_ms_; }
-  // For the renderer.
-  void SetGpuTimingSupported(bool supported) { gpu_timing_supported_ = supported; }
-  void SetGpuFrameMs(float ms) { gpu_frame_ms_ = ms; }
 
   // What fragment shaders' mediump floats are on this GPU (rendering/glsl_header.h): "16-bit",
   // "32-bit: no gain here", "ignored (desktop GL)"; set by the renderer when it starts.
   const std::string& FragmentPrecision() const { return fragment_precision_; }
-  void SetFragmentPrecision(std::string text) { fragment_precision_ = std::move(text); }  // for the renderer
 
   // ---- Framebuffer invalidation (GLES: glInvalidateFramebuffer) ----
   // Tells phone GPUs which pictures they needn't load before drawing or store after (depth after
@@ -149,18 +132,19 @@ class Window {
   // How, for the engine panel and logs: "Swappy", "vsync", "vsync / 2", "limiter", "none".
   virtual std::string PacingMethod() const { return "none"; }
 
+  class InternalAccess;
+  // Engine-only parts (the platform's, the renderer's and the Application's): see InternalAccess.
+  InternalAccess Internal();
+
  protected:
   Vec2 size_;  // drawable size in pixels (updated by the platform on resize)
   input::Input input_;
 
   bool is_active_ = true;
 
-  std::shared_ptr<Viewport> screen_ =
-      std::make_shared<Viewport>(nullptr, ViewportSettings{.name = "Screen", .clear = Color{0.1f, 0.1f, 0.15f, 1.0f}});
-  std::vector<std::pair<int, std::shared_ptr<Viewport>>> viewports_;
-  int next_viewport_id_ = 0;
-  std::vector<std::pair<int, std::function<void()>>> overlays_;
-  int next_overlay_id_ = 0;
+  std::unique_ptr<Viewport> screen_ = Viewport::CreateScreen();
+  std::vector<std::shared_ptr<Viewport>> viewports_;
+  core::CallbackList<> overlays_;
   bool screen_depth_ = true;
   bool gpu_timing_ = WLW_DEBUG_UI != 0;
   bool gpu_timing_supported_ = false;
@@ -173,5 +157,33 @@ class Window {
  public:
   static std::unique_ptr<Window> Create(const Vec2& size, const std::string& title, const WindowOptions& options = {});
 };
+
+// For the platform layer, the renderer and the Application, not games.
+class Window::InternalAccess {
+ public:
+  explicit InternalAccess(Window& window) : window_(window) {}
+
+  void SetScreenHasDepth(bool has) const { window_.screen_depth_ = has; }  // the platform
+  void SetGpuTimingSupported(bool supported) const { window_.gpu_timing_supported_ = supported; }
+  void SetGpuFrameMs(float ms) const { window_.gpu_frame_ms_ = ms; }
+  void SetFragmentPrecision(std::string text) const { window_.fragment_precision_ = std::move(text); }
+
+  // Drops the scenes and viewports (their GPU resources, if nothing else holds them): the engine
+  // calls it at shutdown while the GL context still exists.
+  void ReleaseScenes() const {
+    window_.viewports_.clear();
+    window_.screen_->SetScene(nullptr);
+  }
+
+  // Layers drawn on top of the screen (after its UI canvas), just before the frame is presented,
+  // in the order added (e.g. the debug UI). Disconnect the Connection to remove one.
+  core::Connection AddOverlay(std::function<void()> draw) const { return window_.overlays_.Add(std::move(draw)); }
+  void DrawOverlays() const { window_.overlays_.Call(); }
+
+ private:
+  Window& window_;
+};
+
+inline Window::InternalAccess Window::Internal() { return InternalAccess(*this); }
 
 }  // namespace wlw::scene

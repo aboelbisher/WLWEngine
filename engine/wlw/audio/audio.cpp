@@ -104,26 +104,31 @@ void DataCallback(ma_device* device, void* output, const void* /*input*/, ma_uin
 }
 }  // namespace
 
-Audio::Audio() {
+Audio::Audio(const AudioConfig& config) {
+  if (!config.enabled) {
+    WLW_LOG(LogAudio, Info, "Audio off (AudioConfig::enabled): no device");
+    mixer_ = std::make_unique<Mixer>(kFallbackSampleRate, config.max_voices);
+    return;
+  }
   auto device = std::make_unique<Device>();
-  ma_device_config config = ma_device_config_init(ma_device_type_playback);
-  config.playback.format = ma_format_f32;
-  config.playback.channels = 2;
-  config.sampleRate = 0;  // the device's native rate: no resampling at output time
-  config.dataCallback = DataCallback;
-  config.performanceProfile = ma_performance_profile_low_latency;  // small buffers: snappy sounds
+  ma_device_config device_config = ma_device_config_init(ma_device_type_playback);
+  device_config.playback.format = ma_format_f32;
+  device_config.playback.channels = 2;
+  device_config.sampleRate = 0;  // the device's native rate: no resampling at output time
+  device_config.dataCallback = DataCallback;
+  device_config.performanceProfile = ma_performance_profile_low_latency;  // small buffers: snappy sounds
   // Android: tell the OS this is game audio (routing, volume key behaviour).
-  config.aaudio.usage = ma_aaudio_usage_game;
-  config.aaudio.contentType = ma_aaudio_content_type_sonification;
+  device_config.aaudio.usage = ma_aaudio_usage_game;
+  device_config.aaudio.contentType = ma_aaudio_content_type_sonification;
 
   // The mixer must exist before the callback can run, and it needs the rate: open the device,
   // read its rate, create the mixer, hand it over, and only then start the device.
-  if (ma_device_init(nullptr, &config, &device->device) != MA_SUCCESS) {
+  if (ma_device_init(nullptr, &device_config, &device->device) != MA_SUCCESS) {
     WLW_LOG(LogAudio, Warning, "No audio device: the game runs without sound");
-    mixer_ = std::make_unique<Mixer>(kFallbackSampleRate);
+    mixer_ = std::make_unique<Mixer>(kFallbackSampleRate, config.max_voices);
     return;
   }
-  mixer_ = std::make_unique<Mixer>(device->device.sampleRate);
+  mixer_ = std::make_unique<Mixer>(device->device.sampleRate, config.max_voices);
   device->device.pUserData = mixer_.get();
   if (ma_device_start(&device->device) != MA_SUCCESS) {
     WLW_LOG(LogAudio, Warning, "Audio device failed to start: no sound");

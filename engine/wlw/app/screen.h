@@ -9,6 +9,7 @@ struct UIContext;
 
 namespace wlw::app {
 
+class Application;
 class ScreenStack;
 
 // One state of the game - a menu, the game itself, a pause or game-over panel - with its own
@@ -49,9 +50,15 @@ class Screen {
 
   ScreenStack& Stack() const { return *stack_; }  // valid from OnEnter on
 
+ protected:
+  // The app's services (window, input, audio, screens, time...), like System::App(). Valid from
+  // OnEnter on (not in the constructor: the screen isn't on the stack yet).
+  Application& App() const { return *app_; }
+
  private:
   friend class ScreenStack;
   ScreenStack* stack_ = nullptr;
+  Application* app_ = nullptr;
 };
 
 // The stack of screens. Changes requested during a frame (Push/Pop/Replace/Reset) are queued
@@ -81,7 +88,11 @@ class ScreenStack {
   float FadeAmount() const;  // 0 = clear, 1 = black (drawn by Application over the UI)
   float fade_time = 0.22f;   // seconds for each half of a fade
 
-  // ---- Driven by Application each frame ----
+  class InternalAccess;
+  // Driving it (the Application's, each frame): see InternalAccess below.
+  InternalAccess Internal();
+
+ private:
   void FixedUpdate(float dt);
   void Update(float dt);
   void Render(float alpha);
@@ -92,7 +103,6 @@ class ScreenStack {
   void EndFrame(float dt);  // applies queued changes, advances fades
   void Clear();             // exits every screen now, drops queued changes (shutdown)
 
- private:
   enum class OpKind { Push, Pop, Replace, Reset };
   struct Op {
     OpKind kind;
@@ -109,6 +119,29 @@ class ScreenStack {
   std::vector<Op> pending_;
   FadePhase fade_phase_ = FadePhase::None;
   float fade_time_left_ = 0.0f;
+  Application* app_ = nullptr;  // given to every screen (Screen::App)
 };
+
+// For the Application (and screen tests), not games: the frame's phases reach the screens through it.
+class ScreenStack::InternalAccess {
+ public:
+  explicit InternalAccess(ScreenStack& stack) : stack_(stack) {}
+
+  void SetApp(Application* app) const { stack_.app_ = app; }  // before the first screen is pushed
+  void FixedUpdate(float dt) const { stack_.FixedUpdate(dt); }
+  void Update(float dt) const { stack_.Update(dt); }
+  void Render(float alpha) const { stack_.Render(alpha); }
+  void RenderUI(ui::UIContext& ui) const { stack_.RenderUI(ui); }
+  void DebugUI() const { stack_.DebugUI(); }
+  bool Back() const { return stack_.Back(); }  // true if a screen handled it
+  void AppPaused() const { stack_.AppPaused(); }
+  void EndFrame(float dt) const { stack_.EndFrame(dt); }  // applies queued changes, advances fades
+  void Clear() const { stack_.Clear(); }                  // exits every screen now, drops queued changes
+
+ private:
+  ScreenStack& stack_;
+};
+
+inline ScreenStack::InternalAccess ScreenStack::Internal() { return InternalAccess(*this); }
 
 }  // namespace wlw::app

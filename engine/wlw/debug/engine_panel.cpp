@@ -70,7 +70,7 @@ void EnginePanel::OnDebugUI() {
     }
     ImGui::SameLine();
     if (ImGui::RadioButton("Auto##render_scale", forced <= 0.0f)) app::cv_render_scale.Set(0.0f, CVarSource::Console);
-    const scene::Viewport& screen = window.GetScreen();
+    const scene::Viewport& screen = window.MainViewport();
     const char* from = forced > 0.0f                          ? "r.render_scale"
                        : App().Quality().RenderScale() > 0.0f ? "the quality level"
                                                               : "the game";
@@ -104,8 +104,8 @@ void EnginePanel::OnDebugUI() {
     ImGui::Text("%s GPU: 3D %.2f ms, post %.2f ms, canvas %.2f ms", name, std::max(gpu.scene_ms, 0.0f),
                 std::max(gpu.post_ms, 0.0f), std::max(gpu.canvas_ms, 0.0f));
   };
-  gpu_line("Screen", window.GetScreen());
-  const scene::RenderStats& stats = window.GetScreen().GetRenderStats();
+  gpu_line("Screen", window.MainViewport());
+  const scene::RenderStats& stats = window.MainViewport().GetRenderStats();
   ImGui::Text("%d draw calls (%d transparent), %d instances (%.0f KB up), %d culled", stats.draw_calls,
               stats.transparent_draw_calls, stats.instances, stats.instance_bytes / 1024.0f, stats.culled_nodes);
   ImGui::Text("%d program changes, %d texture binds, %d state calls skipped", stats.program_changes,
@@ -136,10 +136,10 @@ void EnginePanel::OnDebugUI() {
                         pass.name.c_str(), gpu);
     }
   };
-  post_line("Screen", window.GetScreen());
+  post_line("Screen", window.MainViewport());
   // Offscreen viewports: size, format, update mode, GPU memory of their texture, last frame's draws.
-  for (const auto& [_, viewport] : window.GetViewports()) {
-    const rendering::RenderTarget* target = viewport->GetTarget();
+  for (const auto& viewport : window.Viewports()) {
+    const rendering::RenderTarget* target = viewport->Internal().GetTarget();
     if (target == nullptr) continue;
     static constexpr const char* kModes[] = {"always", "once", "disabled"};
     const rendering::TextureFormat format = target->Settings().format;

@@ -268,9 +268,9 @@ TEST_CASE("sprite batch") {
   CHECK((as_node->Kind() == wlw::scene::NodeKind::SpriteBatch &&
          wlw::scene::Node3D().Kind() == wlw::scene::NodeKind::Node));
   CHECK((batch.GetMaterial() && batch.GetMaterial()->blend == wlw::rendering::BlendMode::Additive));
-  const uint64_t before = batch.Version();
+  const uint64_t before = batch.Internal().Version();
   auto out = batch.Write(5);
-  CHECK((out.size() == 3 && batch.Count() == 3 && batch.Version() == before + 1));  // cut at the capacity
+  CHECK((out.size() == 3 && batch.Count() == 3 && batch.Internal().Version() == before + 1));  // cut at the capacity
   out[0] = {{0.0f, 0.0f}, 2.0f, red};
   out[1] = {{4.0f, 1.0f}, 1.0f, red};
   out[2] = {{1.0f, 0.0f}, 0.5f, red};
@@ -280,7 +280,7 @@ TEST_CASE("sprite batch") {
   const wlw::AABB world = batch.WorldBounds();
   CHECK((Near(world.min.x, 9.0f) && Near(world.max.x, 14.5f) && Near(world.min.z, 2.0f) && Near(world.max.z, 2.0f)));
   batch.Clear();
-  CHECK((batch.Empty() && batch.Version() == before + 2));
+  CHECK((batch.Empty() && batch.Internal().Version() == before + 2));
 }
 
 // ---- FlowParticles: dots along paths ----

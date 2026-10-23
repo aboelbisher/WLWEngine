@@ -95,10 +95,9 @@ class SpriteBatch : public Node3D {
   size_t Capacity() const { return capacity_; }
   bool Empty() const { return sprites_.empty(); }
 
-  // ---- For the renderer ----
-  uint64_t Version() const { return version_; }  // bumped by every Write
-  rendering::WInstanceBuffer* GetSpriteBuffer() const { return buffer_.get(); }
-  void SetSpriteBuffer(std::unique_ptr<rendering::WInstanceBuffer> buffer) { buffer_ = std::move(buffer); }
+  class InternalAccess;
+  // Engine-only parts (the renderer's): see InternalAccess below.
+  InternalAccess Internal();
 
  private:
   size_t capacity_;
@@ -108,5 +107,20 @@ class SpriteBatch : public Node3D {
   glm::vec2 bounds_min_{0.0f}, bounds_max_{0.0f};
   std::unique_ptr<rendering::WInstanceBuffer> buffer_;
 };
+
+// For the renderer, not games.
+class SpriteBatch::InternalAccess {
+ public:
+  explicit InternalAccess(SpriteBatch& batch) : batch_(batch) {}
+
+  uint64_t Version() const { return batch_.version_; }  // bumped by every Write
+  rendering::WInstanceBuffer* GetSpriteBuffer() const { return batch_.buffer_.get(); }
+  void SetSpriteBuffer(std::unique_ptr<rendering::WInstanceBuffer> buffer) const { batch_.buffer_ = std::move(buffer); }
+
+ private:
+  SpriteBatch& batch_;
+};
+
+inline SpriteBatch::InternalAccess SpriteBatch::Internal() { return InternalAccess(*this); }
 
 }  // namespace wlw::scene

@@ -7,14 +7,18 @@ around the editor and iOS ("Why this order"). Work goes one step at a time, in o
 stable: commits name them ("Roadmap 4.3b: ..."). Commits and CHANGELOG entries from before 2026-10-21
 use the old numbers: "Old numbering" at the end maps them.
 
-**Current step:** 2.5 API consistency (plan in chat first) · **Updated:** 2026-10-23
+**Current step:** 2.6 Legacy removal (plan in chat first) · **Updated:** 2026-10-24
 
-**Next session:** plan 2.5 in chat and wait for the OK (it may also rename the primitives' camelCase
-  `createXxxWithNormals`). The engine is Z up since 2.4: the games' worlds (Bluzzle's board in XZ, Threadlock's liquid
-  camera, Snake) are turned in 2.8 (CHANGELOG 2.4 "Migration"). The 0.2 shims stay through v0.2.x and go before v0.3.0; the 0.3 ones (2.1:
-  core::Vector2/3, core::Color, scene::AABB...; 2.2: SetRotation(degrees), GetModelMatrix, AddNode, IterateOverNodes;
-  2.3: DirectionalLight, OrthographicCamera; 2.4: BurstSettings::spread_degrees / spin_max) stay through v0.3.x; the
-  games move off them in 2.8. Bluzzle is on bea1357 (2.3) with its node-types patch pushed.
+**Next session:** plan 2.6 in chat and wait for the OK (each deletion confirmed with the owner). Since 2.5 every
+  factory returns `unique_ptr` and engine-only methods sit behind `x.Internal()` (CLAUDE.md "API rules"); Threadlock
+  needs one line for it (city_art.cpp: `std::shared_ptr<Shader> gradient`). The engine is Z up since 2.4: the games' worlds (Bluzzle's board in XZ, Threadlock's liquid
+  camera, Snake) are turned in 2.8 (CHANGELOG 2.4 "Migration"). **No deprecation shims any more** (owner, 2026-10-24:
+  nothing published uses the engine): APIs change directly, CHANGELOG lists Breaking + Migration. 2.5 already broke
+  GetScreen, RemoveViewport(int), the flat AppConfig fields and createXxxWithNormals without shims. The older shims
+  (0.2: InstanceData, ParticleSystem's old WriteTo; 0.3: core::Vector2/3, core::Color, scene::AABB, collision.h,
+  SetRotation(degrees), GetModelMatrix, AddNode, IterateOverNodes, DirectionalLight, OrthographicCamera,
+  BurstSettings::spread_degrees / spin_max, PackColor...) are candidates for 2.6 (ask: some are whole files). The
+  games move off all of it in 2.8. Bluzzle is on bea1357 (2.3) with its node-types patch pushed.
 
 Where things stand (2026-10-21):
 - Done: Phase 0 = v0.1.0 (2026-10-15), Phase 1 = v0.2.0 (2026-10-18), each step one squashed commit on main named
@@ -101,8 +105,8 @@ Where things stand (2026-10-21):
   compiles. iOS joins the list once Phase 6 has run it.
 - CLAUDE.md and CHANGELOG.md updated; breaking changes come with migration notes.
 - Whatever a step replaces is deleted within the same phase (file deletions confirmed with the
-  owner first). A renamed public API may keep a thin `WLW_DEPRECATED` forwarding shim through one
-  release (CLAUDE.md "Versioning"); the CTest test `deprecations` makes sure it goes after that.
+  owner first). Until a game ships, renamed APIs get no deprecation shim (CLAUDE.md "Versioning"): the
+  change is breaking, with migration notes.
 
 ## Principles
 - Hot paths are data-oriented: dense arrays, handles, no per-frame allocations, no virtual call
@@ -271,8 +275,10 @@ The editor shows and edits what this phase defines, so it comes first.
   frustum). Fly, orbit and follow camera controllers (the editor camera reuses fly and orbit).
 - [x] **2.4 Conventions.** *(done 2026-10-23, commit "Roadmap 2.4: conventions"; Z up, +Y forward (D1 revised); every golden image unchanged by turning the test scenes; two primitive winding bugs found)* Z up, right-handed, +Y forward, meters, radians; the default camera
   follows them; documented and tested.
-- [ ] **2.5 API consistency.** `GetScreen()` -> `MainViewport()`; every `Create()` returns
-  `shared_ptr`; const-ref getters; removal by object instead of int ids; renderer-only methods
+- [x] **2.5 API consistency.** *(done 2026-10-23, commit "Roadmap 2.5: API consistency"; the owner chose
+  `unique_ptr` from every factory; resources register in their constructor; `core::Connection` for callbacks; every
+  golden image unchanged)* `GetScreen()` -> `MainViewport()`; every `Create()` returns
+  `unique_ptr`; const-ref getters; removal by object instead of int ids; renderer-only methods
   behind an internal accessor; Screens get `App()`; AppConfig grouped (window, graphics, audio).
 - [ ] **2.6 Legacy removal.** `WLWEngine`, `RenderingDriver::SetViewport/Clear/AttachWindow`,
   `Window::SetIsActive`, TextureManager, GEMINI.md (FPSCamera, FollowCamera and

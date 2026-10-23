@@ -76,12 +76,12 @@ struct ViewportSettings {
 
 // "Draw this scene, from this camera, into this picture" - like Godot's SubViewport. It shows a
 // Scene (which it only points at: several viewports may share one), through a camera, with a 2D
-// Canvas drawn over the 3D. The window's own viewport is the screen (Window::GetScreen()); the
+// Canvas drawn over the 3D. The window's own viewport is the screen (Window::MainViewport()); the
 // others draw into a texture before the screen, in the order they were added
 // (Window::AddViewport), so a viewport may use the texture of one added before it.
 //
-//   auto view = scene::Viewport::Create({.format = TextureFormat::RGBA16F, .depth = false});
-//   view->SetSizeFromScreen(0.5f);          // half resolution, follows rotation / resizes
+//   std::shared_ptr<scene::Viewport> view = scene::Viewport::Create({.format = TextureFormat::RGBA16F, .depth =
+//   false}); view->SetSizeFromScreen(0.5f);          // half resolution, follows rotation / resizes
 //   view->SetCamera(top_down_camera);
 //   view->GetScene()->Root().AddChild(particles);   // its own scene; or SetScene(shared_world)
 //   window.AddViewport(view);
@@ -95,14 +95,10 @@ class Viewport {
   };
 
   // An offscreen viewport with its own (empty) scene, drawing into a texture of its own.
-  static std::shared_ptr<Viewport> Create(const ViewportSettings& settings = {}) {
+  static std::unique_ptr<Viewport> Create(const ViewportSettings& settings = {}) {
     rendering::RenderTargetSettings target{settings.format, settings.smooth, settings.depth};
-    return std::make_shared<Viewport>(rendering::RenderTarget::Create(target), settings);
+    return std::unique_ptr<Viewport>(new Viewport(rendering::RenderTarget::Create(target), settings));
   }
-
-  // `target` null = draws to the window (the screen). Games use Create().
-  Viewport(std::shared_ptr<rendering::RenderTarget> target, const ViewportSettings& settings)
-      : target_(std::move(target)), settings_(settings) {}
 
   // ---- What it shows ----
   void SetScene(std::shared_ptr<Scene> scene) { scene_ = std::move(scene); }  // null: no 3D, only the canvas
@@ -134,22 +130,13 @@ class Viewport {
     std::erase_if(layers_, [&layer](const CanvasLayer& entry) { return entry.owned.get() == &layer; });
   }
   int CanvasLayerCount() const { return static_cast<int>(layers_.size()); }  // the default one included
-  // Calls visit(canvas) for each layer of `mode`, in drawing order.
-  template <typename Visit>
-  void ForEachCanvasLayer(CanvasMode mode, Visit&& visit) {
-    for (CanvasLayer& layer : layers_) {
-      if (layer.settings.mode == mode) visit(layer.owned ? *layer.owned : canvas_);
-    }
-  }
-  // Empties every layer and sizes it for `pixels` (the Application does it each frame).
-  void BeginCanvases(glm::vec2 pixels, glm::vec2 reference) {
-    for (CanvasLayer& layer : layers_) (layer.owned ? *layer.owned : canvas_).BeginFrame(pixels, reference);
-  }
 
   // ---- Its picture ----
   // The texture it draws into (null for the screen). The same object for the viewport's life.
-  std::shared_ptr<rendering::WTexture2D> GetTexture() const { return target_ ? target_->GetTexture() : nullptr; }
-  rendering::RenderTarget* GetTarget() const { return target_.get(); }
+  const std::shared_ptr<rendering::WTexture2D>& GetTexture() const {
+    static const std::shared_ptr<rendering::WTexture2D> kNone;
+    return target_ ? target_->GetTexture() : kNone;
+  }
   bool IsScreen() const { return target_ == nullptr; }
 
   // Size: fixed pixels, or a fraction of the screen that follows it (the default: 1.0).
@@ -216,25 +203,21 @@ class Viewport {
   const RenderStats& GetRenderStats() const { return render_stats_; }
   const GpuStats& GetGpuStats() const { return gpu_stats_; }
 
-  // Unique for the program's run (GPU timing results find their viewport by it, frames later).
-  uint32_t Id() const { return id_; }
-
-  // ---- For the renderer ----
-  GpuStats& MutableGpuStats() { return gpu_stats_; }
-  // Whether to draw it this frame, at `pixel_size`: applies the update mode (Once becomes
-  // Disabled), and redraws a kept picture once after a resize threw it away.
-  bool BeginDraw(glm::ivec2 pixel_size) {
-    if (pixel_size.x <= 0 || pixel_size.y <= 0) return false;
-    const bool resized = pixel_size != last_size_;
-    last_size_ = pixel_size;
-    const bool draw = update_mode_ != UpdateMode::Disabled || (resized && has_picture_);
-    if (update_mode_ == UpdateMode::Once) update_mode_ = UpdateMode::Disabled;
-    if (draw) has_picture_ = true;
-    return draw;
-  }
-  void SetRenderStats(const RenderStats& stats) { render_stats_ = stats; }
+  class InternalAccess;
+  // Engine-only parts (the renderer's and the Application's): see InternalAccess below.
+  InternalAccess Internal();
 
  private:
+  friend class Window;  // makes the screen's (CreateScreen)
+
+  // `target` null = draws to the window (the screen).
+  Viewport(std::shared_ptr<rendering::RenderTarget> target, const ViewportSettings& settings)
+      : target_(std::move(target)), settings_(settings) {}
+  static std::unique_ptr<Viewport> CreateScreen() {
+    return std::unique_ptr<Viewport>(
+        new Viewport(nullptr, ViewportSettings{.name = "Screen", .clear = Color{0.1f, 0.1f, 0.15f, 1.0f}}));
+  }
+
   std::shared_ptr<rendering::RenderTarget> target_;
   ViewportSettings settings_;
   std::shared_ptr<Scene> scene_ = Scene::Create();
@@ -278,5 +261,49 @@ class Viewport {
     return next++;
   }
 };
+
+// For the renderer and the Application, not games.
+class Viewport::InternalAccess {
+ public:
+  explicit InternalAccess(Viewport& viewport) : viewport_(viewport) {}
+
+  // Unique for the program's run (GPU timing results find their viewport by it, frames later).
+  uint32_t Id() const { return viewport_.id_; }
+  rendering::RenderTarget* GetTarget() const { return viewport_.target_.get(); }
+  GpuStats& MutableGpuStats() const { return viewport_.gpu_stats_; }
+  void SetRenderStats(const RenderStats& stats) const { viewport_.render_stats_ = stats; }
+
+  // Whether to draw it this frame, at `pixel_size`: applies the update mode (Once becomes
+  // Disabled), and redraws a kept picture once after a resize threw it away.
+  bool BeginDraw(glm::ivec2 pixel_size) const {
+    Viewport& v = viewport_;
+    if (pixel_size.x <= 0 || pixel_size.y <= 0) return false;
+    const bool resized = pixel_size != v.last_size_;
+    v.last_size_ = pixel_size;
+    const bool draw = v.update_mode_ != UpdateMode::Disabled || (resized && v.has_picture_);
+    if (v.update_mode_ == UpdateMode::Once) v.update_mode_ = UpdateMode::Disabled;
+    if (draw) v.has_picture_ = true;
+    return draw;
+  }
+
+  // Calls visit(canvas) for each layer of `mode`, in drawing order.
+  template <typename Visit>
+  void ForEachCanvasLayer(CanvasMode mode, Visit&& visit) const {
+    for (CanvasLayer& layer : viewport_.layers_) {
+      if (layer.settings.mode == mode) visit(layer.owned ? *layer.owned : viewport_.canvas_);
+    }
+  }
+  // Empties every layer and sizes it for `pixels` (the Application does it each frame).
+  void BeginCanvases(glm::vec2 pixels, glm::vec2 reference) const {
+    for (CanvasLayer& layer : viewport_.layers_) {
+      (layer.owned ? *layer.owned : viewport_.canvas_).Internal().BeginFrame(pixels, reference);
+    }
+  }
+
+ private:
+  Viewport& viewport_;
+};
+
+inline Viewport::InternalAccess Viewport::Internal() { return InternalAccess(*this); }
 
 }  // namespace wlw::scene

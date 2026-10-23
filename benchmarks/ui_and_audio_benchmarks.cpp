@@ -28,7 +28,7 @@ void TextBenchmarks(bench::Context& ctx) {
   ui::TextStyle outlined;
   outlined.outline = 0.05f;
   ctx.Run("ui/text 1k glyphs", [&] {
-    canvas.BeginFrame({1080.0f, 1920.0f}, {1080.0f, 1920.0f});
+    canvas.Internal().BeginFrame({1080.0f, 1920.0f}, {1080.0f, 1920.0f});
     for (int i = 0; i < 20; ++i) {
       canvas.Text(*font, line, {20.0f, 40.0f + 60.0f * static_cast<float>(i)}, 36.0f, ui::Align::Left,
                   i % 2 ? outlined : ui::TextStyle{});

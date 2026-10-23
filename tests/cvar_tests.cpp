@@ -83,13 +83,13 @@ TEST_CASE("bad text leaves the value alone") {
 TEST_CASE("change callbacks run on changes only") {
   static CVar<int> level{"test.callback.level", 0, "Level"};
   int calls = 0;
-  const int id = level.OnChange([&calls] { ++calls; });
+  core::Connection connection = level.OnChange([&calls] { ++calls; });
   level.Set(1);
   level.Set(1);  // the same value: no change
   CHECK(level.SetFromText("2", CVarSource::Console) == CVarSetResult::Ok);
   CHECK(calls == 2);
   CHECK(level.LastSource() == CVarSource::Console);
-  level.RemoveOnChange(id);
+  connection.Disconnect();
   level.Set(3);
   CHECK(calls == 2);
 }

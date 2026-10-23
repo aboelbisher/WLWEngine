@@ -16,7 +16,7 @@
 namespace wlw::rendering {
 
 GLShader::GLShader(const Shader& shader) {
-  const ShaderSource& source = shader.Source();
+  const ShaderSource& source = shader.Internal().Source();
   if (!source.ok) return;  // the text's error was logged when the Shader was made
   const std::string label = shader.Name();
   // The engine's inputs (shaders/custom/*) go in front of each stage of the game's text, which

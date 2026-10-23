@@ -224,7 +224,7 @@ ConsoleModel::ConsoleModel(size_t capacity) : capacity_(std::max<size_t>(capacit
   });
 }
 
-ConsoleModel::~ConsoleModel() { RemoveLogSink(sink_); }
+ConsoleModel::~ConsoleModel() { sink_.Disconnect(); }
 
 void ConsoleModel::ForEachLine(const std::function<void(const LogRecord&)>& visit) const {
   std::lock_guard lock(mutex_);

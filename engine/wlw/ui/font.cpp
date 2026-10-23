@@ -15,7 +15,7 @@ struct Font::Impl {
   float scale = 1.0f;  // font units -> atlas pixels
 };
 
-std::shared_ptr<Font> Font::Load(const std::string& path, const FontOptions& options) {
+std::unique_ptr<Font> Font::Load(const std::string& path, const FontOptions& options) {
   std::optional<std::vector<uint8_t>> data = platform::ReadFile(path);
   if (!data) {
     WLW_LOG(LogUI, Error, "Font not found: %s", path.c_str());
@@ -26,8 +26,8 @@ std::shared_ptr<Font> Font::Load(const std::string& path, const FontOptions& opt
   return font;
 }
 
-std::shared_ptr<Font> Font::FromMemory(std::vector<uint8_t> ttf, const FontOptions& options) {
-  std::shared_ptr<Font> font(new Font());
+std::unique_ptr<Font> Font::FromMemory(std::vector<uint8_t> ttf, const FontOptions& options) {
+  std::unique_ptr<Font> font(new Font());
   font->impl_ = std::make_unique<Impl>();
   font->impl_->ttf = std::move(ttf);
   const unsigned char* data = font->impl_->ttf.data();

@@ -63,7 +63,7 @@ void SetSampling(GLenum kind, bool smooth, bool repeat, bool mipmaps) {
 void Prepare2D(const WTexture2D& texture, GLTextureObject& gl, bool created) {
   const TextureSettings& settings = texture.Settings();
   const GLFormat format = ToGL(settings.format);
-  if (texture.IsRenderTarget()) {
+  if (texture.Internal().IsRenderTarget()) {
     // Storage only, no texels: the GPU draws them. Reallocated when the target's size or format
     // changed (the texture object stays, so materials and framebuffers holding it keep working).
     if (!created && gl.width_ == texture.Width() && gl.height_ == texture.Height() && gl.format_ == settings.format) {
@@ -74,10 +74,10 @@ void Prepare2D(const WTexture2D& texture, GLTextureObject& gl, bool created) {
     glTexImage2D(GL_TEXTURE_2D, 0, format.internal_format, texture.Width(), texture.Height(), 0, format.format,
                  format.type, nullptr);
   } else {
-    if (!created && gl.version_ == texture.Version()) return;
+    if (!created && gl.version_ == texture.Internal().Version()) return;
     glBindTexture(GL_TEXTURE_2D, gl.id_);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);  // rows of RGB / R8 images aren't always 4-byte aligned
-    const void* pixels = texture.Pixels().empty() ? nullptr : texture.Pixels().data();
+    const void* pixels = texture.Internal().Pixels().empty() ? nullptr : texture.Internal().Pixels().data();
     if (created) {
       SetSampling(GL_TEXTURE_2D, settings.smooth, settings.repeat, settings.mipmaps);
       std::vector<uint8_t> zeros;
@@ -92,8 +92,8 @@ void Prepare2D(const WTexture2D& texture, GLTextureObject& gl, bool created) {
     }
     glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
     if (settings.mipmaps) glGenerateMipmap(GL_TEXTURE_2D);
-    gl.version_ = texture.Version();
-    texture.ReleasePixels();  // on the GPU now: no second copy in memory
+    gl.version_ = texture.Internal().Version();
+    texture.Internal().ReleasePixels();  // on the GPU now: no second copy in memory
   }
   gl.width_ = texture.Width();
   gl.height_ = texture.Height();
@@ -103,7 +103,7 @@ void Prepare2D(const WTexture2D& texture, GLTextureObject& gl, bool created) {
 void PrepareCubemap(const WCubemap& cubemap, GLTextureObject& gl) {
   glBindTexture(GL_TEXTURE_CUBE_MAP, gl.id_);
   glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-  const auto& faces = cubemap.Faces();
+  const auto& faces = cubemap.Internal().Faces();
   for (size_t i = 0; i < faces.size() && i < 6; ++i) {
     const GLFormat format = ToGL(faces[i].channels == 4 ? TextureFormat::RGBA8 : TextureFormat::RGB8);
     glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + static_cast<GLenum>(i), 0, format.internal_format,
@@ -112,7 +112,7 @@ void PrepareCubemap(const WCubemap& cubemap, GLTextureObject& gl) {
   }
   glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
   SetSampling(GL_TEXTURE_CUBE_MAP, /*smooth=*/true, /*repeat=*/false, /*mipmaps=*/false);
-  cubemap.ReleaseFaces();
+  cubemap.Internal().ReleaseFaces();
 }
 
 // A render target's framebuffer: its colour texture (the target's WTexture2D) plus, if asked for,
@@ -137,12 +137,12 @@ class GLFramebufferObject : public GpuResource {
 }  // namespace
 
 GLuint GLTexture(const WTexture& texture) {
-  auto* gl = static_cast<GLTextureObject*>(texture.Gpu());
+  auto* gl = static_cast<GLTextureObject*>(texture.Internal().Gpu());
   const bool created = gl == nullptr;
   if (created) {
     auto made = std::make_unique<GLTextureObject>(texture.IsCubemap() ? GL_TEXTURE_CUBE_MAP : GL_TEXTURE_2D);
     gl = made.get();
-    texture.SetGpu(std::move(made));
+    texture.Internal().SetGpu(std::move(made));
   }
   if (texture.IsCubemap()) {
     if (created) PrepareCubemap(static_cast<const WCubemap&>(texture), *gl);
@@ -160,13 +160,13 @@ void BindGLTexture(const WTexture& texture, unsigned int unit) {
 
 const GLShader* GLShaderFor(const Shader& shader) {
   if (!shader.IsValid()) return nullptr;
-  if (auto* gl = static_cast<const GLShader*>(shader.Gpu())) return gl;
+  if (auto* gl = static_cast<const GLShader*>(shader.Internal().Gpu())) return gl;
   const auto start = std::chrono::steady_clock::now();
   auto made = std::make_unique<GLShader>(shader);
   const GLShader* gl = made.get();
-  shader.SetGpu(std::move(made));
+  shader.Internal().SetGpu(std::move(made));
   if (gl->Program() == 0) {
-    shader.MarkFailed();  // the compile error was logged; don't try every frame
+    shader.Internal().MarkFailed();  // the compile error was logged; don't try every frame
     return nullptr;
   }
   if (warmed_up) {  // not prepared by the warm-up: it costs a frame now (worth knowing on phones)
@@ -177,16 +177,16 @@ const GLShader* GLShaderFor(const Shader& shader) {
 }
 
 GLuint GLFramebuffer(RenderTarget& target) {
-  auto* gl = static_cast<GLFramebufferObject*>(target.Gpu());
+  auto* gl = static_cast<GLFramebufferObject*>(target.Internal().Gpu());
   const bool created = gl == nullptr;
   if (created) {
     if (!CanRenderTo(target.Settings().format)) {
       WLW_LOG(LogRender, Warning, "This GPU can't draw into 16-bit float textures: render target falls back to RGBA8");
-      target.SetFormat(TextureFormat::RGBA8);
+      target.Internal().SetFormat(TextureFormat::RGBA8);
     }
     auto made = std::make_unique<GLFramebufferObject>(target.Settings().depth);
     gl = made.get();
-    target.SetGpu(std::move(made));
+    target.Internal().SetGpu(std::move(made));
   }
   if (!created && gl->width_ == target.Width() && gl->height_ == target.Height() &&
       gl->format_ == target.Settings().format) {
@@ -242,9 +242,9 @@ bool CanRenderTo(TextureFormat format) {
 
 int PrepareAliveResources() {
   int compiled = 0;
-  Resource::ForEachAlive([&compiled](Resource& resource) {
+  Resource::InternalAccess::ForEachAlive([&compiled](Resource& resource) {
     if (const auto* shader = dynamic_cast<const Shader*>(&resource)) {
-      const bool had_program = shader->Gpu() != nullptr;
+      const bool had_program = shader->Internal().Gpu() != nullptr;
       if (GLShaderFor(*shader) && !had_program) ++compiled;
     } else if (const auto* texture = dynamic_cast<const WTexture*>(&resource)) {
       glActiveTexture(GL_TEXTURE0);

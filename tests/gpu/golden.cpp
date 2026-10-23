@@ -65,10 +65,10 @@ testing::Image Render(const std::shared_ptr<scene::Viewport>& viewport) {
   REQUIRE_MESSAGE(gpu.ok, "no GL 3.3 context (on Linux CI: run under xvfb-run with Mesa)");
   rendering::RenderingDriver& driver = *gpu.engine->GetRenderingDriver();
 
-  const int id = gpu.window->AddViewport(viewport);
+  gpu.window->AddViewport(viewport);
   driver.DrawWindow(gpu.window);
-  testing::Image picture{kSize, kSize, driver.ReadPixels(*viewport->GetTarget())};
-  gpu.window->RemoveViewport(id);
+  testing::Image picture{kSize, kSize, driver.ReadPixels(*viewport->Internal().GetTarget())};
+  gpu.window->RemoveViewport(viewport.get());
   REQUIRE_MESSAGE(picture.rgba.size() == size_t{kSize} * kSize * 4, "nothing was drawn into the viewport");
   return picture;
 }

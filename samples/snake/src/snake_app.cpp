@@ -29,9 +29,9 @@ uint32_t RandomSeed() { return std::random_device{}(); }
 
 wlw::app::AppConfig SnakeApp::MakeConfig() {
   wlw::app::AppConfig config;
-  config.title = "WLWSnake";
-  config.window_size = {1280, 720};
-  config.show_stats_in_title = false;  // the title shows the score instead
+  config.name = "WLWSnake";
+  config.window.size = {1280, 720};
+  config.window.stats_in_title = false;  // the title shows the score instead
   return config;
 }
 
@@ -43,26 +43,26 @@ void SnakeApp::OnStart() {
   auto sun = std::make_shared<scene::DirectionalLight3D>();
   sun->SetDirection({-0.5f, -1.0f, -0.7f});
   sun->SetAmbient(0.35f);
-  App().Window().GetScreen().GetScene()->Root().AddChild(sun);
+  App().Window().MainViewport().GetScene()->Root().AddChild(sun);
   material_ = rendering::Material::Create();
   material_->shininess = 64.0f;
 
-  head_model_ = MakeModel(utils::createCubeWithNormals(1.0f, Color{0.95f, 0.80f, 0.15f, 1.0f}));
-  dead_head_model_ = MakeModel(utils::createCubeWithNormals(1.0f, Color{0.85f, 0.15f, 0.15f, 1.0f}));
-  body_model_ = MakeModel(utils::createCubeWithNormals(1.0f, Color{0.55f, 0.85f, 0.25f, 1.0f}));
-  food_model_ = MakeModel(utils::createGemWithNormals(0.5f, 0.8f));
+  head_model_ = MakeModel(utils::CubeMesh(1.0f, Color{0.95f, 0.80f, 0.15f, 1.0f}));
+  dead_head_model_ = MakeModel(utils::CubeMesh(1.0f, Color{0.85f, 0.15f, 0.15f, 1.0f}));
+  body_model_ = MakeModel(utils::CubeMesh(1.0f, Color{0.55f, 0.85f, 0.25f, 1.0f}));
+  food_model_ = MakeModel(utils::GemMesh(0.5f, 0.8f));
 
   BuildBoard();
 
   food_node_ = std::make_shared<scene::MeshInstance3D>();
   food_node_->SetModel(food_model_);
   food_node_->SetMaterial(material_);
-  App().Window().GetScreen().GetScene()->Root().AddChild(food_node_);
+  App().Window().MainViewport().GetScene()->Root().AddChild(food_node_);
 
-  particle_node_ = std::make_shared<scene::MultiMeshInstance3D>();          // no copies until the first sparkle
-  particle_node_->SetModel(MakeModel(utils::createCubeWithNormals(1.0f)));  // white: tinted per particle
+  particle_node_ = std::make_shared<scene::MultiMeshInstance3D>();  // no copies until the first sparkle
+  particle_node_->SetModel(MakeModel(utils::CubeMesh(1.0f)));       // white: tinted per particle
   particle_node_->SetMaterial(material_);
-  App().Window().GetScreen().GetScene()->Root().AddChild(particle_node_);
+  App().Window().MainViewport().GetScene()->Root().AddChild(particle_node_);
 
   SetupCameras();
 
@@ -97,12 +97,12 @@ void SnakeApp::SetupCameras() {
   perspective_camera_->SetPosition(Vec3(center, 0.0f, center) + direction * distance);
   perspective_camera_->LookAt({center, 0.0f, center});
 
-  App().Window().GetScreen().SetCamera(ortho_camera_);
+  App().Window().MainViewport().SetCamera(ortho_camera_);
 }
 
 void SnakeApp::BuildBoard() {
-  auto tile_a = MakeModel(wlw::utils::createCubeWithNormals(1.0f, Color{0.20f, 0.45f, 0.25f, 1.0f}));
-  auto tile_b = MakeModel(wlw::utils::createCubeWithNormals(1.0f, Color{0.24f, 0.52f, 0.29f, 1.0f}));
+  auto tile_a = MakeModel(wlw::utils::CubeMesh(1.0f, Color{0.20f, 0.45f, 0.25f, 1.0f}));
+  auto tile_b = MakeModel(wlw::utils::CubeMesh(1.0f, Color{0.24f, 0.52f, 0.29f, 1.0f}));
   for (int z = 0; z < kGridSize; ++z) {
     for (int x = 0; x < kGridSize; ++x) {
       auto tile = std::make_shared<wlw::scene::MeshInstance3D>();
@@ -110,7 +110,7 @@ void SnakeApp::BuildBoard() {
       tile->SetMaterial(material_);
       tile->SetScale({1.0f, 0.1f, 1.0f});
       tile->SetPosition({(float)x, -0.05f, (float)z});
-      App().Window().GetScreen().GetScene()->Root().AddChild(tile);
+      App().Window().MainViewport().GetScene()->Root().AddChild(tile);
     }
   }
 }
@@ -182,9 +182,9 @@ void SnakeApp::ReadInput() {
   if (in.WasKeyPressed(Key::P)) {
     orthographic_ = !orthographic_;
     if (orthographic_) {
-      App().Window().GetScreen().SetCamera(ortho_camera_);
+      App().Window().MainViewport().SetCamera(ortho_camera_);
     } else {
-      App().Window().GetScreen().SetCamera(perspective_camera_);
+      App().Window().MainViewport().SetCamera(perspective_camera_);
     }
     WLW_LOG_INFO("Projection: %s", orthographic_ ? "orthographic (top-down)" : "perspective (tilted)");
   }
@@ -215,7 +215,7 @@ void SnakeApp::ReadInput() {
 void SnakeApp::OnRender(float alpha) {
   float t = 1.0f;
   if (interpolate_ && game_.GetState() == SnakeGame::State::Playing) {
-    t = std::clamp((move_timer_ + alpha * App().Config().fixed_timestep) / game_.MoveInterval(), 0.0f, 1.0f);
+    t = std::clamp((move_timer_ + alpha * App().Config().time.fixed_step) / game_.MoveInterval(), 0.0f, 1.0f);
   }
   SyncSnakeNodes(t);
 
@@ -261,7 +261,7 @@ SnakeApp::NodePtr SnakeApp::AcquireSegmentNode(size_t index) {
     auto node = std::make_shared<wlw::scene::MeshInstance3D>();
     node->SetModel(body_model_);  // meshes/models are shared by all segments: one GPU copy
     node->SetMaterial(material_);
-    App().Window().GetScreen().GetScene()->Root().AddChild(node);
+    App().Window().MainViewport().GetScene()->Root().AddChild(node);
     segment_nodes_.push_back(node);
   }
   return segment_nodes_[index];
@@ -289,9 +289,9 @@ void SnakeApp::OnDebugUI() {
   ImGui::Checkbox("Interpolate", &interpolate_);
   if (ImGui::Checkbox("Orthographic", &orthographic_)) {
     if (orthographic_) {
-      App().Window().GetScreen().SetCamera(ortho_camera_);
+      App().Window().MainViewport().SetCamera(ortho_camera_);
     } else {
-      App().Window().GetScreen().SetCamera(perspective_camera_);
+      App().Window().MainViewport().SetCamera(perspective_camera_);
     }
   }
   if (ImGui::Button("Restart")) Restart();

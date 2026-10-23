@@ -136,7 +136,7 @@ class AndroidWindow : public scene::Window {
  public:
   explicit AndroidWindow(bool depth) : depth_(depth) {
     g_window = this;
-    SetScreenHasDepth(depth);
+    Internal().SetScreenHasDepth(depth);
   }
 
   ~AndroidWindow() override {
@@ -147,7 +147,7 @@ class AndroidWindow : public scene::Window {
 
   bool Initialize(scene::Window* share_with) override {
     if (share_with) WLW_LOG(LogPlatform, Warning, "Multiple windows aren't supported on Android");
-    input_.SetTouchScreen(true);  // the pointer is a finger: no hover, coarse aim
+    input_.Internal().SetTouchScreen(true);  // the pointer is a finger: no hover, coarse aim
     // The native window arrives asynchronously (APP_CMD_INIT_WINDOW): wait for it.
     while (g_app->window == nullptr && !g_app->destroyRequested) PollEvents(-1);
     if (g_app->destroyRequested) return false;
@@ -256,10 +256,10 @@ class AndroidWindow : public scene::Window {
       const float x = AMotionEvent_getX(event, 0);  // first finger only
       const float y = AMotionEvent_getY(event, 0);
       switch (action) {
-        case AMOTION_EVENT_ACTION_DOWN: input_.OnPointerDown(x, y); break;
-        case AMOTION_EVENT_ACTION_MOVE: input_.OnPointerMove(x, y); break;
+        case AMOTION_EVENT_ACTION_DOWN: input_.Internal().OnPointerDown(x, y); break;
+        case AMOTION_EVENT_ACTION_MOVE: input_.Internal().OnPointerMove(x, y); break;
         case AMOTION_EVENT_ACTION_UP:
-        case AMOTION_EVENT_ACTION_CANCEL: input_.OnPointerUp(x, y); break;
+        case AMOTION_EVENT_ACTION_CANCEL: input_.Internal().OnPointerUp(x, y); break;
         default: break;
       }
       return 1;
@@ -269,8 +269,8 @@ class AndroidWindow : public scene::Window {
       const input::Key key = MapKey(keycode);
       if (key == input::Key::Unknown) return 0;
       const int32_t action = AKeyEvent_getAction(event);
-      if (action == AKEY_EVENT_ACTION_DOWN) input_.OnKey(key, true);
-      if (action == AKEY_EVENT_ACTION_UP) input_.OnKey(key, false);
+      if (action == AKEY_EVENT_ACTION_DOWN) input_.Internal().OnKey(key, true);
+      if (action == AKEY_EVENT_ACTION_UP) input_.Internal().OnKey(key, false);
       return 1;
     }
     return 0;
@@ -428,7 +428,7 @@ class AndroidWindow : public scene::Window {
     eglQuerySurface(g_display, surface_, EGL_HEIGHT, &height);
     size_ = {(float)width, (float)height};
     g_insets_valid = false;  // size or orientation changed: ask for the insets again
-    input_.SetSurfaceSize((float)width, (float)height);
+    input_.Internal().SetSurfaceSize((float)width, (float)height);
   }
 
   EGLConfig config_ = nullptr;

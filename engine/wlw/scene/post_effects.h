@@ -11,7 +11,7 @@
 // (rendering/shaders/post/*). Each adds its passes after the viewport's existing ones and returns
 // the materials that control it, to change while the game runs (SetParam).
 //
-//   scene::AddBloom(App().Window().GetScreen(), {.threshold = 0.7f});   // glow on the whole screen
+//   scene::AddBloom(App().Window().MainViewport(), {.threshold = 0.7f});   // glow on the whole screen
 namespace wlw::scene {
 
 struct BlurSettings {
@@ -68,8 +68,8 @@ struct ThresholdSettings {
 // additive dots become liquid (metaballs). Usually on an offscreen viewport cleared to transparent,
 // whose texture is then laid over the game:
 //
-//   auto liquid = scene::Viewport::Create({.format = TextureFormat::RGBA16F, .depth = false});
-//   liquid->SetSizeFromScreen(0.5f);              // half resolution: 4x fewer pixels to fill
+//   std::shared_ptr<scene::Viewport> liquid = scene::Viewport::Create({.format = TextureFormat::RGBA16F, .depth =
+//   false}); liquid->SetSizeFromScreen(0.5f);              // half resolution: 4x fewer pixels to fill
 //   liquid->GetScene()->Root().AddChild(dots);   // a SpriteBatch, Additive
 //   scene::AddBlur(*liquid, {.scale = 1.0f, .format = TextureFormat::RGBA16F});  // RGBA16F all the way:
 //   scene::AddThreshold(*liquid, {.threshold = 0.45f});                          // RGBA8 clips colour x density

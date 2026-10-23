@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <memory>
 #include <numbers>
 #include <vector>
 #include "wlw/core/mesh.h"
@@ -25,12 +26,11 @@ inline void TurnToZUp(std::vector<core::Vertex3D>& vertices) {
 // Every mesh here is centred on the origin, Z up (core/math.h Conventions), front faces counter-clockwise seen
 // from outside. The pyramid frustum, cylinder, gem and sphere stand on Z.
 
-inline std::shared_ptr<core::Mesh<core::Vertex3D>> createPyramidFrustumWithNormals(float baseSize = 2.0f,
-                                                                                   float topSize = 1.0f,
-                                                                                   float height = 1.5f) {
+inline std::unique_ptr<core::Mesh<core::Vertex3D>> PyramidFrustumMesh(float base_size = 2.0f, float top_size = 1.0f,
+                                                                      float height = 1.5f) {
   // Define half-sizes
-  const float HB = baseSize / 2.0f;
-  const float HT = topSize / 2.0f;
+  const float HB = base_size / 2.0f;
+  const float HT = top_size / 2.0f;
   const float HH = height / 2.0f;
 
   // Define the 8 UNIQUE POSITIONS first (for readability)
@@ -132,21 +132,20 @@ inline std::shared_ptr<core::Mesh<core::Vertex3D>> createPyramidFrustumWithNorma
   vertices.push_back({P[7], {0.0f, 1.0f, 1.0f, 1.0f}, N_Side4, UV_TL});  // 34
   vertices.push_back({P[3], {0.0f, 0.0f, 1.0f, 1.0f}, N_Side4, UV_BL});  // 35
 
-  // ... (indices and mesh_ setup remains the same) ...
+  // ... (indices and mesh setup remains the same) ...
   indices.resize(vertices.size());
   for (size_t i = 0; i < vertices.size(); ++i) {
     indices[i] = static_cast<uint32_t>(i);
   }
 
-  auto mesh_ = std::make_shared<core::Mesh<core::Vertex3D>>();
-  mesh_->SetVertices(vertices);
-  mesh_->SetIndices(indices);
-  return mesh_;
+  auto mesh = std::make_unique<core::Mesh<core::Vertex3D>>();
+  mesh->SetVertices(vertices);
+  mesh->SetIndices(indices);
+  return mesh;
 }
 
-inline std::shared_ptr<core::Mesh<core::Vertex3D>> createCubeWithNormals(float size = 1.0f,
-                                                                         const Color& color = {1.0f, 1.0f, 1.0f,
-                                                                                               1.0f}) {
+inline std::unique_ptr<core::Mesh<core::Vertex3D>> CubeMesh(float size = 1.0f,
+                                                            const Color& color = {1.0f, 1.0f, 1.0f, 1.0f}) {
   const float HS = size / 2.0f;
   std::vector<core::Vertex3D> vertices;
 
@@ -217,17 +216,16 @@ inline std::shared_ptr<core::Mesh<core::Vertex3D>> createCubeWithNormals(float s
     indices[i] = static_cast<uint32_t>(i);
   }
 
-  auto mesh_ = std::make_shared<core::Mesh<core::Vertex3D>>();
-  mesh_->SetVertices(vertices);
-  mesh_->SetIndices(indices);
-  return mesh_;
+  auto mesh = std::make_unique<core::Mesh<core::Vertex3D>>();
+  mesh->SetVertices(vertices);
+  mesh->SetIndices(indices);
+  return mesh;
 }
 
 // A flat rectangle in the XY plane, facing up (+Z), centred on the origin: a floor or a ground for shadows to land
 // on. `width` along X, `depth` along Y; uv (0, 0) at the -X -Y corner. One quad, two triangles.
-inline std::shared_ptr<core::Mesh<core::Vertex3D>> createPlaneWithNormals(float width = 1.0f, float depth = 1.0f,
-                                                                          const Color& color = {1.0f, 1.0f, 1.0f,
-                                                                                                1.0f}) {
+inline std::unique_ptr<core::Mesh<core::Vertex3D>> PlaneMesh(float width = 1.0f, float depth = 1.0f,
+                                                             const Color& color = {1.0f, 1.0f, 1.0f, 1.0f}) {
   const float hw = width / 2.0f, hd = depth / 2.0f;
   std::vector<core::Vertex3D> vertices = {
       {{-hw, -hd, 0.0f}, color, kUp, {0.0f, 0.0f}},
@@ -237,7 +235,7 @@ inline std::shared_ptr<core::Mesh<core::Vertex3D>> createPlaneWithNormals(float 
   };
   // Counter-clockwise seen from above, like the cube's top face.
   std::vector<uint32_t> indices = {0, 1, 2, 2, 3, 0};
-  auto mesh = std::make_shared<core::Mesh<core::Vertex3D>>();
+  auto mesh = std::make_unique<core::Mesh<core::Vertex3D>>();
   mesh->SetVertices(vertices);
   mesh->SetIndices(indices);
   return mesh;
@@ -247,9 +245,8 @@ inline std::shared_ptr<core::Mesh<core::Vertex3D>> createPlaneWithNormals(float 
 // along the edges and 8 small triangles at the corners. Every facet has its own flat normal, so
 // the edges catch the light differently from the faces - that's what makes it read as a solid,
 // "physical" block instead of a flat-shaded box. `bevel` is clamped to [0, size / 2).
-inline std::shared_ptr<core::Mesh<core::Vertex3D>> createBeveledCubeWithNormals(float size = 1.0f, float bevel = 0.1f,
-                                                                                const Color& color = {1.0f, 1.0f, 1.0f,
-                                                                                                      1.0f}) {
+inline std::unique_ptr<core::Mesh<core::Vertex3D>> BeveledCubeMesh(float size = 1.0f, float bevel = 0.1f,
+                                                                   const Color& color = {1.0f, 1.0f, 1.0f, 1.0f}) {
   const float h = size / 2.0f;                              // half size: the outer surface
   const float in = h - std::clamp(bevel, 0.0f, h * 0.99f);  // where the flat faces end
   std::vector<core::Vertex3D> vertices;
@@ -322,14 +319,13 @@ inline std::shared_ptr<core::Mesh<core::Vertex3D>> createBeveledCubeWithNormals(
   std::vector<uint32_t> indices(vertices.size());
   for (size_t i = 0; i < vertices.size(); ++i) indices[i] = static_cast<uint32_t>(i);
 
-  auto mesh = std::make_shared<core::Mesh<core::Vertex3D>>();
+  auto mesh = std::make_unique<core::Mesh<core::Vertex3D>>();
   mesh->SetVertices(vertices);
   mesh->SetIndices(indices);
   return mesh;
 }
 
-inline std::shared_ptr<core::Mesh<core::Vertex3D>> createSphereWithNormals(float radius = 1.0f, int stacks = 32,
-                                                                           int sectors = 64) {
+inline std::unique_ptr<core::Mesh<core::Vertex3D>> SphereMesh(float radius = 1.0f, int stacks = 32, int sectors = 64) {
   std::vector<core::Vertex3D> vertices;
   std::vector<uint32_t> indices;
 
@@ -409,14 +405,14 @@ inline std::shared_ptr<core::Mesh<core::Vertex3D>> createSphereWithNormals(float
   }
 
   // --- 3. Package and Return ---
-  auto mesh_ = std::make_shared<core::Mesh<core::Vertex3D>>();
-  mesh_->SetVertices(vertices);
-  mesh_->SetIndices(indices);
-  return mesh_;
+  auto mesh = std::make_unique<core::Mesh<core::Vertex3D>>();
+  mesh->SetVertices(vertices);
+  mesh->SetIndices(indices);
+  return mesh;
 }
 
-inline std::shared_ptr<core::Mesh<core::Vertex3D>> createCylinderWithNormals(float radius = 0.5f, float height = 1.0f,
-                                                                             int segments = 32) {
+inline std::unique_ptr<core::Mesh<core::Vertex3D>> CylinderMesh(float radius = 0.5f, float height = 1.0f,
+                                                                int segments = 32) {
   std::vector<core::Vertex3D> vertices;
   std::vector<uint32_t> indices;
   const float HH = height / 2.0f;
@@ -471,13 +467,13 @@ inline std::shared_ptr<core::Mesh<core::Vertex3D>> createCylinderWithNormals(flo
   }
   primitives_detail::TurnToZUp(vertices);
 
-  auto mesh_ = std::make_shared<core::Mesh<core::Vertex3D>>();
-  mesh_->SetVertices(vertices);
-  mesh_->SetIndices(indices);
-  return mesh_;
+  auto mesh = std::make_unique<core::Mesh<core::Vertex3D>>();
+  mesh->SetVertices(vertices);
+  mesh->SetIndices(indices);
+  return mesh;
 }
 
-inline std::shared_ptr<core::Mesh<core::Vertex3D>> createGemWithNormals(float width = 0.5f, float height = 1.0f) {
+inline std::unique_ptr<core::Mesh<core::Vertex3D>> GemMesh(float width = 0.5f, float height = 1.0f) {
   std::vector<core::Vertex3D> vertices;
   const float HW = width / 2.0f;
   const float HH = height / 2.0f;
@@ -487,7 +483,7 @@ inline std::shared_ptr<core::Mesh<core::Vertex3D>> createGemWithNormals(float wi
   Vec3 bottom = {0, -HH, 0};
   Vec3 mid[4] = {{HW, 0, HW}, {-HW, 0, HW}, {-HW, 0, -HW}, {HW, 0, -HW}};
 
-  auto addTriangle = [&](const Vec3& p1, const Vec3& p2, const Vec3& p3) {
+  auto add_triangle = [&](const Vec3& p1, const Vec3& p2, const Vec3& p3) {
     Vec3 v1 = p2 - p1;
     Vec3 v2 = p3 - p1;
     Vec3 normal = primitives_detail::Unit(glm::cross(v1, v2));
@@ -497,18 +493,18 @@ inline std::shared_ptr<core::Mesh<core::Vertex3D>> createGemWithNormals(float wi
   };
 
   for (int i = 0; i < 4; ++i) {
-    addTriangle(top, mid[(i + 1) % 4], mid[i]);
-    addTriangle(bottom, mid[i], mid[(i + 1) % 4]);
+    add_triangle(top, mid[(i + 1) % 4], mid[i]);
+    add_triangle(bottom, mid[i], mid[(i + 1) % 4]);
   }
   primitives_detail::TurnToZUp(vertices);
 
   std::vector<uint32_t> indices(vertices.size());
   for (size_t i = 0; i < vertices.size(); ++i) indices[i] = (uint32_t)i;
 
-  auto mesh_ = std::make_shared<core::Mesh<core::Vertex3D>>();
-  mesh_->SetVertices(vertices);
-  mesh_->SetIndices(indices);
-  return mesh_;
+  auto mesh = std::make_unique<core::Mesh<core::Vertex3D>>();
+  mesh->SetVertices(vertices);
+  mesh->SetIndices(indices);
+  return mesh;
 }
 
 }  // namespace wlw::utils

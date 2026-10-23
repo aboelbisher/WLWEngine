@@ -9,6 +9,8 @@
 #include <string_view>
 #include <vector>
 
+#include "wlw/core/connection.h"
+
 #include "wlw/core/cvar.h"
 #include "wlw/core/log.h"
 
@@ -89,7 +91,7 @@ class ConsoleModel {
   size_t capacity_;
   mutable std::mutex mutex_;
   std::deque<LogRecord> lines_;
-  int sink_ = -1;
+  core::Connection sink_;
   std::vector<std::string> history_;
   size_t history_position_ = 0;  // == history_.size(): not browsing
 };

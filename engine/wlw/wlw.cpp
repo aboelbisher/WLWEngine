@@ -22,7 +22,7 @@ class WLWEngineImpl : public WLWEngine {
     if (platform::IsAlive()) {
       for (auto& [_, window] : windows_) {
         window->MakeContextCurrent();
-        window->ReleaseScenes();  // frees meshes/textures/viewports nobody else holds
+        window->Internal().ReleaseScenes();  // frees meshes/textures/viewports nobody else holds
       }
     }
     rendering_driver_.reset();  // frees shaders, then shuts the platform down
@@ -50,7 +50,7 @@ class WLWEngineImpl : public WLWEngine {
     // Clear last frame's input events on every window first, then poll the OS once:
     // on desktop one poll delivers events for all windows.
     for (auto& [_, window] : windows_) {
-      window->GetInput().BeginFrame();
+      window->GetInput().Internal().BeginFrame();
     }
     WLW_PROFILE_SCOPE("Poll input");
     for (auto& [_, window] : windows_) {

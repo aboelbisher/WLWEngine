@@ -7,6 +7,7 @@
 #include <string>
 #include <thread>
 
+#include "wlw/audio/audio_config.h"
 #include "wlw/audio/mixer.h"
 
 namespace wlw::audio {
@@ -23,7 +24,7 @@ class Audio {
   using SoundId = Mixer::SoundId;
   static constexpr SoundId kNoSound = Mixer::kNoSound;
 
-  Audio();
+  explicit Audio(const AudioConfig& config = {});
   ~Audio();
   Audio(const Audio&) = delete;
   Audio& operator=(const Audio&) = delete;

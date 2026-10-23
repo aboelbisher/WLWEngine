@@ -10,33 +10,33 @@ using wlw::input::Swipe;
 
 TEST_CASE("tap and swipe") {
   Input in;
-  in.SetSurfaceSize(1000, 2000);  // swipe threshold: 6% of the short side = 60 units
-  in.BeginFrame();
-  in.OnPointerDown(100, 100);
-  in.OnPointerUp(110, 105);  // moved less than the threshold
+  in.Internal().SetSurfaceSize(1000, 2000);  // swipe threshold: 6% of the short side = 60 units
+  in.Internal().BeginFrame();
+  in.Internal().OnPointerDown(100, 100);
+  in.Internal().OnPointerUp(110, 105);  // moved less than the threshold
   CHECK((in.WasPointerPressed() && in.WasPointerReleased() && in.WasTapped()));
   CHECK(in.Swipes().empty());
 
-  in.BeginFrame();
-  in.OnPointerDown(100, 100);
-  in.OnPointerMove(100, 300);
+  in.Internal().BeginFrame();
+  in.Internal().OnPointerDown(100, 100);
+  in.Internal().OnPointerMove(100, 300);
   CHECK((in.Swipes().size() == 1 && in.Swipes()[0] == Swipe::Down));
-  in.OnPointerUp(100, 300);
+  in.Internal().OnPointerUp(100, 300);
   CHECK(!in.WasTapped());  // a drag that swiped is not a tap
 }
 
 TEST_CASE("blocked pointer is invisible to the game") {
   Input in;
-  in.SetSurfaceSize(1000, 2000);
-  in.BeginFrame();
-  in.OnPointerDown(100, 100);
-  in.OnPointerMove(100, 300);
+  in.Internal().SetSurfaceSize(1000, 2000);
+  in.Internal().BeginFrame();
+  in.Internal().OnPointerDown(100, 100);
+  in.Internal().OnPointerMove(100, 300);
   in.SetPointerBlocked(true);
   CHECK((!in.IsPointerDown() && !in.WasPointerPressed() && in.Swipes().empty()));
   CHECK((in.RawPointerDown() && in.RawPointerPressed()));  // the owner still sees it
   CHECK(in.PointerPosition().y == 300.0f);                 // position stays readable
 
-  in.OnPointerUp(100, 300);
+  in.Internal().OnPointerUp(100, 300);
   CHECK((!in.WasPointerReleased() && !in.WasTapped()));
   CHECK(in.RawPointerReleased());
 
@@ -47,7 +47,7 @@ TEST_CASE("blocked pointer is invisible to the game") {
 TEST_CASE("touch flag") {
   Input in;
   CHECK(!in.IsTouchScreen());
-  in.SetTouchScreen(true);
+  in.Internal().SetTouchScreen(true);
   CHECK(in.IsTouchScreen());
 }
 

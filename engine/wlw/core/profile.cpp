@@ -13,7 +13,7 @@ namespace wlw::profile {
 
 namespace {
 
-int log_sink = -1;
+core::Connection log_sink;
 
 // Tracy's message colours (0xRRGGBB; 0 = the default) by level.
 uint32_t MessageColor(LogLevel level) {
@@ -46,7 +46,7 @@ bool Connected() { return TracyIsConnected; }
 
 void Start() {
   SetThreadName("Game");
-  if (log_sink >= 0) return;
+  if (log_sink.Connected()) return;
   // Only while a viewer is connected (Tracy drops messages otherwise): the log lines on the timeline.
   log_sink = AddLogSink([](const LogRecord& record) {
     if (!TracyIsConnected) return;
@@ -56,9 +56,7 @@ void Start() {
 }
 
 void Stop() {
-  if (log_sink < 0) return;
-  RemoveLogSink(log_sink);
-  log_sink = -1;
+  log_sink.Disconnect();  // here, not at static destruction (the log may be gone by then)
 }
 
 #if defined(WLW_PLATFORM_ANDROID)

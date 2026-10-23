@@ -23,7 +23,7 @@ namespace {
 
 std::shared_ptr<core::Model<core::Vertex3D>> CubeModel() {
   auto model = std::make_shared<core::Model<core::Vertex3D>>();
-  model->meshes.push_back(utils::createCubeWithNormals(1.0f));
+  model->meshes.push_back(utils::CubeMesh(1.0f));
   return model;
 }
 

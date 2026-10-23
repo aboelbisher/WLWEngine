@@ -16,7 +16,7 @@ inline CVar<bool> cv_gpu_timing{"r.gpu_timing", WLW_DEBUG_UI != 0, "Measure the 
 inline CVar<bool> cv_invalidate_framebuffers{"r.invalidate_framebuffers", true,
                                              "Tell phone GPUs which pictures needn't be loaded or stored"};
 
-// The frame-rate target (Application::SetTargetFps; starts at AppConfig::target_fps): fps, 0 = the
+// The frame-rate target (Application::SetTargetFps; starts at AppConfig::graphics.target_fps): fps, 0 = the
 // display's rate, -1 = uncapped (desktop).
 inline CVar<int> cv_target_fps{"r.target_fps", 60, "Frames per second: 30/60/90/120, 0 = display rate, -1 = uncapped",
                                CVarFlags::None, CVar<int>::Range{-1, 1000}};

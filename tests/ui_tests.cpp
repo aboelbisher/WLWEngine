@@ -77,7 +77,7 @@ TEST_CASE("canvas units") {
   wlw::platform::SafeAreaInsets insets;
   insets.top = 100.0f;    // status bar / camera cutout
   insets.bottom = 54.0f;  // gesture bar
-  canvas.BeginFrame({1080.0f, 2400.0f}, {400.0f, 720.0f});
+  canvas.Internal().BeginFrame({1080.0f, 2400.0f}, {400.0f, 720.0f});
   CHECK(Near(canvas.PixelsPerUnit(), 2.7f));  // the width limits: 1080 / 400
   CHECK((Near(canvas.Size().x, 400.0f) && Near(canvas.Size().y, 2400.0f / 2.7f, 1e-2f)));
   // The safe area (the UI layer's): the insets, converted to canvas units.
@@ -86,14 +86,14 @@ TEST_CASE("canvas units") {
   CHECK((Near(safe.max.y, (2400.0f - 54.0f) / 2.7f, 1e-2f) && Near(safe.max.x, 400.0f)));
   CHECK(Near(canvas.FromPixels({270.0f, 0.0f}).x, 100.0f));
 
-  canvas.BeginFrame({2400.0f, 1080.0f}, {400.0f, 720.0f});  // landscape: the height limits
+  canvas.Internal().BeginFrame({2400.0f, 1080.0f}, {400.0f, 720.0f});  // landscape: the height limits
   CHECK(Near(canvas.PixelsPerUnit(), 1.5f));
 }
 
 TEST_CASE("canvas text and batches") {
   const Font& font_a = TestFont();
   Canvas canvas;
-  canvas.BeginFrame({400.0f, 800.0f}, {400.0f, 800.0f});
+  canvas.Internal().BeginFrame({400.0f, 800.0f}, {400.0f, 800.0f});
 
   canvas.Text(font_a, "123", {200.0f, 50.0f}, 40.0f, Align::Center);
   CHECK(canvas.QuadCount() == 3);
@@ -113,7 +113,7 @@ TEST_CASE("canvas text and batches") {
   CHECK((canvas.Batches().size() == 2 && canvas.Batches()[1].first_quad == 6));
 
   // Outline and shadow are extra copies of the glyphs, drawn first (behind).
-  canvas.BeginFrame({400.0f, 800.0f}, {400.0f, 800.0f});
+  canvas.Internal().BeginFrame({400.0f, 800.0f}, {400.0f, 800.0f});
   TextStyle style;
   style.outline = 0.06f;
   style.shadow_offset = {2.0f, 3.0f};
@@ -135,13 +135,13 @@ TEST_CASE("canvas text and batches") {
 TEST_CASE("canvas turned text") {
   const Font& font = TestFont();
   Canvas canvas;
-  canvas.BeginFrame({400.0f, 800.0f}, {400.0f, 800.0f});
+  canvas.Internal().BeginFrame({400.0f, 800.0f}, {400.0f, 800.0f});
   const glm::vec2 at(200.0f, 100.0f);
   canvas.Text(font, "HH", at, 40.0f, Align::Center);
   const std::vector<UIVertex> flat = canvas.Vertices();
 
   // A quarter turn clockwise (y down): what was right of the point is now below it; uvs and params are untouched.
-  canvas.BeginFrame({400.0f, 800.0f}, {400.0f, 800.0f});
+  canvas.Internal().BeginFrame({400.0f, 800.0f}, {400.0f, 800.0f});
   TextStyle style;
   style.rotation = 1.5707963f;
   canvas.Text(font, "HH", at, 40.0f, Align::Center, style);
@@ -155,7 +155,7 @@ TEST_CASE("canvas turned text") {
   }
 
   // The shadow turns with the text but still falls by its offset on screen.
-  canvas.BeginFrame({400.0f, 800.0f}, {400.0f, 800.0f});
+  canvas.Internal().BeginFrame({400.0f, 800.0f}, {400.0f, 800.0f});
   style.shadow_offset = {0.0f, 3.0f};
   canvas.Text(font, "HH", at, 40.0f, Align::Center, style);
   const auto& shadowed = canvas.Vertices();
@@ -169,22 +169,29 @@ TEST_CASE("canvas turned text") {
 TEST_CASE("canvas keeps its fonts alive") {
   // Text from a font the caller lets go of before the frame is drawn still has its atlas.
   Canvas canvas;
-  canvas.BeginFrame({800.0f, 600.0f}, {800.0f, 600.0f});
+  canvas.Internal().BeginFrame({800.0f, 600.0f}, {800.0f, 600.0f});
   std::weak_ptr<Font> watch;
   {
-    auto font = Font::Load(WLW_TEST_FONT);
+    std::shared_ptr<Font> font = Font::Load(WLW_TEST_FONT);
     REQUIRE(font != nullptr);
     watch = font;
     canvas.Text(*font, "kept", {10.0f, 10.0f}, 20.0f);
   }
   CHECK((!watch.expired() && canvas.Batches().size() == 1 && canvas.Batches()[0].font == watch.lock()));
-  canvas.BeginFrame({800.0f, 600.0f}, {800.0f, 600.0f});  // the next frame lets it go
+  canvas.Internal().BeginFrame({800.0f, 600.0f}, {800.0f, 600.0f});  // the next frame lets it go
   CHECK(watch.expired());
+
+  // A uniquely owned font (what Load returns) works too: the batch points at it without owning it.
+  std::unique_ptr<Font> unique = Font::Load(WLW_TEST_FONT);
+  REQUIRE(unique != nullptr);
+  canvas.Text(*unique, "plain", {10.0f, 10.0f}, 20.0f);
+  CHECK((canvas.Batches().size() == 1 && canvas.Batches()[0].font.get() == unique.get()));
+  CHECK(canvas.Batches()[0].font.use_count() == 0);  // owns nothing
 }
 
 TEST_CASE("canvas line") {
   Canvas canvas;
-  canvas.BeginFrame({400.0f, 800.0f}, {400.0f, 800.0f});
+  canvas.Internal().BeginFrame({400.0f, 800.0f}, {400.0f, 800.0f});
   canvas.Line({10.0f, 20.0f}, {30.0f, 20.0f}, 4.0f, {1, 1, 1, 1});  // horizontal, 20 long
   CHECK(canvas.QuadCount() == 1);
   const auto& v = canvas.Vertices();
@@ -214,7 +221,7 @@ TEST_CASE("layout and toggle") {
   CHECK((Near(middle.min.x, 35.0f) && Near(middle.max.x, 65.0f)));
 
   Canvas canvas;
-  canvas.BeginFrame({400.0f, 800.0f}, {400.0f, 800.0f});
+  canvas.Internal().BeginFrame({400.0f, 800.0f}, {400.0f, 800.0f});
   UIContext ui(canvas);
   ui.pointer.position = {50.0f, 25.0f};
   ui.pointer.pressed = ui.pointer.released = true;
@@ -227,7 +234,7 @@ TEST_CASE("layout and toggle") {
 // Triangles and arcs: what the shader gets to compute their coverage.
 TEST_CASE("canvas shapes") {
   Canvas canvas;
-  canvas.BeginFrame({400.0f, 800.0f}, {400.0f, 800.0f});  // 1 pixel per unit
+  canvas.Internal().BeginFrame({400.0f, 800.0f}, {400.0f, 800.0f});  // 1 pixel per unit
   canvas.Triangle({0.0f, 0.0f}, {30.0f, 0.0f}, {0.0f, 40.0f}, {1, 1, 1, 1});
   CHECK(canvas.QuadCount() == 1);
   const auto& v = canvas.Vertices();
@@ -265,7 +272,7 @@ TEST_CASE("canvas shapes") {
 // What widgets remember: kept while asked for every frame, dropped a frame after they stop.
 TEST_CASE("widget memory") {
   Canvas canvas;
-  canvas.BeginFrame({400.0f, 800.0f}, {400.0f, 800.0f});
+  canvas.Internal().BeginFrame({400.0f, 800.0f}, {400.0f, 800.0f});
   UIContext ui(canvas);
   ui.NewFrame(0.016f);
   ui.Memory(7, 1.0f) += 1.0f;
@@ -280,7 +287,7 @@ TEST_CASE("widget memory") {
 // A click is a press and a release on the same widget; sliding off cancels.
 TEST_CASE("pressable") {
   Canvas canvas;
-  canvas.BeginFrame({400.0f, 800.0f}, {400.0f, 800.0f});
+  canvas.Internal().BeginFrame({400.0f, 800.0f}, {400.0f, 800.0f});
   UIContext ui(canvas);
   const Rect rect{{0.0f, 0.0f}, {100.0f, 50.0f}};
   ui.pointer.position = {50.0f, 25.0f};
@@ -303,7 +310,7 @@ TEST_CASE("pressable") {
 TEST_CASE("themed widgets") {
   const Font& font = TestFont();
   Canvas canvas;
-  canvas.BeginFrame({400.0f, 800.0f}, {400.0f, 800.0f});
+  canvas.Internal().BeginFrame({400.0f, 800.0f}, {400.0f, 800.0f});
   UIContext ui(canvas);
   ui.theme.font = &font;
   ui.safe_area = {{0.0f, 0.0f}, canvas.Size()};
@@ -368,7 +375,7 @@ TEST_CASE("themed widgets") {
 
 // A ShaderMaterial's params: stored by name, set again = replaced (no GPU needed).
 TEST_CASE("material params") {
-  auto material = wlw::rendering::ShaderMaterial::Create(nullptr);  // no shader: no GPU needed
+  std::shared_ptr<wlw::rendering::ShaderMaterial> material = wlw::rendering::ShaderMaterial::Create(nullptr);  // no GPU
   CHECK((!material->IsValid() && material->Params().empty() && material->AsShaderMaterial() == material.get()));
   material->SetParam("uTime", 1.5f);
   material->SetParam("uTint", glm::vec4(1.0f, 0.5f, 0.0f, 1.0f));
@@ -382,8 +389,8 @@ TEST_CASE("material params") {
 // A ShaderRect is one quad in a run of its own, with uv 0..1, between the runs around it.
 TEST_CASE("canvas shader rect") {
   Canvas canvas;
-  canvas.BeginFrame({400.0f, 800.0f}, {400.0f, 800.0f});
-  auto material = wlw::rendering::ShaderMaterial::Create(nullptr);  // no shader: no GPU needed
+  canvas.Internal().BeginFrame({400.0f, 800.0f}, {400.0f, 800.0f});
+  std::shared_ptr<wlw::rendering::ShaderMaterial> material = wlw::rendering::ShaderMaterial::Create(nullptr);  // no GPU
   canvas.FillRect({{0.0f, 0.0f}, {10.0f, 10.0f}}, {1, 1, 1, 1});
   canvas.ShaderRect({{20.0f, 30.0f}, {120.0f, 80.0f}}, material, {1.0f, 0.0f, 0.0f, 1.0f});
   canvas.FillRect({{0.0f, 0.0f}, {10.0f, 10.0f}}, {1, 1, 1, 1});

@@ -8,6 +8,7 @@
 #include <cstdlib>
 #include <deque>
 #include <filesystem>
+#include <memory>
 #include <mutex>
 #include <unordered_map>
 
@@ -49,10 +50,10 @@ Categories& GetCategories() {
 }
 
 // ---- Sinks, history, file ----
+struct SinkSlot;
 struct Output {
   std::mutex mutex;
-  std::vector<std::pair<int, LogSink>> sinks;
-  int next_sink = 0;
+  std::vector<std::shared_ptr<SinkSlot>> sinks;
   bool platform = true;
   std::deque<LogRecord> history;
   FILE* file = nullptr;
@@ -61,6 +62,21 @@ Output& GetOutput() {
   static Output output;
   return output;
 }
+
+// A sink and its Connection's side: Disconnect takes it out of the list under the output's lock,
+// so a record being written on another thread finishes first.
+struct SinkSlot final : core::ConnectionSlot {
+  explicit SinkSlot(LogSink fn) : sink(std::move(fn)) {}
+  void Disconnect() override {
+    Output& output = GetOutput();
+    std::lock_guard lock(output.mutex);
+    connected = false;
+    std::erase_if(output.sinks, [this](const std::shared_ptr<SinkSlot>& slot) { return slot.get() == this; });
+  }
+  bool Connected() const override { return connected; }
+  LogSink sink;
+  std::atomic<bool> connected{true};
+};
 
 thread_local bool t_in_log = false;  // a sink that logs would deadlock: its records are dropped
 
@@ -97,7 +113,7 @@ void Write(const LogCategory& category, LogLevel level, const char* file, int li
       std::fprintf(output.file, "%s\n", FormatLogRecord(record).c_str());
       std::fflush(output.file);  // every line: a crash must not lose the last ones
     }
-    for (const auto& [_, sink] : output.sinks) sink(record);
+    for (const auto& slot : output.sinks) slot->sink(record);
     if (output.history.size() == kLogHistorySize) output.history.pop_front();
     output.history.push_back(std::move(record));
   }
@@ -207,17 +223,12 @@ std::vector<std::string> LogCategoryNames() {
   return names;
 }
 
-int AddLogSink(LogSink sink) {
+core::Connection AddLogSink(LogSink sink) {
+  auto slot = std::make_shared<SinkSlot>(std::move(sink));
   Output& output = GetOutput();
   std::lock_guard lock(output.mutex);
-  output.sinks.emplace_back(output.next_sink, std::move(sink));
-  return output.next_sink++;
-}
-
-void RemoveLogSink(int id) {
-  Output& output = GetOutput();
-  std::lock_guard lock(output.mutex);
-  std::erase_if(output.sinks, [id](const auto& sink) { return sink.first == id; });
+  output.sinks.push_back(slot);
+  return core::Connection(slot);
 }
 
 void SetPlatformLogOutput(bool on) {

@@ -35,8 +35,8 @@ struct GlyphQuad {
 // Sizes are "line heights": the distance from the highest ascender to the lowest descender, in
 // whatever units the caller uses (Canvas units for the UI). Covers printable ASCII (32..126);
 // other characters draw as '?'. CPU only: the UI renderer uploads the atlas.
-// Always owned by a shared_ptr (Load / FromMemory): a Canvas keeps the fonts it was given alive
-// until it's drawn, so text works even if the caller lets go of its font first.
+// Load / FromMemory return a unique_ptr. Held by a shared_ptr, a font is kept alive by the Canvas
+// until the text is drawn (the caller may let go first); held by a unique_ptr, it must outlive the draw.
 class Font : public std::enable_shared_from_this<Font> {
  public:
   struct Atlas {
@@ -46,8 +46,8 @@ class Font : public std::enable_shared_from_this<Font> {
   };
 
   // Reads the file with platform::ReadFile (works for APK assets). Null on failure (logged).
-  static std::shared_ptr<Font> Load(const std::string& path, const FontOptions& options = {});
-  static std::shared_ptr<Font> FromMemory(std::vector<uint8_t> ttf, const FontOptions& options = {});
+  static std::unique_ptr<Font> Load(const std::string& path, const FontOptions& options = {});
+  static std::unique_ptr<Font> FromMemory(std::vector<uint8_t> ttf, const FontOptions& options = {});
   ~Font();
 
   float Measure(std::string_view text, float size) const;  // advance width of the whole string

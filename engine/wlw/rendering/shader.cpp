@@ -123,23 +123,19 @@ ShaderSource SplitShaderSource(const std::string& code) {
 
 Shader::Shader(ShaderSource source, std::string name) : source_(std::move(source)), name_(std::move(name)) {}
 
-std::shared_ptr<Shader> Shader::Create(const std::string& code, const std::string& name) {
+std::unique_ptr<Shader> Shader::Create(const std::string& code, const std::string& name) {
   ShaderSource source = SplitShaderSource(code);
   if (!source.ok) WLW_LOG(LogShader, Error, "%s: %s", name.c_str(), source.error.c_str());
-  auto shader = std::make_shared<Shader>(std::move(source), name);
-  Register(shader);
-  return shader;
+  return std::unique_ptr<Shader>(new Shader(std::move(source), name));
 }
 
-std::shared_ptr<Shader> Shader::FromFile(const std::string& path) {
+std::unique_ptr<Shader> Shader::FromFile(const std::string& path) {
   const auto bytes = platform::ReadFile(path);
   if (!bytes) {
     WLW_LOG(LogShader, Error, "Shader file not found: %s", path.c_str());
     ShaderSource missing;
     missing.error = "file not found";
-    auto shader = std::make_shared<Shader>(std::move(missing), path);
-    Register(shader);
-    return shader;
+    return std::unique_ptr<Shader>(new Shader(std::move(missing), path));
   }
   return Create(std::string(bytes->begin(), bytes->end()), path);
 }

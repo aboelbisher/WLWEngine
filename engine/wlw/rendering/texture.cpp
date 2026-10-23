@@ -8,13 +8,6 @@ namespace wlw::rendering {
 
 namespace {
 
-// Every resource made by a Create function. Weak: the list never keeps one alive. Expired entries
-// are dropped as ForEachAlive walks it.
-std::vector<std::weak_ptr<Resource>>& AliveResources() {
-  static std::vector<std::weak_ptr<Resource>> resources;
-  return resources;
-}
-
 uint32_t NextResourceId() {
   static uint32_t next = 1;
   return next++;
@@ -22,19 +15,64 @@ uint32_t NextResourceId() {
 
 }  // namespace
 
-Resource::Resource() : id_(NextResourceId()) {}
-
-void Resource::Register(const std::shared_ptr<Resource>& resource) { AliveResources().push_back(resource); }
-
-void Resource::ForEachAlive(const std::function<void(Resource&)>& visit) {
-  auto& resources = AliveResources();
-  std::erase_if(resources, [](const std::weak_ptr<Resource>& entry) { return entry.expired(); });
-  // A copy: `visit` may make resources (Register would invalidate the iteration).
-  const std::vector<std::weak_ptr<Resource>> alive = resources;
-  for (const auto& entry : alive) {
-    if (auto resource = entry.lock()) visit(*resource);
+// Every resource alive, by raw pointer: a resource adds itself in its constructor and leaves in its
+// destructor (swap-remove), so no owner type is needed. While ForEachAlive walks the list a destroyed
+// resource only nulls its slot (indices must not move under the walk); the walk compacts afterwards.
+struct AliveList {
+  static std::vector<Resource*>& Slots() {
+    static std::vector<Resource*> slots;
+    return slots;
   }
+  static int& Walking() {
+    static int depth = 0;
+    return depth;
+  }
+  static size_t& Holes() {
+    static size_t holes = 0;
+    return holes;
+  }
+
+  static void Add(Resource* resource) {
+    auto& slots = Slots();
+    resource->slot_ = static_cast<uint32_t>(slots.size());
+    slots.push_back(resource);
+  }
+  static void Remove(Resource* resource) {
+    auto& slots = Slots();
+    if (Walking() > 0) {
+      slots[resource->slot_] = nullptr;
+      ++Holes();
+      return;
+    }
+    Resource* last = slots.back();
+    slots[resource->slot_] = last;
+    last->slot_ = resource->slot_;
+    slots.pop_back();
+  }
+  static void Compact() {
+    auto& slots = Slots();
+    std::erase(slots, nullptr);
+    for (size_t i = 0; i < slots.size(); ++i) slots[i]->slot_ = static_cast<uint32_t>(i);
+    Holes() = 0;
+  }
+};
+
+Resource::Resource() : id_(NextResourceId()) { AliveList::Add(this); }
+
+Resource::~Resource() { AliveList::Remove(this); }
+
+void Resource::InternalAccess::ForEachAlive(const std::function<void(Resource&)>& visit) {
+  auto& slots = AliveList::Slots();
+  ++AliveList::Walking();
+  // By index, re-reading the size: `visit` may add resources (appended, visited too) or destroy some
+  // (their slots become null).
+  for (size_t i = 0; i < slots.size(); ++i) {
+    if (Resource* resource = slots[i]) visit(*resource);
+  }
+  if (--AliveList::Walking() == 0 && AliveList::Holes() > 0) AliveList::Compact();
 }
+
+size_t Resource::InternalAccess::AliveCount() { return AliveList::Slots().size() - AliveList::Holes(); }
 
 size_t TexelBytes(TextureFormat format) {
   switch (format) {
@@ -50,15 +88,14 @@ size_t TexelBytes(TextureFormat format) {
 WTexture2D::WTexture2D(int width, int height, const TextureSettings& settings, bool render_target)
     : width_(std::max(width, 1)), height_(std::max(height, 1)), settings_(settings), render_target_(render_target) {}
 
-std::shared_ptr<WTexture2D> WTexture2D::Create(int width, int height, const TextureSettings& settings,
+std::unique_ptr<WTexture2D> WTexture2D::Create(int width, int height, const TextureSettings& settings,
                                                const void* pixels) {
-  auto texture = std::make_shared<WTexture2D>(width, height, settings, /*render_target=*/false);
+  std::unique_ptr<WTexture2D> texture(new WTexture2D(width, height, settings, /*render_target=*/false));
   if (pixels) texture->Update(pixels);
-  Register(texture);
   return texture;
 }
 
-std::shared_ptr<WTexture2D> WTexture2D::FromImage(const utils::RawImage& image) {
+std::unique_ptr<WTexture2D> WTexture2D::FromImage(const utils::RawImage& image) {
   const TextureFormat format = image.channels == 4   ? TextureFormat::RGBA8
                                : image.channels == 1 ? TextureFormat::R8
                                                      : TextureFormat::RGB8;
@@ -76,12 +113,8 @@ void WTexture2D::Update(const void* pixels) {
 
 WCubemap::WCubemap(const std::array<utils::RawImage, 6>& faces) : faces_(faces.begin(), faces.end()) {}
 
-std::shared_ptr<WCubemap> WCubemap::Create(const std::array<utils::RawImage, 6>& faces) {
-  auto cubemap = std::make_shared<WCubemap>(faces);
-  Register(cubemap);
-  return cubemap;
+std::unique_ptr<WCubemap> WCubemap::Create(const std::array<utils::RawImage, 6>& faces) {
+  return std::unique_ptr<WCubemap>(new WCubemap(faces));
 }
-
-void WCubemap::ReleaseFaces() const { std::vector<utils::RawImage>().swap(faces_); }
 
 }  // namespace wlw::rendering

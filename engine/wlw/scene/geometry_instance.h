@@ -70,7 +70,7 @@ class GeometryInstance3D : public Node3D {
 class MeshInstance3D : public GeometryInstance3D {
  public:
   MeshInstance3D() : GeometryInstance3D(NodeKind::MeshInstance) {}
-  static std::shared_ptr<MeshInstance3D> Create() { return std::make_shared<MeshInstance3D>(); }
+  static std::unique_ptr<MeshInstance3D> Create() { return std::make_unique<MeshInstance3D>(); }
 };
 
 // Draws its model once per copy, all in ONE draw call (GPU instancing), each copy with its own transform (relative
@@ -80,7 +80,7 @@ class MeshInstance3D : public GeometryInstance3D {
 class MultiMeshInstance3D : public GeometryInstance3D {
  public:
   MultiMeshInstance3D() : GeometryInstance3D(NodeKind::MultiMeshInstance) {}
-  static std::shared_ptr<MultiMeshInstance3D> Create() { return std::make_shared<MultiMeshInstance3D>(); }
+  static std::unique_ptr<MultiMeshInstance3D> Create() { return std::make_unique<MultiMeshInstance3D>(); }
 
   // WriteInstances(count) returns its `count` copies to fill in place, like SpriteBatch::Write: the first
   // min(old, count) keep their values, new ones start as identity + white. The span is valid until the next
@@ -103,8 +103,6 @@ class MultiMeshInstance3D : public GeometryInstance3D {
   }
   std::span<const rendering::Instance> Instances() const { return instances_; }
   size_t InstanceCount() const { return instances_.size(); }
-  // For the renderer: bumped by every change, so it re-uploads only when something changed.
-  uint64_t GetInstancesVersion() const { return instances_version_; }
 
   // The box around every copy, in the node's space: SetInstanceBounds' box if one is set, else computed from the
   // copies (each copy's transform applied to the model's box) and cached until the copies or the model's box change.
@@ -116,9 +114,9 @@ class MultiMeshInstance3D : public GeometryInstance3D {
   // displacement visible to culling. nullopt = computed again.
   void SetInstanceBounds(std::optional<wlw::AABB> box) { custom_instance_bounds_ = box; }
 
-  // ---- For the renderer ----
-  rendering::WInstanceBuffer* GetInstanceBuffer() const { return instance_buffer_.get(); }
-  void SetInstanceBuffer(std::unique_ptr<rendering::WInstanceBuffer> buffer) { instance_buffer_ = std::move(buffer); }
+  class InternalAccess;
+  // Engine-only parts (the renderer's): see InternalAccess below.
+  InternalAccess Internal();
 
  private:
   std::vector<rendering::Instance> instances_;
@@ -130,5 +128,23 @@ class MultiMeshInstance3D : public GeometryInstance3D {
   mutable wlw::AABB instance_bounds_model_box_{};
   mutable uint64_t instance_bounds_version_ = UINT64_MAX;
 };
+
+// For the renderer, not games.
+class MultiMeshInstance3D::InternalAccess {
+ public:
+  explicit InternalAccess(MultiMeshInstance3D& node) : node_(node) {}
+
+  // Bumped by every change, so the renderer re-uploads only when something changed.
+  uint64_t GetInstancesVersion() const { return node_.instances_version_; }
+  rendering::WInstanceBuffer* GetInstanceBuffer() const { return node_.instance_buffer_.get(); }
+  void SetInstanceBuffer(std::unique_ptr<rendering::WInstanceBuffer> buffer) const {
+    node_.instance_buffer_ = std::move(buffer);
+  }
+
+ private:
+  MultiMeshInstance3D& node_;
+};
+
+inline MultiMeshInstance3D::InternalAccess MultiMeshInstance3D::Internal() { return InternalAccess(*this); }
 
 }  // namespace wlw::scene

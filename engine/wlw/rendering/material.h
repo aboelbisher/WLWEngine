@@ -19,10 +19,10 @@ class Material {
  public:
   virtual ~Material() = default;
 
-  void SetTexture(std::shared_ptr<rendering::WTexture> texture) { texture_ = texture; }
+  void SetTexture(std::shared_ptr<WTexture> texture) { texture_ = std::move(texture); }
 
   bool HasTexture() const { return texture_ != nullptr; }
-  const WTexture* GetTexture() const { return texture_.get(); }
+  const std::shared_ptr<WTexture>& GetTexture() const { return texture_; }
 
   // Non-null for a ShaderMaterial: the renderers draw it with its shader instead.
   virtual const ShaderMaterial* AsShaderMaterial() const { return nullptr; }

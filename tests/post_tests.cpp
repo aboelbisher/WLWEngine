@@ -140,30 +140,31 @@ TEST_CASE("chain targets") {
   chain.Add(Pass(0.5f));
   chain.Add(Pass());
   const rendering::RenderTargetSettings scene{TextureFormat::RGBA8, true, /*depth=*/true};
-  const PostPlan& plan = chain.Prepare({200, 100}, scene);
-  CHECK((plan.steps.size() == 3 && chain.TargetCount() == 2));
-  CHECK((chain.Target(0).Width() == 100 && chain.Target(0).Height() == 50));
-  CHECK((chain.SceneTarget().Width() == 200 && chain.SceneTarget().Settings().depth));
+  const PostPlan& plan = chain.Internal().Prepare({200, 100}, scene);
+  CHECK((plan.steps.size() == 3 && chain.Internal().TargetCount() == 2));
+  CHECK((chain.Internal().Target(0).Width() == 100 && chain.Internal().Target(0).Height() == 50));
+  CHECK((chain.Internal().SceneTarget().Width() == 200 && chain.Internal().SceneTarget().Settings().depth));
 
   // The same size again: the same textures (nothing made per frame).
-  const rendering::RenderTarget* first = &chain.Target(0);
-  const rendering::RenderTarget* scene_target = &chain.SceneTarget();
-  chain.Prepare({200, 100}, scene);
-  CHECK((&chain.Target(0) == first && &chain.SceneTarget() == scene_target));
+  const rendering::RenderTarget* first = &chain.Internal().Target(0);
+  const rendering::RenderTarget* scene_target = &chain.Internal().SceneTarget();
+  chain.Internal().Prepare({200, 100}, scene);
+  CHECK((&chain.Internal().Target(0) == first && &chain.Internal().SceneTarget() == scene_target));
 
   // A new size: the same textures, resized (materials holding them keep working).
-  chain.Prepare({400, 300}, scene);
-  CHECK((&chain.Target(0) == first && chain.Target(0).Width() == 200 && chain.Target(0).Height() == 150));
-  CHECK((&chain.SceneTarget() == scene_target && chain.SceneTarget().Height() == 300));
+  chain.Internal().Prepare({400, 300}, scene);
+  CHECK((&chain.Internal().Target(0) == first && chain.Internal().Target(0).Width() == 200 &&
+         chain.Internal().Target(0).Height() == 150));
+  CHECK((&chain.Internal().SceneTarget() == scene_target && chain.Internal().SceneTarget().Height() == 300));
 
   // If the GPU fell back to RGBA8, the targets aren't remade every frame.
-  chain.SceneTarget().SetFormat(TextureFormat::RGBA8);
+  chain.Internal().SceneTarget().Internal().SetFormat(TextureFormat::RGBA8);
   const rendering::RenderTargetSettings hdr{TextureFormat::RGBA16F, true, true};
-  chain.Prepare({400, 300}, hdr);
-  const rendering::RenderTarget* hdr_target = &chain.SceneTarget();
-  chain.SceneTarget().SetFormat(TextureFormat::RGBA8);  // what the renderer does on such a GPU
-  chain.Prepare({400, 300}, hdr);
-  CHECK(&chain.SceneTarget() == hdr_target);
+  chain.Internal().Prepare({400, 300}, hdr);
+  const rendering::RenderTarget* hdr_target = &chain.Internal().SceneTarget();
+  chain.Internal().SceneTarget().Internal().SetFormat(TextureFormat::RGBA8);  // what the renderer does on such a GPU
+  chain.Internal().Prepare({400, 300}, hdr);
+  CHECK(&chain.Internal().SceneTarget() == hdr_target);
 
   chain.Clear();
   CHECK(chain.Empty());
@@ -191,16 +192,18 @@ TEST_CASE("render scale upscale") {
   // The chain: the scene picture at the render size, re-planned when it changes.
   rendering::PostChain chain;
   const rendering::RenderTargetSettings scene{TextureFormat::RGBA8, true, /*depth=*/true};
-  const PostPlan& plan = chain.Prepare({200, 100}, scene, {100, 50});
+  const PostPlan& plan = chain.Internal().Prepare({200, 100}, scene, {100, 50});
   CHECK((plan.steps.size() == 1 && plan.steps[0].pass == rendering::kUpscalePass));
-  CHECK((chain.SceneTarget().Width() == 100 && chain.SceneTarget().Height() == 50 && chain.TargetCount() == 0));
-  const rendering::RenderTarget* scene_target = &chain.SceneTarget();
+  CHECK((chain.Internal().SceneTarget().Width() == 100 && chain.Internal().SceneTarget().Height() == 50 &&
+         chain.Internal().TargetCount() == 0));
+  const rendering::RenderTarget* scene_target = &chain.Internal().SceneTarget();
   // Asked for at the same size (a screen without a depth buffer draws through its picture): still
   // one copy, since the picture must reach the destination.
-  const PostPlan& same = chain.Prepare({200, 100}, scene);
+  const PostPlan& same = chain.Internal().Prepare({200, 100}, scene);
   CHECK((same.steps.size() == 1 && same.steps[0].pass == rendering::kUpscalePass &&
          same.steps[0].size == glm::ivec2(200, 100)));
-  CHECK((&chain.SceneTarget() == scene_target && chain.SceneTarget().Width() == 200));  // the same texture, resized
+  CHECK((&chain.Internal().SceneTarget() == scene_target &&
+         chain.Internal().SceneTarget().Width() == 200));  // the same texture, resized
 }
 
 TEST_CASE("post shaders") {
@@ -286,11 +289,11 @@ TEST_CASE("scale while running") {
   const scene::Bloom bloom = scene::AddBloom(*view, {.scale = 0.25f, .iterations = 1});
   const rendering::RenderTargetSettings scene{};
   rendering::PostChain& chain = view->Post();
-  chain.Prepare({400, 200}, scene);
-  const int targets = chain.TargetCount();
+  chain.Internal().Prepare({400, 200}, scene);
+  const int targets = chain.Internal().TargetCount();
   auto has_width = [&chain](int width) {
-    for (int i = 0; i < chain.TargetCount(); ++i) {
-      if (chain.Target(i).Width() == width) return true;
+    for (int i = 0; i < chain.Internal().TargetCount(); ++i) {
+      if (chain.Internal().Target(i).Width() == width) return true;
     }
     return false;
   };
@@ -301,9 +304,9 @@ TEST_CASE("scale while running") {
   CHECK(passes[0].scale == 1.0f);  // not the bloom's
   CHECK((passes[1].scale == 0.125f && passes[2].scale == 0.125f && passes[3].scale == 0.125f));
   CHECK((passes[4].material == bloom.combine && passes[4].scale == 1.0f));  // writes the picture
-  const PostPlan& plan = chain.Prepare({400, 200}, scene);
+  const PostPlan& plan = chain.Internal().Prepare({400, 200}, scene);
   CHECK(plan.steps[1].size == glm::ivec2(50, 25));
-  CHECK(chain.TargetCount() == targets);
+  CHECK(chain.Internal().TargetCount() == targets);
   CHECK((has_width(50) && !has_width(100)));
 
   auto liquid = scene::Viewport::Create();

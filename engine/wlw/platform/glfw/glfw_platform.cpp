@@ -337,22 +337,24 @@ class GlfwWindow : public Window {
 
   static void OnKey(GLFWwindow* w, int key, int /*scancode*/, int action, int /*mods*/) {
     if (action == GLFW_REPEAT) return;
-    From(w)->input_.OnKey(MapKey(key), action == GLFW_PRESS);
+    From(w)->input_.Internal().OnKey(MapKey(key), action == GLFW_PRESS);
   }
 
-  static void OnChar(GLFWwindow* w, unsigned int codepoint) { From(w)->input_.OnText(codepoint); }
+  static void OnChar(GLFWwindow* w, unsigned int codepoint) { From(w)->input_.Internal().OnText(codepoint); }
 
   static void OnMouseButton(GLFWwindow* w, int button, int action, int /*mods*/) {
     if (button != GLFW_MOUSE_BUTTON_LEFT) return;
     double x = 0, y = 0;
     glfwGetCursorPos(w, &x, &y);
     if (action == GLFW_PRESS)
-      From(w)->input_.OnPointerDown((float)x, (float)y);
+      From(w)->input_.Internal().OnPointerDown((float)x, (float)y);
     else
-      From(w)->input_.OnPointerUp((float)x, (float)y);
+      From(w)->input_.Internal().OnPointerUp((float)x, (float)y);
   }
 
-  static void OnCursorPos(GLFWwindow* w, double x, double y) { From(w)->input_.OnPointerMove((float)x, (float)y); }
+  static void OnCursorPos(GLFWwindow* w, double x, double y) {
+    From(w)->input_.Internal().OnPointerMove((float)x, (float)y);
+  }
 
   static void OnFramebufferSize(GLFWwindow* w, int width, int height) {
     GlfwWindow* self = From(w);
@@ -363,7 +365,7 @@ class GlfwWindow : public Window {
   void UpdateInputSurface() {
     int w = 0, h = 0;
     glfwGetWindowSize(window_, &w, &h);  // cursor coordinates are in window units, not pixels
-    input_.SetSurfaceSize((float)w, (float)h);
+    input_.Internal().SetSurfaceSize((float)w, (float)h);
   }
 
   // Moved, maybe to a monitor with another refresh rate.
@@ -424,7 +426,7 @@ class GlfwWindow : public Window {
 
 std::unique_ptr<Window> Window::Create(const Vec2& size, const std::string& title, const WindowOptions& options) {
   auto window = std::make_unique<GlfwWindow>(size, title, options);
-  window->SetScreenHasDepth(options.depth);
+  window->Internal().SetScreenHasDepth(options.depth);
   return window;
 }
 

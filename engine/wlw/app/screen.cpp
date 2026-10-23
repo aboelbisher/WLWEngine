@@ -132,6 +132,7 @@ void ScreenStack::Apply(Op op) {
   }
   if (!op.screen) return;
   op.screen->stack_ = this;
+  op.screen->app_ = app_;
   screens_.push_back(std::move(op.screen));
   screens_.back()->OnEnter();
 }

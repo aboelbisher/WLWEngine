@@ -34,7 +34,7 @@ inline std::vector<uint8_t> RadialFalloffPixels(int size) {
 // The dot above as a texture: glows, light spots, soft shadows, particles. Drawn Additive (e.g.
 // Canvas::Image with a tint), overlapping dots add up into a smooth density field: threshold it
 // and you get metaballs (a liquid surface). Smooth sampling, clamped at the edges. Make it once.
-inline std::shared_ptr<rendering::WTexture2D> RadialFalloffTexture(int size = 64) {
+inline std::unique_ptr<rendering::WTexture2D> RadialFalloffTexture(int size = 64) {
   const std::vector<uint8_t> pixels = RadialFalloffPixels(size);
   return rendering::WTexture2D::Create(std::max(size, 1), std::max(size, 1),
                                        {rendering::TextureFormat::RGBA8, /*smooth=*/true, /*repeat=*/false},

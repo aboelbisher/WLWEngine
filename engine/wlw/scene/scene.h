@@ -15,7 +15,7 @@ namespace wlw::scene {
 // second camera) - see viewport.h.
 class Scene {
  public:
-  static std::shared_ptr<Scene> Create() { return std::make_shared<Scene>(); }
+  static std::unique_ptr<Scene> Create() { return std::make_unique<Scene>(); }
 
   // The node every top-level node hangs under: Root().AddChild(node). It is never drawn itself; leave its
   // transform alone (it would move the whole world).

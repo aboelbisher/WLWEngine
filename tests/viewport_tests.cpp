@@ -61,7 +61,7 @@ TEST_CASE("scene") {
 }
 
 TEST_CASE("viewport shows a shared scene") {
-  auto world = scene::Scene::Create();
+  std::shared_ptr<scene::Scene> world = scene::Scene::Create();
   auto main_view = Offscreen();
   auto minimap = Offscreen();
   CHECK(
@@ -71,13 +71,14 @@ TEST_CASE("viewport shows a shared scene") {
   world->Root().AddChild(std::make_shared<scene::Node3D>());
   CHECK((main_view->GetScene()->NodeCount() == 1 && minimap->GetScene()->NodeCount() == 1));  // same world
 
-  auto camera = scene::Camera3D::Create();
+  std::shared_ptr<scene::Camera3D> camera = scene::Camera3D::Create();
   minimap->SetCamera(camera);
   CHECK(minimap->GetCamera() == camera);
   CHECK(main_view->GetCamera() != nullptr);  // a default camera until SetCamera
 
-  CHECK((!main_view->IsScreen() && main_view->GetTarget() != nullptr));
-  scene::Viewport screen(nullptr, {});
+  CHECK((!main_view->IsScreen() && main_view->Internal().GetTarget() != nullptr));
+  FakeWindow window;
+  const scene::Viewport& screen = window.MainViewport();
   CHECK((screen.IsScreen() && screen.GetTexture() == nullptr));
 }
 
@@ -135,25 +136,25 @@ TEST_CASE("update modes") {
   auto view = Offscreen();
   const glm::ivec2 size{100, 50};
   // Always: every frame.
-  CHECK((view->BeginDraw(size) && view->BeginDraw(size)));
-  CHECK(!view->BeginDraw({0, 0}));  // nothing to draw into
+  CHECK((view->Internal().BeginDraw(size) && view->Internal().BeginDraw(size)));
+  CHECK(!view->Internal().BeginDraw({0, 0}));  // nothing to draw into
 
   // Once: the next frame only, then it keeps its picture (and reports Disabled).
   view->SetUpdateMode(scene::Viewport::UpdateMode::Once);
-  CHECK(view->BeginDraw(size));
+  CHECK(view->Internal().BeginDraw(size));
   CHECK(view->GetUpdateMode() == scene::Viewport::UpdateMode::Disabled);
-  CHECK((!view->BeginDraw(size) && !view->BeginDraw(size)));
+  CHECK((!view->Internal().BeginDraw(size) && !view->Internal().BeginDraw(size)));
   // A resize throws the kept picture away: it's drawn once more at the new size.
-  CHECK(view->BeginDraw({200, 100}));
-  CHECK(!view->BeginDraw({200, 100}));
+  CHECK(view->Internal().BeginDraw({200, 100}));
+  CHECK(!view->Internal().BeginDraw({200, 100}));
 
   // Disabled from the start: never drawn, not even after a resize (there was no picture to keep).
   auto never = Offscreen();
   never->SetUpdateMode(scene::Viewport::UpdateMode::Disabled);
-  CHECK((!never->BeginDraw(size) && !never->BeginDraw({300, 300})));
+  CHECK((!never->Internal().BeginDraw(size) && !never->Internal().BeginDraw({300, 300})));
   // Once, again later: draws one more frame.
   never->SetUpdateMode(scene::Viewport::UpdateMode::Once);
-  CHECK((never->BeginDraw({300, 300}) && !never->BeginDraw({300, 300})));
+  CHECK((never->Internal().BeginDraw({300, 300}) && !never->Internal().BeginDraw({300, 300})));
 }
 
 TEST_CASE("clear color") {
@@ -165,25 +166,27 @@ TEST_CASE("clear color") {
 
 TEST_CASE("window viewports") {
   FakeWindow window;
-  CHECK((window.GetScreen().IsScreen() && window.GetScreen().GetScene() != nullptr));
-  CHECK(window.GetScreen().GetClearColor()->a == 1.0f);  // the screen is opaque
+  CHECK((window.MainViewport().IsScreen() && window.MainViewport().GetScene() != nullptr));
+  CHECK(window.MainViewport().GetClearColor()->a == 1.0f);  // the screen is opaque
 
   auto first = Offscreen("first");
   auto second = Offscreen("second");
   auto third = Offscreen("third");
   window.AddViewport(first);
-  const int id_second = window.AddViewport(second);
+  window.AddViewport(second);
   window.AddViewport(third);
   // Drawn in the order added.
-  CHECK(window.GetViewports().size() == 3);
-  CHECK((window.GetViewports()[0].second == first && window.GetViewports()[2].second == third));
-  window.RemoveViewport(id_second);
-  CHECK((window.GetViewports().size() == 2 && window.GetViewports()[1].second == third));
+  CHECK(window.Viewports().size() == 3);
+  CHECK((window.Viewports()[0] == first && window.Viewports()[2] == third));
+  // Removed by object (like Node3D::RemoveChild): handed back, the others keep their order.
+  CHECK(window.RemoveViewport(second.get()) == second);
+  CHECK((window.Viewports().size() == 2 && window.Viewports()[1] == third));
+  CHECK(window.RemoveViewport(second.get()) == nullptr);  // not in the window any more
 
   // Shutdown: scenes and viewports are let go (the game may still hold its own references).
-  window.GetScreen().GetScene()->Root().AddChild(std::make_shared<scene::Node3D>());
-  window.ReleaseScenes();
-  CHECK((window.GetViewports().empty() && window.GetScreen().GetScene() == nullptr));
+  window.MainViewport().GetScene()->Root().AddChild(std::make_shared<scene::Node3D>());
+  window.Internal().ReleaseScenes();
+  CHECK((window.Viewports().empty() && window.MainViewport().GetScene() == nullptr));
 }
 
 TEST_CASE("canvas matches screen units") {
@@ -194,8 +197,8 @@ TEST_CASE("canvas matches screen units") {
   const glm::vec2 screen{1080.0f, 2400.0f};
   const glm::vec2 reference{360.0f, 640.0f};
   ui::Canvas screen_canvas;
-  screen_canvas.BeginFrame(screen, reference);
-  view->GetCanvas().BeginFrame(glm::vec2(view->PixelSize(screen)), reference);
+  screen_canvas.Internal().BeginFrame(screen, reference);
+  view->GetCanvas().Internal().BeginFrame(glm::vec2(view->PixelSize(screen)), reference);
   CHECK(Near(view->GetCanvas().Size().x, screen_canvas.Size().x, 0.01f));
   CHECK(Near(view->GetCanvas().Size().y, screen_canvas.Size().y, 0.01f));
   CHECK(Near(view->GetCanvas().PixelsPerUnit() * 2.0f, screen_canvas.PixelsPerUnit(), 0.01f));
@@ -216,7 +219,7 @@ TEST_CASE("canvas layers") {
 
   auto order_of = [&](CanvasMode mode) {
     std::vector<const ui::Canvas*> drawn;
-    view->ForEachCanvasLayer(mode, [&](const ui::Canvas& canvas) { drawn.push_back(&canvas); });
+    view->Internal().ForEachCanvasLayer(mode, [&](const ui::Canvas& canvas) { drawn.push_back(&canvas); });
     return drawn;
   };
   // Picture layers by order (they go into the picture, before the post passes)...
@@ -225,11 +228,11 @@ TEST_CASE("canvas layers") {
   CHECK(order_of(CanvasMode::Overlay) == std::vector<const ui::Canvas*>({&backdrop, &ui, &hud, &popup}));
 
   // Every layer is started each frame at the viewport's size, in the same units.
-  view->BeginCanvases({540.0f, 1200.0f}, {360.0f, 640.0f});
+  view->Internal().BeginCanvases({540.0f, 1200.0f}, {360.0f, 640.0f});
   CHECK((Near(glow.Size().x, ui.Size().x) && Near(popup.Size().y, ui.Size().y)));
   glow.FillRect({{0, 0}, {10, 10}}, {1, 1, 1, 1});
   CHECK((glow.QuadCount() == 1 && ui.QuadCount() == 0));  // separate draw lists
-  view->BeginCanvases({540.0f, 1200.0f}, {360.0f, 640.0f});
+  view->Internal().BeginCanvases({540.0f, 1200.0f}, {360.0f, 640.0f});
   CHECK(glow.QuadCount() == 0);
 
   // References stay valid as layers come and go; the default layer can't be removed.

@@ -11,10 +11,12 @@ add_executable(wlw_tests
   test_main.cpp
   test_helpers.h
   anim_tests.cpp
+  app_config_tests.cpp
   audio_tests.cpp
   blend_tests.cpp
   camera_tests.cpp
   color_tests.cpp
+  connection_tests.cpp
   console_tests.cpp
   conventions_tests.cpp
   core_tests.cpp

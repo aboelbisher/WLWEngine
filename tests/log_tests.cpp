@@ -24,10 +24,10 @@ namespace {
 // For one case: no console output, records collected, every level back to Info afterwards.
 struct Quiet {
   std::vector<LogRecord> records;
-  int sink = AddLogSink([this](const LogRecord& record) { records.push_back(record); });
+  core::Connection sink = AddLogSink([this](const LogRecord& record) { records.push_back(record); });
   Quiet() { SetPlatformLogOutput(false); }
   ~Quiet() {
-    RemoveLogSink(sink);
+    sink.Disconnect();
     SetLogLevel(LogLevel::Info);
     SetPlatformLogOutput(true);
   }
@@ -115,10 +115,13 @@ TEST_CASE("sinks get the records the filters let through") {
 TEST_CASE("a removed sink gets nothing") {
   Quiet quiet;
   int calls = 0;
-  const int id = AddLogSink([&calls](const LogRecord&) { ++calls; });
+  core::Connection connection = AddLogSink([&calls](const LogRecord&) { ++calls; });
   WLW_LOG_INFO("one");
-  RemoveLogSink(id);
+  CHECK(connection.Connected());
+  connection.Disconnect();
+  CHECK(!connection.Connected());
   WLW_LOG_INFO("two");
+  connection.Disconnect();  // twice: nothing happens
   CHECK(calls == 1);
   CHECK(quiet.records.size() == 2);
 }

@@ -15,10 +15,10 @@ namespace {
 // Collects what the console logs, without console output.
 struct Output {
   std::vector<LogRecord> records;
-  int sink = AddLogSink([this](const LogRecord& record) { records.push_back(record); });
+  core::Connection sink = AddLogSink([this](const LogRecord& record) { records.push_back(record); });
   Output() { SetPlatformLogOutput(false); }
   ~Output() {
-    RemoveLogSink(sink);
+    sink.Disconnect();
     SetPlatformLogOutput(true);
   }
   bool Contains(const std::string& text) const {

@@ -32,7 +32,7 @@ bool CanRenderTo(TextureFormat format);
 // Whether the GL context has this extension (e.g. "GL_EXT_disjoint_timer_query").
 bool HasGLExtension(const char* extension);
 
-// Makes the GPU side of every resource alive now (Resource::ForEachAlive): compiles shaders and
+// Makes the GPU side of every resource alive now (Resource::InternalAccess::ForEachAlive): compiles shaders and
 // uploads textures, so the first frames don't stall on it. Afterwards, a shader compiled when first
 // drawn is logged ("compiled during play"). Returns how many shaders it compiled.
 int PrepareAliveResources();

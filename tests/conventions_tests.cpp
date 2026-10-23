@@ -144,35 +144,35 @@ TEST_CASE("particles fall down -Z and rest on a floor at a height in z") {
 
 TEST_CASE("primitives: counter-clockwise outward faces, standing on Z") {
   const std::pair<std::string, std::function<MeshPtr()>> meshes[] = {
-      {"cube", [] { return utils::createCubeWithNormals(1.0f); }},
-      {"beveled cube", [] { return utils::createBeveledCubeWithNormals(1.0f, 0.1f); }},
-      {"pyramid frustum", [] { return utils::createPyramidFrustumWithNormals(2.0f, 1.0f, 1.5f); }},
-      {"sphere", [] { return utils::createSphereWithNormals(1.0f, 8, 16); }},
-      {"cylinder", [] { return utils::createCylinderWithNormals(0.5f, 2.0f, 12); }},
-      {"gem", [] { return utils::createGemWithNormals(0.5f, 1.0f); }},
+      {"cube", [] { return utils::CubeMesh(1.0f); }},
+      {"beveled cube", [] { return utils::BeveledCubeMesh(1.0f, 0.1f); }},
+      {"pyramid frustum", [] { return utils::PyramidFrustumMesh(2.0f, 1.0f, 1.5f); }},
+      {"sphere", [] { return utils::SphereMesh(1.0f, 8, 16); }},
+      {"cylinder", [] { return utils::CylinderMesh(0.5f, 2.0f, 12); }},
+      {"gem", [] { return utils::GemMesh(0.5f, 1.0f); }},
   };
   for (const auto& [name, make] : meshes) {
     CAPTURE(name);
     CHECK(InwardTriangles(make()) == 0);
   }
   // The tall ones are tall along Z.
-  const AABB cylinder = utils::createCylinderWithNormals(0.5f, 2.0f, 12)->GetLocalAABB();
+  const AABB cylinder = utils::CylinderMesh(0.5f, 2.0f, 12)->GetLocalAABB();
   CHECK((Near(cylinder.max.z, 1.0f) && Near(cylinder.max.x, 0.5f, 1e-3f) && Near(cylinder.max.y, 0.5f, 1e-2f)));
-  const AABB gem = utils::createGemWithNormals(0.5f, 1.0f)->GetLocalAABB();
+  const AABB gem = utils::GemMesh(0.5f, 1.0f)->GetLocalAABB();
   CHECK((Near(gem.max.z, 0.5f) && Near(gem.min.z, -0.5f) && Near(gem.max.x, 0.25f)));
-  const AABB pyramid = utils::createPyramidFrustumWithNormals(2.0f, 1.0f, 1.5f)->GetLocalAABB();
+  const AABB pyramid = utils::PyramidFrustumMesh(2.0f, 1.0f, 1.5f)->GetLocalAABB();
   CHECK(Near(pyramid.max.z, 0.75f));
   // (Each mesh in a local: a range-for over a temporary's member would dangle before C++23.)
-  const MeshPtr sphere = utils::createSphereWithNormals(1.0f, 8, 16);
+  const MeshPtr sphere = utils::SphereMesh(1.0f, 8, 16);
   bool pole = false;
   for (const auto& v : sphere->GetVertices()) pole |= NearVec(v.position, kUp);
   CHECK(pole);
   // The plane is the ground: XY, facing +Z.
-  const MeshPtr plane = utils::createPlaneWithNormals(2.0f, 2.0f);
+  const MeshPtr plane = utils::PlaneMesh(2.0f, 2.0f);
   for (const auto& v : plane->GetVertices()) CHECK(v.normal == kUp);
   // The cube's front (as written, +Z) faces kModelFront.
   bool front = false;
-  const MeshPtr cube = utils::createCubeWithNormals(1.0f);
+  const MeshPtr cube = utils::CubeMesh(1.0f);
   for (const auto& v : cube->GetVertices()) front |= NearVec(v.normal, kModelFront);
   CHECK(front);
 }

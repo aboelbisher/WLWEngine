@@ -1,8 +1,8 @@
 #pragma once
 
+#include <functional>
 #include <memory>
 #include <string>
-#include <functional>
 #include <utility>
 #include <vector>
 
@@ -10,6 +10,8 @@
 #include "wlw/app/screen.h"
 #include "wlw/app/system.h"
 #include "wlw/app/time.h"
+#include "wlw/audio/audio_config.h"
+#include "wlw/core/connection.h"
 #include "wlw/core/console.h"
 #include "wlw/core/cvar.h"
 #include "wlw/core/fixed_timestep.h"
@@ -33,22 +35,49 @@ class DebugUI;
 
 namespace app {
 
-struct AppConfig {
-  std::string title = "WLWengine";
-  Vec2 window_size = {1280, 720};
-  // false: the screen surface gets no depth buffer (scene::WindowOptions::depth): saves its memory
-  // for a game whose screen always has post passes or a render scale below 1 (else it costs a copy).
-  bool screen_depth = true;
-  float fixed_timestep = 1.0f / 60.0f;  // simulation rate: 60 steps per second
-  float max_frame_time = 0.25f;         // longer frames are clamped (see FixedTimestep)
+// ---- How the app starts (AppConfig and its groups) ----
+struct WindowConfig {
+  std::string title;           // the title bar's text (desktop); empty = AppConfig::name
+  Vec2 size = {1280, 720};     // desktop window size in pixels (phones: always full screen)
+  bool stats_in_title = true;  // "title | 60 fps | 16.7 ms" (desktop)
+};
+
+struct GraphicsConfig {
   // Frames per second the screen gets (core/frame_pacing.h): 30/60/90/120..., core::kTargetDisplayRate
   // (0) = the display's own rate, core::kTargetUncapped (-1) = no limit (desktop profiling). Phones
   // can't go past the display's rate. Change it later with Application::SetTargetFps.
   int target_fps = 60;
-  bool show_stats_in_title = true;  // "title | 60 fps | 16.7 ms" (desktop)
-  // The UI's virtual resolution: the Canvas is scaled so this area fits on any screen.
-  Vec2 ui_reference_size = {640, 360};
+  // false: the screen surface gets no depth buffer (scene::WindowOptions::depth): saves its memory
+  // for a game whose screen always has post passes or a render scale below 1 (else it costs a copy).
+  bool screen_depth = true;
 };
+
+using AudioConfig = audio::AudioConfig;  // enabled, max_voices (audio/audio.h)
+
+struct TimeConfig {
+  float fixed_step = 1.0f / 60.0f;  // simulation rate (OnFixedUpdate): 60 steps per second
+  float max_frame_time = 0.25f;     // longer frames are clamped (see FixedTimestep)
+};
+
+struct UIConfig {
+  // The UI's virtual resolution: the Canvas is scaled so this area fits on any screen.
+  Vec2 reference_size = {640, 360};
+};
+
+struct AppConfig {
+  // The game's name: its save folder (quality.txt, cvars.cfg, the debug log; desktop and Android)
+  // and the default window title. Changing it moves the saves.
+  std::string name = "WLWengine";
+  WindowConfig window;
+  GraphicsConfig graphics;
+  AudioConfig audio;
+  TimeConfig time;
+  UIConfig ui;
+};
+
+// The config the app runs with: the defaults that follow other fields filled in (an empty window
+// title = the name). The Application calls it; it's a plain function for tests.
+AppConfig ResolveAppConfig(AppConfig config);
 
 // The app: owns the services (engine and renderer, window, input, audio, screens, time) and runs
 // the main loop. Games don't subclass it: they add Systems (always running) and push Screens (one
@@ -104,7 +133,7 @@ class Application final {
   void Quit() { quit_requested_ = true; }
 
   // ---- Frame pacing ----
-  // The frame-rate target (see AppConfig::target_fps), e.g. from a settings menu: 30 saves battery.
+  // The frame-rate target (see AppConfig::graphics.target_fps), e.g. from a settings menu: 30 saves battery.
   // The same as the cvar r.target_fps. Quality's budget follows the rate frames are paced to.
   void SetTargetFps(int fps);
   int TargetFps() const;
@@ -151,8 +180,8 @@ class Application final {
   bool quality_timing_ = false;        // GPU timing turned on for it (once: the debug panel may turn it off)
   float quality_render_scale_ = 0.0f;  // the last one applied to the screen (0: none yet)
   bool quit_requested_ = false;
-  std::string cvar_file_;                                  // <save dir>/cvars.cfg: the player's Saved cvars
-  std::vector<std::pair<CVarBase*, int>> cvar_callbacks_;  // removed in the destructor
+  std::string cvar_file_;                               // <save dir>/cvars.cfg: the player's Saved cvars
+  std::vector<core::ScopedConnection> cvar_callbacks_;  // removed in the destructor
   std::unique_ptr<ConsoleCommand> quit_command_;
 
   // Stats accumulators, folded into time_ twice a second.

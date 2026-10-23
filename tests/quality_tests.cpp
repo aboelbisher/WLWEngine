@@ -22,7 +22,7 @@ constexpr float kFrame = 1.0f / 60.0f;
 // `seconds` of frames with these readings (gpu_ms < 0: not measured). Returns the level changes.
 int Run(Quality& quality, float seconds, float gpu_ms, float frame_ms = 16.7f) {
   int changes = 0;
-  for (float t = 0.0f; t < seconds; t += kFrame) changes += quality.Update(kFrame, gpu_ms, frame_ms) ? 1 : 0;
+  for (float t = 0.0f; t < seconds; t += kFrame) changes += quality.Internal().Update(kFrame, gpu_ms, frame_ms) ? 1 : 0;
   return changes;
 }
 
@@ -30,7 +30,7 @@ int Run(Quality& quality, float seconds, float gpu_ms, float frame_ms = 16.7f) {
 
 TEST_CASE("starts highest and settles") {
   Quality quality;
-  CHECK((!quality.Configured() && !quality.Update(kFrame, 50.0f, 50.0f)));  // nothing until configured
+  CHECK((!quality.Configured() && !quality.Internal().Update(kFrame, 50.0f, 50.0f)));  // nothing until configured
   std::vector<int> seen;
   quality.OnChange([&seen](int level) { seen.push_back(level); });
   quality.Configure({.levels = 3});
@@ -67,7 +67,7 @@ TEST_CASE("steps down when frames are late") {
   // A one-frame hitch (a level loading) counts as at most two budgets and fades: no step.
   Quality hitch;
   hitch.Configure({.levels = 3, .settle_seconds = 0.0f});
-  hitch.Update(kFrame, 5.0f, 2000.0f);
+  hitch.Internal().Update(kFrame, 5.0f, 2000.0f);
   CHECK((Run(hitch, 5.0f, 5.0f) == 0 && hitch.Level() == 2));
 }
 
@@ -109,21 +109,21 @@ TEST_CASE("the budget follows the frame-rate target") {
   CHECK(Near(quality.BudgetMs(), 1000.0f / 60.0f));  // 60 fps until told otherwise
   Run(quality, 1.5f, 10.0f);
   // 30 fps (a battery saver): 33.3 ms to fit in; the readings so far meant nothing, so it settles again.
-  quality.SetTargetFrameMs(1000.0f / 30.0f);
+  quality.Internal().SetTargetFrameMs(1000.0f / 30.0f);
   CHECK(Near(quality.BudgetMs(), 1000.0f / 30.0f));
   CHECK((Run(quality, 0.9f, 30.0f, 33.3f) == 0 && quality.SecondsOver() == 0.0f));  // settling
   // 25 ms of GPU work: too much for 60 fps, plenty of time at 30.
   CHECK((Run(quality, 5.0f, 25.0f, 33.3f) == 0 && quality.Level() == 2));
   // 120 fps: 8.3 ms. The same work is now far over it: down after settling (1 s) + 2 s of it. The
   // same rate again on the way (float noise) doesn't restart the readings.
-  quality.SetTargetFrameMs(1000.0f / 120.0f);
+  quality.Internal().SetTargetFrameMs(1000.0f / 120.0f);
   CHECK(Run(quality, 1.5f, 25.0f, 8.3f) == 0);
-  quality.SetTargetFrameMs(1000.0f / 120.0f + 0.001f);
+  quality.Internal().SetTargetFrameMs(1000.0f / 120.0f + 0.001f);
   CHECK((Run(quality, 2.0f, 25.0f, 8.3f) == 1 && quality.Level() == 1));
   // A game's own budget_ms wins over the target.
   Quality own;
   own.Configure({.levels = 3, .budget_ms = 11.1f});
-  own.SetTargetFrameMs(1000.0f / 30.0f);
+  own.Internal().SetTargetFrameMs(1000.0f / 30.0f);
   CHECK(Near(own.BudgetMs(), 11.1f));
 }
 
@@ -167,7 +167,7 @@ TEST_CASE("saved between launches") {
   std::filesystem::remove(file);
   {
     Quality quality;
-    quality.SetSaveFile(file.string());
+    quality.Internal().SetSaveFile(file.string());
     quality.Configure({.levels = 3, .settle_seconds = 0.0f});
     CHECK(quality.Level() == 2);  // nothing saved: the highest
     Run(quality, 2.5f, 15.0f);
@@ -176,19 +176,19 @@ TEST_CASE("saved between launches") {
   }
   {
     Quality next_launch;
-    next_launch.SetSaveFile(file.string());
+    next_launch.Internal().SetSaveFile(file.string());
     next_launch.Configure({.levels = 3});
     CHECK(next_launch.Level() == 1);
   }
   {
     Quality fewer_levels;  // the game changed its levels since: clamped
-    fewer_levels.SetSaveFile(file.string());
+    fewer_levels.Internal().SetSaveFile(file.string());
     fewer_levels.Configure({.levels = 1});
     CHECK(fewer_levels.Level() == 0);
   }
   {
     Quality forced;  // the game's start wins over the saved one
-    forced.SetSaveFile(file.string());
+    forced.Internal().SetSaveFile(file.string());
     forced.Configure({.levels = 3, .start = 2});
     CHECK(forced.Level() == 2);
   }

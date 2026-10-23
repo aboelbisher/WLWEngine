@@ -16,7 +16,7 @@ class WLW_DEPRECATED(0.3,
                      "Use Camera3D: SetOrthographic(height), SetFrameAspect(width / height), "
                      "SetFitMode(Contain), SetPosition + LookAt(target, up)") OrthographicCamera : public Camera3D {
  public:
-  static std::shared_ptr<OrthographicCamera> Create() { return std::make_shared<OrthographicCamera>(); }
+  static std::unique_ptr<OrthographicCamera> Create() { return std::make_unique<OrthographicCamera>(); }
 
   OrthographicCamera() {
     SetOrthographic(10.0f, 0.1f, 100.0f);

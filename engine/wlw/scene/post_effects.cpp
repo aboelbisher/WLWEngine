@@ -20,7 +20,7 @@ std::shared_ptr<rendering::Shader> EngineShader(const std::string& file) {
   static std::unordered_map<std::string, std::weak_ptr<rendering::Shader>> made;
   if (auto shader = made[file].lock()) return shader;
   const std::string* text = rendering::FindShaderFile(file);
-  auto shader = rendering::Shader::Create(text ? *text : std::string(), file);
+  std::shared_ptr<rendering::Shader> shader = rendering::Shader::Create(text ? *text : std::string(), file);
   made[file] = shader;
   return shader;
 }

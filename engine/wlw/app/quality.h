@@ -66,16 +66,10 @@ class Quality {
   // The frame time it fits in: settings' budget_ms, else the frame-rate target's (SetTargetFrameMs).
   float BudgetMs() const { return settings_.budget_ms > 0.0f ? settings_.budget_ms : target_frame_ms_; }
 
-  // ---- For the Application (and tests) ----
-  // Where the level is kept between launches (empty: nowhere). Set before Configure.
-  void SetSaveFile(std::string path) { save_file_ = std::move(path); }
-  // The frame time of the rate frames are paced to (the Application keeps it in step with the
-  // window). A change while it is the budget restarts the readings (Settle).
-  void SetTargetFrameMs(float ms);
-  // Fed once per frame.
-  // `dt` seconds of real time; `gpu_ms` the GPU's time for the frame (< 0: not measured);
-  // `frame_ms` the time between frames. Returns true when the level changed (the callback has run).
-  bool Update(float dt, float gpu_ms, float frame_ms);
+  class InternalAccess;
+  // Feeding it (the Application's, and tests'): see InternalAccess below.
+  InternalAccess Internal();
+
   // Ignore readings for settle_seconds (after the app was in the background, a level loaded...).
   void Settle();
 
@@ -89,6 +83,8 @@ class Quality {
  private:
   void SetLevel(int level);
   void Save() const;
+  void SetTargetFrameMs(float ms);
+  bool Update(float dt, float gpu_ms, float frame_ms);
 
   QualitySettings settings_;
   std::string save_file_;
@@ -104,5 +100,25 @@ class Quality {
   float under_ = 0.0f;
   std::array<int, kMaxLevels> failures_{};  // times each level was stepped down from
 };
+
+// For the Application (and tests), not games.
+class Quality::InternalAccess {
+ public:
+  explicit InternalAccess(Quality& quality) : quality_(quality) {}
+
+  // Where the level is kept between launches (empty: nowhere). Set before Configure.
+  void SetSaveFile(std::string path) const { quality_.save_file_ = std::move(path); }
+  // The frame time of the rate frames are paced to (the Application keeps it in step with the
+  // window). A change while it is the budget restarts the readings (Settle).
+  void SetTargetFrameMs(float ms) const { quality_.SetTargetFrameMs(ms); }
+  // Fed once per frame: `dt` seconds of real time; `gpu_ms` the GPU's time for the frame (< 0: not
+  // measured); `frame_ms` the time between frames. Returns true when the level changed (the callback has run).
+  bool Update(float dt, float gpu_ms, float frame_ms) const { return quality_.Update(dt, gpu_ms, frame_ms); }
+
+ private:
+  Quality& quality_;
+};
+
+inline Quality::InternalAccess Quality::Internal() { return InternalAccess(*this); }
 
 }  // namespace wlw::app

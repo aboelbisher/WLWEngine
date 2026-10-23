@@ -25,7 +25,7 @@ namespace {
 std::shared_ptr<scene::Scene> GridScene(int count) {
   auto scene = scene::Scene::Create();
   auto model = std::make_shared<core::Model<core::Vertex3D>>();
-  model->meshes.push_back(utils::createCubeWithNormals(0.8f));
+  model->meshes.push_back(utils::CubeMesh(0.8f));
   const int side = static_cast<int>(std::ceil(std::sqrt(static_cast<float>(count))));
   for (int i = 0; i < count; ++i) {
     auto node = std::make_shared<scene::MeshInstance3D>();
@@ -143,7 +143,7 @@ void InstanceBoundsBenchmark(bench::Context& ctx) {
   constexpr size_t kCopies = 5000;
   scene::MultiMeshInstance3D node;
   auto model = std::make_shared<core::Model<core::Vertex3D>>();
-  model->meshes.push_back(utils::createCubeWithNormals(1.0f));
+  model->meshes.push_back(utils::CubeMesh(1.0f));
   node.SetModel(model);
   core::Random rng(42);
   for (rendering::Instance& copy : node.WriteInstances(kCopies)) {

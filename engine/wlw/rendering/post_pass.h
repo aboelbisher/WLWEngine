@@ -107,7 +107,11 @@ class PostChain {
     planned_ = false;
   }
 
-  // ---- For the renderer ----
+  class InternalAccess;
+  // Engine-only parts (the renderer's): see InternalAccess below.
+  InternalAccess Internal();
+
+ private:
   // The plan for a viewport of `pixels`, and the textures it needs at their sizes (re-planned only
   // when the passes or a size changed; errors are logged then). The scene picture's target gets
   // `scene` (format, smooth, depth) and `scene_pixels` (the render size; {0, 0} = `pixels`). The plan
@@ -122,7 +126,6 @@ class PostChain {
   }
   int TargetCount() const { return static_cast<int>(targets_.size()); }
 
- private:
   std::vector<PostPass> passes_;
   PostPlan plan_;
   bool planned_ = false;
@@ -133,5 +136,25 @@ class PostChain {
   std::vector<std::shared_ptr<RenderTarget>> targets_;
   std::vector<TextureFormat> target_formats_;  // as asked for
 };
+
+// For the renderer, not games (see the private members of the same names for what they do).
+class PostChain::InternalAccess {
+ public:
+  explicit InternalAccess(PostChain& chain) : chain_(chain) {}
+
+  const PostPlan& Prepare(glm::ivec2 pixels, const RenderTargetSettings& scene,
+                          glm::ivec2 scene_pixels = {0, 0}) const {
+    return chain_.Prepare(pixels, scene, scene_pixels);
+  }
+  RenderTarget& SceneTarget() const { return chain_.SceneTarget(); }
+  RenderTarget& Target(int index) const { return chain_.Target(index); }
+  const std::shared_ptr<WTexture2D>& TextureOf(int index) const { return chain_.TextureOf(index); }
+  int TargetCount() const { return chain_.TargetCount(); }
+
+ private:
+  PostChain& chain_;
+};
+
+inline PostChain::InternalAccess PostChain::Internal() { return InternalAccess(*this); }
 
 }  // namespace wlw::rendering
