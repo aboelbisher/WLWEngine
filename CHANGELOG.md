@@ -9,7 +9,22 @@ to a tag. Until a game ships, APIs change without deprecation shims (the owner's
 listed under **Breaking** with its **Migration**. Shims added before that (`WLW_DEPRECATED`, listed under
 **Deprecated**) are deleted (listed under **Removed**).
 
-## Unreleased
+## 0.3.0 (2026-10-24): Phase 2, core API
+
+The core API the editor will show and edit, made consistent while the games are small: one set of math, colour
+and geometry types in `wlw`; `Node3D` as a plain class with a cached quaternion transform, an ordered hierarchy,
+names, ids and layers; node types (`MeshInstance3D`, `MultiMeshInstance3D`, `SpriteBatch`, lights, `Camera3D`)
+instead of one node that does everything; the **Z-up** conventions (+Z up, +Y forward, right-handed); one set of
+API rules (factories return `unique_ptr`, const-ref getters, remove by object, `core::Connection` callbacks,
+`Internal()` for engine-only methods); the legacy `WLWEngine` path removed; a frame loop of three calls
+(`Init` / `Frame` / `Shutdown`) the platform can drive; Bluzzle, Threadlock and Snake migrated. Details per step below.
+
+- **Breaking** (migration notes in the steps): nearly every public API changed. Most visible: the turn to Z up
+  (2.4: positions, directions, Euler angles, glTF import, default camera and lights); `Node3D` no longer draws
+  (use the node types, 2.3); `GetRotation()` returns a `Quat` and `Translate` uses the node's own axes (2.2);
+  factories return `std::unique_ptr` and `AppConfig` is grouped (2.5); `WLWEngine`, the old cameras, the old
+  vector / colour / geometry types and every 0.2 / 0.3 shim are gone (2.3, 2.6).
+- **Deprecated:** none (the shims announced in 2.1-2.4 were removed in 2.6; no new shims until a game ships).
 
 - ROADMAP.md reordered around the editor (2026-10-21): Phase 2 Core API, then the editor (3 shell and game
   tools, 4 reflection, data and scenes, 5 scene editor), 6 iOS on the current GL renderer, 7 Android platform,

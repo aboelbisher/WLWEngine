@@ -7,15 +7,15 @@ around the editor and iOS ("Why this order"). Work goes one step at a time, in o
 stable: commits name them ("Roadmap 4.3b: ..."). Commits and CHANGELOG entries from before 2026-10-21
 use the old numbers: "Old numbering" at the end maps them.
 
-**Current step:** release v0.3.0 (Phase 2 done), then 3.1 Keys and mouse for tools · **Updated:** 2026-10-24
+**Current step:** 3.1 Keys and mouse for tools (plan in chat first) · **Updated:** 2026-10-24
 
-**Next session:** release v0.3.0 if it isn't out yet (CLAUDE.md "Versioning"), move Bluzzle and Threadlock to the
-  tag (their 2.8 migration commits), then plan 3.1 in chat and wait for the OK.
+**Next session:** plan 3.1 in chat and wait for the OK (v0.3.0 is out; Threadlock moves to the tag when the
+  owner has committed its work in progress).
 
 Where things stand (2026-10-21):
-- Done: Phase 0 = v0.1.0 (2026-10-15), Phase 1 = v0.2.0 (2026-10-18), each step one squashed commit on main named
+- Done: Phase 0 = v0.1.0 (2026-10-15), Phase 1 = v0.2.0 (2026-10-18), Phase 2 = v0.3.0 (2026-10-24), each step one squashed commit on main named
   "Roadmap x.y: ..." with its details and numbers in CHANGELOG.md (0.8 also has a reformat commit, listed in
-  `.git-blame-ignore-revs`). Since v0.2.0, two small additions Threadlock asked for (CHANGELOG "Unreleased"):
+  `.git-blame-ignore-revs`). Since v0.2.0, two small additions Threadlock asked for (CHANGELOG 0.3.0):
   `platform::KeepScreenOn`, `ui::TextStyle::rotation`.
 - Games: Bluzzle (live in Play testing; desktop + Android) and Threadlock (Android) are migrated to the Phase 2
   API (2.8) and move to v0.3.0 with it. Snake (`samples/snake`) only has to keep compiling. Epicycles, Silhouette and Ripple are on old
@@ -249,7 +249,7 @@ licence) for editor UI tests.
 - [x] **1.6 Instances.** *(done 2026-10-16, commit "Roadmap 1.6: instances"; fx/particles instances 5k 315 -> 120 us, render/gather 10k 659 -> 403 us, 52 B per copy; Mali-G78/G76 instanced vertex load/store -1 cycle at full occupancy)* 52-byte instances (3x4 matrix + RGBA8), instance bounds cached on change,
   a `WriteInstances(count)` span API; Bluzzle's particles use it (with its move to v0.2.0).
 
-## Phase 2: Core API (breaking, while the games are small)
+## Phase 2: Core API (breaking, while the games are small; released as v0.3.0, 2026-10-24)
 The editor shows and edits what this phase defines, so it comes first.
 - [x] **2.1 Math, colour, geometry.** *(done 2026-10-23, commit "Roadmap 2.1: math, colour, geometry"; benchmarks within noise of main; GLM_FORCE_CTOR_INIT measured +21-30% on nested transforms, left off)* `wlw/core/math.h` (glm configuration, aliases, helpers);
   `core::Vector2/3` replaced (0.3 shims). `Color`: RGBA as authored (sRGB-encoded; see D8), hex and text, exact sRGB
