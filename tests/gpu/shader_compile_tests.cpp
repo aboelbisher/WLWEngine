@@ -51,6 +51,26 @@ void fragment() {
 }
 )";
 
+// A mediump mesh shader with vertex() that is shadowed (wlw/shadows.glsl in both stages).
+constexpr const char* kShadowed = R"(shader_type mesh;
+precision mediump float;
+#include "wlw/lighting.glsl"
+#include "wlw/shadows.glsl"
+void vertex() {
+  highp vec4 world = WorldPosition(aPos);
+  gl_Position = uViewProjection * world;
+  vWorldPos = world.xyz;
+  vNormal = WorldNormal(aNormal);
+  vUV = aUV;
+  vColor = aColor;
+}
+void fragment() {
+  vec3 normal = normalize(vNormal);
+  float shadow = SceneShadow(vWorldPos, normal);
+  FragColor = vec4(vColor.rgb * SceneLighting(vWorldPos, normal, ViewDirection(vWorldPos), 32.0, shadow), 1.0);
+}
+)";
+
 // A mesh shader without vertex() (the engine's), uModel and uNormalMatrix read in the fragment stage.
 constexpr const char* kDefaultVertex = R"(shader_type mesh;
 uniform float uTime;
@@ -140,6 +160,7 @@ void CompileEverything() {
   }
   game("game_shared_uniforms", kSharedUniforms);
   game("game_default_vertex", kDefaultVertex);
+  game("game_shadowed", kShadowed);
   game("game_mediump", kMediump);
   game("game_sampler_types", kSamplerTypes);
 }

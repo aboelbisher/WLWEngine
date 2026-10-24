@@ -71,9 +71,11 @@ namespace wlw::rendering {
 //                         FragColor is premultiplied alpha (rgb * a); it only blends if the
 //                         material's `blend` isn't Opaque (see blend_mode.h).
 //   Lighting: #include "wlw/lighting.glsl" and multiply by SceneLighting(vWorldPos,
-//   normalize(vNormal), ViewDirection(vWorldPos), shininess, 1.0): the scene's lights, like the
-//   engine's shader. In the shadow pass the node is drawn as its plain mesh (a vertex() that
-//   moves vertices isn't seen there).
+//   normalize(vNormal), ViewDirection(vWorldPos), shininess, shadow): the scene's lights, like the
+//   engine's shader. Shadows: #include "wlw/shadows.glsl" too and pass shadow =
+//   SceneShadow(vWorldPos, normal) (1 when the frame has no shadow light or the node doesn't receive
+//   shadows: SetReceivesShadow), or 1.0. In the shadow pass the node is drawn as its plain mesh (a
+//   vertex() that moves vertices isn't seen there).
 //
 // Post shaders (a viewport's post passes, see rendering/post_pass.h; no vertex()). fragment() runs
 // once per pixel of the pass's output and gets:

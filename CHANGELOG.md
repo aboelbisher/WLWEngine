@@ -9,6 +9,14 @@ to a tag. Until a game ships, APIs change without deprecation shims (the owner's
 listed under **Breaking** with its **Migration**. Shims added before that (`WLW_DEPRECATED`, listed under
 **Deprecated**) are deleted (listed under **Removed**).
 
+## Unreleased
+
+- Game mesh shaders receive shadows: `#include "wlw/shadows.glsl"` and pass `SceneShadow(vWorldPos, normal)` to
+  `SceneLighting` in `fragment()`. The renderer binds the shadow map for them and sets `uReceivesShadow` from the
+  frame's shadow light and `SetReceivesShadow` (before, only the engine's own shader could be shadowed).
+  `ShadowLookupPosition` is available in both stages. Asked for by Bluzzle (a shader background under the board's
+  shadows). Test: a game shader's shadows draw the same picture as the engine's.
+
 ## 0.3.0 (2026-10-24): Phase 2, core API
 
 The core API the editor will show and edit, made consistent while the games are small: one set of math, colour

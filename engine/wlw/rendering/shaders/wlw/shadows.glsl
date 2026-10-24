@@ -1,13 +1,12 @@
 // Shadows from the frame's shadow light (one directional light, wlw/frame.glsl). Include after
-// wlw/frame.glsl. The vertex stage computes where to look a point up; the fragment stage looks.
+// wlw/frame.glsl. The engine's shader computes where to look a point up per vertex and looks per
+// fragment; a game's mesh shader calls SceneShadow() in fragment(), which does both.
 
-#ifdef WLW_VERTEX
 // Where a world point is in the shadow map's space. Pushing it out along the normal keeps a
 // surface from shadowing itself ("shadow acne": it compares against nearly its own depth).
-vec4 ShadowLookupPosition(vec3 world_position, vec3 normal) {
+highp vec4 ShadowLookupPosition(highp vec3 world_position, highp vec3 normal) {
   return uLightSpace * vec4(world_position + normal * uShadowParams.z, 1.0);
 }
-#endif
 
 #ifdef WLW_FRAGMENT
 uniform highp sampler2DShadow uShadowMap;  // texture unit 1
@@ -27,5 +26,16 @@ float ShadowVisibility(highp vec4 light_space_position) {
     }
   }
   return mix(1.0, lit / 9.0, uShadowStrength);
+}
+
+// Game mesh shaders: true when this draw is shadowed (the frame has a shadow light and the node
+// receives shadows, GeometryInstance3D::SetReceivesShadow). Set by the renderer per draw.
+uniform bool uReceivesShadow;
+
+// The shadow at a surface point for a game's mesh shader (1 = lit), to pass to SceneLighting:
+// 1 when the draw isn't shadowed. `normal` is the world normal (unit length).
+float SceneShadow(highp vec3 world_position, highp vec3 normal) {
+  if (!uReceivesShadow) return 1.0;
+  return ShadowVisibility(ShadowLookupPosition(world_position, normal));
 }
 #endif

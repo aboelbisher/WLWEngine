@@ -529,10 +529,14 @@ is ~850 lines of C++ + ~225 of Kotlin).
   double-sided; Lit, SimpleLit and Unlit tiers; a material editor (inspector + preview). From 1.3:
   fp16 can't hold N·H near 1, so the specular terms stay highp or use Filament's form (1 - (N·H)²
   as |N×H|², exact in mediump); malioc checks the result. A way to turn specular off (a specular
-  strength or colour, 0 = no highlight): Bluzzle's floor gets "no shine" from shininess 1000 today
-  and moves to it then. From 1.4: the engine never turns on back-face culling. Single-sided materials want it,
+  strength or colour, 0 = no highlight). From 1.4: the engine never turns on back-face culling. Single-sided materials want it,
   and a mirrored node (det < 0) then needs the front face flipped (`glFrontFace(GL_CW)`), and instanced copies
   that mirror split into their own draw (Godot: `CULL_VARIANT_REVERSED`). Normals already stay outward.
+  Game mesh shaders get a surface entry point too (Godot spatial shaders, Unreal materials, Unity Shader Graph):
+  `surface()` sets albedo / normal / roughness / emission and the engine wraps it in its lighting and shadows, so
+  lighting changes (13.1, cascades, the RHI) reach game shaders without edits. Today's path (`fragment()` calling
+  `SceneLighting` / `SceneShadow`, like Unity's hand-written URP shaders) stays as the full-control option, like
+  Godot's `render_mode unshaded`; a shadow-catcher option (unlit, only darkened by shadows) comes with the tiers.
 - [ ] **13.3 Environment lighting.** Skybox (cube, equirect), procedural sky, IBL (prefiltered
   specular, SH9 irradiance, BRDF LUT; cooked offline, computed at runtime for dynamic skies),
   reflection probes (baked, box-projected, blended).

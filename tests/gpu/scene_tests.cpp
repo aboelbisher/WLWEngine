@@ -155,19 +155,51 @@ TEST_CASE("render scale with post") {
   CHECK((viewport->GetRenderStats().render_width == 128 && viewport->GetRenderStats().post_passes == 6));
 }
 
-TEST_CASE("shadows") {
+namespace {
+
+// Three cubes casting shadows on a ground plane, all drawn with `material`.
+std::shared_ptr<scene::Viewport> ShadowScene(const std::shared_ptr<rendering::Material>& material,
+                                             bool ground_receives = true) {
   auto viewport = MakeViewport();
   viewport->SetCamera(FixedCamera(Vec3{0, -6, 5}, Vec3{0, 0, 0}));
   AddSun(*viewport, 0.3f)->SetCastsShadows(true);
-  auto ground = AddMesh(*viewport, utils::PlaneMesh(8.0f, 8.0f, Color{0.7f, 0.7f, 0.75f, 1.0f}), Opaque(), {0, 0, 0});
-  ground->SetReceivesShadow(true);
+  auto ground = AddMesh(*viewport, utils::PlaneMesh(8.0f, 8.0f, Color{0.7f, 0.7f, 0.75f, 1.0f}), material, {0, 0, 0});
+  ground->SetReceivesShadow(ground_receives);
   for (int i = 0; i < 3; ++i) {
-    auto cube = AddMesh(*viewport, utils::CubeMesh(1.0f, Color{0.3f, 0.6f, 0.9f, 1.0f}), Opaque(),
+    auto cube = AddMesh(*viewport, utils::CubeMesh(1.0f, Color{0.3f, 0.6f, 0.9f, 1.0f}), material,
                         {-1.5f + 1.5f * i, 0.5f - 0.5f * i, 0.5f + 0.5f * i});
     cube->SetCastsShadow(true);
     cube->SetReceivesShadow(true);
   }
-  CheckGolden("shadows", viewport);
+  return viewport;
+}
+
+}  // namespace
+
+TEST_CASE("shadows") { CheckGolden("shadows", ShadowScene(Opaque())); }
+
+TEST_CASE("game shader shadows match the engine's") {
+  // A mesh shader lit and shadowed like the engine's (SceneLighting + SceneShadow) draws the same
+  // picture, and honours SetReceivesShadow. No stored reference: both pictures come from this run.
+  const std::shared_ptr<rendering::Shader> shader = rendering::Shader::Create(R"(shader_type mesh;
+#include "wlw/lighting.glsl"
+#include "wlw/shadows.glsl"
+void fragment() {
+  vec3 normal = normalize(vNormal);
+  float shadow = SceneShadow(vWorldPos, normal);
+  FragColor = vec4(vColor.rgb * SceneLighting(vWorldPos, normal, ViewDirection(vWorldPos), 32.0, shadow), 1.0);
+}
+)");
+  REQUIRE(shader->IsValid());
+  const std::shared_ptr<rendering::Material> game = rendering::ShaderMaterial::Create(shader);
+  SUBCASE("received") {
+    gpu_tests::CheckSamePictures("shadows_game_shader", gpu_tests::Render(ShadowScene(Opaque())),
+                                 gpu_tests::Render(ShadowScene(game)));
+  }
+  SUBCASE("not received") {
+    gpu_tests::CheckSamePictures("shadows_game_shader_off", gpu_tests::Render(ShadowScene(Opaque(), false)),
+                                 gpu_tests::Render(ShadowScene(game, false)));
+  }
 }
 
 TEST_CASE("transparency") {

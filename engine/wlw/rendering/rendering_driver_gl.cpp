@@ -762,7 +762,8 @@ class GLRenderingDriver : public RenderingDriver {
         continue;
       }
       if (item.custom) {
-        UseShaderMaterial(*item.custom, *item.custom_program, slot, IsMultiMesh(*item.node));
+        UseShaderMaterial(*item.custom, *item.custom_program, slot, IsMultiMesh(*item.node),
+                          frame.shadow_active && item.node->ReceivesShadow());
       } else {
         const MeshProgram& program = *item.program;
         state_.UseProgram(program.id);
@@ -891,15 +892,19 @@ class GLRenderingDriver : public RenderingDriver {
     return shader_material;
   }
 
-  // A ShaderMaterial's shader with its node's matrices and its params (the camera and lights come
-  // from the frame block). Its textures start at unit 2: units 0-1 are the mesh texture and the
-  // shadow map, which stay bound for the nodes drawn after.
+  // A ShaderMaterial's shader with its node's matrices, whether it's shadowed (SceneShadow in
+  // wlw/shadows.glsl: the frame has a shadow light and the node receives it) and its params (the
+  // camera and lights come from the frame block). Its textures start at unit 2: units 0-1 are the
+  // mesh texture and the shadow map, which stay bound for the nodes drawn after.
   struct NodeSlot;  // (below)
-  void UseShaderMaterial(const ShaderMaterial& material, const GLShader& shader, const NodeSlot& slot, bool instanced) {
+  void UseShaderMaterial(const ShaderMaterial& material, const GLShader& shader, const NodeSlot& slot, bool instanced,
+                         bool shadowed) {
     state_.UseProgram(shader.Program());
     glUniformMatrix4fv(shader.Location("uModel"), 1, GL_FALSE, glm::value_ptr(slot.model));
     glUniformMatrix3fv(shader.Location("uNormalMatrix"), 1, GL_FALSE, glm::value_ptr(slot.normal_matrix));
     glUniform1i(shader.Location("uInstanced"), instanced);
+    glUniform1i(shader.Location("uReceivesShadow"), shadowed);
+    glUniform1i(shader.Location("uShadowMap"), 1);  // (-1, ignored, unless it includes wlw/shadows.glsl)
     shader.ApplyParams(material, 2);
   }
 
