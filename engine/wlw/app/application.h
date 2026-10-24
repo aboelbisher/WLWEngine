@@ -1,11 +1,14 @@
 #pragma once
 
+#include <chrono>
 #include <functional>
 #include <memory>
 #include <string>
+#include <thread>
 #include <utility>
 #include <vector>
 
+#include "wlw/app/frame_clock.h"
 #include "wlw/app/quality.h"
 #include "wlw/app/screen.h"
 #include "wlw/app/system.h"
@@ -14,7 +17,6 @@
 #include "wlw/core/connection.h"
 #include "wlw/core/console.h"
 #include "wlw/core/cvar.h"
-#include "wlw/core/fixed_timestep.h"
 #include "wlw/core/type_name.h"
 #include "wlw/core/math.h"
 #include "wlw/input/input.h"
@@ -43,6 +45,7 @@ struct WindowConfig {
   std::string title;           // the title bar's text (desktop); empty = AppConfig::name
   Vec2 size = {1280, 720};     // desktop window size in pixels (phones: always full screen)
   bool stats_in_title = true;  // "title | 60 fps | 16.7 ms" (desktop)
+  bool visible = true;         // false: a hidden window (desktop: tests, tools); phones always show theirs
 };
 
 struct GraphicsConfig {
@@ -110,6 +113,23 @@ AppConfig ResolveAppConfig(AppConfig config);
 //   10. draw + present, then poll input; apply queued screen changes; Quality() reads the frame's
 //       times (its OnChange runs here, so a new level shows from the next frame; so does its
 //       render scale, QualitySettings::render_scales, set on the screen just before drawing)
+//
+// Who drives the frames. Run() = Internal().Init(), then Internal().Frame() until it returns false,
+// then Internal().Shutdown(). Whoever owns the platform's loop makes those calls instead of Run()
+// where looping inside a call isn't allowed. All three come from one thread, the game thread: the
+// one that called Init().
+//   Desktop, Android  WLW_MAIN calls Run() (Android: on android_main's thread). The window may wait
+//                     inside a frame: Init() for Android's native window, the event poll while in
+//                     the background.
+//   iOS (later)       either a game thread calls Run() like Android, or the app delegate calls Init()
+//                     and CADisplayLink calls Frame() once per refresh (nothing waits in the frame:
+//                     the display link paces it). Going to the background: one more Frame() so
+//                     OnAppPaused runs before the app is suspended.
+//   Web (later)       emscripten_set_main_loop calls Frame(); the Application lives on the heap (the
+//                     browser unwinds main), and Shutdown() may never come.
+//   Editor (later)    calls Frame() when the game should move on (Pause / Step).
+// So save in OnAppPaused, not only in OnShutdown: iOS ends suspended apps and browsers close tabs
+// without a Shutdown() (Android already can).
 class Application final {
  public:
   explicit Application(AppConfig config = {});
@@ -118,8 +138,8 @@ class Application final {
   Application(const Application&) = delete;
   Application& operator=(const Application&) = delete;
 
-  // Adds a system; they run in the order added. Started (OnStart) when Run begins, or at the
-  // next frame when added while running. Returns it, e.g. to wire systems together.
+  // Adds a system; they run in the order added. Started (OnStart) when the app starts (Run), or at
+  // the next frame when added while running. Returns it, e.g. to wire systems together.
   template <typename T, typename... Args>
   T& AddSystem(Args&&... args) {
     return static_cast<T&>(
@@ -131,9 +151,19 @@ class Application final {
     return systems_.Get<T>();
   }
 
-  // Runs until Quit() is called or the window is closed. Returns the process exit code.
+  // Starts, runs frames until Quit() is called or the window is closed, shuts down. Returns the
+  // process exit code: Quit's, 0 when the window was closed, 1 when the app couldn't start.
   int Run();
-  void Quit() { quit_requested_ = true; }
+  // Ends the app after this frame (it still finishes and is shown), like Godot's quit(code) and
+  // Unity's Application.Quit(code). The last call's code wins.
+  void Quit(int exit_code = 0) {
+    quit_requested_ = true;
+    exit_code_ = exit_code;
+  }
+
+  class InternalAccess;
+  // Init / Frame / Shutdown for entry points, the editor and tests (see "Who drives the frames").
+  InternalAccess Internal();
 
   // ---- Frame pacing ----
   // The frame-rate target (see AppConfig::graphics.target_fps), e.g. from a settings menu: 30 saves battery.
@@ -154,7 +184,14 @@ class Application final {
 #endif
 
  private:
-  void BuildUI();  // phase 8: canvases, pointer, safe area, OnRenderUI, screens, fades
+  enum class State { NotStarted, Running, Stopped };
+
+  bool Init();
+  bool Frame();
+  int Shutdown();
+  bool OnGameThread() const;
+  double ClockSeconds() const;  // the monotonic clock, in seconds since the Application was made
+  void BuildUI();               // phase 8: canvases, pointer, safe area, OnRenderUI, screens, fades
   void UpdateStats(double frame_seconds);
   void PlotFrame(double frame_seconds);
   void UpdateQuality(double frame_seconds);
@@ -178,13 +215,18 @@ class Application final {
   std::unique_ptr<debug::DebugUI> debug_ui_;
 #endif
   SystemList systems_;
-  ScreenStack screens_;  // emptied at the end of Run(), while the systems are still alive
-  core::FixedTimestep timestep_;
+  ScreenStack screens_;  // emptied by Shutdown(), while the systems are still alive
+  FrameClock clock_;
   app::Time time_;
   app::Quality quality_;
   bool quality_timing_ = false;        // GPU timing turned on for it (once: the debug panel may turn it off)
   float quality_render_scale_ = 0.0f;  // the last one applied to the screen (0: none yet)
+  State state_ = State::NotStarted;
+  bool in_frame_ = false;
   bool quit_requested_ = false;
+  int exit_code_ = 0;
+  std::thread::id game_thread_;  // the thread that called Init()
+  std::chrono::steady_clock::time_point clock_origin_ = std::chrono::steady_clock::now();
   std::string cvar_file_;                               // <save dir>/cvars.cfg: the player's Saved cvars
   std::vector<core::ScopedConnection> cvar_callbacks_;  // removed in the destructor
   std::unique_ptr<ConsoleCommand> quit_command_;
@@ -193,6 +235,29 @@ class Application final {
   int stats_frames_ = 0;
   double stats_seconds_ = 0.0;
 };
+
+// Engine-only (entry points, the editor, tests): the frame loop in three calls. Games never call these;
+// a game calling Frame() from a hook would be a bug (it's refused).
+class Application::InternalAccess {
+ public:
+  explicit InternalAccess(Application& app) : app_(app) {}
+
+  // Everything before the first frame: startup cvars, the renderer (platform, window, GL context), audio,
+  // UI, debug UI, the systems' OnStart, the shader warm-up, a quality lock; the clock starts last.
+  // False when the app can't start (Run() then returns 1). Once only.
+  bool Init() const { return app_.Init(); }
+  // One whole frame (phases 1-10). False when it's time to stop: Quit() was called or the window was
+  // closed (that frame still ran and was shown); also before Init() and after Shutdown().
+  bool Frame() const { return app_.Frame(); }
+  // The screens' OnExit and the systems' OnShutdown (once), then the exit code. Not from a hook: use
+  // Quit(). The destructor calls it for a running app; it destroys everything else as before.
+  int Shutdown() const { return app_.Shutdown(); }
+
+ private:
+  Application& app_;
+};
+
+inline Application::InternalAccess Application::Internal() { return InternalAccess(*this); }
 
 }  // namespace app
 }  // namespace wlw

@@ -16,7 +16,8 @@ namespace wlw::core {
 //   for (int i = 0; i < steps; ++i) Simulate(stepper.Step());
 //   Render(stepper.Alpha());   // 0..1: how far we are between the last step and the next
 //
-// See docs/concepts/01-game-loop.md.
+// The Application runs it through app::FrameClock (frame_clock.h); the whole frame is described in
+// app/application.h.
 class FixedTimestep {
  public:
   explicit FixedTimestep(float step_seconds = 1.0f / 60.0f, float max_frame_seconds = 0.25f)

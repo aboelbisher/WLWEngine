@@ -30,6 +30,7 @@ class Time {
 
  private:
   friend class Application;
+  friend class FrameClock;  // fills the per-frame values
   float delta_ = 0.0f;
   float real_delta_ = 0.0f;
   float fixed_step_ = 1.0f / 60.0f;

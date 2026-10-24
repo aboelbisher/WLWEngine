@@ -19,9 +19,11 @@
 namespace wlw::platform {
 
 // Called by the renderer before the first window is created / after everything is destroyed.
+// Counted: each Init() needs its own Shutdown(), and only the last one shuts the platform down, so
+// two renderers can share a process (an app test next to the golden tests' context).
 bool Init();
 void Shutdown();
-bool IsAlive();  // true between Init() and Shutdown()
+bool IsAlive();  // true between the first Init() and the last Shutdown()
 
 // Whether a GL context is current on this thread. GPU-resource destructors check it so that
 // objects outliving the engine don't call into a destroyed context.

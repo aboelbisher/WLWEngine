@@ -13,7 +13,8 @@
 //   WLW_MAIN(MakeApp)
 //
 // Desktop: a normal main(). Android: android_main(), called by NativeActivity on its own thread.
-// (iOS will get its own variant here.)
+// Both call Application::Run(). (iOS and the web will get their variants here; where the platform
+// owns the loop they drive Internal().Init() / Frame() / Shutdown() instead: see application.h.)
 
 #include <memory>
 

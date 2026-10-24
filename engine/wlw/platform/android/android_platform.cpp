@@ -55,6 +55,7 @@ namespace {
 
 android_app* g_app = nullptr;
 bool g_alive = false;
+int g_users = 0;  // Init() calls not yet matched by a Shutdown()
 EGLDisplay g_display = EGL_NO_DISPLAY;
 SafeAreaInsets g_insets;  // cached; refreshed when the window changes
 bool g_insets_valid = false;
@@ -457,10 +458,12 @@ int32_t OnInputEvent(android_app* /*app*/, AInputEvent* event) { return g_window
 // ---- platform.h ----
 bool Init() {
   g_alive = true;  // the EGL display is created with the first window's context
+  ++g_users;
   return true;
 }
 
 void Shutdown() {
+  if (!g_alive || --g_users > 0) return;
   if (g_window) {
     g_window->DestroySurface();
     g_window->DestroyContext();

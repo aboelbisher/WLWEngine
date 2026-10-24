@@ -22,6 +22,32 @@ listed under **Breaking** with its **Migration**. Shims added before that (`WLW_
   Arc). Only the glyph corners turn; the SDF anti-aliasing holds (abs-derivative width: ~8% softer at 5°,
   ~16% at 10°, ~41% at 45°). The shadow keeps its on-screen offset. Asked for by Threadlock (World 2's pinned order slips).
 
+### Platform-driven frame (Roadmap 2.7)
+The frame loop is three calls, so whoever owns the platform's loop can drive it: the editor (3.2: Pause / Step),
+iOS's CADisplayLink (6.1, if it doesn't use a game thread like Android) and the browser (8.3). Like Godot's
+`Main::setup / iteration / cleanup`, Unreal's `FEngineLoop` and SDL3's main callbacks. Nothing changes for games.
+- **`Application::Internal().Init() / Frame() / Shutdown()`**: `Init` = everything before the first frame (cvars,
+  renderer, audio, UI, the systems' `OnStart`, the warm-up; the clock starts last); `Frame` = one whole frame, phases
+  1-10 as before, false when it's time to stop (the frame `Quit` is called in still finishes and is shown);
+  `Shutdown` = the screens' `OnExit` and the systems' `OnShutdown`, then the exit code. `Run()` = those three;
+  **`WLW_MAIN` and `RunAndroidApp` are unchanged**. `application.h` says which platform drives frames how.
+- **Lifecycle checks**: `Frame()` before `Init()` / after `Shutdown()` returns false; `Init()` twice, `Frame()`
+  from inside a frame and `Shutdown()` from a hook are refused (logged; use `Quit`); the three calls come from the
+  thread that called `Init()` (assert); destroying a running app shuts it down, so `OnShutdown` runs exactly once.
+- **`Quit(int exit_code = 0)`**: `Run()` / `Shutdown()` return it (0 when the window was closed, 1 when the app
+  couldn't start). `Quit()` calls still compile.
+- **`app::FrameClock`** (`frame_clock.h`): phase 2's time math (measure, clamp, time scale, fixed steps, alpha,
+  time since start, the restart after a resume) out of the loop, fed seconds, with tests (`frame_clock` suite).
+- **`WindowConfig::visible`** (false = a hidden desktop window, for tests and tools). **`platform::Init()` /
+  `Shutdown()` are counted**: each renderer holds one, the last `Shutdown` shuts the platform down.
+- **Save in `OnAppPaused`**: `OnShutdown` isn't guaranteed everywhere (iOS ends suspended apps, browsers close
+  tabs; Android already could). The hooks' comments say so.
+- Tests: `wlw_app_tests` ("gpu: app ...", a real app on a hidden window; Linux CI under xvfb, skipped on Windows
+  CI): hook order, `Quit(code)`, the lifecycle checks, the destructor, systems added mid-frame, `Run()`'s code.
+  Its own binary because GL objects belong to the context that made them: an app's warm-up prepares every alive
+  resource, so next to the golden tests' context it compiled their copy shader into its own and took it along.
+- `core/fixed_timestep.h` no longer points to a `docs/` page that never existed.
+
 ### Legacy removal (Roadmap 2.6)
 The leftovers from before Phase 2 are gone, so 2.7 (the frame) starts from one path: `Application` -> renderer ->
 window.

@@ -65,6 +65,7 @@ class GLRenderingDriver : public RenderingDriver {
       WLW_LOG(LogRender, Error, "Platform initialization failed");
       return false;
     }
+    platform_started_ = true;
     if (!window->Initialize()) {
       WLW_LOG(LogRender, Error, "Window / GL context creation failed");
       return false;
@@ -1048,7 +1049,7 @@ class GLRenderingDriver : public RenderingDriver {
   }
 
   ~GLRenderingDriver() override {
-    if (!platform::IsAlive()) return;
+    if (!platform_started_ || !platform::IsAlive()) return;
     // Free the GL objects while the main window's context still exists: its scenes and viewports (their
     // meshes, textures and targets, unless something else still holds them), then our own...
     if (main_window_) {
@@ -1072,13 +1073,14 @@ class GLRenderingDriver : public RenderingDriver {
       gpu_timer_.reset();
     }
     main_window_.reset();
-    // ...then shut the platform down (destroys any windows / contexts still open).
+    // ...then our hold on the platform: the last one shuts it down (destroys any windows / contexts still open).
     platform::Shutdown();
   }
 
  private:
   RenderDevice* device_;
-  std::string gpu_name_;  // GL_RENDERER
+  bool platform_started_ = false;  // Initialize took a platform::Init() (counted): the destructor gives it back
+  std::string gpu_name_;           // GL_RENDERER
   std::shared_ptr<scene::Window> main_window_;
   std::unique_ptr<ui::UIRenderer> ui_renderer_;
 

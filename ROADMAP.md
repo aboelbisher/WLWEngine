@@ -7,12 +7,11 @@ around the editor and iOS ("Why this order"). Work goes one step at a time, in o
 stable: commits name them ("Roadmap 4.3b: ..."). Commits and CHANGELOG entries from before 2026-10-21
 use the old numbers: "Old numbering" at the end maps them.
 
-**Current step:** 2.7 Platform-driven frame (plan in chat first) · **Updated:** 2026-10-24
+**Current step:** 2.8 Migrate the games (plan in chat first) · **Updated:** 2026-10-24
 
-**Next session:** plan 2.7 in chat and wait for the OK. Since 2.6 there is one loop path: `Application` owns
-  the `RenderDevice` + `RenderingDriver` (no `WLWEngine`), draws the window and polls input in step 10 of `Run()`;
-  the renderer keeps the window and does the GL shutdown order in its destructor. Every deprecation shim is gone
-  (no-shims rule, owner 2026-10-24; the tooling in core/deprecated.h stays for later). The games break on main
+**Next session:** plan 2.8 in chat and wait for the OK. Since 2.7 the frame is three calls
+  (`Application::Internal().Init/Frame/Shutdown`; `Run()` = those, `WLW_MAIN` unchanged), so 2.7 added nothing to
+  the games' migration. Every deprecation shim is gone (no-shims rule, owner 2026-10-24). The games break on main
   since 2.4 and move in 2.8 (its list below has the call sites). Bluzzle is on bea1357 (2.3) with its node-types
   patch pushed.
 
@@ -280,7 +279,11 @@ The editor shows and edits what this phase defines, so it comes first.
   `Window::SetIsActive`, TextureManager, GEMINI.md (FPSCamera, FollowCamera and
   `Window::ProcessMouseMovement` went in 2.3)
   (each deletion confirmed with the owner).
-- [ ] **2.7 Platform-driven frame.** `Application::Init/Frame/Shutdown`; `Run()` loops on desktop
+- [x] **2.7 Platform-driven frame.** *(done 2026-10-24, commit "Roadmap 2.7: platform-driven frame";
+  `Application::Internal().Init/Frame/Shutdown` with lifecycle checks, `Quit(code)`, `app::FrameClock` with tests,
+  counted `platform::Init`, `WindowConfig::visible`, `wlw_app_tests` on a hidden window; Application keeps owning
+  the window (the editor's Restart decides in 3.2); no headless app until the null RHI backend (9.1))*
+  `Application::Init/Frame/Shutdown`; `Run()` loops on desktop
   and Android; `WLW_MAIN` unchanged. The editor (3.2) drives frames through it, and the shape must also fit iOS
   (6.1: a game thread like `android_main`, or `Frame()` from CADisplayLink callbacks).
 - [ ] **2.8 Migrate the games.** Bluzzle, Threadlock and Snake updated; a short note for the dropped games

@@ -168,6 +168,7 @@ TEST_CASE("glsl es 300") {
   CompileEverything();
   SetShaderSourceObserver(nullptr);
   window.reset();              // its context goes with it
+  platform::Shutdown();        // our Init() (counted: GLFW stays up while the golden tests use it)
   gpu_tests::UseGpuContext();  // the golden tests' context back, if they run in this process too
 }
 

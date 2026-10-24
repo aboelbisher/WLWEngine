@@ -32,9 +32,10 @@ class System {
   // Android Back / desktop Escape that no screen handled; the last system added is asked first.
   // Return true if handled; if nobody does, the app goes to the background (desktop: quits).
   virtual bool OnBack() { return false; }
-  virtual void OnAppPaused() {}   // went to the background: save now (Android may end the app)
+  // Went to the background: save now. Phones and browsers may end the app afterwards without an OnShutdown.
+  virtual void OnAppPaused() {}
   virtual void OnAppResumed() {}  // came back from the background
-  virtual void OnShutdown() {}    // the loop ended; services are still alive
+  virtual void OnShutdown() {}    // the app is stopping (not on every platform: see OnAppPaused); services alive
 
   // Its type's name ("MyGame"; AddSystem sets it): the profiler names its hooks' zones with it.
   const std::string& Name() const { return name_; }

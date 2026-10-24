@@ -33,6 +33,7 @@
 namespace wlw::platform {
 namespace {
 bool g_alive = false;
+int g_users = 0;  // Init() calls not yet matched by a Shutdown()
 
 void GlfwErrorCallback(int error, const char* description) {
   WLW_LOG(LogPlatform, Error, "GLFW error %d: %s", error, description);
@@ -59,10 +60,14 @@ std::filesystem::path ExecutableDirectory() {
 }  // namespace
 
 bool Init() {
-  if (g_alive) return true;
+  if (g_alive) {
+    ++g_users;
+    return true;
+  }
   glfwSetErrorCallback(GlfwErrorCallback);
   if (!glfwInit()) return false;
   g_alive = true;
+  g_users = 1;
 
   // Every window we create gets an OpenGL 3.3 core context.
   glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
@@ -75,7 +80,7 @@ bool Init() {
 }
 
 void Shutdown() {
-  if (!g_alive) return;
+  if (!g_alive || --g_users > 0) return;
   glfwTerminate();  // also destroys any windows still open
   g_alive = false;
 }

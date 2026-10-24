@@ -41,18 +41,24 @@ engine/wlw/
               (level + text filters), an input line with history and Tab completion (ConsoleModel = the testable
               logic); phones: no typing yet (GameTextInput, D9). ImGui gets keys + text from Input; while it wants
               text input the game's keyboard is blocked. Off in release builds
-  app/        Application (final: owns the services, the RenderDevice + RenderingDriver (no separate engine object; the renderer keeps the window and does the GL shutdown order) and runs the loop; see the frame in application.h): Window(),
+  app/        Application (final: owns the services, the RenderDevice + RenderingDriver (no separate engine object; the renderer keeps the window and does the GL shutdown order) and runs the frames; see the frame in application.h): Window(),
               Input(), Audio(), Screens(), Time(), Config(). engine_cvars.h: log.filter, r.gpu_timing,
               r.invalidate_framebuffers, r.target_fps, r.pacing.auto_interval, r.render_scale, quality.lock (Run applies the cvar sources first, wires these to the window /
               log / quality, saves changed Saved cvars at the end of a frame). Games add Systems (system.h: always running,
               like Unreal subsystems / Godot autoloads; hooks OnStart/OnFixedUpdate/OnUpdate/OnRender/OnRenderUI/
               OnDebugUI/OnBack/OnAppPaused/OnAppResumed/OnShutdown, run in the order added, then the screens'; App()
               = the services) and push Screens. SystemList = the testable dispatch. Time (time.h): Delta, RealDelta,
-              FixedStep, Alpha, SinceStart, SetScale (hit-stop / slow motion via core/time_scale.h), Fps.
+              FixedStep, Alpha, SinceStart, SetScale (hit-stop / slow motion via core/time_scale.h), Fps; filled by
+              FrameClock (frame_clock.h: fed seconds, clamp, scale, fixed steps, restart after a resume; tested).
+              The frame loop is three calls, Internal().Init() / Frame() / Shutdown() (entry points, editor, tests;
+              application.h says which platform drives frames how); Run() = those (desktop + Android via WLW_MAIN).
+              Checks: Frame before Init / after Shutdown = false; Init twice, Frame inside a frame, Shutdown from a
+              hook refused; one thread; the destructor shuts a running app down. Quit(exit_code) -> Run's return.
+              Save in OnAppPaused: OnShutdown isn't guaranteed on iOS / web.
               entry_point.h: WLW_MAIN(make_app) with the game's MakeApp() (builds the Application, adds its systems),
               Screen + ScreenStack (game states: deferred push/pop/replace, overlays, fades, Back routing; Screen::App()
               = the services, protected, valid from OnEnter). AppConfig = name (save folder + default window title) +
-              groups window{title, size, stats_in_title} / graphics{target_fps, screen_depth} / audio{enabled,
+              groups window{title, size, stats_in_title, visible} / graphics{target_fps, screen_depth} / audio{enabled,
               max_voices} / time{fixed_step, max_frame_time} / ui{reference_size}; ResolveAppConfig (tested) fills the
               defaults (window title = name)
               Quality (quality.h, App().Quality(); like Unity QualitySettings + Adaptive Performance): the game defines
@@ -81,7 +87,7 @@ engine/wlw/
               gf2.h (linear algebra over GF(2): BitVector, SolveGf2 = Gaussian elimination with null space,
               LightestSolution: Lights Out-style "which toggles clear it" problems)
   platform/   THE ONLY PER-OS CODE: platform.h interface + glfw/glfw_platform.cpp (desktop)
-              + android/android_platform.cpp (NativeActivity + EGL). Also save files: GetSaveDirectory, WriteFileAtomic, ReadLocalFile. iOS goes here later.
+              + android/android_platform.cpp (NativeActivity + EGL). Init/Shutdown are counted (each renderer holds one). Also save files: GetSaveDirectory, WriteFileAtomic, ReadLocalFile. iOS goes here later.
               LaunchArguments() (launch_arguments.cpp; desktop argv via WLW_MAIN, Android the intent's "wlw" extra).
               Frame pacing: desktop = vsync interval when the target divides the monitor's refresh (the monitor the
               window's centre is on, re-checked on moves), else vsync off + FrameLimiter + PreciseSleep (glfw_sleep.cpp:
@@ -252,7 +258,7 @@ kit/wlw/kit/  wlw::kit: game-level building blocks shared by games (separate tar
               (UMP consent, load/show/retry); games add that dir to their sourceSets and depend on play-services-ads + UMP
 samples/      small games, built only when the engine is the top-level project (desktop):
               snake/ (Snake + its rules tests)
-tests/        engine unit tests (no window/GPU: conventions (axes, turns, camera on screen, lights, particles, primitive windings, glTF front), cameras (view = inverse world, fit modes, frustum, fly/orbit/follow controllers), node kinds, quality levels (down/up, back-off, settle, frame-time-only, lock, saved,
+tests/        engine unit tests (no window/GPU: frame clock, conventions (axes, turns, camera on screen, lights, particles, primitive windings, glTF front), cameras (view = inverse world, fit modes, frustum, fly/orbit/follow controllers), node kinds, quality levels (down/up, back-off, settle, frame-time-only, lock, saved,
               budget from the target, render scales), frame pacing (plans per target/refresh, limiter schedule), draw order (sort keys), sky (rays, place in the order), scene gather + cull, transform (Euler orders, look rotation, matrix cache, hierarchy, names, ids, layers), normal matrices (cofactor vs inverse-transpose, mirrors, flat), shader system (preprocessor, embedded files in every variant, std140 layout, lights, variants, UI kinds), systems (order, starting, Back), blending (depth-write rule, canvas batches, images, falloff texture), resources (made without a GPU, updates, alive list: owned any way, made / destroyed during a walk), connections (disconnect, scoped, changes while calling), app config (groups, defaults), post passes (planning, ping-pong, named inputs, chain targets, effects, render-scale upscale), viewports (scenes, sizes, render scale, update modes), anim, audio, core (random, atomic files, bridge queue), exact cover, search (bitboards, minimax, expectimax), gf2 (Lights Out), shader text splitting, lighting (light nodes, shadow-box fitting), fx, instances (layout, Color32 = lround, SinCos, Arvo boxes vs corners, WriteInstances, cached bounds), input, kit, picking, primitives, ui (canvas, safe area, widgets), screens, profile macros + TypeName, version macros + build info + the deprecation macros; CTest "deprecations" runs cmake/CheckDeprecations.cmake). doctest: one binary wlw_tests, a TEST_SUITE per file, shared main test_main.cpp,
               test_helpers.h (Near = absolute tolerance); compound checks in double parentheses CHECK((a && b));
               each TEST_CASE is its own CTest test (cases run in parallel processes: no shared temp files);
@@ -265,7 +271,10 @@ tests/        engine unit tests (no window/GPU: conventions (axes, turns, camera
               .diff.png to build/<preset>/tests/gpu/gpu_output/ (CI: the gpu-output artifact). wlw_gpu_tests --update
               rewrites references from this GPU: only commit llvmpipe ones. A rendering change that changes pictures
               on purpose = new references from CI's artifact, reviewed like code. Windows CI skips them (-LE gpu).
-              Same binary: shader_compile_tests.cpp ("gpu: glsl 330", "gpu: glsl es 300") compiles + links every engine
+              wlw_app_tests (tests/gpu/app_tests.cpp, also "gpu: app ...", label gpu): a real Application on a hidden
+              window driven by Init/Frame/Shutdown (hook order, Quit codes, lifecycle checks). Its own binary: GL objects
+              belong to one context, and an app's warm-up prepares every alive resource (it would steal the golden tests' shaders).
+              wlw_gpu_tests also has shader_compile_tests.cpp ("gpu: glsl 330", "gpu: glsl es 300"), which compiles + links every engine
               program and sample game shaders as GLSL 3.30 and in a desktop OpenGL ES 3.0 context (Mesa / NVIDIA both
               refuse a precision mismatch); --dump-shaders <dir> writes the final sources. Mali Offline Compiler:
               Arm Performance Studio's Linux archive is unpacked in WSL (~/arm/Arm_Performance_Studio_2026.5/
