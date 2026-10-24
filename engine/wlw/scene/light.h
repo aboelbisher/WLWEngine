@@ -1,7 +1,6 @@
 #pragma once
 
 #include "wlw/core/color.h"
-#include "wlw/core/deprecated.h"
 #include "wlw/core/math.h"
 #include "wlw/core/rotation.h"
 #include "wlw/scene/node.h"
@@ -97,9 +96,5 @@ class SpotLight3D : public Light3D {
   float inner_angle_ = 12.5f * kDegToRad;
   float outer_angle_ = 17.5f * kDegToRad;
 };
-
-#if !WLW_NO_DEPRECATED
-using DirectionalLight WLW_DEPRECATED(0.3, "Use DirectionalLight3D") = DirectionalLight3D;
-#endif
 
 }  // namespace wlw::scene

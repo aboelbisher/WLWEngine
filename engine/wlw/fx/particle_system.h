@@ -8,7 +8,6 @@
 #include <glm/glm.hpp>
 
 #include "wlw/core/color.h"
-#include "wlw/core/deprecated.h"
 #include "wlw/core/math.h"
 #include "wlw/core/random.h"
 #include "wlw/rendering/instance_buffer.h"
@@ -34,20 +33,6 @@ struct BurstSettings {
   Color color{1.0f, 1.0f, 1.0f, 1.0f};
   float brightness_jitter = 0.15f;  // each particle's colour is scaled by 1 +- this
   float delay = 0.0f;               // seconds before the particles appear (for staggered effects)
-
-#if !WLW_NO_DEPRECATED
-  // 0.3's degrees: when set (>= 0) they win over spread / max_spin. Only assigning one warns (a deprecated field
-  // would warn wherever the settings are copied, in clang).
-  struct Degrees {
-    float value = -1.0f;
-    WLW_DEPRECATED(0.3, "Use spread / max_spin (radians)") Degrees& operator=(float degrees) {
-      value = degrees;
-      return *this;
-    }
-  };
-  Degrees spread_degrees;
-  Degrees spin_max;
-#endif
 };
 
 // A CPU particle simulation that outputs GPU instances: the particles of all bursts are drawn as
@@ -88,13 +73,6 @@ class ParticleSystem {
   // node.WriteInstances, filled in place (52 bytes each). Call once per frame after Update. The
   // first call reserves the system's capacity in the node, so later ones never allocate.
   void WriteTo(scene::MultiMeshInstance3D& node) const;
-
-#if !WLW_NO_DEPRECATED
-  WLW_DISABLE_DEPRECATION_WARNINGS_BEGIN
-  WLW_DEPRECATED(0.2, "Use WriteTo(node)")
-  void BuildInstances(std::vector<rendering::InstanceData>& out) const;
-  WLW_DISABLE_DEPRECATION_WARNINGS_END
-#endif
 
   void Clear() { particles_.clear(); }
   size_t Count() const { return particles_.size(); }

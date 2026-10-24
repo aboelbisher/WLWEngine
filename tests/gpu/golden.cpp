@@ -5,9 +5,10 @@
 
 #include "support/image_compare.h"
 #include "wlw/platform/platform.h"
+#include "wlw/rendering/render_device.h"
 #include "wlw/rendering/render_target.h"
+#include "wlw/rendering/rendering_driver.h"
 #include "wlw/scene/window.h"
-#include "wlw/wlw.h"
 
 namespace wlw::gpu_tests {
 namespace {
@@ -15,9 +16,11 @@ namespace {
 bool g_update = false;
 std::string g_dump_directory;
 
-// One engine and hidden window per process (ctest runs every case in its own process).
+// One renderer and hidden window per process (ctest runs every case in its own process). Destroyed in reverse
+// order, like the Application: the window handle, the renderer (scenes, GL, platform), then the device.
 struct Gpu {
-  std::unique_ptr<WLWEngine> engine;
+  std::unique_ptr<rendering::RenderDevice> device;
+  std::unique_ptr<rendering::RenderingDriver> driver;
   std::shared_ptr<scene::Window> window;
   bool ok = false;
 };
@@ -25,10 +28,11 @@ struct Gpu {
 Gpu& GetGpu() {
   static Gpu gpu = [] {
     Gpu made;
-    made.engine = WLWEngine::Create();
+    made.device = rendering::RenderDevice::Create();
+    made.driver = rendering::RenderingDriver::Create(made.device.get());
     made.window = scene::Window::Create({kSize, kSize}, "wlw_gpu_tests", {.visible = false});
-    made.ok = made.engine->Start(made.window);
-    if (made.ok) MESSAGE("GPU: " << made.engine->GetRenderingDriver()->GpuName());
+    made.ok = made.driver->Initialize(made.window);
+    if (made.ok) MESSAGE("GPU: " << made.driver->GpuName());
     return made;
   }();
   return gpu;
@@ -63,7 +67,7 @@ std::shared_ptr<scene::Viewport> MakeViewport() {
 testing::Image Render(const std::shared_ptr<scene::Viewport>& viewport) {
   Gpu& gpu = GetGpu();
   REQUIRE_MESSAGE(gpu.ok, "no GL 3.3 context (on Linux CI: run under xvfb-run with Mesa)");
-  rendering::RenderingDriver& driver = *gpu.engine->GetRenderingDriver();
+  rendering::RenderingDriver& driver = *gpu.driver;
 
   gpu.window->AddViewport(viewport);
   driver.DrawWindow(gpu.window);
@@ -92,7 +96,7 @@ void CheckSamePictures(const std::string& name, const testing::Image& a, const t
 
 void CheckGolden(const std::string& name, const std::shared_ptr<scene::Viewport>& viewport) {
   const testing::Image actual = Render(viewport);
-  rendering::RenderingDriver& driver = *GetGpu().engine->GetRenderingDriver();
+  rendering::RenderingDriver& driver = *GetGpu().driver;
 
   const std::filesystem::path reference_path = std::filesystem::path(WLW_GPU_REFERENCES) / (name + ".png");
   const std::filesystem::path output = WLW_GPU_OUTPUT;

@@ -56,8 +56,6 @@ class GLRenderingDriver : public RenderingDriver {
  public:
   explicit GLRenderingDriver(RenderDevice* device) : device_(device) {}
 
-  RenderDevice* GetDevice() override { return device_; }
-
   bool Initialize(std::shared_ptr<scene::Window> window) override {
     main_window_ = window;
 
@@ -121,14 +119,6 @@ class GLRenderingDriver : public RenderingDriver {
     return true;
   }
 
-  void AttachWindow(std::shared_ptr<scene::Window> window) override {
-    if (!WLW_VERIFY(main_window_ != nullptr,
-                    "AttachWindow before Initialize: the rendering driver has no main window")) {
-      return;
-    }
-    window->Initialize(main_window_.get());  // shares GPU resources with the main window
-  }
-
   std::string GpuName() const override { return gpu_name_; }
 
   std::vector<uint8_t> ReadPixels(RenderTarget& target) override {
@@ -159,13 +149,6 @@ class GLRenderingDriver : public RenderingDriver {
                        pixels.begin() + (height - 1 - y) * row);
     }
     return pixels;
-  }
-
-  void SetViewport(int x, int y, int width, int height) override { glViewport(x, y, width, height); }
-
-  void Clear() override {
-    glClearColor(0.1f, 0.1f, 0.15f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
   }
 
   // What one viewport draws, gathered from its scene before any drawing starts.
@@ -366,7 +349,7 @@ class GLRenderingDriver : public RenderingDriver {
       if (frame_.shadow_active) DrawShadowMap(frame_);
     }
 
-    SetViewport(0, 0, render.x, render.y);
+    glViewport(0, 0, render.x, render.y);
     state_.SetDepthWrite(true);
     GLbitfield clear_bits = has_depth ? GL_DEPTH_BUFFER_BIT : 0;
     if (const auto& color = viewport.GetClearColor()) {
@@ -1066,9 +1049,11 @@ class GLRenderingDriver : public RenderingDriver {
 
   ~GLRenderingDriver() override {
     if (!platform::IsAlive()) return;
-    // Free our GL objects while the main window's context still exists...
+    // Free the GL objects while the main window's context still exists: its scenes and viewports (their
+    // meshes, textures and targets, unless something else still holds them), then our own...
     if (main_window_) {
       main_window_->MakeContextCurrent();
+      main_window_->Internal().ReleaseScenes();
       ui_renderer_.reset();
       for (const auto& [_, program] : mesh_programs_) {
         if (program.id) glDeleteProgram(program.id);

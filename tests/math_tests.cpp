@@ -1,6 +1,6 @@
 // Tests for wlw/core/math.h (Roadmap 2.1): the glm configuration and aliases, constants, scalar helpers (lerps,
 // smoothstep, move towards, frame-rate independent decay, angles), vector helpers (safe normalize, 2D cross and
-// perpendicular, rotation, segment distance against brute force), and the deprecated core::Vector2/3 shims.
+// perpendicular, rotation, segment distance against brute force).
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -9,7 +9,6 @@
 #include <glm/glm.hpp>
 
 #include "test_helpers.h"
-#include "wlw/core/deprecated.h"
 #include "wlw/core/math.h"
 #include "wlw/core/random.h"
 
@@ -144,25 +143,5 @@ TEST_CASE("segment distance matches brute force") {
   CHECK(ClosestPointOnSegment(Vec2(1, 5), Vec2(0, 0), Vec2(2, 0)) == Vec2(1, 0));
   CHECK(DistanceToSegment(Vec2(3, 4), Vec2(0, 0), Vec2(0, 0)) == 5.0f);  // a point segment
 }
-
-#if !WLW_NO_DEPRECATED
-WLW_DISABLE_DEPRECATION_WARNINGS_BEGIN
-TEST_CASE("deprecated vector shims convert both ways") {
-  const core::Vector2 size = Vec2(1280.0f, 720.0f);  // core::Vector2 size = window.GetSize();
-  const Vec2 back = size;
-  CHECK(back == Vec2(1280.0f, 720.0f));
-  core::Vector3 p{1.0f, 2.0f, 3.0f};
-  p += core::Vector3{1.0f, 0.0f, 0.0f};
-  const Vec3 as_glm = p;
-  CHECK(as_glm == Vec3(2, 2, 3));
-  const core::Vector3 n = core::Vector3{0, 0, 2}.Normalize();
-  CHECK((n.x == 0.0f && n.y == 0.0f && n.z == 1.0f));
-  const core::Vector3 c = core::Vector3{1, 0, 0}.Cross({0, 1, 0});
-  CHECK(c.z == 1.0f);
-  const core::Vector3 r = core::Vector3{1, 0, 0}.Rotate(90.0f, {0, 0, 1});
-  CHECK((Near(r.x, 0.0f, 1e-6f) && Near(r.y, 1.0f, 1e-6f)));
-}
-WLW_DISABLE_DEPRECATION_WARNINGS_END
-#endif
 
 TEST_SUITE_END();

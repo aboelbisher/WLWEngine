@@ -10,11 +10,13 @@ It's a plain CMake library with no IDE-specific project files, so Visual Studio,
 | Path | What |
 |---|---|
 | `engine/wlw/` | Engine source. Include as `#include "wlw/scene/window.h"` |
+| `kit/wlw/kit/` | Game-level building blocks shared by games (saves, progress, daily streaks, ads); a separate target on top of the engine |
 | `engine/wlw/platform/` | The only per-OS code: `glfw/` (desktop), `android/` (NativeActivity + EGL). Everything else is shared |
 | `samples/` | Small sample games (Snake) built when the engine is the top-level project |
-| `third_party/` | Vendored glad (GL loader), stb, tinygltf |
-| `cmake/WLWHelpers.cmake` | `wlw_add_assets()`, `wlw_set_warnings()` for game targets |
-| `vcpkg/` + `vcpkg.json` | Dependency manager (git submodule, pinned) + manifest (glm, glfw3) |
+| `tests/`, `benchmarks/` | Unit tests + golden-image GPU tests (doctest), benchmarks (nanobench); built when the engine is the top-level project |
+| `third_party/` | Vendored: glm, glad (GL loader), stb, tinygltf + nlohmann json, miniaudio, stb_vorbis, Dear ImGui, doctest, nanobench, Tracy, Swappy (versions and licences in `third_party/README.md`) |
+| `cmake/WLWHelpers.cmake` | `wlw_add_game()`, `wlw_add_assets()`, `wlw_set_warnings()` for game targets |
+| `vcpkg/` + `vcpkg.json` | Dependency manager (git submodule, pinned) + manifest: GLFW only (desktop) |
 
 ## Getting the code
 
@@ -62,7 +64,7 @@ add_subdirectory(external/WLWengine)
 wlw_add_game(my_game SOURCES main.cpp ASSETS assets)   # .exe on desktop, .so on Android
 ```
 
-A game is a `wlw::app::System` (it runs for the app's whole life; `Screen`s are its states) and overrides the hooks it needs; `App()` gives the services (window, input, audio, screens, time):
+A game adds `wlw::app::System`s (they run for the app's whole life; `Screen`s are its states) that override the hooks they need; `App()` gives the services (window, input, audio, screens, time, quality, config):
 
 ```cpp
 class MyGame : public wlw::app::System {
@@ -74,7 +76,9 @@ class MyGame : public wlw::app::System {
 };
 
 std::unique_ptr<wlw::app::Application> MakeApp() {
-  auto app = std::make_unique<wlw::app::Application>(wlw::app::AppConfig{.title = "My Game"});
+  wlw::app::AppConfig config;
+  config.name = "My Game";  // the save folder and the window title
+  auto app = std::make_unique<wlw::app::Application>(config);
   app->AddSystem<MyGame>();
   return app;
 }

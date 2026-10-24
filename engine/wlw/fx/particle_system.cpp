@@ -48,10 +48,6 @@ int ParticleSystem::Burst(const BurstSettings& settings, const glm::vec3& origin
   const glm::vec3 axis = length > 0.0f ? settings.direction / length : kUp;
   float spread = settings.spread;
   float max_spin = settings.max_spin;
-#if !WLW_NO_DEPRECATED
-  if (settings.spread_degrees.value >= 0.0f) spread = settings.spread_degrees.value * kDegToRad;
-  if (settings.spin_max.value >= 0.0f) max_spin = settings.spin_max.value * kDegToRad;
-#endif
 
   for (int i = 0; i < count; ++i) {
     Particle p;
@@ -145,18 +141,5 @@ void ParticleSystem::WriteTo(scene::MultiMeshInstance3D& node) const {
   }
   if (count < out.size()) node.WriteInstances(count);  // drop the slots of the skipped ones
 }
-
-#if !WLW_NO_DEPRECATED
-WLW_DISABLE_DEPRECATION_WARNINGS_BEGIN
-void ParticleSystem::BuildInstances(std::vector<rendering::InstanceData>& out) const {
-  scene::MultiMeshInstance3D node;  // the copies as WriteTo makes them, then the old 80-byte form
-  WriteTo(node);
-  out.clear();
-  for (const rendering::Instance& instance : node.Instances()) {
-    out.push_back({instance.Transform(), Color32::FromPacked(instance.color).ToColor()});
-  }
-}
-WLW_DISABLE_DEPRECATION_WARNINGS_END
-#endif
 
 }  // namespace wlw::fx

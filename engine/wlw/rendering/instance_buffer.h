@@ -7,21 +7,9 @@
 #include <glm/glm.hpp>
 
 #include "wlw/core/color.h"
-#include "wlw/core/deprecated.h"
 #include "wlw/core/geometry.h"
 
 namespace wlw::rendering {
-
-#if !WLW_NO_DEPRECATED
-// 0.2's names for Color32 (wlw/core/color.h): the same bytes.
-WLW_DEPRECATED(0.3, "Use wlw::UnitToByte") inline uint32_t PackUnitByte(float v) { return UnitToByte(v); }
-WLW_DEPRECATED(0.3, "Use Color32(color).Packed()") inline uint32_t PackColor(const Color& color) {
-  return Color32(color).Packed();
-}
-WLW_DEPRECATED(0.3, "Use Color32::FromPacked(packed).ToColor()") inline Color UnpackColor(uint32_t packed) {
-  return Color32::FromPacked(packed).ToColor();
-}
-#endif
 
 // One copy of a mesh in an instanced draw (see MultiMeshInstance3D::WriteInstances): 52 bytes, the layout Godot's
 // GLES3 renderer uses. `rows` are the top 3 rows of the copy's affine 4x4 transform, relative to the
@@ -57,14 +45,6 @@ static_assert(offsetof(Instance, rows) == 0 && offsetof(Instance, color) == 48);
 // The node-space box around every copy of a mesh whose own box is `mesh_box` (each copy's box by
 // Arvo's method, see TransformBox, from its 3x4 rows). Empty `instances`: an empty box at 0.
 AABB InstanceBounds(std::span<const Instance> instances, const AABB& mesh_box);
-
-#if !WLW_NO_DEPRECATED
-// The 80-byte instance before 1.6: a full 4x4 matrix and a float colour.
-struct WLW_DEPRECATED(0.2, "Use rendering::Instance (52 bytes: 3 rows + RGBA8)") InstanceData {
-  glm::mat4 transform{1.0f};
-  Color tint{1.0f, 1.0f, 1.0f, 1.0f};
-};
-#endif
 
 // One dot of a SpriteBatch (scene/sprite_batch.h): 16 bytes, a third of an Instance, because a flat
 // round dot needs no rotation, scale or normals - only where, how big and what colour. The GPU

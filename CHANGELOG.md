@@ -22,6 +22,52 @@ listed under **Breaking** with its **Migration**. Shims added before that (`WLW_
   Arc). Only the glyph corners turn; the SDF anti-aliasing holds (abs-derivative width: ~8% softer at 5°,
   ~16% at 10°, ~41% at 45°). The shadow keeps its on-screen offset. Asked for by Threadlock (World 2's pinned order slips).
 
+### Legacy removal (Roadmap 2.6)
+The leftovers from before Phase 2 are gone, so 2.7 (the frame) starts from one path: `Application` -> renderer ->
+window.
+- **`WLWEngine` is gone** (`wlw/wlw.h`, `wlw.cpp`): `Application` owns the `RenderDevice` and the
+  `RenderingDriver` itself (like Godot's `Main` owns its servers), draws the window and polls input in step 10 of
+  its frame. The shutdown order stays: the renderer keeps the window and, when destroyed, releases its scenes
+  (`Window::Internal().ReleaseScenes`) with the context current, frees its own GL objects, then shuts the platform
+  down; the device goes last. The GPU tests own a device + driver the same way.
+- **Renderer interface trimmed**: `RenderingDriver::AttachWindow`, `SetViewport`, `Clear` and `GetDevice` (none
+  called), and `Window::Initialize`'s `share_with` (GL context sharing; only `AttachWindow` used it). Several
+  native windows, if the editor ever needs them, get designed against 2.7's frame. `rendering_driver.h` no longer
+  includes the buffer, vertex, image and texture headers.
+- **`Window::SetIsActive`** (nothing read it), **`utils::TextureManager`** (nothing included it) and
+  **`GEMINI.md`** (out of date) are deleted. README.md is refreshed (vendored libraries, `AppConfig::name`, kit).
+- **Every deprecation shim is deleted** (the 0.2 and 0.3 ones, under the no-shims rule): `core/vector2.h`,
+  `core/vector3.h`, `core/collision.h` and `scene/orthographic_camera.h` as whole files, and the shims inside
+  `color.h`, `geometry.h`, `node.h`, `scene.h`, `light.h`, `particle_system.h` and `instance_buffer.h`, with their
+  tests. `Node3D::SetRotation(const Vec3&) = delete` is now always on (glm would turn a Vec3 into a Quat silently).
+  The tooling stays for later (`core/deprecated.h`, the `WLW_NO_DEPRECATED` option, the `deprecations` test), with
+  zero shims in the engine.
+- Every golden image is unchanged.
+- **Removed:** `WLWEngine`; `RenderingDriver::AttachWindow` / `SetViewport` / `Clear` / `GetDevice`;
+  `Window::Initialize(share_with)` (now `Initialize()`), `Window::SetIsActive`; `utils::TextureManager`;
+  `core::Vector2`, `core::Vector3`; `core::Color`; `scene::AABB` / `Ray` / `Plane` / `Frustum`,
+  `scene::IntersectPlane`, `scene::TransformBox`, `scene::Union`; `AABB::Intersects` / `FromPositionAndSize` /
+  `FromPositionAndScale`; `Frustum::TestAABB`; `scene::OrthographicCamera`; `scene::DirectionalLight`;
+  `Node3D::SetRotation(degrees)` / `GetModelMatrix` / `AddNode`; `Scene::AddNode` / `IterateOverNodes`;
+  `BurstSettings::spread_degrees` / `spin_max`; `ParticleSystem::BuildInstances`; `rendering::InstanceData`,
+  `PackColor`, `PackUnitByte`, `UnpackColor`.
+- **Migration:** `core::Vector2` / `Vector3` -> `wlw::Vec2` / `Vec3` (`wlw/core/math.h`; `.Normalize()` ->
+  `glm::normalize`, `.Cross(b)` -> `glm::cross`, `.Rotate(deg, axis)` -> `glm::angleAxis(glm::radians(deg), axis) * v`);
+  `core::Color` -> `wlw::Color`; `#include "wlw/core/collision.h"` -> `"wlw/core/geometry.h"` and
+  `scene::AABB` etc. -> `wlw::AABB`, `IntersectPlane(ray, plane)` -> `Raycast(ray, plane)` (a distance:
+  `ray.At(*t)` is the point), `scene::TransformBox` / `Union` -> `wlw::TransformBox` / `Union`; `a.Intersects(b)`
+  -> `Overlaps(a, b)`, `FromPositionAndSize(p, s)` -> `AABB::FromCenterSize(p, Vec3(s))`, `FromPositionAndScale` ->
+  `FromCenterSize`, `frustum.TestAABB(box)` -> `Overlaps(frustum, box)`; `OrthographicCamera` -> `Camera3D` with
+  `SetOrthographic(height)`, `SetFrameAspect(width / height)`, `SetFitMode(Contain)`, `SetPosition` +
+  `LookAt(target, up)`; `DirectionalLight` -> `DirectionalLight3D`; `SetRotation(degrees)` ->
+  `SetEulerAngles(glm::radians(degrees), EulerOrder::XYZ)`, `GetModelMatrix()` -> `GetWorldMatrix()`,
+  `node->AddNode(child)` -> `AddChild(child)`, `scene.AddNode(node)` -> `scene.Root().AddChild(node)`,
+  `IterateOverNodes(f)` -> `ForEachNode([](Node3D& node) { ... })`; `spread_degrees = d` / `spin_max = d` ->
+  `spread = d * kDegToRad` / `max_spin = d * kDegToRad`; `BuildInstances` / `InstanceData` ->
+  `WriteTo(MultiMeshInstance3D&)`; `PackColor(c)` -> `Color32(c).Packed()`, `UnpackColor(p)` ->
+  `Color32::FromPacked(p).ToColor()`, `PackUnitByte(v)` -> `UnitToByte(v)`. Code that got renderer headers
+  (textures, images, buffers) through `wlw/app/application.h` includes them itself.
+
 ### API consistency (Roadmap 2.5)
 One set of rules for the public API (CLAUDE.md "API rules"): factories hand over `unique_ptr`, getters return const
 references, things are removed by object, callbacks return a `core::Connection`, and what only the engine calls

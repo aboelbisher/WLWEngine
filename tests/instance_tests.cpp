@@ -1,6 +1,6 @@
 // Tests for instancing (Roadmap 1.6): rendering::Instance (52 bytes: layout, transforms, Color32),
 // core::SinCos, TransformBox and InstanceBounds against brute-force corners,
-// MultiMeshInstance3D::WriteInstances and its cached instance bounds, mesh nodes' boxes, and the deprecated shims.
+// MultiMeshInstance3D::WriteInstances and its cached instance bounds and mesh nodes' boxes.
 #include <algorithm>
 #include <bit>
 #include <cmath>
@@ -17,7 +17,6 @@
 
 #include "test_helpers.h"
 #include "wlw/core/geometry.h"
-#include "wlw/core/deprecated.h"
 #include "wlw/core/math.h"
 #include "wlw/core/model.h"
 #include "wlw/core/random.h"
@@ -310,26 +309,5 @@ TEST_CASE("model and material getters return the node's own pointers") {
   node.SetModel(nullptr);
   CHECK(held == nullptr);  // a held reference follows SetModel
 }
-
-#if !WLW_NO_DEPRECATED
-WLW_DISABLE_DEPRECATION_WARNINGS_BEGIN
-TEST_CASE("deprecated instance shims") {
-  scene::MultiMeshInstance3D node;
-  fx::ParticleSystem particles(64, 3u);
-  fx::BurstSettings burst;
-  burst.count_min = burst.count_max = 20;
-  particles.Burst(burst, glm::vec3(1.0f, 2.0f, 3.0f));
-  particles.Update(0.1f);
-  std::vector<rendering::InstanceData> built;
-  particles.BuildInstances(built);
-  particles.WriteTo(node);
-  REQUIRE(built.size() == node.InstanceCount());
-  for (size_t i = 0; i < built.size(); ++i) {
-    CHECK(built[i].transform == node.Instances()[i].Transform());
-    CHECK(wlw::Color32(built[i].tint).Packed() == node.Instances()[i].color);
-  }
-}
-WLW_DISABLE_DEPRECATION_WARNINGS_END
-#endif
 
 TEST_SUITE_END();

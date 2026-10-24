@@ -134,7 +134,7 @@ class FlowParticles {
   std::vector<float> phase_cos_;  //   is sin(phase + wave) = sin p cos w + cos p sin w, no sin per dot
   std::vector<float> speed_;      // multiplier on the path's speed
   std::vector<float> size_;       // multiplier on dot_size
-  std::vector<uint32_t> color_;   // RGBA8 (rendering::PackColor)
+  std::vector<uint32_t> color_;   // RGBA8 (Color32::Packed)
   std::vector<int> place_;        // place in its path's queue, -1 = moving
 };
 

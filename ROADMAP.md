@@ -7,18 +7,14 @@ around the editor and iOS ("Why this order"). Work goes one step at a time, in o
 stable: commits name them ("Roadmap 4.3b: ..."). Commits and CHANGELOG entries from before 2026-10-21
 use the old numbers: "Old numbering" at the end maps them.
 
-**Current step:** 2.6 Legacy removal (plan in chat first) · **Updated:** 2026-10-24
+**Current step:** 2.7 Platform-driven frame (plan in chat first) · **Updated:** 2026-10-24
 
-**Next session:** plan 2.6 in chat and wait for the OK (each deletion confirmed with the owner). Since 2.5 every
-  factory returns `unique_ptr` and engine-only methods sit behind `x.Internal()` (CLAUDE.md "API rules"); Threadlock
-  needs one line for it (city_art.cpp: `std::shared_ptr<Shader> gradient`). The engine is Z up since 2.4: the games' worlds (Bluzzle's board in XZ, Threadlock's liquid
-  camera, Snake) are turned in 2.8 (CHANGELOG 2.4 "Migration"). **No deprecation shims any more** (owner, 2026-10-24:
-  nothing published uses the engine): APIs change directly, CHANGELOG lists Breaking + Migration. 2.5 already broke
-  GetScreen, RemoveViewport(int), the flat AppConfig fields and createXxxWithNormals without shims. The older shims
-  (0.2: InstanceData, ParticleSystem's old WriteTo; 0.3: core::Vector2/3, core::Color, scene::AABB, collision.h,
-  SetRotation(degrees), GetModelMatrix, AddNode, IterateOverNodes, DirectionalLight, OrthographicCamera,
-  BurstSettings::spread_degrees / spin_max, PackColor...) are candidates for 2.6 (ask: some are whole files). The
-  games move off all of it in 2.8. Bluzzle is on bea1357 (2.3) with its node-types patch pushed.
+**Next session:** plan 2.7 in chat and wait for the OK. Since 2.6 there is one loop path: `Application` owns
+  the `RenderDevice` + `RenderingDriver` (no `WLWEngine`), draws the window and polls input in step 10 of `Run()`;
+  the renderer keeps the window and does the GL shutdown order in its destructor. Every deprecation shim is gone
+  (no-shims rule, owner 2026-10-24; the tooling in core/deprecated.h stays for later). The games break on main
+  since 2.4 and move in 2.8 (its list below has the call sites). Bluzzle is on bea1357 (2.3) with its node-types
+  patch pushed.
 
 Where things stand (2026-10-21):
 - Done: Phase 0 = v0.1.0 (2026-10-15), Phase 1 = v0.2.0 (2026-10-18), each step one squashed commit on main named
@@ -280,7 +276,7 @@ The editor shows and edits what this phase defines, so it comes first.
   golden image unchanged)* `GetScreen()` -> `MainViewport()`; every `Create()` returns
   `unique_ptr`; const-ref getters; removal by object instead of int ids; renderer-only methods
   behind an internal accessor; Screens get `App()`; AppConfig grouped (window, graphics, audio).
-- [ ] **2.6 Legacy removal.** `WLWEngine`, `RenderingDriver::SetViewport/Clear/AttachWindow`,
+- [x] **2.6 Legacy removal.** *(done 2026-10-24, commit "Roadmap 2.6: legacy removal"; `Application` owns the device + renderer; 8 files deleted (wlw.h/.cpp, TextureManager, the 4 shim headers, GEMINI.md) and every 0.2/0.3 shim; also `AttachWindow`'s context sharing, `RenderingDriver::GetDevice`; every golden image unchanged)* `WLWEngine`, `RenderingDriver::SetViewport/Clear/AttachWindow`,
   `Window::SetIsActive`, TextureManager, GEMINI.md (FPSCamera, FollowCamera and
   `Window::ProcessMouseMovement` went in 2.3)
   (each deletion confirmed with the owner).
@@ -289,6 +285,13 @@ The editor shows and edits what this phase defines, so it comes first.
   (6.1: a game thread like `android_main`, or `Frame()` from CADisplayLink callbacks).
 - [ ] **2.8 Migrate the games.** Bluzzle, Threadlock and Snake updated; a short note for the dropped games
   (Epicycles, Silhouette, Ripple) in the CHANGELOG.
+  Shims removed in 2.6 (CHANGELOG 2.6 "Migration"), call sites on 2026-10-24: Bluzzle `bluzzle_app.cpp`
+  (`Vector3` x13, `spread_degrees` x8 + `spin_max` x2, `AddNode` x5, `DirectionalLight` x2, `OrthographicCamera`,
+  `Vector2`, `core::Color`, `collision.h` + `IntersectPlane`), `bluzzle_app.h` (`DirectionalLight` x2,
+  `OrthographicCamera`, `core::Color`), `bluzzle_hud.cpp` (`Vector2` x4, `core::Color`), `bluzzle_screens.cpp`
+  (`core::Color`); Threadlock `liquid.cpp` (`PackColor` x3, `OrthographicCamera`, `AddNode`), `liquid.h`
+  (`OrthographicCamera`), `lantern_art.cpp` (`PackColor`), `palette.h` (`core::Color`). Plus 2.4's turn to Z up,
+  2.5's renames, and any renderer header a game got through `application.h` (it no longer includes `wlw.h`).
 
 ## Phase 3: Editor shell and game tools
 The editor as a build of each game (D12), useful first through the games' own tools. Done when Threadlock's

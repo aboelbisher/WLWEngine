@@ -102,30 +102,6 @@ TEST_CASE("directions stay in the cone") {
   for (const auto& p : ps.Particles()) CHECK(glm::dot(glm::normalize(p.velocity), glm::vec3(0, 0, 1)) >= cos_limit);
 }
 
-#if !WLW_NO_DEPRECATED
-TEST_CASE("0.3 degree settings still work") {
-  // The deprecated spread_degrees / spin_max win when set: the same particles as the radians.
-  BurstSettings radians = Fixed(50);
-  radians.spread = 30.0f * wlw::kDegToRad;
-  radians.max_spin = 90.0f * wlw::kDegToRad;
-  BurstSettings degrees = Fixed(50);
-  degrees.spread = 0.0f;
-  degrees.max_spin = 0.0f;
-  WLW_DISABLE_DEPRECATION_WARNINGS_BEGIN
-  degrees.spread_degrees = 30.0f;
-  degrees.spin_max = 90.0f;
-  WLW_DISABLE_DEPRECATION_WARNINGS_END
-  ParticleSystem a(64, 7u), b(64, 7u);
-  a.Burst(radians, glm::vec3(0.0f));
-  b.Burst(degrees, glm::vec3(0.0f));
-  REQUIRE(a.Count() == b.Count());
-  for (size_t i = 0; i < a.Count(); ++i) {
-    CHECK(glm::length(a.Particles()[i].velocity - b.Particles()[i].velocity) < 1e-5f);
-    CHECK(glm::length(a.Particles()[i].angular_velocity - b.Particles()[i].angular_velocity) < 1e-5f);
-  }
-}
-#endif
-
 TEST_CASE("delay and instances") {
   ParticleSystem ps;
   ps.gravity = glm::vec3(0.0f, -10.0f, 0.0f);
@@ -155,7 +131,7 @@ TEST_CASE("delay and instances") {
 
 TEST_CASE("write to matches the matrices glm builds") {
   // WriteTo writes T * Rx * Ry * Rz * S in closed form with core::SinCos: the same copies as glm's
-  // translate / rotate / scale (what BuildInstances did before 1.6), the same colours as PackColor.
+  // translate / rotate / scale (what BuildInstances did before 1.6), the same colours as Color32::Packed.
   ParticleSystem ps(300, 5u);
   BurstSettings s = Fixed(100);
   s.spread = wlw::kPi;

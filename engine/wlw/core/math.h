@@ -25,8 +25,6 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 
-#include "wlw/core/deprecated.h"
-
 namespace wlw {
 
 using Vec2 = glm::vec2;
@@ -204,10 +202,3 @@ inline SinCosResult SinCos(float radians) {
 }
 
 }  // namespace wlw::core
-
-// The 0.2 vector types, deprecated (Use wlw::Vec2 / Vec3); still reached through this header so games that
-// used them through engine headers keep compiling until they move (Roadmap 2.8).
-#if !WLW_NO_DEPRECATED
-#include "wlw/core/vector2.h"
-#include "wlw/core/vector3.h"
-#endif

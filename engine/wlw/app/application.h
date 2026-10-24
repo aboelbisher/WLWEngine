@@ -19,7 +19,6 @@
 #include "wlw/core/math.h"
 #include "wlw/input/input.h"
 #include "wlw/scene/window.h"
-#include "wlw/wlw.h"
 
 namespace wlw {
 
@@ -32,6 +31,10 @@ struct UIContext;
 namespace debug {
 class DebugUI;
 }
+namespace rendering {
+class RenderDevice;
+class RenderingDriver;
+}  // namespace rendering
 
 namespace app {
 
@@ -163,9 +166,11 @@ class Application final {
 
   AppConfig config_;
   // Destroyed in reverse order: screens and systems first (they may hold GPU resources and
-  // references to each other), then the UI and audio, the window handle, and the engine (GL +
-  // platform shutdown) last.
-  std::unique_ptr<WLWEngine> engine_;
+  // references to each other), then the UI and audio, the window handle, the renderer (it keeps the
+  // window: releases its scenes and its own GL objects, then shuts the platform down) and the mesh
+  // device last (the renderer uses it until then).
+  std::unique_ptr<rendering::RenderDevice> render_device_;
+  std::unique_ptr<rendering::RenderingDriver> renderer_;
   std::shared_ptr<scene::Window> window_;
   std::unique_ptr<audio::Audio> audio_;
   std::unique_ptr<ui::UIContext> ui_;  // the UI layer over the screen's canvas (pointer, safe area, widget state)

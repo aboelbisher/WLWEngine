@@ -8,10 +8,8 @@
 #include <optional>
 
 #include "test_helpers.h"
-#include "wlw/core/deprecated.h"
 #include "wlw/core/geometry.h"
 #include "wlw/scene/camera_3d.h"
-#include "wlw/scene/orthographic_camera.h"
 
 TEST_SUITE_BEGIN("picking");
 
@@ -20,15 +18,6 @@ using namespace wlw;
 namespace {
 
 const Vec2 kScreen{540.0f, 960.0f};
-
-[[maybe_unused]] bool NearMat(const glm::mat4& a, const glm::mat4& b, float tolerance) {
-  for (int c = 0; c < 4; ++c) {
-    for (int r = 0; r < 4; ++r) {
-      if (!Near(a[c][r], b[c][r], tolerance)) return false;
-    }
-  }
-  return true;
-}
 
 std::shared_ptr<scene::Camera3D> Perspective() {
   auto camera = scene::Camera3D::Create();
@@ -133,31 +122,5 @@ TEST_CASE("world to screen is the inverse") {
     }
   }
 }
-
-#if !WLW_NO_DEPRECATED
-WLW_DISABLE_DEPRECATION_WARNINGS_BEGIN
-TEST_CASE("deprecated orthographic camera matches the 0.3 matrices") {
-  auto camera = scene::OrthographicCamera::Create();
-  camera->SetPosition({0, 12, 5});
-  camera->SetTarget({1, 0, 0});
-  camera->SetVisibleArea(9, 13);
-  camera->SetClipPlanes(0.5f, 50.0f);
-  // 0.3: glm::lookAt, then the visible area fitted to the aspect (the height grown until the width fits).
-  const float aspect = kScreen.x / kScreen.y;
-  const float half_height = std::max(13.0f / 2.0f, (9.0f / 2.0f) / aspect);
-  const float half_width = half_height * aspect;
-  const glm::mat4 view = glm::lookAt(glm::vec3(0, 12, 5), glm::vec3(1, 0, 0), glm::vec3(0, 1, 0));
-  const glm::mat4 projection = glm::ortho(-half_width, half_width, -half_height, half_height, 0.5f, 50.0f);
-  CHECK(NearMat(camera->GetViewMatrix(), view, 1e-4f));
-  CHECK(NearMat(camera->GetProjectionMatrix(aspect), projection, 1e-4f));
-  // A wide screen: the height is what fits.
-  CHECK(Near(camera->VisibleSize(2.0f).y, 13.0f, 1e-4f));
-  camera->SetUp({0, 0, -1});
-  camera->SetPosition({0, 10, 0});
-  camera->SetTarget({0, 0, 0});
-  CHECK(NearMat(camera->GetViewMatrix(), glm::lookAt(glm::vec3(0, 10, 0), glm::vec3(0), glm::vec3(0, 0, -1)), 1e-4f));
-}
-WLW_DISABLE_DEPRECATION_WARNINGS_END
-#endif
 
 TEST_SUITE_END();

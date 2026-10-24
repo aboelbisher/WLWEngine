@@ -145,8 +145,7 @@ class AndroidWindow : public scene::Window {
     if (g_window == this) g_window = nullptr;
   }
 
-  bool Initialize(scene::Window* share_with) override {
-    if (share_with) WLW_LOG(LogPlatform, Warning, "Multiple windows aren't supported on Android");
+  bool Initialize() override {
     input_.Internal().SetTouchScreen(true);  // the pointer is a finger: no hover, coarse aim
     // The native window arrives asynchronously (APP_CMD_INIT_WINDOW): wait for it.
     while (g_app->window == nullptr && !g_app->destroyRequested) PollEvents(-1);

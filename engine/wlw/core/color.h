@@ -12,7 +12,6 @@
 #include <string>
 #include <string_view>
 
-#include "wlw/core/deprecated.h"
 #include "wlw/core/math.h"
 
 namespace wlw {
@@ -131,9 +130,3 @@ struct Color32 {
 static_assert(sizeof(Color32) == 4);
 
 }  // namespace wlw
-
-#if !WLW_NO_DEPRECATED
-namespace wlw::core {
-using Color WLW_DEPRECATED(0.3, "Use wlw::Color") = wlw::Color;
-}  // namespace wlw::core
-#endif

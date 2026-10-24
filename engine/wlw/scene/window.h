@@ -38,9 +38,8 @@ class Window {
   virtual ~Window() = default;
 
   // ---- Platform-specific (implemented per OS) ----
-  // Creates the OS window/surface and a GL context. `share_with`: share GPU resources with
-  // another window's context (desktop multi-window; unsupported on mobile).
-  virtual bool Initialize(Window* share_with = nullptr) = 0;
+  // Creates the OS window/surface and its GL context (the renderer calls it).
+  virtual bool Initialize() = 0;
   virtual void MakeContextCurrent() = 0;
   virtual void ProcessEvents() = 0;      // poll OS events and feed GetInput()
   virtual void SwapBuffers() = 0;        // present the drawn frame
@@ -59,8 +58,6 @@ class Window {
 
   input::Input& GetInput() { return input_; }
   const input::Input& GetInput() const { return input_; }
-
-  void SetIsActive(bool is_active) { is_active_ = is_active; }
 
   Vec2 GetSize() const {
     return size_;  // drawable size in pixels
@@ -140,8 +137,6 @@ class Window {
   Vec2 size_;  // drawable size in pixels (updated by the platform on resize)
   input::Input input_;
 
-  bool is_active_ = true;
-
   std::unique_ptr<Viewport> screen_ = Viewport::CreateScreen();
   std::vector<std::shared_ptr<Viewport>> viewports_;
   core::CallbackList<> overlays_;
@@ -168,8 +163,8 @@ class Window::InternalAccess {
   void SetGpuFrameMs(float ms) const { window_.gpu_frame_ms_ = ms; }
   void SetFragmentPrecision(std::string text) const { window_.fragment_precision_ = std::move(text); }
 
-  // Drops the scenes and viewports (their GPU resources, if nothing else holds them): the engine
-  // calls it at shutdown while the GL context still exists.
+  // Drops the scenes and viewports (their GPU resources, if nothing else holds them): the renderer
+  // calls it when it shuts down, while the GL context still exists.
   void ReleaseScenes() const {
     window_.viewports_.clear();
     window_.screen_->SetScene(nullptr);

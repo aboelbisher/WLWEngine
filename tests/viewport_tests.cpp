@@ -21,7 +21,7 @@ namespace {
 // A window without an OS window: only the shared (platform-free) part is exercised.
 class FakeWindow : public scene::Window {
  public:
-  bool Initialize(Window*) override { return true; }
+  bool Initialize() override { return true; }
   void MakeContextCurrent() override {}
   void ProcessEvents() override {}
   void SwapBuffers() override {}

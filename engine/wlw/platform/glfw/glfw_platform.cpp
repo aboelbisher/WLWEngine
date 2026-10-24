@@ -251,12 +251,11 @@ class GlfwWindow : public Window {
     window_ = nullptr;
   }
 
-  bool Initialize(Window* share_with) override {
+  bool Initialize() override {
     if (window_ != nullptr) {
       WLW_LOG(LogPlatform, Warning, "Window '%s' is already initialized", title_.c_str());
       return true;
     }
-    GLFWwindow* share = share_with ? static_cast<GlfwWindow*>(share_with)->window_ : nullptr;
     glfwWindowHint(GLFW_VISIBLE, options_.visible ? GLFW_TRUE : GLFW_FALSE);
     glfwWindowHint(GLFW_DEPTH_BITS, options_.depth ? 24 : 0);  // no depth: no stencil either
     glfwWindowHint(GLFW_STENCIL_BITS, options_.depth ? 8 : 0);
@@ -264,7 +263,7 @@ class GlfwWindow : public Window {
       glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
       glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
     }
-    window_ = glfwCreateWindow((int)size_.x, (int)size_.y, title_.c_str(), nullptr, share);
+    window_ = glfwCreateWindow((int)size_.x, (int)size_.y, title_.c_str(), nullptr, nullptr);
     glfwWindowHint(GLFW_VISIBLE, GLFW_TRUE);
     glfwWindowHint(GLFW_DEPTH_BITS, 24);
     glfwWindowHint(GLFW_STENCIL_BITS, 8);

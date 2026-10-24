@@ -2,8 +2,11 @@
 
 // Deprecation: how an engine API changes without breaking games the same day (like Unreal's UE_DEPRECATED).
 //
-// When a name changes, the old one stays as a thin shim that forwards to the new one, marked with the version
-// that deprecates it (the next release: the minor version after the one in CMakeLists.txt's project(VERSION)):
+// Not used today: while nothing published depends on the engine, APIs change directly (CHANGELOG.md: Breaking +
+// Migration; CLAUDE.md "Versioning"), and the engine has no shims. This is the tool for when a game ships on a
+// tagged engine. Then, when a name changes, the old one stays as a thin shim that forwards to the new one, marked
+// with the version that deprecates it (the next release: the minor version after the one in CMakeLists.txt's
+// project(VERSION)):
 //
 //   #if !WLW_NO_DEPRECATED
 //   WLW_DEPRECATED(0.3, "Use SetRenderScale()") inline void SetScale(float s) { SetRenderScale(s); }

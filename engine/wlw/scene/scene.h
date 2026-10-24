@@ -1,10 +1,8 @@
 #pragma once
 
 #include <cstdint>
-#include <functional>
 #include <memory>
 
-#include "wlw/core/deprecated.h"
 #include "wlw/rendering/texture.h"
 #include "wlw/scene/node.h"
 
@@ -39,25 +37,11 @@ class Scene {
     for (const std::shared_ptr<Node3D>& child : root_.GetChildren()) Walk(*child, visit);
   }
 
-#if !WLW_NO_DEPRECATED
-  WLW_DEPRECATED(0.3, "Use Root().AddChild(node)")
-  void AddNode(const std::shared_ptr<Node3D>& node) { root_.AddChild(node); }
-  WLW_DEPRECATED(0.3, "Use ForEachNode([](Node3D& node) { ... })")
-  void IterateOverNodes(const std::function<void(const std::shared_ptr<Node3D>&)>& callback) const {
-    for (const std::shared_ptr<Node3D>& child : root_.GetChildren()) WalkShared(child, callback);
-  }
-#endif
-
  private:
   template <typename F>
   static void Walk(Node3D& node, F& visit) {
     visit(node);
     for (const std::shared_ptr<Node3D>& child : node.GetChildren()) Walk(*child, visit);
-  }
-  static void WalkShared(const std::shared_ptr<Node3D>& node,
-                         const std::function<void(const std::shared_ptr<Node3D>&)>& callback) {
-    callback(node);
-    for (const std::shared_ptr<Node3D>& child : node->GetChildren()) WalkShared(child, callback);
   }
 
   Node3D root_;

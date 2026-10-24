@@ -11,8 +11,6 @@ endif()
 message(STATUS "WLWengine platform: ${WLW_PLATFORM}")
 
 add_library(wlw STATIC
-  wlw/wlw.h
-  wlw/wlw.cpp
   wlw/version.h.in
 
   wlw/anim/ease.h
@@ -36,7 +34,6 @@ add_library(wlw STATIC
   wlw/app/system.h
   wlw/app/time.h
 
-  wlw/core/collision.h
   wlw/core/color.cpp
   wlw/core/color.h
   wlw/core/fixed_timestep.h
@@ -68,8 +65,6 @@ add_library(wlw STATIC
   wlw/core/model.h
   wlw/core/profile.cpp
   wlw/core/profile.h
-  wlw/core/vector2.h
-  wlw/core/vector3.h
   wlw/core/vertex_3d.h
 
   wlw/fx/flow_particles.cpp
@@ -151,7 +146,6 @@ add_library(wlw STATIC
   wlw/scene/light.h
   wlw/scene/node.h
   wlw/scene/node_3d.cpp
-  wlw/scene/orthographic_camera.h
   wlw/scene/post_effects.cpp
   wlw/scene/post_effects.h
   wlw/scene/scene.cpp
@@ -181,7 +175,6 @@ add_library(wlw STATIC
   wlw/utils/image_loader.h
   wlw/utils/libs_impl.cpp
   wlw/utils/primitives.h
-  wlw/utils/texture_manager.h
   wlw/utils/textures.h
 )
 add_library(wlw::wlw ALIAS wlw)

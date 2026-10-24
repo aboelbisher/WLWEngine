@@ -1,21 +1,16 @@
 // Tests for wlw/core/geometry.h (Roadmap 2.1): the shapes' helpers, Overlaps and Raycast checked against brute
 // force (points sampled along rays and inside shapes, fixed seeds), degenerate rays (zero direction components,
-// origins on a face, parallel to a plane or triangle), the frustum tests never dropping a visible shape, and the
-// deprecated wlw::scene names (collision.h, included first so the engine headers after it are compiled with
-// those names visible).
-#include "wlw/core/collision.h"
+// origins on a face, parallel to a plane or triangle), the frustum tests never dropping a visible shape.
 
 #include <algorithm>
 #include <cmath>
 #include <limits>
 #include <optional>
-#include <type_traits>
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
 #include "test_helpers.h"
-#include "wlw/core/deprecated.h"
 #include "wlw/core/geometry.h"
 #include "wlw/core/random.h"
 #include "wlw/scene/camera_3d.h"
@@ -287,27 +282,5 @@ TEST_CASE("transform box keeps a flat box finite") {
   const AABB squashed = TransformBox(glm::scale(Mat4(1.0f), {2.0f, 0.0f, 1.0f}), flat);
   CHECK((squashed.min == Vec3(-2, 0, -1) && squashed.max == Vec3(2, 0, 1)));
 }
-
-#if !WLW_NO_DEPRECATED
-WLW_DISABLE_DEPRECATION_WARNINGS_BEGIN
-TEST_CASE("deprecated scene geometry shims") {
-  static_assert(std::is_same_v<scene::AABB, AABB> && std::is_same_v<scene::Ray, Ray> &&
-                std::is_same_v<scene::Plane, Plane> && std::is_same_v<scene::Frustum, Frustum>);
-  const scene::Plane ground{{0, 1, 0}, 0};
-  const std::optional<glm::vec3> hit = scene::IntersectPlane({{1, 5, 2}, {0, -1, 0}}, ground);
-  CHECK((hit && *hit == glm::vec3(1, 0, 2)));
-  CHECK(!scene::IntersectPlane({{0, 1, 0}, {1, 0, 0}}, ground));
-  const scene::AABB box = scene::AABB::FromPositionAndSize({1, 0, 0}, 2.0f);
-  CHECK((box.min == Vec3(0, -1, -1) && box.max == Vec3(2, 1, 1)));
-  CHECK(scene::AABB::FromPositionAndScale({0, 0, 0}, {2, 4, 6}).max == Vec3(1, 2, 3));
-  CHECK(box.Intersects(AABB{{2, 1, 1}, {3, 3, 3}}));
-  CHECK_FALSE(box.Intersects(AABB{{2.5f, 1, 1}, {3, 3, 3}}));
-  CHECK(scene::Union(box, AABB{}).min == box.min);
-  CHECK(scene::TransformBox(Mat4(1.0f), box).max == box.max);
-  const Frustum frustum = Frustum::FromMatrix(glm::perspective(1.0f, 1.0f, 0.1f, 10.0f));
-  CHECK(frustum.TestAABB(AABB::FromCenterSize({0, 0, -5}, Vec3(1))));
-}
-WLW_DISABLE_DEPRECATION_WARNINGS_END
-#endif
 
 TEST_SUITE_END();

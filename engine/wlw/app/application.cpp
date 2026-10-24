@@ -7,6 +7,8 @@
 #include "wlw/audio/audio.h"
 #include "wlw/platform/bridge.h"
 #include "wlw/platform/platform.h"
+#include "wlw/rendering/render_device.h"
+#include "wlw/rendering/rendering_driver.h"
 #include "wlw/ui/canvas.h"
 #include "wlw/ui/ui_context.h"
 #if WLW_DEBUG_UI
@@ -42,7 +44,8 @@ AppConfig ResolveAppConfig(AppConfig config) {
 
 Application::Application(AppConfig config)
     : config_(ResolveAppConfig(std::move(config))),
-      engine_(WLWEngine::Create()),
+      render_device_(rendering::RenderDevice::Create()),
+      renderer_(rendering::RenderingDriver::Create(render_device_.get())),
       window_(
           scene::Window::Create(config_.window.size, config_.window.title, {.depth = config_.graphics.screen_depth})),
       timestep_(config_.time.fixed_step, config_.time.max_frame_time) {
@@ -78,7 +81,7 @@ int Application::Run() {
   bool started = false;
   {
     WLW_PROFILE_SCOPE("Engine start");
-    started = engine_->Start(window_);
+    started = renderer_->Initialize(window_);  // the platform, the window and its GL context
   }
   if (!started) {
     WLW_LOG(LogApp, Error, "Engine failed to start");
@@ -112,7 +115,7 @@ int Application::Run() {
     systems_.StartPending();  // the systems added before Run, in order
   }
   // The scenes they built: compile the shader variants they need now, not during the first frames.
-  engine_->GetRenderingDriver()->WarmUp(*window_);
+  renderer_->WarmUp(*window_);
   // The game has started: ReadOnly cvars keep their values from now on. A quality lock from a config
   // file or the command line applies now that OnStart configured the levels.
   CVarBase::SetStarted(true);
@@ -222,14 +225,19 @@ int Application::Run() {
         ForEachSystem(systems_, [](System& system) { system.OnDebugUI(); });
         screens_.Internal().DebugUI();
       }
-      debug_ui_->EndFrame();  // drawn on top of the scene by Iterate()
+      debug_ui_->EndFrame();  // drawn on top of the scene by DrawWindow
     }
 #endif
 
-    // 10. Draw + present every window, then poll input; screen changes requested this frame
-    // happen now, between frames.
+    // 10. Draw + present the window, then poll input for the next frame (last frame's events are
+    // cleared first); screen changes requested this frame happen now, between frames.
     ApplyQualityRenderScale();  // a level chosen since the last frame (or at start) draws this one
-    engine_->Iterate();
+    if (window_->HasSurface()) renderer_->DrawWindow(window_);
+    window_->GetInput().Internal().BeginFrame();
+    {
+      WLW_PROFILE_SCOPE("Poll input");
+      window_->ProcessEvents();
+    }
     WLW_PROFILE_FRAME();  // presented: one frame on the profiler's timeline
     {
       WLW_PROFILE_SCOPE("Screen changes");

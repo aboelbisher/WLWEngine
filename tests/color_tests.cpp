@@ -1,6 +1,6 @@
 // Tests for wlw/core/color.h (Roadmap 2.1): Color's constructors, hex and text round trips, the exact sRGB curve
 // (every byte value survives decode + encode), alpha and shading helpers, operators with Lerp and Tween<Color>,
-// Color32 bytes, and the deprecated core::Color / PackColor shims.
+// and Color32 bytes.
 #include <cstdint>
 #include <string>
 #include <type_traits>
@@ -8,7 +8,6 @@
 #include "test_helpers.h"
 #include "wlw/anim/tween.h"
 #include "wlw/core/color.h"
-#include "wlw/core/deprecated.h"
 #include "wlw/rendering/instance_buffer.h"
 
 TEST_SUITE_BEGIN("color");
@@ -121,17 +120,5 @@ TEST_CASE("color32 bytes") {
     CHECK(Color32(Color32(b8, b8, b8, b8).ToColor()) == Color32(b8, b8, b8, b8));
   }
 }
-
-#if !WLW_NO_DEPRECATED
-WLW_DISABLE_DEPRECATION_WARNINGS_BEGIN
-TEST_CASE("deprecated color shims") {
-  static_assert(std::is_same_v<core::Color, Color>);
-  const core::Color old{0.25f, 0.5f, 0.75f, 1.0f};
-  CHECK(rendering::PackColor(old) == Color32(old).Packed());
-  CHECK(rendering::UnpackColor(0x408000FFu) == Color32::FromPacked(0x408000FFu).ToColor());
-  CHECK(rendering::PackUnitByte(0.5f) == 128u);
-}
-WLW_DISABLE_DEPRECATION_WARNINGS_END
-#endif
 
 TEST_SUITE_END();

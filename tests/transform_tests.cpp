@@ -1,7 +1,6 @@
 // Tests for Node3D's transform and hierarchy (Roadmap 2.2): Euler orders and look rotations
 // (core/rotation.h), cached local/world matrices and their dirty marks, world getters and setters,
-// children (order, moves, reparenting, refused loops), names and paths, ids, render layers, and the
-// 0.3 shims (the old degrees rotation must give the old matrix).
+// children (order, moves, reparenting, refused loops), names and paths, ids and render layers.
 #include <memory>
 #include <unordered_set>
 #include <vector>
@@ -10,7 +9,6 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 #include "test_helpers.h"
-#include "wlw/core/deprecated.h"
 #include "wlw/core/math.h"
 #include "wlw/core/model.h"
 #include "wlw/core/random.h"
@@ -47,16 +45,6 @@ bool SameRotation(const Quat& a, const Quat& b, float tolerance = 1e-4f) {
 
 Mat4 Trs(const Vec3& t, const Quat& r, const Vec3& s) {
   return glm::translate(Mat4(1.0f), t) * glm::mat4_cast(r) * glm::scale(Mat4(1.0f), s);
-}
-
-// The 0.2 node's local matrix: T * Rx * Ry * Rz * S from degrees.
-Mat4 OldLocalMatrix(const Vec3& position, const Vec3& degrees, const Vec3& scale) {
-  const Vec3 radians = glm::radians(degrees);
-  Mat4 m = glm::translate(Mat4(1.0f), position);
-  m = glm::rotate(m, radians.x, Vec3(1.0f, 0.0f, 0.0f));
-  m = glm::rotate(m, radians.y, Vec3(0.0f, 1.0f, 0.0f));
-  m = glm::rotate(m, radians.z, Vec3(0.0f, 0.0f, 1.0f));
-  return glm::scale(m, scale);
 }
 
 constexpr EulerOrder kOrders[] = {EulerOrder::XYZ, EulerOrder::XZY, EulerOrder::YXZ,
@@ -381,36 +369,6 @@ TEST_CASE("the gather skips hidden branches, depth first in child order") {
   scene.ForEachNode([&](Node3D&) { ++count; });
   CHECK(count == 5);
 }
-
-#if !WLW_NO_DEPRECATED
-WLW_DISABLE_DEPRECATION_WARNINGS_BEGIN
-TEST_CASE("0.3 shims: degrees rotation, model matrix, AddNode") {
-  core::Random rng(11);
-  for (int i = 0; i < 100; ++i) {
-    const Vec3 position(rng.Range(-5.0f, 5.0f), rng.Range(-5.0f, 5.0f), rng.Range(-5.0f, 5.0f));
-    const Vec3 degrees(rng.Range(-400.0f, 400.0f), rng.Range(-400.0f, 400.0f), rng.Range(-400.0f, 400.0f));
-    const Vec3 scale(rng.Range(-2.0f, 2.0f), rng.Range(0.1f, 2.0f), rng.Range(0.1f, 2.0f));
-    Node3D node;
-    node.SetPosition(position);
-    node.SetRotation(degrees);
-    node.SetScale(scale);
-    CHECK(NearMat(node.GetLocalMatrix(), OldLocalMatrix(position, degrees, scale), 1e-4f));  // float rounding only
-  }
-  auto parent = std::make_shared<Node3D>();
-  auto child = std::make_shared<Node3D>();
-  parent->AddNode(child);
-  parent->SetPosition({1, 0, 0});
-  CHECK(child->GetParent() == parent.get());
-  CHECK(NearMat(child->GetModelMatrix(), child->GetWorldMatrix()));
-
-  scene::Scene scene;
-  scene.AddNode(parent);
-  int visited = 0;
-  scene.IterateOverNodes([&](const std::shared_ptr<Node3D>&) { ++visited; });
-  CHECK((scene.NodeCount() == 1 && visited == 2));
-}
-WLW_DISABLE_DEPRECATION_WARNINGS_END
-#endif
 
 TEST_CASE("lights aim with a look rotation") {
   scene::DirectionalLight3D light;

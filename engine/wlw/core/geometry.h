@@ -11,7 +11,6 @@
 #include <limits>
 #include <optional>
 
-#include "wlw/core/deprecated.h"
 #include "wlw/core/math.h"
 
 namespace wlw {
@@ -70,16 +69,6 @@ struct AABB {
   AABB Grown(float by) const { return {min - Vec3(by), max + Vec3(by)}; }
   // The box grown just enough to hold `p`.
   AABB Expanded(const Vec3& p) const { return {glm::min(min, p), glm::max(max, p)}; }
-
-#if !WLW_NO_DEPRECATED
-  WLW_DEPRECATED(0.3, "Use Overlaps(a, b)") bool Intersects(const AABB& other) const {
-    return glm::all(glm::lessThanEqual(min, other.max)) && glm::all(glm::greaterThanEqual(max, other.min));
-  }
-  WLW_DEPRECATED(0.3, "Use AABB::FromCenterSize(pos, Vec3(size))")
-  static AABB FromPositionAndSize(const Vec3& pos, float size) { return FromCenterSize(pos, Vec3(size)); }
-  WLW_DEPRECATED(0.3, "Use AABB::FromCenterSize(pos, scale)")
-  static AABB FromPositionAndScale(const Vec3& pos, const Vec3& scale) { return FromCenterSize(pos, scale); }
-#endif
 };
 
 struct Sphere {
@@ -128,10 +117,6 @@ struct Frustum {
     }
     return f;
   }
-
-#if !WLW_NO_DEPRECATED
-  WLW_DEPRECATED(0.3, "Use Overlaps(frustum, box)") bool TestAABB(const AABB& box) const;
-#endif
 };
 
 // ---- Overlaps ----
@@ -171,10 +156,6 @@ inline bool Overlaps(const Frustum& frustum, const Sphere& sphere) {
   }
   return true;
 }
-
-#if !WLW_NO_DEPRECATED
-inline bool Frustum::TestAABB(const AABB& box) const { return Overlaps(*this, box); }
-#endif
 
 // ---- Raycasts: the distance t along the ray (ray.At(t) is the point), or nothing ----
 

@@ -1,28 +1,26 @@
 #pragma once
 
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <vector>
-#include <array>
-#include "wlw/rendering/index_buffer.h"
-#include "wlw/rendering/vertex_buffer.h"
-#include "wlw/core/vertex_3d.h"
-#include "wlw/utils/image_loader.h"
-#include "wlw/rendering/texture.h"
 
 #include "wlw/rendering/render_device.h"
-
 #include "wlw/scene/window.h"
 
 namespace wlw::rendering {
 class RenderTarget;
 
+// Draws windows (engine-internal: the Application owns it, games never see it). Destroying it releases the
+// window's scenes and the renderer's GL objects while the context exists, then shuts the platform down, so it
+// goes before the RenderDevice it was made with.
 class RenderingDriver {
  public:
   virtual ~RenderingDriver() = default;
 
+  // Starts the platform and makes the window's surface + GL context (the window is kept until the driver is
+  // destroyed); false on failure.
   virtual bool Initialize(std::shared_ptr<scene::Window> window) = 0;
-  virtual void AttachWindow(std::shared_ptr<scene::Window> window) = 0;
   virtual void DrawWindow(std::shared_ptr<scene::Window> window) = 0;
   // Compiles the shader variants everything in the window's scenes needs now, so the first frames
   // don't stall on it (the Application calls it once the game has built its scenes). Variants
@@ -36,11 +34,6 @@ class RenderingDriver {
   virtual std::vector<uint8_t> ReadPixels(RenderTarget& target) = 0;
   // The GPU (GL_RENDERER: e.g. "Adreno (TM) 640", "llvmpipe (LLVM 17.0.6, 256 bits)"); "" before Initialize.
   virtual std::string GpuName() const = 0;
-
-  virtual void SetViewport(int x, int y, int width, int height) = 0;
-  virtual void Clear() = 0;
-
-  virtual RenderDevice* GetDevice() = 0;
 
   static std::unique_ptr<RenderingDriver> Create(RenderDevice* device);
 };

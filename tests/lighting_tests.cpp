@@ -5,7 +5,6 @@
 #include <glm/glm.hpp>
 
 #include "test_helpers.h"
-#include "wlw/core/deprecated.h"
 #include "wlw/scene/geometry_instance.h"
 #include "wlw/scene/light.h"
 #include "wlw/scene/shadow_map.h"
@@ -62,16 +61,6 @@ TEST_CASE("spot light cone in radians") {
   CHECK((spot.GetInnerAngle() == 0.2f && spot.GetOuterAngle() == 0.3f));
   CHECK(NearVec(spot.GetDirection(), kDown));
 }
-
-#if !WLW_NO_DEPRECATED
-WLW_DISABLE_DEPRECATION_WARNINGS_BEGIN
-TEST_CASE("deprecated light names") {
-  std::shared_ptr<scene::DirectionalLight> sun = std::make_shared<scene::DirectionalLight>();
-  std::shared_ptr<scene::DirectionalLight3D> same = sun;  // the same type
-  CHECK(same->GetType() == scene::Light3D::Type::Directional);
-}
-WLW_DISABLE_DEPRECATION_WARNINGS_END
-#endif
 
 TEST_CASE("shadow box contains the bounds") {
   // Every corner of the bounds lands inside the light's box (clip space -1..1 on all axes).

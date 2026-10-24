@@ -7,7 +7,6 @@
 #include <string_view>
 #include <vector>
 
-#include "wlw/core/deprecated.h"
 #include "wlw/core/math.h"
 #include "wlw/core/rotation.h"
 
@@ -165,21 +164,9 @@ class Node3D {
   bool IsVisible() const { return visible_; }
   bool IsVisibleInHierarchy() const;
 
-#if !WLW_NO_DEPRECATED
-  WLW_DISABLE_DEPRECATION_WARNINGS_BEGIN
-  // 0.3's rotation: degrees about X, then Y, then Z as R = Rx * Ry * Rz.
-  WLW_DEPRECATED(0.3, "Use SetEulerAngles(radians, EulerOrder::XYZ) or SetRotation(Quat)")
-  void SetRotation(const Vec3& degrees) { SetEulerAngles(glm::radians(degrees), EulerOrder::XYZ); }
-  WLW_DEPRECATED(0.3, "Use GetWorldMatrix()")
-  Mat4 GetModelMatrix() const { return GetWorldMatrix(); }
-  WLW_DEPRECATED(0.3, "Use AddChild(node)")
-  void AddNode(std::shared_ptr<Node3D> node) { AddChild(std::move(node)); }
-  WLW_DISABLE_DEPRECATION_WARNINGS_END
-#else
   // glm's Quat converts implicitly from a Vec3 of Euler angles (radians): without this, a 0.2-style
   // SetRotation(Vec3(0, 90, 0)) would still compile and turn by 90 radians.
   void SetRotation(const Vec3&) = delete;
-#endif
 
  protected:
   explicit Node3D(NodeKind kind);
