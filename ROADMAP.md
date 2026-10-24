@@ -7,21 +7,18 @@ around the editor and iOS ("Why this order"). Work goes one step at a time, in o
 stable: commits name them ("Roadmap 4.3b: ..."). Commits and CHANGELOG entries from before 2026-10-21
 use the old numbers: "Old numbering" at the end maps them.
 
-**Current step:** 2.8 Migrate the games (plan in chat first) · **Updated:** 2026-10-24
+**Current step:** release v0.3.0 (Phase 2 done), then 3.1 Keys and mouse for tools · **Updated:** 2026-10-24
 
-**Next session:** plan 2.8 in chat and wait for the OK. Since 2.7 the frame is three calls
-  (`Application::Internal().Init/Frame/Shutdown`; `Run()` = those, `WLW_MAIN` unchanged), so 2.7 added nothing to
-  the games' migration. Every deprecation shim is gone (no-shims rule, owner 2026-10-24). The games break on main
-  since 2.4 and move in 2.8 (its list below has the call sites). Bluzzle is on bea1357 (2.3) with its node-types
-  patch pushed.
+**Next session:** release v0.3.0 if it isn't out yet (CLAUDE.md "Versioning"), move Bluzzle and Threadlock to the
+  tag (their 2.8 migration commits), then plan 3.1 in chat and wait for the OK.
 
 Where things stand (2026-10-21):
 - Done: Phase 0 = v0.1.0 (2026-10-15), Phase 1 = v0.2.0 (2026-10-18), each step one squashed commit on main named
   "Roadmap x.y: ..." with its details and numbers in CHANGELOG.md (0.8 also has a reformat commit, listed in
   `.git-blame-ignore-revs`). Since v0.2.0, two small additions Threadlock asked for (CHANGELOG "Unreleased"):
   `platform::KeepScreenOn`, `ui::TextStyle::rotation`.
-- Games: Bluzzle (live in Play testing; desktop + Android) and Threadlock (Android) are on the engine's main
-  (c39718e). Snake (`samples/snake`) only has to keep compiling. Epicycles, Silhouette and Ripple are on old
+- Games: Bluzzle (live in Play testing; desktop + Android) and Threadlock (Android) are migrated to the Phase 2
+  API (2.8) and move to v0.3.0 with it. Snake (`samples/snake`) only has to keep compiling. Epicycles, Silhouette and Ripple are on old
   pre-0.1 commits and are not targets (the owner dropped them).
 - How the owner works: the plan goes in chat first; code only after an OK. Work on a branch (`<topic>/setup`, or
   `bench/<topic>` so `bench.yml` runs) pushed to GitHub so CI checks it, then show the result and squash-merge to
@@ -286,15 +283,9 @@ The editor shows and edits what this phase defines, so it comes first.
   `Application::Init/Frame/Shutdown`; `Run()` loops on desktop
   and Android; `WLW_MAIN` unchanged. The editor (3.2) drives frames through it, and the shape must also fit iOS
   (6.1: a game thread like `android_main`, or `Frame()` from CADisplayLink callbacks).
-- [ ] **2.8 Migrate the games.** Bluzzle, Threadlock and Snake updated; a short note for the dropped games
-  (Epicycles, Silhouette, Ripple) in the CHANGELOG.
-  Shims removed in 2.6 (CHANGELOG 2.6 "Migration"), call sites on 2026-10-24: Bluzzle `bluzzle_app.cpp`
-  (`Vector3` x13, `spread_degrees` x8 + `spin_max` x2, `AddNode` x5, `DirectionalLight` x2, `OrthographicCamera`,
-  `Vector2`, `core::Color`, `collision.h` + `IntersectPlane`), `bluzzle_app.h` (`DirectionalLight` x2,
-  `OrthographicCamera`, `core::Color`), `bluzzle_hud.cpp` (`Vector2` x4, `core::Color`), `bluzzle_screens.cpp`
-  (`core::Color`); Threadlock `liquid.cpp` (`PackColor` x3, `OrthographicCamera`, `AddNode`), `liquid.h`
-  (`OrthographicCamera`), `lantern_art.cpp` (`PackColor`), `palette.h` (`core::Color`). Plus 2.4's turn to Z up,
-  2.5's renames, and any renderer header a game got through `application.h` (it no longer includes `wlw.h`).
+- [x] **2.8 Migrate the games.** *(done 2026-10-24, commit "Roadmap 2.8: migrate the games"; Bluzzle's world turned
+  to Z up (no Y-up root node), Threadlock and Snake moved; no engine code changed)* Bluzzle, Threadlock and Snake
+  updated; a short note for the dropped games (Epicycles, Silhouette, Ripple) in the CHANGELOG.
 
 ## Phase 3: Editor shell and game tools
 The editor as a build of each game (D12), useful first through the games' own tools. Done when Threadlock's

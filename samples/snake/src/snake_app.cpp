@@ -41,7 +41,7 @@ void SnakeApp::OnStart() {
   // Tilted, with a tight highlight: seen from straight above, an overhead sun would put a
   // specular highlight on every top face and wash the colours out.
   auto sun = std::make_shared<scene::DirectionalLight3D>();
-  sun->SetDirection({-0.5f, -1.0f, -0.7f});
+  sun->SetDirection({-0.5f, 0.7f, -1.0f});
   sun->SetAmbient(0.35f);
   App().Window().MainViewport().GetScene()->Root().AddChild(sun);
   material_ = rendering::Material::Create();
@@ -74,17 +74,20 @@ void SnakeApp::OnStart() {
 
 void SnakeApp::SetupCameras() {
   using namespace wlw;
-  const float center = (kGridSize - 1) / 2.0f;  // cells are 1x1 and centred on integer coordinates
+  // Cells are 1x1 and centred on integer coordinates; the game's cell (x, z) is the world point (x, -z) on the
+  // ground (z = 0), so the game's row 0 is the top of the screen.
+  const float center = (kGridSize - 1) / 2.0f;
+  const Vec3 board_center{center, -center, 0.0f};
 
-  // Main camera: straight down at the board, no perspective. Screen "up" is -z on the board, so
-  // the up vector is {0, 0, -1}; the usual {0, 1, 0} would be parallel to the view direction.
+  // Main camera: straight down at the board, no perspective. Screen "up" is +y on the board, so
+  // the up vector is kForward; the usual kUp would be parallel to the view direction.
   // Contain: the whole board (plus a margin) stays visible on any aspect ratio.
   const float board_with_margin = kGridSize + 2.0f;
   ortho_camera_ = scene::Camera3D::Create();
   ortho_camera_->SetOrthographic(board_with_margin, 1.0f, 60.0f);
   ortho_camera_->SetFitMode(scene::Camera3D::FitMode::Contain);
-  ortho_camera_->SetPosition({center, 30.0f, center});
-  ortho_camera_->LookAt({center, 0.0f, center}, {0.0f, 0.0f, -1.0f});
+  ortho_camera_->SetPosition(board_center + Vec3(0.0f, 0.0f, 30.0f));
+  ortho_camera_->LookAt(board_center, kForward);
 
   // For comparison (P key): a tilted perspective view (~68 degrees down). Contain keeps the smaller of the two
   // fields of view at 45 degrees, so backing off until half the board fits that angle frames it on any screen.
@@ -93,9 +96,9 @@ void SnakeApp::SetupCameras() {
   perspective_camera_->SetFitMode(scene::Camera3D::FitMode::Contain);
   const float half_board = kGridSize / 2.0f + 1.0f;  // + margin
   const float distance = half_board / std::tan(glm::radians(45.0f) / 2.0f);
-  const Vec3 direction = glm::normalize(Vec3(0.0f, 22.0f, 9.0f));
-  perspective_camera_->SetPosition(Vec3(center, 0.0f, center) + direction * distance);
-  perspective_camera_->LookAt({center, 0.0f, center});
+  const Vec3 direction = glm::normalize(Vec3(0.0f, -9.0f, 22.0f));
+  perspective_camera_->SetPosition(board_center + direction * distance);
+  perspective_camera_->LookAt(board_center);
 
   App().Window().MainViewport().SetCamera(ortho_camera_);
 }
@@ -108,8 +111,8 @@ void SnakeApp::BuildBoard() {
       auto tile = std::make_shared<wlw::scene::MeshInstance3D>();
       tile->SetModel((x + z) % 2 == 0 ? tile_a : tile_b);
       tile->SetMaterial(material_);
-      tile->SetScale({1.0f, 0.1f, 1.0f});
-      tile->SetPosition({(float)x, -0.05f, (float)z});
+      tile->SetScale({1.0f, 1.0f, 0.1f});
+      tile->SetPosition({(float)x, -(float)z, -0.05f});
       App().Window().MainViewport().GetScene()->Root().AddChild(tile);
     }
   }
@@ -126,7 +129,7 @@ void SnakeApp::EatBurst() {
   burst.speed_max = 6.0f;
   burst.size_start = 0.22f;
   burst.color = {0.95f, 0.85f, 0.3f, 1.0f};
-  particles_.Burst(burst, {static_cast<float>(head.x), 0.6f, static_cast<float>(head.z)});
+  particles_.Burst(burst, {static_cast<float>(head.x), -static_cast<float>(head.z), 0.6f});
 }
 
 void SnakeApp::Restart() {
@@ -221,8 +224,8 @@ void SnakeApp::OnRender(float alpha) {
 
   const Cell food = game_.Food();
   const float bob = 0.1f * std::sin(glm::radians(food_spin_ * 2.0f));
-  food_node_->SetPosition({(float)food.x, 0.55f + bob, (float)food.z});
-  food_node_->SetRotation(glm::angleAxis(glm::radians(food_spin_), wlw::Vec3(0.0f, 1.0f, 0.0f)));
+  food_node_->SetPosition({(float)food.x, -(float)food.z, 0.55f + bob});
+  food_node_->SetRotation(glm::angleAxis(glm::radians(food_spin_), wlw::kUp));
 
   particles_.WriteTo(*particle_node_);
 }
@@ -238,7 +241,7 @@ void SnakeApp::SyncSnakeNodes(float t) {
     // just appeared (the snake grew) has no previous position: it simply sits at the tail.
     const Cell to = body[i];
     const Cell from = i < previous.size() ? previous[i] : to;
-    node->SetPosition({from.x + (to.x - from.x) * t, 0.45f, from.z + (to.z - from.z) * t});
+    node->SetPosition({from.x + (to.x - from.x) * t, -(from.z + (to.z - from.z) * t), 0.45f});
 
     if (i == 0) {
       node->SetModel(dead ? dead_head_model_ : head_model_);

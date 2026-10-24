@@ -22,6 +22,21 @@ listed under **Breaking** with its **Migration**. Shims added before that (`WLW_
   Arc). Only the glyph corners turn; the SDF anti-aliasing holds (abs-derivative width: ~8% softer at 5°,
   ~16% at 10°, ~41% at 45°). The shadow keeps its on-screen offset. Asked for by Threadlock (World 2's pinned order slips).
 
+### Migrate the games (Roadmap 2.8)
+The games move onto the Phase 2 API. No engine code changed: this step is the games' own commits plus Snake.
+- **Bluzzle**: its world is Z up now, laid out like the engine's conventions (no Y-up root node): the board on the
+  XY plane (z = 0), row 0 at the top of the screen (+y), the tray below (-y), heights in z, gravity -Z; the
+  picking ray hits z = 0 through `Raycast`. The camera is a `Camera3D` (orthographic, `Contain`, `LookAt`), the
+  lights `DirectionalLight3D`, particle angles in radians. Screenshots before and after match (board, tray, pips,
+  shadows, drag and drop, the all-clear burst).
+- **Threadlock** (2D: a canvas and one sprite viewport): `Rgba` = `wlw::Color`; the liquid's camera is a
+  `Camera3D` looking straight down with `kForward` up; `Color32(c).Packed()`; the tile pool removes its viewports
+  by object; `Screen::App()` instead of its own `Services()`. Its desktop `threadlock_tests` / `threadlock_tool`
+  link `wlw_glm` (they couldn't find glm since 2.1).
+- **Snake**: the board on the XY plane, cameras and the sun turned to Z up: the top-down picture it had before 2.4 (since 2.4 it showed the board edge on).
+- **Dropped games**: Epicycles, Silhouette and Ripple stay on their pre-0.1 engine commits and are not migrated.
+  Moving one later means every **Migration** line since 0.1.0 (most of Phase 2's), the turn to Z up first.
+
 ### Platform-driven frame (Roadmap 2.7)
 The frame loop is three calls, so whoever owns the platform's loop can drive it: the editor (3.2: Pause / Step),
 iOS's CADisplayLink (6.1, if it doesn't use a game thread like Android) and the browser (8.3). Like Godot's
