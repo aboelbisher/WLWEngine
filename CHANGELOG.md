@@ -11,6 +11,23 @@ listed under **Breaking** with its **Migration**. Shims added before that (`WLW_
 
 ## Unreleased
 
+- HDR scene picture and an output pass (first slice of 13.1, for Bluzzle's glow): `Viewport::SetFormat(RGBA16F)`
+  works on the screen too (its 3D goes into an HDR picture; the window stays 8-bit) and on offscreen viewports
+  (their texture follows); `SetFormatOverride` / cvar `r.hdr` (-1 the game's, 0 8-bit, 1 HDR) for A/B; RGBA8
+  fallback where the GPU can't draw RGBA16F, shown in the engine panel (`RenderStats::picture_format`).
+  Post settings as data: `viewport.Post().Settings()` (`rendering/post_settings.h`). Its `tone_map` {mapper
+  `Clamp` (today's picture) or `Shoulder` (PBR Neutral's shoulder without its toe: no change below 0.8, the hue
+  kept above), `exposure`, `dither`} drives the output pass: the frame's last full-screen pass (after the game's
+  passes, before the Overlay UI), one read of the HDR picture and one write of the destination, and only when a
+  setting needs it (`PostSettings::NeedsOutputPass`). `PlanPostChain` takes `PostPlanOptions` (scene format,
+  output pass: step `kOutputPass`). Tests: planning with the output pass, formats following the scene picture,
+  re-planning on setting changes, the viewport format; GPU probes of both mappers, exposure and dithering.
+- **Breaking:** `PostPass::format`, `BlurSettings::format` and `BloomSettings::format` are
+  `std::optional<TextureFormat>`, and nullopt (the default) means the scene picture's format, so an HDR
+  viewport's passes stay HDR. Pictures don't change for 8-bit viewports (RGBA8 was the default).
+  **Migration:** code that read `pass.format` as a `TextureFormat` uses `pass.format.value_or(...)`; to keep a pass
+  8-bit on an HDR viewport, give it `.format = TextureFormat::RGBA8`.
+
 - Game mesh shaders receive shadows: `#include "wlw/shadows.glsl"` and pass `SceneShadow(vWorldPos, normal)` to
   `SceneLighting` in `fragment()`. The renderer binds the shadow map for them and sets `uReceivesShadow` from the
   frame's shadow light and `SetReceivesShadow` (before, only the engine's own shader could be shadowed).

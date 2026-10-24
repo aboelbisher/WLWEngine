@@ -524,6 +524,9 @@ is ~850 lines of C++ + ~225 of Kotlin).
   (RGBA16F or R11G11B10F by caps), manual and auto exposure, tonemapping (ACES fitted, AgX, PBR
   Neutral), 3D LUT grading, dithering, UI composited in sRGB after tonemapping; the gamma opt-out;
   Bluzzle and Threadlock retuned with the owner.
+  Early slice done (2026-10-25, for Bluzzle's glow): RGBA16F scene picture on any viewport (`SetFormat`, `r.hdr`),
+  post settings as data, the output pass (exposure, Clamp / Shoulder tone mapping, dithering). Still to do here:
+  linear shading, R11G11B10F / RGB10A2 by caps, ACES / AgX / full PBR Neutral, auto exposure, LUT grading.
 - [ ] **13.2 PBR materials.** Metallic-roughness (GGX, Smith, Schlick; Lambert or Burley diffuse),
   base / normal / ORM / emissive maps, alpha opaque / mask (alpha to coverage) / blend,
   double-sided; Lit, SimpleLit and Unlit tiers; a material editor (inspector + preview). From 1.3:

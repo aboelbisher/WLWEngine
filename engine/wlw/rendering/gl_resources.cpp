@@ -179,11 +179,12 @@ const GLShader* GLShaderFor(const Shader& shader) {
 GLuint GLFramebuffer(RenderTarget& target) {
   auto* gl = static_cast<GLFramebufferObject*>(target.Internal().Gpu());
   const bool created = gl == nullptr;
+  // Checked whenever the format may have changed (Viewport::SetFormat), not only when made.
+  if ((created || gl->format_ != target.Settings().format) && !CanRenderTo(target.Settings().format)) {
+    WLW_LOG(LogRender, Warning, "This GPU can't draw into 16-bit float textures: render target falls back to RGBA8");
+    target.Internal().SetFormat(TextureFormat::RGBA8);
+  }
   if (created) {
-    if (!CanRenderTo(target.Settings().format)) {
-      WLW_LOG(LogRender, Warning, "This GPU can't draw into 16-bit float textures: render target falls back to RGBA8");
-      target.Internal().SetFormat(TextureFormat::RGBA8);
-    }
     auto made = std::make_unique<GLFramebufferObject>(target.Settings().depth);
     gl = made.get();
     target.Internal().SetGpu(std::move(made));

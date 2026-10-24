@@ -43,6 +43,8 @@ struct RenderStats {
   int post_targets = 0;   // textures the passes before the last write into
   float post_us = 0.0f;   // their GL calls
   int invalidations = 0;  // glInvalidateFramebuffer calls (phones: pictures not loaded / stored)
+  // The format its 3D was drawn in: EffectiveFormat(), or RGBA8 where the GPU fell back.
+  rendering::TextureFormat picture_format = rendering::TextureFormat::RGBA8;
 };
 
 // The GPU's time for a viewport (Window::SetGpuTiming), smoothed, in ms; -1 = not measured
@@ -67,7 +69,7 @@ struct CanvasLayerSettings {
 
 struct ViewportSettings {
   std::string name = "Viewport";                                      // shown in the debug UI
-  rendering::TextureFormat format = rendering::TextureFormat::RGBA8;  // RGBA16F: glow, values above 1
+  rendering::TextureFormat format = rendering::TextureFormat::RGBA8;  // RGBA16F: glow, values above 1 (SetFormat)
   bool depth = true;   // a depth buffer; false for a 2D-only viewport (saves memory)
   bool smooth = true;  // linear filtering when its texture is sampled
   // Each drawn frame starts from this colour; nullopt keeps the last picture (trails, painting).
@@ -186,6 +188,26 @@ class Viewport {
             std::max(1, static_cast<int>(std::lround(static_cast<float>(pixels.y) * scale)))};
   }
 
+  // ---- Picture format (HDR) ----
+  // What its 3D and Picture layers are drawn into: RGBA16F keeps values above 1 (glow, bright
+  // highlights) for its post passes and the output pass's tone mapping (post_settings.h). The
+  // screen itself stays 8-bit: an HDR screen draws through its scene picture, and the output pass
+  // (or a copy) brings it down. An offscreen viewport's texture changes format too. A GPU that
+  // can't draw into RGBA16F falls back to RGBA8 (with a warning; the engine panel shows it).
+  // Like Unity's camera HDR switch or Godot's use_hdr_2d.
+  void SetFormat(rendering::TextureFormat format) {
+    settings_.format = format;
+    ApplyTargetFormat();
+  }
+  // A format that wins over SetFormat's while set (the r.hdr cvar sets the screen's); nullopt = none.
+  void SetFormatOverride(std::optional<rendering::TextureFormat> format) {
+    format_override_ = format;
+    ApplyTargetFormat();
+  }
+  const std::optional<rendering::TextureFormat>& GetFormatOverride() const { return format_override_; }
+  // The format it is drawn in: the override if set, else its own.
+  rendering::TextureFormat EffectiveFormat() const { return format_override_.value_or(settings_.format); }
+
   void SetUpdateMode(UpdateMode mode) { update_mode_ = mode; }
   UpdateMode GetUpdateMode() const { return update_mode_; }
   void SetClearColor(std::optional<Color> color) { settings_.clear = color; }
@@ -245,6 +267,11 @@ class Viewport {
   std::optional<float> screen_scale_;
   float render_scale_ = 1.0f;
   float render_scale_override_ = 0.0f;  // 0 = none
+  std::optional<rendering::TextureFormat> format_override_;
+  // An offscreen viewport's texture is its picture: it follows the format (reallocated before the next draw).
+  void ApplyTargetFormat() {
+    if (target_) target_->Internal().SetFormat(EffectiveFormat());
+  }
   static float ClampRenderScale(float scale) {
     return std::isfinite(scale) ? std::clamp(scale, kMinRenderScale, kMaxRenderScale) : 1.0f;
   }

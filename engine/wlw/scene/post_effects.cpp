@@ -37,7 +37,8 @@ void SetScaleOf(Viewport& viewport, const ShaderMaterial* material, float scale)
 }
 
 // The blur's passes, appended to `viewport`.
-void AppendBlur(Viewport& viewport, float scale, float spread, int iterations, rendering::TextureFormat format,
+void AppendBlur(Viewport& viewport, float scale, float spread, int iterations,
+                std::optional<rendering::TextureFormat> format,
                 std::vector<std::shared_ptr<ShaderMaterial>>& materials) {
   for (int i = 0; i < std::max(iterations, 1); ++i) {
     for (const glm::vec2 direction : {glm::vec2(1.0f, 0.0f), glm::vec2(0.0f, 1.0f)}) {

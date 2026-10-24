@@ -269,6 +269,7 @@ class GLRenderingDriver : public RenderingDriver {
     };
     for (const auto& viewport : window.Viewports()) warm(*viewport);
     warm(window.MainViewport());
+    OutputMaterial();  // made now so the warm-up compiles it (any viewport may turn tone mapping on later)
     // Every game shader and texture alive now (canvas shaders too: no scene says they're needed).
     const int custom = PrepareAliveResources();
     warmed_up_ = true;
@@ -293,17 +294,24 @@ class GLRenderingDriver : public RenderingDriver {
 #endif
     using Clock = std::chrono::steady_clock;
     const glm::ivec2 render = FitRenderSize(viewport.RenderSize(pixels));  // == pixels at render scale 1
-    // With post passes or a render scale the 3D goes into the scene picture, a target of the
-    // viewport's own format, at the render size; so does 3D that needs depth when the destination
-    // has none (a screen made without a depth buffer: WindowOptions::depth).
-    const bool needs_picture =
-        !viewport.Post().Empty() || render != pixels || (viewport.Settings().depth && !has_depth);
+    // With post passes, the output pass or a render scale the 3D goes into the scene picture, a
+    // target of the viewport's own format, at the render size; so does 3D that needs depth when the
+    // destination has none (a screen made without a depth buffer: WindowOptions::depth), and the 3D
+    // of an HDR screen (the window's surface is 8-bit).
+    const TextureFormat format = viewport.EffectiveFormat();
+    const bool needs_picture = viewport.Post().HasWork() || render != pixels ||
+                               (viewport.Settings().depth && !has_depth) ||
+                               (viewport.IsScreen() && format != TextureFormat::RGBA8);
     const PostPlan* post = nullptr;
     GLuint scene_framebuffer = destination;
+    // What the 3D is drawn into, after any fallback (the destination's format without a picture).
+    const RenderTarget* own_target = viewport.Internal().GetTarget();
+    TextureFormat drawn_format = own_target ? own_target->Settings().format : TextureFormat::RGBA8;
     if (needs_picture && pixels.x > 0 && pixels.y > 0) {
       const scene::ViewportSettings& settings = viewport.Settings();
-      post = &viewport.Post().Internal().Prepare(pixels, {settings.format, settings.smooth, settings.depth}, render);
+      post = &viewport.Post().Internal().Prepare(pixels, {format, settings.smooth, settings.depth}, render);
       scene_framebuffer = GLFramebuffer(viewport.Post().Internal().SceneTarget());
+      drawn_format = viewport.Post().Internal().SceneTarget().Settings().format;
       has_depth = settings.depth;
     }
     const std::shared_ptr<scene::Scene>& scene = viewport.GetScene();
@@ -371,6 +379,7 @@ class GLRenderingDriver : public RenderingDriver {
     stats.state_calls_skipped = state_.Skipped();
     stats.render_width = render.x;
     stats.render_height = render.y;
+    stats.picture_format = drawn_format;
 
     // 2D: Picture layers into the picture (before the passes, at its render size), Overlay layers
     // on top after them (full size: the UI stays sharp at any render scale).
@@ -503,7 +512,9 @@ class GLRenderingDriver : public RenderingDriver {
     for (size_t index = 0; index < plan.steps.size(); ++index) {
       const PostStep& step = plan.steps[index];
       // A scaled viewport without passes: the step that stretches its picture (no material: a copy).
-      const PostPass& pass = step.pass == kUpscalePass ? upscale_pass_ : passes[static_cast<size_t>(step.pass)];
+      const PostPass& pass = step.pass == kUpscalePass  ? upscale_pass_
+                             : step.pass == kOutputPass ? OutputPass(chain.Settings())
+                                                        : passes[static_cast<size_t>(step.pass)];
       WLW_PROFILE_SCOPE_DYNAMIC(pass.name.empty() ? "Post pass" : pass.name.c_str());
       WLW_PROFILE_GPU_ZONE_DYNAMIC(pass.name.empty() ? "Post pass" : pass.name.c_str());
       TimeSection(viewport_id, GpuSection::Kind::PostPass, static_cast<int>(index));
@@ -550,6 +561,24 @@ class GLRenderingDriver : public RenderingDriver {
     glEnable(GL_DEPTH_TEST);
     glBindFramebuffer(GL_FRAMEBUFFER, destination);  // the canvas draws there next
     return invalidations;
+  }
+
+  // The output pass (post_settings.h): one engine shader, shared by every viewport; its params are
+  // set from the viewport's settings just before it draws.
+  const std::shared_ptr<ShaderMaterial>& OutputMaterial() {
+    if (!output_pass_.material) {
+      const std::string* text = FindShaderFile("post/output.glsl");
+      output_pass_.material = ShaderMaterial::Create(Shader::Create(text ? *text : std::string(), "post/output.glsl"));
+    }
+    return output_pass_.material;
+  }
+  const PostPass& OutputPass(const PostSettings& settings) {
+    ShaderMaterial& material = *OutputMaterial();
+    const ToneMapSettings& tone_map = settings.tone_map;
+    material.SetParam("uExposure", tone_map.exposure);
+    material.SetParam("uShoulder", tone_map.mapper == ToneMapper::Shoulder ? 1.0f : 0.0f);
+    material.SetParam("uDither", tone_map.dither ? 1.0f : 0.0f);
+    return output_pass_;
   }
 
   // What a pass without a usable shader does: copies uSource.
@@ -1075,6 +1104,7 @@ class GLRenderingDriver : public RenderingDriver {
       DeleteShadowMap();
       glDeleteVertexArrays(1, &post_vao_);
       copy_shader_.reset();
+      output_pass_.material.reset();
       gpu_timer_.reset();
     }
     main_window_.reset();
@@ -1098,6 +1128,7 @@ class GLRenderingDriver : public RenderingDriver {
   GLuint post_vao_ = 0;                       // empty: post passes draw a triangle made in the shader
   std::shared_ptr<Shader> copy_shader_;       // a post pass without a usable shader
   PostPass upscale_pass_{.name = "Upscale"};  // kUpscalePass: no material, so a copy
+  PostPass output_pass_{.name = "Output"};    // kOutputPass: OutputMaterial()
   int max_target_size_ = 0;                   // the largest side the GPU draws into (0: not known)
   bool warned_render_size_ = false;
   std::unique_ptr<GpuTimer> gpu_timer_;  // null: this GPU can't time

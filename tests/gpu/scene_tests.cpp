@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdlib>
 #include <memory>
 #include <span>
 #include <utility>
@@ -328,6 +329,60 @@ TEST_CASE("post chain bloom") {
   AddMesh(*viewport, utils::CubeMesh(1.0f, Color{0.2f, 0.25f, 0.6f, 1.0f}), Opaque(), {1.2f, 0, 0});
   scene::AddBloom(*viewport, {.threshold = 0.7f, .strength = 1.0f});
   CheckGolden("post_bloom", viewport);
+}
+
+namespace {
+
+// An HDR viewport whose whole picture is `color` (its clear colour: a float target keeps values above 1),
+// through the output pass with `tone_map`.
+testing::Image ToneMapped(Color color, const rendering::ToneMapSettings& tone_map) {
+  auto viewport = MakeViewport();
+  viewport->SetFormat(rendering::TextureFormat::RGBA16F);
+  viewport->SetClearColor(color);
+  viewport->Post().Settings().tone_map = tone_map;
+  return gpu_tests::Render(viewport);
+}
+
+bool NearRgb(const uint8_t* pixel, int r, int g, int b, int tolerance = 2) {
+  return std::abs(pixel[0] - r) <= tolerance && std::abs(pixel[1] - g) <= tolerance &&
+         std::abs(pixel[2] - b) <= tolerance;
+}
+
+}  // namespace
+
+TEST_CASE("tone mapping") {
+  // The output pass (post_settings.h) on an HDR orange of (2, 1, 0.5). Clamp cuts each channel at 1: the
+  // hue shifts to yellow. Shoulder rolls the peak off to 1 - 0.04 / 1.4 = 0.971 and scales the others with
+  // it (0.486, 0.243), then fades towards white by 1 - 1 / (0.15 x 1.029 + 1) = 0.134: (0.971, 0.551, 0.340).
+  const Color orange{2.0f, 1.0f, 0.5f, 1.0f};
+  const testing::Image clamped = ToneMapped(orange, {.mapper = rendering::ToneMapper::Clamp, .exposure = 1.0001f});
+  CHECK(NearRgb(clamped.Pixel(128, 128), 255, 255, 128));
+  const testing::Image shoulder = ToneMapped(orange, {.mapper = rendering::ToneMapper::Shoulder});
+  CHECK(NearRgb(shoulder.Pixel(128, 128), 248, 140, 87));
+  // Below 0.8 Shoulder changes nothing.
+  CHECK(NearRgb(ToneMapped({0.6f, 0.4f, 0.2f, 1.0f}, {.mapper = rendering::ToneMapper::Shoulder}).Pixel(10, 10), 153,
+                102, 51));
+  // Exposure multiplies first.
+  CHECK(NearRgb(ToneMapped(orange, {.exposure = 0.5f}).Pixel(200, 50), 255, 128, 64));
+}
+
+TEST_CASE("dithering") {
+  // 0.5 is half-way between two 8-bit steps (127.5): without dithering every pixel rounds the same way,
+  // with it the noise spreads them over both neighbours (no flat bands in gradients).
+  auto count_values = [](const testing::Image& image) {
+    std::array<int, 256> counts{};
+    for (int y = 0; y < image.height; ++y) {
+      for (int x = 0; x < image.width; ++x) ++counts[image.Pixel(x, y)[0]];
+    }
+    return counts;
+  };
+  const Color grey{0.5f, 0.5f, 0.5f, 1.0f};
+  const auto flat = count_values(ToneMapped(grey, {.exposure = 1.0001f}));
+  CHECK(std::max(flat[127], flat[128]) == gpu_tests::kSize * gpu_tests::kSize);
+  const auto dithered = count_values(ToneMapped(grey, {.dither = true}));
+  CHECK((dithered[127] > gpu_tests::kSize * gpu_tests::kSize / 4 &&
+         dithered[128] > gpu_tests::kSize * gpu_tests::kSize / 4));
+  CHECK(dithered[127] + dithered[128] == gpu_tests::kSize * gpu_tests::kSize);  // never more than half a step
 }
 
 TEST_CASE("canvas") {

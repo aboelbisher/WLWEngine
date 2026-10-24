@@ -117,13 +117,19 @@ void EnginePanel::OnDebugUI() {
     ImGui::Text("%s post: %d passes, %d textures, %d invalidated, CPU %.0f us", name, s.post_passes, s.post_targets,
                 s.invalidations, s.post_us);
     const rendering::PostChain& chain = viewport.Post();
+    // The scene picture's format as drawn (after any fallback) and as asked for.
+    auto format_name = [](rendering::TextureFormat format) {
+      return format == rendering::TextureFormat::RGBA16F ? "RGBA16F (HDR)" : "RGBA8";
+    };
+    ImGui::Text("  picture %s%s", format_name(s.picture_format),
+                s.picture_format != viewport.EffectiveFormat() ? " (fallback: the GPU can't draw RGBA16F)" : "");
     const std::vector<float>& gpu_ms = viewport.GetGpuStats().pass_ms;
     auto gpu_text = [&gpu_ms](size_t i, char (&text)[32]) {
       text[0] = '\0';
       if (i < gpu_ms.size() && gpu_ms[i] >= 0.0f) std::snprintf(text, sizeof(text), ", GPU %.2f ms", gpu_ms[i]);
     };
     char gpu[32];
-    if (chain.Empty()) {  // a scaled viewport without passes: the copy that stretches its picture
+    if (chain.Empty() && !chain.HasOutputPass()) {  // without passes: the copy that brings its picture over
       gpu_text(0, gpu);
       ImGui::BulletText("upscale (copy)%s", gpu);
     }
@@ -134,6 +140,13 @@ void EnginePanel::OnDebugUI() {
       gpu_text(i, gpu);
       ImGui::BulletText("%s x%.2f%s%s%s", shader.c_str(), pass.scale, pass.name.empty() ? "" : " as ",
                         pass.name.c_str(), gpu);
+    }
+    if (chain.HasOutputPass()) {
+      const rendering::ToneMapSettings& tone_map = chain.Settings().tone_map;
+      gpu_text(chain.Passes().size(), gpu);
+      ImGui::BulletText("output: %s, exposure %.2f%s%s",
+                        tone_map.mapper == rendering::ToneMapper::Shoulder ? "shoulder" : "clamp", tone_map.exposure,
+                        tone_map.dither ? ", dither" : "", gpu);
     }
   };
   post_line("Screen", window.MainViewport());

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "wlw/rendering/shader_material.h"
@@ -18,7 +19,7 @@ struct BlurSettings {
   float scale = 0.5f;   // the passes' size as a fraction of the viewport's: smaller = cheaper and wider
   float spread = 1.0f;  // tap spacing in texels: more = wider, eventually streaky
   int iterations = 1;   // each is one pass across + one down; more = smoother and wider
-  rendering::TextureFormat format = rendering::TextureFormat::RGBA8;  // RGBA16F keeps values above 1
+  std::optional<rendering::TextureFormat> format;  // nullopt = the scene picture's; RGBA16F keeps values above 1
 };
 
 // The blur's shader materials (one per pass, all the same shader): SetParam("uSpread", s).
@@ -40,8 +41,8 @@ struct BloomSettings {
   float strength = 0.8f;   // how much glow is added
   float scale = 0.25f;     // the glow's resolution: a quarter is cheap on phones and soft anyway
   float spread = 1.5f;
-  int iterations = 2;                                                 // blur rounds: more = a wider halo
-  rendering::TextureFormat format = rendering::TextureFormat::RGBA8;  // of the glow passes
+  int iterations = 2;                              // blur rounds: more = a wider halo
+  std::optional<rendering::TextureFormat> format;  // of the glow passes; nullopt = the scene picture's
 };
 
 // The bloom's materials: bright.SetParam("uThreshold" / "uKnee", ...), combine.SetParam("uStrength", ...).

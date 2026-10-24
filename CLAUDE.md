@@ -138,6 +138,12 @@ engine/wlw/
               Post passes (post_pass.h): Viewport::AddPostPass({material (shader_type post), scale, format, name, inputs});
               with passes the 3D draws into the scene picture, PlanPostChain (CPU, tested) ping-pongs pooled targets, the
               last pass writes the destination (screen or viewport texture), then the Overlay canvas layers (UI not post-processed).
+              A pass's format nullopt = the scene picture's. HDR: Viewport::SetFormat(RGBA16F) (screen: 3D into an HDR scene
+              picture, the surface stays 8-bit; offscreen: its texture follows), SetFormatOverride / cvar r.hdr, RGBA8
+              fallback (RenderStats::picture_format). Post settings as data (post_settings.h, Post().Settings(), Godot
+              Environment / Unity Volume shape): tone_map {Clamp | Shoulder (PBR Neutral's shoulder, no toe: we shade gamma-
+              encoded), exposure, dither} -> the OUTPUT PASS (shaders/post/output.glsl, kOutputPass in the plan): after the
+              game's passes, writes the destination, only when NeedsOutputPass(); renderer-owned material, params set per draw.
               Ready-made (scene/post_effects.h, shaders/post/*): AddBlur (separable 9-tap Gaussian in 5 reads), AddBloom
               (bright pass with soft knee -> blur at 1/4 -> combine onto the picture before it), AddThreshold (density ->
               solid shapes coloured rgb/a: soft additive dots -> AddBlur -> AddThreshold = metaballs/liquid; keep the

@@ -22,6 +22,7 @@
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
+#include <optional>
 #include <thread>
 
 namespace wlw::app {
@@ -391,6 +392,12 @@ void Application::ApplyStartupCVars() {
   WatchCVar(cv_target_fps, [this] { window_->SetTargetFps(cv_target_fps.Get()); });
   WatchCVar(cv_pacing_auto_interval, [this] { window_->SetAutoSwapInterval(cv_pacing_auto_interval.Get()); });
   WatchCVar(cv_render_scale, [this] { window_->MainViewport().SetRenderScaleOverride(cv_render_scale.Get()); });
+  WatchCVar(cv_hdr, [this] {
+    const int hdr = cv_hdr.Get();
+    window_->MainViewport().SetFormatOverride(
+        hdr < 0 ? std::nullopt
+                : std::optional(hdr > 0 ? rendering::TextureFormat::RGBA16F : rendering::TextureFormat::RGBA8));
+  });
   cvar_callbacks_.emplace_back(cv_quality_lock.OnChange([this] {
     if (!quality_.Configured()) return;
     if (cv_quality_lock.Get() < 0) {

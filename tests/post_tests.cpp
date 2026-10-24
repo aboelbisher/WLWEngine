@@ -206,13 +206,96 @@ TEST_CASE("render scale upscale") {
          chain.Internal().SceneTarget().Width() == 200));  // the same texture, resized
 }
 
+TEST_CASE("output pass") {
+  const rendering::PostPlanOptions output{.output_pass = true};
+  // Alone: one step from the scene picture to the destination (it also does a render scale's stretch).
+  const PostPlan alone = rendering::PlanPostChain({}, kPhone, {540, 1200}, output);
+  REQUIRE(alone.steps.size() == 1);
+  CHECK((alone.steps[0].pass == rendering::kOutputPass && alone.steps[0].source == kSceneTarget &&
+         alone.steps[0].output == kDestination && alone.steps[0].size == kPhone && alone.targets.empty()));
+
+  // After passes: the last pass now writes a target, the output pass reads it and writes the destination.
+  const std::vector<PostPass> passes{Pass(0.5f), Pass(), Pass(1.0f, "", {{"uFirst", rendering::kScenePicture}})};
+  const PostPlan plan = rendering::PlanPostChain(passes, kPhone, {0, 0}, output);
+  REQUIRE(plan.steps.size() == 4);
+  const rendering::PostStep& last = plan.steps[3];
+  CHECK((last.pass == rendering::kOutputPass && last.output == kDestination && last.size == kPhone));
+  CHECK((plan.steps[2].output >= 0 && last.source == plan.steps[2].output));
+  CHECK(plan.steps[2].size == kPhone);  // a full-size pass keeps its size
+  // The rules of the plan still hold (the checker expects one step per pass: without the output step).
+  PostPlan passes_only = plan;
+  passes_only.steps.pop_back();
+  for (size_t i = 0; i < passes_only.steps.size(); ++i) CHECK(passes_only.steps[i].output >= 0);
+  CHECK(plan.steps[1].output != plan.steps[2].output);
+}
+
+TEST_CASE("pass formats follow the scene picture") {
+  // Passes without a format of their own write the scene picture's: an HDR viewport stays HDR.
+  const std::vector<PostPass> passes{PostPass{.scale = 0.5f}, Pass(0.5f, "", {}, TextureFormat::RGBA8), PostPass{}};
+  const PostPlan hdr = rendering::PlanPostChain(passes, kPhone, {0, 0}, {.scene_format = TextureFormat::RGBA16F});
+  CHECK(hdr.targets[static_cast<size_t>(hdr.steps[0].output)].format == TextureFormat::RGBA16F);
+  CHECK(hdr.targets[static_cast<size_t>(hdr.steps[1].output)].format == TextureFormat::RGBA8);  // its own
+  const PostPlan ldr = rendering::PlanPostChain(passes, kPhone);
+  CHECK(ldr.targets[static_cast<size_t>(ldr.steps[0].output)].format == TextureFormat::RGBA8);
+
+  // The ready-made effects follow it too, unless given a format.
+  auto view = scene::Viewport::Create();
+  scene::AddBlur(*view);
+  scene::AddBlur(*view, {.format = TextureFormat::RGBA16F});
+  CHECK((!view->Post().Passes()[0].format && view->Post().Passes()[2].format == TextureFormat::RGBA16F));
+}
+
+TEST_CASE("settings re-plan the chain") {
+  rendering::PostChain chain;
+  CHECK((!chain.HasOutputPass() && !chain.HasWork()));
+  const rendering::RenderTargetSettings scene{TextureFormat::RGBA16F, true, true};
+  // Nothing asked for at the same size: one copy (see "render scale upscale").
+  CHECK(chain.Internal().Prepare({200, 100}, scene).steps[0].pass == rendering::kUpscalePass);
+
+  // Turning tone mapping on adds the output pass at the next Prepare; turning it off removes it.
+  chain.Settings().tone_map.mapper = rendering::ToneMapper::Shoulder;
+  CHECK((chain.HasOutputPass() && chain.HasWork()));
+  const PostPlan& on = chain.Internal().Prepare({200, 100}, scene);
+  CHECK((on.steps.size() == 1 && on.steps[0].pass == rendering::kOutputPass));
+  chain.Settings().tone_map.mapper = rendering::ToneMapper::Clamp;
+  CHECK(chain.Internal().Prepare({200, 100}, scene).steps[0].pass == rendering::kUpscalePass);
+
+  // Each setting away from its "do nothing" value needs it.
+  CHECK(!rendering::PostSettings{}.NeedsOutputPass());
+  CHECK(rendering::PostSettings{.tone_map = {.exposure = 1.5f}}.NeedsOutputPass());
+  CHECK(rendering::PostSettings{.tone_map = {.dither = true}}.NeedsOutputPass());
+
+  // A pass that inherits the format follows the scene picture when it changes.
+  chain.Add(PostPass{.scale = 0.5f});
+  chain.Add(PostPass{});
+  chain.Internal().Prepare({200, 100}, {TextureFormat::RGBA8, true, true});
+  CHECK(chain.Internal().Target(0).Settings().format == TextureFormat::RGBA8);
+  chain.Internal().Prepare({200, 100}, scene);
+  CHECK(chain.Internal().Target(0).Settings().format == TextureFormat::RGBA16F);
+}
+
+TEST_CASE("viewport format") {
+  // The screen's picture format: its own, or the override (the r.hdr cvar) while set.
+  auto view = scene::Viewport::Create();
+  CHECK(view->EffectiveFormat() == TextureFormat::RGBA8);
+  view->SetFormat(TextureFormat::RGBA16F);
+  CHECK((view->EffectiveFormat() == TextureFormat::RGBA16F && view->Settings().format == TextureFormat::RGBA16F));
+  view->SetFormatOverride(TextureFormat::RGBA8);
+  CHECK(view->EffectiveFormat() == TextureFormat::RGBA8);
+  // An offscreen viewport's texture follows (the GPU storage is remade before its next draw).
+  CHECK(view->GetTexture()->Settings().format == TextureFormat::RGBA8);
+  view->SetFormatOverride(std::nullopt);
+  CHECK((view->EffectiveFormat() == TextureFormat::RGBA16F &&
+         view->GetTexture()->Settings().format == TextureFormat::RGBA16F));
+}
+
 TEST_CASE("post shaders") {
   // `shader_type post` has no vertex(); the engine's post shaders all parse as post shaders.
   CHECK(rendering::SplitShaderSource("shader_type post; void fragment() { FragColor = vec4(1.0); }").target ==
         rendering::Shader::Target::Post);
   CHECK(!rendering::SplitShaderSource("shader_type post; void vertex() {} void fragment() {}").ok);
-  for (const char* file :
-       {"post/copy.glsl", "post/blur.glsl", "post/bright.glsl", "post/bloom_combine.glsl", "post/threshold.glsl"}) {
+  for (const char* file : {"post/copy.glsl", "post/blur.glsl", "post/bright.glsl", "post/bloom_combine.glsl",
+                           "post/threshold.glsl", "post/output.glsl"}) {
     const std::string* text = rendering::FindShaderFile(file);
     CHECK(text != nullptr);
     if (!text) continue;

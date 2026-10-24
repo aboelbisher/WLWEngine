@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <optional>
 #include <span>
 #include <string>
 #include <utility>
@@ -8,6 +9,7 @@
 
 #include <glm/glm.hpp>
 
+#include "wlw/rendering/post_settings.h"
 #include "wlw/rendering/render_target.h"
 #include "wlw/rendering/shader_material.h"
 #include "wlw/rendering/texture.h"
@@ -21,7 +23,9 @@
 // The order of a frame, per viewport: its 3D into a texture of its own (the "scene picture", at the
 // viewport's render size: Viewport::SetRenderScale), the passes in the order added, the LAST one
 // writing where the viewport's picture goes (the screen or the viewport's texture), then its 2D
-// canvas on top (the UI stays sharp). The passes before the last write into textures the viewport
+// canvas on top (the UI stays sharp). When the settings need the output pass (post_settings.h:
+// tone mapping...), it runs after the game's passes and is the one that writes the destination.
+// The passes before the last write into textures the viewport
 // keeps for them (a small pool, reused every frame). Pass sizes are fractions of the viewport's
 // size, whatever its render scale: passes read their inputs with linear filtering, so a smaller
 // scene picture is stretched by the first pass that reads it.
@@ -37,12 +41,13 @@ struct PostInput {
 };
 
 struct PostPass {
-  std::shared_ptr<ShaderMaterial> material;     // its shader must be `shader_type post;`; its params apply
-                                                // (null or not compiling: the pass copies uSource)
-  float scale = 1.0f;                           // output size as a fraction of the viewport's: 0.25 = a
-                                                // cheap blur (the last pass is always full size)
-  TextureFormat format = TextureFormat::RGBA8;  // RGBA16F: values above 1 (glow); ignored by the last pass
-  std::string name;                             // lets later passes read its output (PostInput)
+  std::shared_ptr<ShaderMaterial> material;  // its shader must be `shader_type post;`; its params apply
+                                             // (null or not compiling: the pass copies uSource)
+  float scale = 1.0f;                        // output size as a fraction of the viewport's: 0.25 = a
+                                             // cheap blur (the last pass is always full size)
+  std::optional<TextureFormat> format;       // nullopt = the scene picture's (an HDR viewport's passes
+                                             // stay HDR); RGBA16F: values above 1. Ignored by the last pass
+  std::string name;                          // lets later passes read its output (PostInput)
   std::vector<PostInput> inputs;
 };
 
@@ -52,6 +57,8 @@ inline constexpr int kSceneTarget = -1;  // the scene picture
 inline constexpr int kDestination = -2;  // where the viewport's picture goes (the last pass's output)
 inline constexpr int kUpscalePass = -1;  // PostStep::pass of the copy that brings the scene picture
                                          // to the destination (stretched if scaled) without passes
+inline constexpr int kOutputPass = -2;   // PostStep::pass of the output pass (post_settings.h): after
+                                         // the passes, writing the destination
 
 struct PostTargetSpec {
   glm::ivec2 size{1, 1};
@@ -66,8 +73,13 @@ struct PostStep {
   std::vector<std::pair<std::string, int>> inputs;  // extra textures: uniform -> kSceneTarget or target index
 };
 
+struct PostPlanOptions {
+  TextureFormat scene_format = TextureFormat::RGBA8;  // the scene picture's: passes without a format write it
+  bool output_pass = false;                           // one more step after the passes (kOutputPass)
+};
+
 struct PostPlan {
-  std::vector<PostStep> steps;          // one per pass, in order
+  std::vector<PostStep> steps;          // one per pass, in order (then the output pass, if planned)
   std::vector<PostTargetSpec> targets;  // the textures the passes before the last need
   std::vector<std::string> errors;      // unknown input names, repeated names (those inputs are skipped)
 };
@@ -76,8 +88,10 @@ struct PostPlan {
 // size; {0, 0} = `pixels`). Targets are shared as much as possible: a pass writes into a target of
 // its size and format that no later pass still has to read (passes ping-pong between two), and
 // never into the one it reads. Without passes, a scene picture of another size gets one step: a
-// copy (kUpscalePass) that stretches it to `pixels`.
-PostPlan PlanPostChain(std::span<const PostPass> passes, glm::ivec2 pixels, glm::ivec2 scene_pixels = {0, 0});
+// copy (kUpscalePass) that stretches it to `pixels`. With `options.output_pass` the output pass is the
+// last step (full size, writing the destination; it also does the stretch) and every pass writes a target.
+PostPlan PlanPostChain(std::span<const PostPass> passes, glm::ivec2 pixels, glm::ivec2 scene_pixels = {0, 0},
+                       const PostPlanOptions& options = {});
 
 // A viewport's passes and the textures they use (owned by scene::Viewport).
 class PostChain {
@@ -90,8 +104,16 @@ class PostChain {
     passes_.clear();
     planned_ = false;
   }
-  bool Empty() const { return passes_.empty(); }
+  bool Empty() const { return passes_.empty(); }  // no game passes (the output pass may still run)
   const std::vector<PostPass>& Passes() const { return passes_; }
+
+  // The viewport's post settings (post_settings.h): change them any time, read every frame.
+  PostSettings& Settings() { return settings_; }
+  const PostSettings& Settings() const { return settings_; }
+  // Whether the output pass runs (re-planned before the next draw when this changes).
+  bool HasOutputPass() const { return settings_.NeedsOutputPass(); }
+  // Whether anything runs after the 3D: game passes or the output pass.
+  bool HasWork() const { return !passes_.empty() || HasOutputPass(); }
   // Gives a pass a name (e.g. so an effect added after it can read its output).
   void SetName(size_t index, std::string name) {
     if (index >= passes_.size()) return;
@@ -127,10 +149,12 @@ class PostChain {
   int TargetCount() const { return static_cast<int>(targets_.size()); }
 
   std::vector<PostPass> passes_;
+  PostSettings settings_;
   PostPlan plan_;
   bool planned_ = false;
   glm::ivec2 planned_pixels_{0, 0};
   glm::ivec2 planned_scene_pixels_{0, 0};
+  PostPlanOptions planned_options_;
   std::shared_ptr<RenderTarget> scene_target_;
   RenderTargetSettings scene_settings_;  // as asked for (the GPU may fall back)
   std::vector<std::shared_ptr<RenderTarget>> targets_;

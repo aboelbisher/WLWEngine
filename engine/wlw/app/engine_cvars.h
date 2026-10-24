@@ -31,6 +31,11 @@ inline CVar<float> cv_render_scale{"r.render_scale", 0.0f,
                                    "The screen's 3D resolution scale, 0.25-2 (0 = the game's / quality level's)",
                                    CVarFlags::None, CVar<float>::Range{0.0f, 2.0f}};
 
+// The screen's picture format (Viewport::SetFormatOverride) over the game's: 1 = RGBA16F (HDR), 0 = RGBA8,
+// -1 = the game's. For A/B comparisons of HDR's look and cost.
+inline CVar<int> cv_hdr{"r.hdr", -1, "The screen's 3D picture: 1 = HDR (RGBA16F), 0 = 8-bit, -1 = the game's",
+                        CVarFlags::None, CVar<int>::Range{-1, 1}};
+
 // A fixed quality level (app/quality.h), or -1 to let the engine choose.
 inline CVar<int> cv_quality_lock{"quality.lock", -1, "Fixed quality level, -1 = automatic", CVarFlags::None,
                                  CVar<int>::Range{-1, 15}};

@@ -18,11 +18,17 @@ glm::ivec2 ScaledSize(glm::ivec2 pixels, float scale) {
 
 }  // namespace
 
-PostPlan PlanPostChain(std::span<const PostPass> passes, glm::ivec2 pixels, glm::ivec2 scene_pixels) {
+PostPlan PlanPostChain(std::span<const PostPass> passes, glm::ivec2 pixels, glm::ivec2 scene_pixels,
+                       const PostPlanOptions& options) {
   PostPlan plan;
   pixels = glm::max(pixels, glm::ivec2(1));
   if (scene_pixels.x <= 0 || scene_pixels.y <= 0) scene_pixels = pixels;
   const int count = static_cast<int>(passes.size());
+  if (count == 0 && options.output_pass) {
+    // Only the output pass: it reads the scene picture and writes the destination (stretching it if scaled).
+    plan.steps.push_back({.pass = kOutputPass, .source = kSceneTarget, .output = kDestination, .size = pixels});
+    return plan;
+  }
   if (count == 0) {
     // A scene picture drawn at another size (render scale): a copy stretches it to the destination.
     if (scene_pixels != pixels) {
@@ -57,10 +63,12 @@ PostPlan PlanPostChain(std::span<const PostPass> passes, glm::ivec2 pixels, glm:
     }
   }
 
-  // The last step that reads each pass's output: the next pass (uSource), or a later input.
+  // The last step that reads each pass's output: the next pass or the output pass (uSource), or a
+  // later input. The output pass is step `count` when planned: the last pass then writes a target too.
+  const int last_pass = options.output_pass ? count : count - 1;  // the step that writes the destination
   std::vector<int> last_read(static_cast<size_t>(count), -1);
   for (int i = 0; i < count; ++i) {
-    if (i + 1 < count) last_read[static_cast<size_t>(i)] = i + 1;
+    if (i + 1 <= last_pass) last_read[static_cast<size_t>(i)] = i + 1;
     for (const auto& [_, pass] : reads[static_cast<size_t>(i)]) {
       if (pass >= 0) last_read[static_cast<size_t>(pass)] = std::max(last_read[static_cast<size_t>(pass)], i);
     }
@@ -78,11 +86,11 @@ PostPlan PlanPostChain(std::span<const PostPass> passes, glm::ivec2 pixels, glm:
     for (const auto& [uniform, read] : reads[static_cast<size_t>(i)]) {
       step.inputs.emplace_back(uniform, read < 0 ? kSceneTarget : output_of[static_cast<size_t>(read)]);
     }
-    if (i == count - 1) {
+    if (i == last_pass) {
       step.output = kDestination;
       step.size = pixels;
     } else {
-      const PostTargetSpec spec{ScaledSize(pixels, pass.scale), pass.format};
+      const PostTargetSpec spec{ScaledSize(pixels, pass.scale), pass.format.value_or(options.scene_format)};
       int chosen = -1;
       for (int t = 0; t < static_cast<int>(plan.targets.size()); ++t) {
         const PostTargetSpec& existing = plan.targets[static_cast<size_t>(t)];
@@ -103,13 +111,20 @@ PostPlan PlanPostChain(std::span<const PostPass> passes, glm::ivec2 pixels, glm:
     output_of[static_cast<size_t>(i)] = step.output;
     plan.steps.push_back(std::move(step));
   }
+  if (options.output_pass) {
+    plan.steps.push_back(
+        {.pass = kOutputPass, .source = output_of.back(), .output = kDestination, .size = pixels, .inputs = {}});
+  }
   return plan;
 }
 
 const PostPlan& PostChain::Prepare(glm::ivec2 pixels, const RenderTargetSettings& scene, glm::ivec2 scene_pixels) {
   if (scene_pixels.x <= 0 || scene_pixels.y <= 0) scene_pixels = pixels;
-  if (!planned_ || pixels != planned_pixels_ || scene_pixels != planned_scene_pixels_) {
-    plan_ = PlanPostChain(passes_, pixels, scene_pixels);
+  const PostPlanOptions options{.scene_format = scene.format, .output_pass = HasOutputPass()};
+  if (!planned_ || pixels != planned_pixels_ || scene_pixels != planned_scene_pixels_ ||
+      options.scene_format != planned_options_.scene_format || options.output_pass != planned_options_.output_pass) {
+    plan_ = PlanPostChain(passes_, pixels, scene_pixels, options);
+    planned_options_ = options;
     for (const std::string& error : plan_.errors) WLW_LOG(LogRender, Warning, "%s", error.c_str());
     planned_ = true;
     planned_pixels_ = pixels;

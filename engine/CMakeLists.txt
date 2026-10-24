@@ -119,6 +119,7 @@ add_library(wlw STATIC
   wlw/rendering/mesh_variant.h
   wlw/rendering/post_pass.cpp
   wlw/rendering/post_pass.h
+  wlw/rendering/post_settings.h
   wlw/rendering/render_device.h
   wlw/rendering/render_device_gl.cpp
   wlw/rendering/render_list.h
