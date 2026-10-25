@@ -209,6 +209,12 @@ inline std::optional<float> Raycast(const Ray& ray, const Sphere& sphere) {
 }
 
 // Möller and Trumbore's test against the triangle a, b, c (both sides; editor picking, mesh hits).
+// MSVC 19.44 inlines a degenerate triangle's constant-zero det and warns about 1 / det (C4723),
+// although that path has returned: the warning is off for this function.
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4723)
+#endif
 inline std::optional<float> Raycast(const Ray& ray, const Vec3& a, const Vec3& b, const Vec3& c) {
   constexpr float kParallel = 1e-8f;
   const Vec3 edge1 = b - a;
@@ -227,6 +233,9 @@ inline std::optional<float> Raycast(const Ray& ray, const Vec3& a, const Vec3& b
   if (t < 0.0f) return std::nullopt;
   return t;
 }
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
 
 // ---- Boxes ----
 
