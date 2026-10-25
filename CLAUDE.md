@@ -24,7 +24,8 @@ engine/wlw/
               android/java/com/wlw/AudioWatcher.kt (bridge "audio"; watches playback, never takes audio focus).
               Music: Audio::PlayMusic streams a file (decode thread -> lock-free ring -> Mixer stream slots with crossfades)
   anim/       ease.h (Penner easing curves), tween.h (Tween<T>: value-type tweens the game owns and samples),
-              shake.h (trauma-based screen shake: trauma decays, offset = trauma^2 x smooth noise)
+              shake.h (trauma-based screen shake: trauma decays, offset = trauma^2 x smooth noise),
+              timeline.h (Timeline: beats placed Then / With / At on one clock; cues polled with Crossed; Skip)
   fx/         ParticleSystem: CPU simulation (fixed capacity, swap-remove, bursts, Emit = one exact particle,
               optional Floor rectangle in XY at a height in z they bounce on and fall past; gravity -Z; BurstSettings::spread /
               max_spin and Particle::angles / angular_velocity in radians); WriteTo(MultiMeshInstance3D&) = WriteInstances, rows of

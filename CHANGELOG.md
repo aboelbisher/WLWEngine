@@ -11,6 +11,12 @@ listed under **Breaking** with its **Migration**. Shims added before that (`WLW_
 
 ## Unreleased
 
+- `anim::Timeline` (anim/timeline.h, for Bluzzle's game-over sequence): beats on one clock, placed `Then` (after
+  the last beat added, with an optional gap), `With` (with its start, plus an offset) or `At` a time; a plain value
+  like `Tween`, the owner calls `Update(dt)` and reads `Progress` / `Elapsed` / `Started` / `Done` per beat. No
+  callbacks: a cue is a beat of length 0 polled with `Crossed`, true once, on the update that reached it (also
+  when a long frame jumps past several). `Skip()` jumps to the end (crossing what's left), `Skipped()` lets the
+  owner drop one-by-one cues; `Restart`, `Clear`, `Duration`, `Finished`. Tests: placement, progress, cues.
 - `ui::Badge` (widgets.h): a round display for one number read at a glance (a stage, a clock): a disc, the
   value, an optional caption and an optional progress ring filled clockwise from 12 (`BadgeStyle`: ring and value
   colours, scale). `Icon::Rotate`: a block with a quarter-turn arrow. Tests: "badge", every icon draws.

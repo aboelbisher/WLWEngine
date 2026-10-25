@@ -15,6 +15,7 @@ add_library(wlw STATIC
 
   wlw/anim/ease.h
   wlw/anim/shake.h
+  wlw/anim/timeline.h
   wlw/anim/tween.h
 
   wlw/app/application.cpp
