@@ -1,11 +1,13 @@
 // The output pass (rendering/post_settings.h): the frame's last full-screen pass, from the HDR
-// picture to the 8-bit destination in one read and one write. Exposure, then the tone mapper,
-// then dithering. The renderer sets the params from the viewport's PostSettings.
+// picture to the 8-bit destination in one read and one write. The bloom's glow is added, then
+// exposure, the tone mapper and dithering. The renderer sets the params from the viewport's PostSettings.
 shader_type post;
 
-uniform float uExposure;  // the picture is multiplied by it first
-uniform float uShoulder;  // 1 = ToneMapper::Shoulder, 0 = Clamp
-uniform float uDither;    // 1 = +-half an 8-bit step of noise
+uniform sampler2D uBloom;       // the glow (the bloom's level 0, built up); unbound without bloom
+uniform float uBloomIntensity;  // 0 = no bloom
+uniform float uExposure;        // the picture is multiplied by it (after the glow is added)
+uniform float uShoulder;        // 1 = ToneMapper::Shoulder, 0 = Clamp
+uniform float uDither;          // 1 = +-half an 8-bit step of noise
 
 // Khronos PBR Neutral's shoulder (github.com/KhronosGroup/ToneMapping), without its toe: below
 // kStart nothing changes; above, the brightest channel rolls off towards 1 (1.0 shows as 0.9,
@@ -29,7 +31,9 @@ float GradientNoise(vec2 pixel) { return fract(52.9829189 * fract(dot(pixel, vec
 
 void fragment() {
   vec4 color = texture(uSource, vUV);
-  vec3 rgb = max(color.rgb * uExposure, vec3(0.0));
+  vec3 rgb = color.rgb;
+  if (uBloomIntensity > 0.0) rgb += texture(uBloom, vUV).rgb * uBloomIntensity;  // same for every pixel
+  rgb = max(rgb * uExposure, vec3(0.0));
   if (uShoulder > 0.5) rgb = Shoulder(rgb);
   if (uDither > 0.5) rgb += (GradientNoise(gl_FragCoord.xy) - 0.5) / 255.0;
   FragColor = vec4(clamp(rgb, 0.0, 1.0), clamp(color.a, 0.0, 1.0));

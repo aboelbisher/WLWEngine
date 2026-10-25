@@ -63,36 +63,6 @@ void Blur::SetScale(Viewport& viewport, float scale) const {
   for (const auto& material : passes) SetScaleOf(viewport, material.get(), scale);
 }
 
-void Bloom::SetScale(Viewport& viewport, float scale) const {
-  SetScaleOf(viewport, bright.get(), scale);
-  blur.SetScale(viewport, scale);  // the combine pass stays full size (it writes the picture)
-}
-
-Bloom AddBloom(Viewport& viewport, const BloomSettings& settings) {
-  rendering::PostChain& chain = viewport.Post();
-  // The picture the glow is added onto: the scene, or the output of the pass before the bloom
-  // (named, so the combine pass can read it).
-  std::string base = rendering::kScenePicture;
-  if (!chain.Empty()) {
-    const size_t last = chain.Passes().size() - 1;
-    if (chain.Passes()[last].name.empty()) chain.SetName(last, "wlw_before_bloom_" + std::to_string(last));
-    base = chain.Passes()[last].name;
-  }
-
-  Bloom bloom;
-  bloom.bright = Material("post/bright.glsl");
-  bloom.bright->SetParam("uThreshold", settings.threshold);
-  bloom.bright->SetParam("uKnee", std::max(settings.knee, 0.0f));
-  viewport.AddPostPass({.material = bloom.bright, .scale = settings.scale, .format = settings.format});
-
-  AppendBlur(viewport, settings.scale, settings.spread, settings.iterations, settings.format, bloom.blur.passes);
-
-  bloom.combine = Material("post/bloom_combine.glsl");
-  bloom.combine->SetParam("uStrength", settings.strength);
-  viewport.AddPostPass({.material = bloom.combine, .inputs = {{"uBase", base}}});
-  return bloom;
-}
-
 std::shared_ptr<ShaderMaterial> AddThreshold(Viewport& viewport, const ThresholdSettings& settings) {
   auto material = Material("post/threshold.glsl");
   material->SetParam("uThreshold", settings.threshold);

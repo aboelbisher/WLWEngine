@@ -15,7 +15,7 @@
 #include "wlw/rendering/texture.h"
 
 // Post passes: full-screen shaders run on a viewport's finished 3D picture, each one reading what
-// the one before wrote (blur, threshold, bloom, colour grading...). Like Unity's renderer features,
+// the one before wrote (blur, threshold, colour grading...). Like Unity's renderer features,
 // Godot 4's CompositorEffect and Unreal's post-process materials. Ready-made ones: scene/post_effects.h.
 //
 //   viewport.AddPostPass({.material = my_material});   // a material with a `shader_type post;` shader
@@ -53,12 +53,17 @@ struct PostPass {
 
 // ---- The plan (CPU only, testable): which texture each pass reads and writes ----
 
-inline constexpr int kSceneTarget = -1;  // the scene picture
-inline constexpr int kDestination = -2;  // where the viewport's picture goes (the last pass's output)
-inline constexpr int kUpscalePass = -1;  // PostStep::pass of the copy that brings the scene picture
-                                         // to the destination (stretched if scaled) without passes
-inline constexpr int kOutputPass = -2;   // PostStep::pass of the output pass (post_settings.h): after
-                                         // the passes, writing the destination
+inline constexpr int kSceneTarget = -1;    // the scene picture
+inline constexpr int kDestination = -2;    // where the viewport's picture goes (the last pass's output)
+inline constexpr int kUpscalePass = -1;    // PostStep::pass of the copy that brings the scene picture
+                                           // to the destination (stretched if scaled) without passes
+inline constexpr int kOutputPass = -2;     // PostStep::pass of the output pass (post_settings.h): after
+                                           // the passes, writing the destination
+inline constexpr int kBloomDownPass = -3;  // PostStep::pass of a bloom level going down (PostStep::level):
+                                           // level 0 reads the picture, each next one the level before
+inline constexpr int kBloomUpPass = -4;    // PostStep::pass of a bloom level going back up: reads the level
+                                           // below it (built up) as uSource and its own down level as uLevel
+inline constexpr int kMaxBloomLevels = 8;
 
 struct PostTargetSpec {
   glm::ivec2 size{1, 1};
@@ -71,17 +76,27 @@ struct PostStep {
   int output = kDestination;                        // written: kDestination or a target index
   glm::ivec2 size{1, 1};                            // the output's size in pixels
   std::vector<std::pair<std::string, int>> inputs;  // extra textures: uniform -> kSceneTarget or target index
+  int level = 0;                                    // a bloom step's level (0 = the biggest)
 };
 
 struct PostPlanOptions {
   TextureFormat scene_format = TextureFormat::RGBA8;  // the scene picture's: passes without a format write it
   bool output_pass = false;                           // one more step after the passes (kOutputPass)
+  // Bloom steps between the passes and the output pass (needs output_pass): the settings' enabled,
+  // scale and max_levels shape the plan (the other fields are shader params).
+  BloomSettings bloom;
 };
 
+// The bloom levels' sizes for a viewport of `pixels`: the first is `scale` x pixels, each next one
+// half the one before (rounded up), until `max_levels` (at most kMaxBloomLevels) or a short side
+// under 16 px. Always at least one level.
+std::vector<glm::ivec2> BloomLevelSizes(glm::ivec2 pixels, float scale, int max_levels);
+
 struct PostPlan {
-  std::vector<PostStep> steps;          // one per pass, in order (then the output pass, if planned)
+  std::vector<PostStep> steps;          // one per pass, in order (then bloom and the output pass, if planned)
   std::vector<PostTargetSpec> targets;  // the textures the passes before the last need
   std::vector<std::string> errors;      // unknown input names, repeated names (those inputs are skipped)
+  int bloom_levels = 0;                 // planned (0 = no bloom)
 };
 
 // Plans the passes for a viewport of `pixels` whose scene picture is `scene_pixels` big (its render
@@ -89,7 +104,9 @@ struct PostPlan {
 // its size and format that no later pass still has to read (passes ping-pong between two), and
 // never into the one it reads. Without passes, a scene picture of another size gets one step: a
 // copy (kUpscalePass) that stretches it to `pixels`. With `options.output_pass` the output pass is the
-// last step (full size, writing the destination; it also does the stretch) and every pass writes a target.
+// last step (full size, writing the destination; it also does the stretch) and every pass writes a target;
+// with `options.bloom.enabled` too, the bloom levels go down (kBloomDownPass, level 0..n-1) and back
+// up (kBloomUpPass, level n-2..0) before it, and the output pass reads the glow as `uBloom`.
 PostPlan PlanPostChain(std::span<const PostPass> passes, glm::ivec2 pixels, glm::ivec2 scene_pixels = {0, 0},
                        const PostPlanOptions& options = {});
 
@@ -110,8 +127,17 @@ class PostChain {
   // The viewport's post settings (post_settings.h): change them any time, read every frame.
   PostSettings& Settings() { return settings_; }
   const PostSettings& Settings() const { return settings_; }
+  // Bloom on or off whatever the settings say while set (the r.bloom cvar sets the screen's); nullopt = none.
+  void SetBloomOverride(std::optional<bool> enabled) { bloom_override_ = enabled; }
+  const std::optional<bool>& GetBloomOverride() const { return bloom_override_; }
+  // The settings with the override applied: what the renderer uses.
+  PostSettings EffectiveSettings() const {
+    PostSettings settings = settings_;
+    if (bloom_override_) settings.bloom.enabled = *bloom_override_;
+    return settings;
+  }
   // Whether the output pass runs (re-planned before the next draw when this changes).
-  bool HasOutputPass() const { return settings_.NeedsOutputPass(); }
+  bool HasOutputPass() const { return EffectiveSettings().NeedsOutputPass(); }
   // Whether anything runs after the 3D: game passes or the output pass.
   bool HasWork() const { return !passes_.empty() || HasOutputPass(); }
   // Gives a pass a name (e.g. so an effect added after it can read its output).
@@ -150,6 +176,7 @@ class PostChain {
 
   std::vector<PostPass> passes_;
   PostSettings settings_;
+  std::optional<bool> bloom_override_;
   PostPlan plan_;
   bool planned_ = false;
   glm::ivec2 planned_pixels_{0, 0};

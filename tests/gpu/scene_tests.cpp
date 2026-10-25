@@ -135,15 +135,15 @@ TEST_CASE("render scale") {
 }
 
 TEST_CASE("render scale with post") {
-  // Bloom on a picture drawn at 0.5: its passes keep their sizes (a quarter of the viewport's) and
-  // the last one writes the full-size picture (no extra copy). A Picture layer is drawn into the
+  // Bloom on a picture drawn at 0.5: its levels keep their sizes (from half the viewport's: 128, 64,
+  // 32, 16) and the output pass writes the full-size picture (no extra copy). A Picture layer is drawn into the
   // small picture (bloomed, soft); the Overlay layer stays sharp.
   auto viewport = MakeViewport();
   viewport->SetCamera(FixedCamera(Vec3{0, -6, 2}, Vec3{0, 0, 0}));
   AddSun(*viewport, 0.9f);
   AddMesh(*viewport, utils::CubeMesh(1.0f, Color{1.0f, 1.0f, 1.0f, 1.0f}), Opaque(), {-1.2f, 0, 0});
   AddMesh(*viewport, utils::CubeMesh(1.0f, Color{0.2f, 0.25f, 0.6f, 1.0f}), Opaque(), {1.2f, 0, 0});
-  scene::AddBloom(*viewport, {.threshold = 0.7f, .strength = 1.0f});
+  viewport->Post().Settings().bloom = {.enabled = true, .threshold = 0.7f, .intensity = 1.0f};
   viewport->SetRenderScale(0.5f);
   ui::Canvas& picture = viewport->AddCanvasLayer({.mode = scene::CanvasMode::Picture});
   const float size = gpu_tests::kSize;
@@ -153,7 +153,8 @@ TEST_CASE("render scale with post") {
   REQUIRE(font != nullptr);
   AddSharpLabel(viewport->GetCanvas(), *font, "bloom x0.5");
   CheckGolden("render_scale_post", viewport);
-  CHECK((viewport->GetRenderStats().render_width == 128 && viewport->GetRenderStats().post_passes == 6));
+  CHECK((viewport->GetRenderStats().render_width == 128 && viewport->GetRenderStats().post_passes == 8 &&
+         viewport->GetRenderStats().bloom_levels == 4));  // 4 down, 3 up, the output pass
 }
 
 namespace {
@@ -321,13 +322,14 @@ TEST_CASE("skybox without depth buffer") {
 }
 
 TEST_CASE("post chain bloom") {
-  // Bright shapes glowing: bright pass, blur at a quarter size, combined onto the picture.
+  // Bright shapes glowing (an 8-bit picture: a threshold below 1): 4 levels down from half size and
+  // back up, added in the output pass.
   auto viewport = MakeViewport();
   viewport->SetCamera(FixedCamera(Vec3{0, -6, 2}, Vec3{0, 0, 0}));
   AddSun(*viewport, 0.9f);
   AddMesh(*viewport, utils::CubeMesh(1.0f, Color{1.0f, 1.0f, 1.0f, 1.0f}), Opaque(), {-1.2f, 0, 0});
   AddMesh(*viewport, utils::CubeMesh(1.0f, Color{0.2f, 0.25f, 0.6f, 1.0f}), Opaque(), {1.2f, 0, 0});
-  scene::AddBloom(*viewport, {.threshold = 0.7f, .strength = 1.0f});
+  viewport->Post().Settings().bloom = {.enabled = true, .threshold = 0.7f, .intensity = 1.0f};
   CheckGolden("post_bloom", viewport);
 }
 
@@ -383,6 +385,78 @@ TEST_CASE("dithering") {
   CHECK((dithered[127] > gpu_tests::kSize * gpu_tests::kSize / 4 &&
          dithered[128] > gpu_tests::kSize * gpu_tests::kSize / 4));
   CHECK(dithered[127] + dithered[128] == gpu_tests::kSize * gpu_tests::kSize);  // never more than half a step
+}
+
+namespace {
+
+// An HDR picture that is black but for a 2 x 2 square of `value` at pixel `corner` (drawn by a post
+// pass, so it is exact to the pixel), through bloom (Clamp tone mapping: the glow adds on unchanged).
+testing::Image BloomedSquare(glm::vec2 corner, float value, const rendering::BloomSettings& bloom) {
+  static const char* kSquare = R"(shader_type post;
+uniform vec2 uCorner;
+uniform float uValue;
+void fragment() {
+  vec2 p = vUV * uOutputSize - uCorner;
+  bool inside = p.x >= 0.0 && p.y >= 0.0 && p.x < 2.0 && p.y < 2.0;
+  FragColor = vec4(vec3(inside ? uValue : 0.0), 1.0);
+})";
+  auto viewport = MakeViewport();
+  viewport->SetScene(nullptr);
+  viewport->SetFormat(rendering::TextureFormat::RGBA16F);
+  std::shared_ptr<rendering::ShaderMaterial> square =
+      rendering::ShaderMaterial::Create(rendering::Shader::Create(kSquare, "test_square"));
+  square->SetParam("uCorner", corner);
+  square->SetParam("uValue", value);
+  viewport->AddPostPass({.material = square});
+  viewport->Post().Settings().bloom = bloom;
+  return gpu_tests::Render(viewport);
+}
+
+// The glow alone: the bloomed picture minus the same picture without bloom, summed over every
+// pixel (0..255 each, red only: it is grey).
+double GlowSum(glm::vec2 corner, float value, const rendering::BloomSettings& bloom) {
+  const testing::Image bloomed = BloomedSquare(corner, value, bloom);
+  const testing::Image plain = BloomedSquare(corner, value, {});
+  double sum = 0.0;
+  for (int y = 0; y < bloomed.height; ++y) {
+    for (int x = 0; x < bloomed.width; ++x) sum += bloomed.Pixel(x, y)[0] - plain.Pixel(x, y)[0];
+  }
+  return sum;
+}
+
+}  // namespace
+
+TEST_CASE("bloom probes") {
+  // Stability: a 2-pixel spark moved by a pixel (across, down, both, further) glows as much. Each
+  // level's 13 taps see every texel of what they cover, so no position falls between them. The old
+  // bloom (one bilinear read per quarter-size texel: 4 of its 16 texels) went from full glow to none.
+  const std::array<glm::vec2, 4> moves{glm::vec2(128, 127), glm::vec2(127, 128), glm::vec2(128, 128),
+                                       glm::vec2(130, 132)};
+  auto check_stable = [&moves](const rendering::BloomSettings& bloom, double tolerance) {
+    const double still = GlowSum({127, 127}, 8.0f, bloom);
+    CHECK(still > 1000.0);
+    for (const glm::vec2 corner : moves) {
+      const double moved = GlowSum(corner, 8.0f, bloom);
+      CHECK_MESSAGE(std::abs(moved - still) < tolerance * still,
+                    "moved to " << corner.x << ", " << corner.y << ": " << moved << " vs " << still);
+    }
+  };
+  // The filters are linear, but the first level's Karis average (each box weighed by 1 / (1 + its peak))
+  // and threshold (per tap: a spark split between taps loses more to it) aren't. Without threshold:
+  // within 10% (measured 9%; under 5% with Karis off). With it: within 20% (measured 12%). Worth it: no
+  // fireflies, and nothing below the threshold glows.
+  check_stable({.enabled = true, .threshold = 0.0f, .knee = 0.0f, .intensity = 1.0f}, 0.1);
+  const rendering::BloomSettings bloom{.enabled = true, .threshold = 1.0f, .knee = 0.0f, .intensity = 1.0f};
+  check_stable(bloom, 0.2);
+
+  // Below the threshold: no glow at all.
+  CHECK(GlowSum({127, 127}, 0.9f, bloom) == 0.0);
+
+  // The glow falls off with distance, along the square's rows (127 and 128, either way up).
+  const testing::Image image = BloomedSquare({127, 127}, 8.0f, bloom);
+  const int near = image.Pixel(131, 127)[0], middle = image.Pixel(140, 127)[0], far = image.Pixel(170, 127)[0];
+  CHECK_MESSAGE((near > middle && middle > far), near << " " << middle << " " << far);
+  CHECK(image.Pixel(250, 5)[0] == 0);  // a corner far away: nothing
 }
 
 TEST_CASE("canvas") {

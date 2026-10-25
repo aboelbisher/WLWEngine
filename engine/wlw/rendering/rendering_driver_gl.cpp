@@ -269,7 +269,8 @@ class GLRenderingDriver : public RenderingDriver {
     };
     for (const auto& viewport : window.Viewports()) warm(*viewport);
     warm(window.MainViewport());
-    OutputMaterial();  // made now so the warm-up compiles it (any viewport may turn tone mapping on later)
+    OutputMaterial();   // made now so the warm-up compiles it (any viewport may turn tone mapping on later)
+    MakeBloomPasses();  // the same for bloom
     // Every game shader and texture alive now (canvas shaders too: no scene says they're needed).
     const int custom = PrepareAliveResources();
     warmed_up_ = true;
@@ -406,6 +407,7 @@ class GLRenderingDriver : public RenderingDriver {
       stats.invalidations += DrawPostPasses(viewport.Post(), *post, destination, viewport.Internal().Id());
       stats.post_passes = static_cast<int>(post->steps.size());
       stats.post_targets = viewport.Post().Internal().TargetCount();
+      stats.bloom_levels = post->bloom_levels;
       stats.post_us = micros(Clock::now() - post_start);
     }
     draw_layers(scene::CanvasMode::Overlay, pixels);
@@ -509,11 +511,14 @@ class GLRenderingDriver : public RenderingDriver {
     state_.SetBlendMode(BlendMode::Opaque);  // each pass replaces its output's pixels
     glBindVertexArray(post_vao_);            // no attributes: post.vert makes the triangle from gl_VertexID
     const std::vector<PostPass>& passes = chain.Passes();
+    const PostSettings settings = chain.EffectiveSettings();
     for (size_t index = 0; index < plan.steps.size(); ++index) {
       const PostStep& step = plan.steps[index];
       // A scaled viewport without passes: the step that stretches its picture (no material: a copy).
+      const bool bloom_step = step.pass == kBloomDownPass || step.pass == kBloomUpPass;
       const PostPass& pass = step.pass == kUpscalePass  ? upscale_pass_
-                             : step.pass == kOutputPass ? OutputPass(chain.Settings())
+                             : step.pass == kOutputPass ? OutputPass(settings, plan.bloom_levels > 0)
+                             : bloom_step               ? BloomPass(step, settings.bloom)
                                                         : passes[static_cast<size_t>(step.pass)];
       WLW_PROFILE_SCOPE_DYNAMIC(pass.name.empty() ? "Post pass" : pass.name.c_str());
       WLW_PROFILE_GPU_ZONE_DYNAMIC(pass.name.empty() ? "Post pass" : pass.name.c_str());
@@ -572,13 +577,43 @@ class GLRenderingDriver : public RenderingDriver {
     }
     return output_pass_.material;
   }
-  const PostPass& OutputPass(const PostSettings& settings) {
+  const PostPass& OutputPass(const PostSettings& settings, bool bloom) {
     ShaderMaterial& material = *OutputMaterial();
     const ToneMapSettings& tone_map = settings.tone_map;
     material.SetParam("uExposure", tone_map.exposure);
     material.SetParam("uShoulder", tone_map.mapper == ToneMapper::Shoulder ? 1.0f : 0.0f);
     material.SetParam("uDither", tone_map.dither ? 1.0f : 0.0f);
+    material.SetParam("uBloomIntensity", bloom ? std::max(settings.bloom.intensity, 0.0f) : 0.0f);
     return output_pass_;
+  }
+
+  // The bloom's steps (post_settings.h): two engine shaders, one material each, shared by every
+  // level and viewport (a pass per level only for its profiler name); params set just before each draw.
+  void MakeBloomPasses() {
+    if (bloom_down_[0].material) return;
+    auto make = [](const char* file) {
+      const std::string* text = FindShaderFile(file);
+      return ShaderMaterial::Create(Shader::Create(text ? *text : std::string(), file));
+    };
+    const std::shared_ptr<ShaderMaterial> down = make("post/bloom_down.glsl");
+    const std::shared_ptr<ShaderMaterial> up = make("post/bloom_up.glsl");
+    for (int k = 0; k < kMaxBloomLevels; ++k) {
+      bloom_down_[k] = {.material = down, .name = "Bloom down " + std::to_string(k)};
+      bloom_up_[k] = {.material = up, .name = "Bloom up " + std::to_string(k)};
+    }
+  }
+  const PostPass& BloomPass(const PostStep& step, const BloomSettings& bloom) {
+    MakeBloomPasses();
+    const int level = std::clamp(step.level, 0, kMaxBloomLevels - 1);
+    if (step.pass == kBloomUpPass) {
+      bloom_up_[level].material->SetParam("uScatter", std::clamp(bloom.scatter, 0.0f, 1.0f));
+      return bloom_up_[level];
+    }
+    ShaderMaterial& material = *bloom_down_[level].material;
+    material.SetParam("uFirst", level == 0 ? 1.0f : 0.0f);
+    material.SetParam("uThreshold", bloom.threshold);
+    material.SetParam("uKnee", std::max(bloom.knee, 0.0f));
+    return bloom_down_[level];
   }
 
   // What a pass without a usable shader does: copies uSource.
@@ -1105,6 +1140,8 @@ class GLRenderingDriver : public RenderingDriver {
       glDeleteVertexArrays(1, &post_vao_);
       copy_shader_.reset();
       output_pass_.material.reset();
+      for (PostPass& pass : bloom_down_) pass.material.reset();
+      for (PostPass& pass : bloom_up_) pass.material.reset();
       gpu_timer_.reset();
     }
     main_window_.reset();
@@ -1129,6 +1166,8 @@ class GLRenderingDriver : public RenderingDriver {
   std::shared_ptr<Shader> copy_shader_;       // a post pass without a usable shader
   PostPass upscale_pass_{.name = "Upscale"};  // kUpscalePass: no material, so a copy
   PostPass output_pass_{.name = "Output"};    // kOutputPass: OutputMaterial()
+  PostPass bloom_down_[kMaxBloomLevels];      // kBloomDownPass, per level: MakeBloomPasses()
+  PostPass bloom_up_[kMaxBloomLevels];        // kBloomUpPass, per level
   int max_target_size_ = 0;                   // the largest side the GPU draws into (0: not known)
   bool warned_render_size_ = false;
   std::unique_ptr<GpuTimer> gpu_timer_;  // null: this GPU can't time

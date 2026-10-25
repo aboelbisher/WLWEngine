@@ -11,6 +11,22 @@ listed under **Breaking** with its **Migration**. Shims added before that (`WLW_
 
 ## Unreleased
 
+- Progressive bloom (first slice of 13.7, for Bluzzle's glow) as a post setting: `viewport.Post().Settings().bloom`
+  {`enabled`, `threshold`, `knee`, `intensity`, `scatter`, `scale`, `max_levels`} (`rendering/post_settings.h`).
+  The picture goes down in levels (from `scale` x the viewport, halved until `max_levels` or 16 px) with Jimenez's
+  13-tap filter (threshold per tap and Karis average on the first level), back up with a tent filter mixed by
+  `scatter`, and the glow is added in the output pass before exposure and tone mapping. Small or moving sparks
+  keep their glow (the old bloom's single bilinear read per quarter texel could miss them). `PlanPostChain` plans
+  it (steps `kBloomDownPass` / `kBloomUpPass` with a `level`, the output pass reads `uBloom`; targets shared like
+  the passes'), `BloomLevelSizes`, `PostPlan::bloom_levels`, `RenderStats::bloom_levels`, an engine panel line
+  with its GPU time, cvar `r.bloom` (-1 the game's, 0 off, 1 on; `PostChain::SetBloomOverride`). Tests: level
+  sizes, plans with and without game passes, re-planning, the override; GPU probes: a moving 2-pixel spark's glow
+  (within 20%), nothing below the threshold, falloff; goldens `post_bloom` and `render_scale_post` redrawn.
+- **Breaking:** `scene::AddBloom`, `scene::Bloom` and `scene::BloomSettings` are removed, with the shaders
+  `post/bright.glsl` and `post/bloom_combine.glsl`. **Migration:** `scene::AddBloom(v, {.threshold = t, .strength
+  = s})` becomes `v.Post().Settings().bloom = {.enabled = true, .threshold = t, .intensity = s}` (it now runs after
+  every game pass, whenever it is set; an 8-bit viewport needs a threshold below 1). `Bloom::SetScale(v, x)`
+  becomes `settings.bloom.scale = x` (the first level's size).
 - HDR scene picture and an output pass (first slice of 13.1, for Bluzzle's glow): `Viewport::SetFormat(RGBA16F)`
   works on the screen too (its 3D goes into an HDR picture; the window stays 8-bit) and on offscreen viewports
   (their texture follows); `SetFormatOverride` / cvar `r.hdr` (-1 the game's, 0 8-bit, 1 HDR) for A/B; RGBA8

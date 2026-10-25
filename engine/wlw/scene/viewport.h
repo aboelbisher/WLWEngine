@@ -41,6 +41,7 @@ struct RenderStats {
   // without passes has one: the copy that stretches its picture (kUpscalePass).
   int post_passes = 0;
   int post_targets = 0;   // textures the passes before the last write into
+  int bloom_levels = 0;   // of those steps, bloom levels (post_settings.h; 0 = no bloom)
   float post_us = 0.0f;   // their GL calls
   int invalidations = 0;  // glInvalidateFramebuffer calls (phones: pictures not loaded / stored)
   // The format its 3D was drawn in: EffectiveFormat(), or RGBA8 where the GPU fell back.

@@ -144,10 +144,16 @@ engine/wlw/
               Environment / Unity Volume shape): tone_map {Clamp | Shoulder (PBR Neutral's shoulder, no toe: we shade gamma-
               encoded), exposure, dither} -> the OUTPUT PASS (shaders/post/output.glsl, kOutputPass in the plan): after the
               game's passes, writes the destination, only when NeedsOutputPass(); renderer-owned material, params set per draw.
-              Ready-made (scene/post_effects.h, shaders/post/*): AddBlur (separable 9-tap Gaussian in 5 reads), AddBloom
-              (bright pass with soft knee -> blur at 1/4 -> combine onto the picture before it), AddThreshold (density ->
+              bloom {enabled, threshold, knee, intensity, scatter, scale, max_levels} (cvar r.bloom = SetBloomOverride):
+              steps kBloomDownPass levels 0..n-1 (shaders/post/bloom_down.glsl: Jimenez 13-tap; level 0 also soft-knee
+              threshold per tap + Karis average per box) then kBloomUpPass n-2..0 (bloom_up.glsl: 3x3 tent of the level
+              below, mix(own level, it, scatter)), each writing a target from the plan's pool; the output pass adds
+              uBloom x intensity BEFORE exposure / tone map. Levels: BloomLevelSizes (scale x viewport, halved rounding
+              up, stop at max_levels / 16 px). Renderer-owned materials (one per shader, a PostPass per level for profiler
+              names). A moving spark's glow stays within 20% (GPU probe); the non-linear parts are threshold and Karis.
+              Ready-made (scene/post_effects.h, shaders/post/*): AddBlur (separable 9-tap Gaussian in 5 reads), AddThreshold (density ->
               solid shapes coloured rgb/a: soft additive dots -> AddBlur -> AddThreshold = metaballs/liquid; keep the
-              viewport AND the blur RGBA16F, RGBA8 clips colour x density and the middles go white). Bloom/Blur::SetScale +
+              viewport AND the blur RGBA16F, RGBA8 clips colour x density and the middles go white). Blur::SetScale +
               PostChain::SetScale change resolution at runtime (passes found by material; re-planned, targets resized).
               Render scale (Viewport::SetRenderScale 0.25-2, like Unity URP renderScale / Godot scaling_3d_scale): the 3D +
               Picture layers go into the scene picture at RenderSize (viewport size x scale), stretched bilinearly to the

@@ -141,9 +141,21 @@ void EnginePanel::OnDebugUI() {
       ImGui::BulletText("%s x%.2f%s%s%s", shader.c_str(), pass.scale, pass.name.empty() ? "" : " as ",
                         pass.name.c_str(), gpu);
     }
+    // Bloom's steps come after the game's passes: their GPU times summed.
+    const size_t bloom_first = chain.Passes().size();
+    const size_t bloom_steps = s.bloom_levels > 0 ? static_cast<size_t>(2 * s.bloom_levels - 1) : 0;
+    if (bloom_steps > 0) {
+      float bloom_ms = 0.0f;
+      for (size_t i = bloom_first; i < bloom_first + bloom_steps && i < gpu_ms.size(); ++i) {
+        bloom_ms += std::max(gpu_ms[i], 0.0f);
+      }
+      const rendering::BloomSettings bloom = chain.EffectiveSettings().bloom;
+      ImGui::BulletText("bloom: %d levels from x%.2f, threshold %.2f, GPU %.2f ms", s.bloom_levels, bloom.scale,
+                        bloom.threshold, bloom_ms);
+    }
     if (chain.HasOutputPass()) {
       const rendering::ToneMapSettings& tone_map = chain.Settings().tone_map;
-      gpu_text(chain.Passes().size(), gpu);
+      gpu_text(bloom_first + bloom_steps, gpu);
       ImGui::BulletText("output: %s, exposure %.2f%s%s",
                         tone_map.mapper == rendering::ToneMapper::Shoulder ? "shoulder" : "clamp", tone_map.exposure,
                         tone_map.dither ? ", dither" : "", gpu);

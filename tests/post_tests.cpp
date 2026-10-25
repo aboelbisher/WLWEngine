@@ -294,7 +294,7 @@ TEST_CASE("post shaders") {
   CHECK(rendering::SplitShaderSource("shader_type post; void fragment() { FragColor = vec4(1.0); }").target ==
         rendering::Shader::Target::Post);
   CHECK(!rendering::SplitShaderSource("shader_type post; void vertex() {} void fragment() {}").ok);
-  for (const char* file : {"post/copy.glsl", "post/blur.glsl", "post/bright.glsl", "post/bloom_combine.glsl",
+  for (const char* file : {"post/copy.glsl", "post/blur.glsl", "post/bloom_down.glsl", "post/bloom_up.glsl",
                            "post/threshold.glsl", "post/output.glsl"}) {
     const std::string* text = rendering::FindShaderFile(file);
     CHECK(text != nullptr);
@@ -332,24 +332,9 @@ TEST_CASE("effects") {
   }
   CHECK(blur.passes[0]->GetShader() == blur.passes[3]->GetShader());  // one shader, shared
 
-  // Bloom on its own: bright, blur x iterations, combine onto the scene picture.
-  auto screen = scene::Viewport::Create();
-  const scene::Bloom bloom = scene::AddBloom(*screen, {.threshold = 0.7f, .iterations = 1});
-  const auto& bloom_passes = screen->Post().Passes();
-  CHECK(bloom_passes.size() == 4);
-  CHECK((bloom_passes.front().material == bloom.bright && bloom_passes.back().material == bloom.combine));
-  CHECK((bloom_passes.back().inputs.size() == 1 && bloom_passes.back().inputs[0].pass == rendering::kScenePicture));
-  const auto* threshold = std::get_if<float>(bloom.bright->GetParam("uThreshold"));
-  CHECK((threshold && *threshold == 0.7f));
-
-  // Bloom after other passes adds its glow onto their result (the last one gets a name).
-  const scene::Bloom after = scene::AddBloom(*view);
-  const auto& all = view->Post().Passes();
-  CHECK((!all[3].name.empty() && all.back().inputs[0].pass == all[3].name));
-  const PostPlan plan = rendering::PlanPostChain(all, kPhone);
+  const PostPlan plan = rendering::PlanPostChain(passes, kPhone);
   CHECK(plan.errors.empty());
-  CheckPlanIsSafe(all, plan);
-  CHECK((after.combine && after.bright));
+  CheckPlanIsSafe(passes, plan);
 
   // Liquid: blur then threshold, the threshold pass last (it writes the viewport's picture).
   auto liquid = scene::Viewport::Create({.format = TextureFormat::RGBA16F, .depth = false});
@@ -369,7 +354,8 @@ TEST_CASE("scale while running") {
   // whatever was added around them), and the targets follow at the next Prepare.
   auto view = scene::Viewport::Create();
   view->AddPostPass(Pass(1.0f, "first"));
-  const scene::Bloom bloom = scene::AddBloom(*view, {.scale = 0.25f, .iterations = 1});
+  const scene::Blur blur = scene::AddBlur(*view, {.scale = 0.25f, .iterations = 1});
+  view->AddPostPass(Pass(1.0f, "last"));
   const rendering::RenderTargetSettings scene{};
   rendering::PostChain& chain = view->Post();
   chain.Internal().Prepare({400, 200}, scene);
@@ -382,20 +368,152 @@ TEST_CASE("scale while running") {
   };
   CHECK(has_width(100));  // a quarter of 400
 
-  bloom.SetScale(*view, 0.125f);
+  blur.SetScale(*view, 0.125f);
   const auto& passes = chain.Passes();
-  CHECK(passes[0].scale == 1.0f);  // not the bloom's
-  CHECK((passes[1].scale == 0.125f && passes[2].scale == 0.125f && passes[3].scale == 0.125f));
-  CHECK((passes[4].material == bloom.combine && passes[4].scale == 1.0f));  // writes the picture
+  CHECK(passes[0].scale == 1.0f);  // not the blur's
+  CHECK((passes[1].scale == 0.125f && passes[2].scale == 0.125f));
+  CHECK(passes[3].scale == 1.0f);
   const PostPlan& plan = chain.Internal().Prepare({400, 200}, scene);
   CHECK(plan.steps[1].size == glm::ivec2(50, 25));
   CHECK(chain.Internal().TargetCount() == targets);
   CHECK((has_width(50) && !has_width(100)));
+}
 
-  auto liquid = scene::Viewport::Create();
-  const scene::Blur blur = scene::AddBlur(*liquid, {.scale = 1.0f});
-  blur.SetScale(*liquid, 0.5f);
-  for (const auto& pass : liquid->Post().Passes()) CHECK(pass.scale == 0.5f);
+namespace {
+
+// Plays a plan with bloom after `passes` game passes and checks every read finds what it means:
+// down level 0 reads the picture (the last pass's output, or the scene), each next level the one
+// before; each up level the step before it (the smallest down level, or the up level below) as
+// uSource and its own down level as uLevel; the output pass the picture and the glow (uBloom).
+void CheckBloomPlan(const PostPlan& plan, int passes) {
+  const int levels = plan.bloom_levels;
+  REQUIRE(levels >= 1);
+  REQUIRE(plan.steps.size() == static_cast<size_t>(passes + 2 * levels));  // + levels - 1 up, + output
+  std::vector<int> holds(plan.targets.size(), -1);                         // per target: which step's output
+  auto finds = [&holds](int texture, int step) {
+    return step < 0 ? texture == kSceneTarget : texture >= 0 && holds[static_cast<size_t>(texture)] == step;
+  };
+  const int picture = passes - 1;  // -1: the scene picture
+  for (int s = 0; s < static_cast<int>(plan.steps.size()); ++s) {
+    const rendering::PostStep& step = plan.steps[static_cast<size_t>(s)];
+    auto input = [&step](const std::string& uniform) {
+      for (const auto& [name, texture] : step.inputs) {
+        if (name == uniform) return texture;
+      }
+      return -100;
+    };
+    if (s < passes) {
+      CHECK(step.pass == s);
+    } else if (s < passes + levels) {
+      const int k = s - passes;
+      CHECK((step.pass == rendering::kBloomDownPass && step.level == k));
+      CHECK(finds(step.source, k == 0 ? picture : s - 1));
+    } else if (s < passes + 2 * levels - 1) {
+      const int k = levels - 2 - (s - passes - levels);
+      CHECK((step.pass == rendering::kBloomUpPass && step.level == k));
+      CHECK(finds(step.source, s - 1));
+      CHECK(finds(input("uLevel"), passes + k));
+      CHECK(step.size == plan.steps[static_cast<size_t>(passes + k)].size);  // the same size as its down level
+    } else {
+      CHECK(step.pass == rendering::kOutputPass);
+      CHECK(finds(step.source, picture));
+      CHECK(finds(input("uBloom"), s - 1));
+      CHECK(step.output == kDestination);
+    }
+    CHECK(step.output != step.source);
+    for (const auto& [_, texture] : step.inputs) CHECK(texture != step.output);
+    if (step.output >= 0) {
+      CHECK(plan.targets[static_cast<size_t>(step.output)].size == step.size);
+      holds[static_cast<size_t>(step.output)] = s;
+    }
+  }
+}
+
+const rendering::PostPlanOptions kBloom{
+    .scene_format = TextureFormat::RGBA16F, .output_pass = true, .bloom = {.enabled = true}};
+
+}  // namespace
+
+TEST_CASE("bloom levels") {
+  // Pixel 4 (1080 x 2280) from half size: halved (rounded up) down to 17 x 36, the next would be 9 x 18.
+  const std::vector<glm::ivec2> pixel4 = rendering::BloomLevelSizes({1080, 2280}, 0.5f, 6);
+  const std::vector<glm::ivec2> expected{{540, 1140}, {270, 570}, {135, 285}, {68, 143}, {34, 72}, {17, 36}};
+  CHECK(pixel4 == expected);
+  CHECK(rendering::BloomLevelSizes({1080, 2280}, 0.5f, 7).size() == 6);  // stopped at 16 px
+  CHECK(rendering::BloomLevelSizes({1080, 2280}, 0.5f, 3).size() == 3);  // max_levels
+  CHECK(rendering::BloomLevelSizes({1080, 2280}, 0.25f, 6).front() == glm::ivec2(270, 570));
+  // Never more than kMaxBloomLevels, never fewer than 1 (even on a tiny viewport or with 0 asked for).
+  CHECK(rendering::BloomLevelSizes({8000, 8000}, 1.0f, 20).size() == rendering::kMaxBloomLevels);
+  CHECK(rendering::BloomLevelSizes({40, 40}, 0.5f, 6) == std::vector<glm::ivec2>{{20, 20}});
+  CHECK(rendering::BloomLevelSizes({1080, 2280}, 0.5f, 0).size() == 1);
+}
+
+TEST_CASE("bloom plan") {
+  // Alone: 6 levels down, 5 up, the output pass. HDR targets (the scene picture's format).
+  const PostPlan alone = rendering::PlanPostChain({}, {1080, 2280}, {0, 0}, kBloom);
+  CHECK((alone.bloom_levels == 6 && alone.errors.empty()));
+  CheckBloomPlan(alone, 0);
+  for (const rendering::PostTargetSpec& target : alone.targets) CHECK(target.format == TextureFormat::RGBA16F);
+  CHECK(alone.steps.back().size == glm::ivec2(1080, 2280));
+
+  // After game passes: the bloom reads the last one's output, which stays until the output pass.
+  const std::vector<PostPass> passes{PostPass{.scale = 0.5f}, PostPass{}};
+  const PostPlan after = rendering::PlanPostChain(passes, kPhone, {0, 0}, kBloom);
+  CheckBloomPlan(after, 2);
+  // Targets are shared: level 0 (half size) reuses the first pass's (half size, free once pass 1 read it).
+  CHECK(after.steps[2].output == after.steps[0].output);
+  CHECK(after.targets.size() < after.steps.size() - 1);
+
+  // One level only: no up steps, the output pass reads level 0 as the glow.
+  const PostPlan one =
+      rendering::PlanPostChain({}, kPhone, {0, 0}, {.output_pass = true, .bloom = {.enabled = true, .max_levels = 1}});
+  CHECK(one.bloom_levels == 1);
+  CheckBloomPlan(one, 0);
+
+  // A render scale doesn't change the levels (they follow the viewport's size; level 0 stretches).
+  const PostPlan scaled = rendering::PlanPostChain({}, kPhone, {540, 1200}, kBloom);
+  CHECK(scaled.steps[0].size == glm::ivec2(540, 1200));
+  CHECK(scaled.steps.size() == rendering::PlanPostChain({}, kPhone, {0, 0}, kBloom).steps.size());
+
+  // Off, or without the output pass (it adds the glow): no bloom steps.
+  const PostPlan off = rendering::PlanPostChain({}, kPhone, {0, 0}, {.output_pass = true});
+  CHECK((off.bloom_levels == 0 && off.steps.size() == 1));
+  CHECK(rendering::PlanPostChain(passes, kPhone, {0, 0}, {.bloom = {.enabled = true}}).bloom_levels == 0);
+}
+
+TEST_CASE("bloom settings re-plan the chain") {
+  rendering::PostChain chain;
+  const rendering::RenderTargetSettings scene{TextureFormat::RGBA16F, true, true};
+  CHECK(!chain.HasOutputPass());
+  chain.Settings().bloom.enabled = true;  // bloom alone needs the output pass (it adds the glow there)
+  CHECK((chain.HasOutputPass() && rendering::PostSettings{.bloom = {.enabled = true}}.NeedsOutputPass()));
+  const PostPlan& on = chain.Internal().Prepare({400, 200}, scene);
+  CHECK((on.bloom_levels == 3 && on.steps[0].size == glm::ivec2(200, 100)));  // 200x100, 100x50, 50x25
+  const int targets = chain.Internal().TargetCount();
+
+  // Scale and levels shape the plan: re-planned at the next Prepare.
+  chain.Settings().bloom.scale = 0.25f;
+  CHECK(chain.Internal().Prepare({400, 200}, scene).steps[0].size == glm::ivec2(100, 50));
+  chain.Settings().bloom.max_levels = 1;
+  CHECK(chain.Internal().Prepare({400, 200}, scene).bloom_levels == 1);
+  // The others are shader params: the same plan, the same textures.
+  chain.Settings().bloom.max_levels = 6;
+  chain.Settings().bloom.scale = 0.5f;
+  chain.Internal().Prepare({400, 200}, scene);
+  CHECK(chain.Internal().TargetCount() == targets);
+  chain.Settings().bloom.threshold = 2.0f;
+  chain.Settings().bloom.intensity = 0.1f;
+  CHECK(chain.Internal().Prepare({400, 200}, scene).bloom_levels == 3);
+
+  // The override (cvar r.bloom) wins over the settings either way.
+  chain.SetBloomOverride(false);
+  CHECK((!chain.HasOutputPass() && chain.Internal().Prepare({400, 200}, scene).bloom_levels == 0));
+  CHECK(chain.Settings().bloom.enabled);  // the game's setting is untouched
+  chain.Settings().bloom.enabled = false;
+  chain.SetBloomOverride(true);
+  CHECK(chain.Internal().Prepare({400, 200}, scene).bloom_levels == 3);
+  chain.SetBloomOverride(std::nullopt);
+  CHECK(chain.Internal().Prepare({400, 200}, scene).bloom_levels == 0);
 }
 
 TEST_SUITE_END();

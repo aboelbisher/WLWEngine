@@ -152,7 +152,7 @@ void CompileEverything() {
     const GLShader compiled(*shader);
     CHECK_MESSAGE(compiled.Program() != 0, name);
   };
-  for (const char* post : {"post/copy.glsl", "post/blur.glsl", "post/bright.glsl", "post/bloom_combine.glsl",
+  for (const char* post : {"post/copy.glsl", "post/blur.glsl", "post/bloom_down.glsl", "post/bloom_up.glsl",
                            "post/threshold.glsl", "post/output.glsl"}) {
     const std::string* text = FindShaderFile(post);
     REQUIRE_MESSAGE(text != nullptr, post);

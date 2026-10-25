@@ -398,6 +398,10 @@ void Application::ApplyStartupCVars() {
         hdr < 0 ? std::nullopt
                 : std::optional(hdr > 0 ? rendering::TextureFormat::RGBA16F : rendering::TextureFormat::RGBA8));
   });
+  WatchCVar(cv_bloom, [this] {
+    const int bloom = cv_bloom.Get();
+    window_->MainViewport().Post().SetBloomOverride(bloom < 0 ? std::nullopt : std::optional(bloom > 0));
+  });
   cvar_callbacks_.emplace_back(cv_quality_lock.OnChange([this] {
     if (!quality_.Configured()) return;
     if (cv_quality_lock.Get() < 0) {

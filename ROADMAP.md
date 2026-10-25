@@ -556,6 +556,10 @@ is ~850 lines of C++ + ~225 of Kotlin).
 - [ ] **13.7 Post stack.** Progressive bloom (Karis average), vignette, chromatic aberration, film
   grain, half-res bokeh depth of field, half-res GTAO (high tier), camera motion blur, SSR (desktop
   high tier); global and per-viewport settings with blending.
+  Early slice done (2026-10-25, for Bluzzle's glow): progressive bloom as a post setting (`PostSettings::bloom`,
+  cvar `r.bloom`): 13-tap downsample with soft-knee threshold and Karis average on the first level, tent upsample
+  with scatter, added in the output pass before tone mapping; it replaced `scene::AddBloom`. Still to do here:
+  lens dirt, the other effects, settings blending.
 - [ ] **13.8 Dynamic resolution.** Render scale driven by GPU time, FSR 1 (EASU + RCAS) upscaling with
   a bilinear fallback, tied into Quality.
 - [ ] **13.9 LOD and culling.** Screen-size LOD selection with hysteresis and dithered crossfade, LOD
