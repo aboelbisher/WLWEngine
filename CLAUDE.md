@@ -255,7 +255,7 @@ engine/wlw/
                  radii/depth; the game sets ui.theme), icons.h (Icon enum + DrawIcon: vector icons from Canvas shapes),
                  widgets.h (immediate mode: Pressable/WidgetId/RaisedRect building blocks; Button(variant, icon), IconButton,
                  IconToggle, Switch, SettingRow, LinkRow, Card (mode tiles: caller draws the art), Dialog (scrim, slide-in,
-                 close X / tap outside), Segmented, Chip, Stars; the older font+ButtonStyle Button/Toggle/Panel still work),
+                 close X / tap outside), Segmented, Chip, Badge (round stat + progress ring), Stars; the older font+ButtonStyle Button/Toggle/Panel still work),
                  layout.h (Centered, Inset, Row, Column).
               The UI canvas is Window::MainViewport().GetCanvas(); an offscreen viewport's canvas is drawn into its texture.
               Canvas layers (viewport.h, like Unity Canvas render modes + sort order): AddCanvasLayer({mode, order}); Picture

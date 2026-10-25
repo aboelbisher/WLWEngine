@@ -378,6 +378,41 @@ Rect Chip(UIContext& ui, std::string_view text, glm::vec2 center, Icon icon, flo
   return rect;
 }
 
+Rect Badge(UIContext& ui, glm::vec2 center, float radius, std::string_view value, std::string_view caption,
+           float progress, const BadgeStyle& style) {
+  const Theme& theme = ui.theme;
+  Canvas& canvas = ui.canvas;
+  const float r = radius * style.scale;
+  const float ring = r * 0.14f;  // the ring's thickness, on the disc's edge
+  constexpr float kTurn = 6.2831853f;
+  canvas.Circle(center + glm::vec2(0.0f, r * 0.08f), r * 1.04f, theme.ink.Faded(0.45f));  // a soft shadow under it
+  canvas.Circle(center, r, theme.track.Faded(0.9f));
+  if (progress >= 0.0f) {
+    const float fill = std::clamp(progress, 0.0f, 1.0f);
+    const float mid = r - ring * 0.5f - r * 0.04f;  // just inside the edge
+    canvas.Ring(center, mid, ring, theme.surface_raised);
+    // A sliver still shows at 0 and the full ring reads as full, not as a seam.
+    if (fill > 0.0f)
+      canvas.Arc(center, mid, ring, 0.0f, std::max(fill, 0.02f) * kTurn, style.ring.value_or(theme.primary));
+  }
+  if (theme.font) {
+    const Font& font = *theme.font;
+    const float inner = 2.0f * (r - ring * 1.6f);  // the width text may take inside the ring
+    if (caption.empty()) {
+      const float size = FitTextSize(font, value, r * 0.95f, inner * 0.9f);
+      canvas.Text(font, value, center, size, Align::Center, ThemedText(theme, style.value.value_or(theme.text)));
+    } else {
+      const float size = FitTextSize(font, value, r * 0.8f, inner * 0.85f);
+      canvas.Text(font, value, center - glm::vec2(0.0f, r * 0.12f), size, Align::Center,
+                  ThemedText(theme, style.value.value_or(theme.text)));
+      const float caption_size = FitTextSize(font, caption, r * 0.27f, inner * 0.7f);
+      canvas.Text(font, caption, center + glm::vec2(0.0f, r * 0.46f), caption_size, Align::Center,
+                  ThemedText(theme, theme.text_muted));
+    }
+  }
+  return {center - glm::vec2(r), center + glm::vec2(r)};
+}
+
 void Stars(UIContext& ui, glm::vec2 center, float size, int filled, int count) {
   const Theme& theme = ui.theme;
   for (int i = 0; i < count; ++i) {

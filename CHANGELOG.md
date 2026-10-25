@@ -11,6 +11,10 @@ listed under **Breaking** with its **Migration**. Shims added before that (`WLW_
 
 ## Unreleased
 
+- `ui::Badge` (widgets.h): a round display for one number read at a glance (a stage, a clock): a disc, the
+  value, an optional caption and an optional progress ring filled clockwise from 12 (`BadgeStyle`: ring and value
+  colours, scale). `Icon::Rotate`: a block with a quarter-turn arrow. Tests: "badge", every icon draws.
+
 - Instance uniforms (first slice of 9.5, for Bluzzle's per-block looks): a mesh shader declares `instance uniform
   float uFlash;` (floats and vec2-4, at most `kMaxInstanceUniforms` = 8; Godot 4's qualifier) and each node sets
   its own value with `GeometryInstance3D::SetInstanceParam(name, value)` / `ClearInstanceParam` /

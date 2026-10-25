@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <optional>
 #include <span>
 #include <string_view>
 
@@ -101,6 +102,19 @@ bool Segmented(UIContext& ui, std::span<const std::string_view> labels, int& sel
 Rect Chip(UIContext& ui, std::string_view text, glm::vec2 center, Icon icon = Icon::None, float height = 38.0f);
 // The size Chip will have (to lay several out in a row).
 glm::vec2 ChipSize(const UIContext& ui, std::string_view text, Icon icon = Icon::None, float height = 38.0f);
+
+// A round display (not pressable) for one number the player checks at a glance: a stage, a level, a clock. A
+// disc with `value` in the middle, an optional small `caption` under it, and, with `progress` >= 0, a ring around
+// the edge filled clockwise from 12 o'clock (0..1: towards the next stage, the time left), like a level badge or
+// a lap counter.
+struct BadgeStyle {
+  std::optional<Color> ring;   // the progress ring (default: the theme's primary)
+  std::optional<Color> value;  // the value's colour (default: the theme's text)
+  float scale = 1.0f;          // the whole badge, about its centre (a bump, a pulse)
+};
+// Returns the disc's bounding square.
+Rect Badge(UIContext& ui, glm::vec2 center, float radius, std::string_view value, std::string_view caption = {},
+           float progress = -1.0f, const BadgeStyle& style = {});
 
 // `count` stars side by side centred on `center`, the first `filled` in the primary colour.
 void Stars(UIContext& ui, glm::vec2 center, float size, int filled, int count = 3);

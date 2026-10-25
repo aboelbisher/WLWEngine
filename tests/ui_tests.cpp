@@ -2,9 +2,11 @@
 // the safe area, widgets
 // (incl. ShaderRect), a ShaderMaterial's params.
 // (Drawing itself needs a GPU; these check everything that's computed before it.)
+#include <algorithm>
 #include <cmath>
 #include <memory>
 #include <string>
+#include <utility>
 #include <variant>
 
 #include "test_helpers.h"
@@ -364,13 +366,49 @@ TEST_CASE("themed widgets") {
 
   // Everything drew something; icons are only shapes (no text), every one of them.
   const size_t before = canvas.QuadCount();
-  for (int i = 1; i <= static_cast<int>(Icon::Grid); ++i) {
+  for (int i = 1; i <= static_cast<int>(Icon::Rotate); ++i) {
     const size_t at = canvas.QuadCount();
     DrawIcon(canvas, static_cast<Icon>(i), {{0.0f, 0.0f}, {48.0f, 48.0f}}, {1, 1, 1, 1});
     CHECK(canvas.QuadCount() > at);
   }
   CHECK((canvas.QuadCount() > before && canvas.Batches().size() >= 1));
   CHECK(Chip(ui, "BEST 100", {200.0f, 600.0f}, Icon::Trophy).Size().x > font.Measure("BEST 100", 17.0f));
+}
+
+TEST_CASE("badge") {
+  const Font& font = TestFont();
+  Canvas canvas;
+  canvas.Internal().BeginFrame({400.0f, 800.0f}, {400.0f, 800.0f});
+  UIContext ui(canvas);
+  ui.theme.font = &font;
+  // Draws a badge at (200, 100), radius 40; returns its square and how many quads it took.
+  const auto draw = [&](std::string_view value, std::string_view caption, float progress, BadgeStyle style = {}) {
+    const size_t before = canvas.QuadCount();
+    const Rect rect = Badge(ui, {200.0f, 100.0f}, 40.0f, value, caption, progress, style);
+    return std::pair{rect, canvas.QuadCount() - before};
+  };
+
+  // The disc's square, scaled about its centre.
+  const auto [rect, plain] = draw("3", "", -1.0f);
+  CHECK((rect.min == glm::vec2(160.0f, 60.0f) && rect.max == glm::vec2(240.0f, 140.0f)));
+  BadgeStyle bigger;
+  bigger.scale = 1.5f;
+  CHECK(Near(draw("3", "", -1.0f, bigger).first.Size().x, 120.0f));
+
+  // A caption and a progress ring each add shapes; an empty ring still shows its track.
+  CHECK(draw("3", "STAGE", -1.0f).second > plain);
+  const size_t empty_ring = draw("3", "", 0.0f).second;
+  CHECK(empty_ring > plain);
+  CHECK(draw("3", "", 0.5f).second > empty_ring);
+
+  // A long value is shrunk to stay inside the ring (text quads: kind 1).
+  const size_t at = canvas.Vertices().size();
+  draw("12345678", "", 0.5f);
+  float right = 0.0f;
+  for (size_t i = at; i < canvas.Vertices().size(); ++i) {
+    if (canvas.Vertices()[i].params.x == 1.0f) right = std::max(right, canvas.Vertices()[i].position.x);
+  }
+  CHECK((right > 210.0f && right < 236.0f));
 }
 
 // A ShaderMaterial's params: stored by name, set again = replaced (no GPU needed).

@@ -156,6 +156,14 @@ void DrawIcon(Canvas& canvas, Icon icon, const Rect& box, const Color& color) {
         for (float x : {-0.4f, 0.4f}) canvas.FillRect(R(x - 0.33f, y - 0.33f, x + 0.33f, y + 0.33f), color, 0.1f * s);
       }
       break;
+    case Icon::Rotate: {
+      // Unlike Restart's open circle, a block sits in the middle: "turn this".
+      canvas.FillRect(R(-0.28f, -0.28f, 0.28f, 0.28f), color, 0.08f * s);
+      const float start = 0.35f, sweep = 2.0f * kPi - 1.5f;
+      canvas.Arc(c, 0.68f * s, 0.18f * s, start, sweep, color);
+      ArrowHead(canvas, c, 0.68f * s, start + sweep, true, 0.3f * s, color);
+      break;
+    }
   }
 }
 

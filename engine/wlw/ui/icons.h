@@ -33,6 +33,7 @@ enum class Icon {
   Privacy,  // a shield
   Home,
   Grid,
+  Rotate,  // a block with a quarter-turn arrow around it (turn a piece)
 };
 
 // `icon` fitted into the square centred in `box`.
