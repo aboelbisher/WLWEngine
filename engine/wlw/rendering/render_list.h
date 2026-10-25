@@ -8,11 +8,11 @@
 // The order a viewport's meshes are drawn in, decided by ONE 64-bit key per draw and one sort
 // (Christer Ericson's "Order your graphics draw calls around!", the scheme the big engines use):
 //
-//   opaque       0 | program (16) | texture (16) | depth, near first (31)
+//   opaque       0 | program (16) | texture or material (16) | depth, near first (31)
 //   transparent  1 | depth, far first (31) | -  | program (16)
 //
-// so opaque draws come before transparent ones; opaque ones are grouped by program, then by
-// texture (fewer GPU state changes) and go front to back within a group (early-Z skips hidden
+// so opaque draws come before transparent ones; opaque ones are grouped by program, then by texture (engine shaders)
+// or material (game shaders: fewer GPU state changes) and go front to back within a group (early-Z skips hidden
 // pixels); transparent ones go back to front, as blending needs. No GPU here: tested on the CPU.
 namespace wlw::rendering {
 

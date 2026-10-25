@@ -121,8 +121,8 @@ class GLUIRenderer : public UIRenderer {
     const glm::vec2 pixels_per_unit = framebuffer_pixels / glm::max(canvas.Size(), glm::vec2(1e-4f));
     const glm::vec2 size = (corners[2].position - corners[0].position) * pixels_per_unit;
     glUseProgram(shader.Program());
-    glUniformMatrix4fv(shader.Location("uProjection"), 1, GL_FALSE, glm::value_ptr(canvas.Projection()));
-    glUniform2f(shader.Location("uSize"), size.x, size.y);
+    glUniformMatrix4fv(shader.EngineInputs().projection, 1, GL_FALSE, glm::value_ptr(canvas.Projection()));
+    glUniform2f(shader.EngineInputs().size, size.x, size.y);
     shader.ApplyParams(material, 0);
     DrawQuads(batch);
     glUseProgram(program_);

@@ -11,6 +11,19 @@ listed under **Breaking** with its **Migration**. Shims added before that (`WLW_
 
 ## Unreleased
 
+- Instance uniforms (first slice of 9.5, for Bluzzle's per-block looks): a mesh shader declares `instance uniform
+  float uFlash;` (floats and vec2-4, at most `kMaxInstanceUniforms` = 8; Godot 4's qualifier) and each node sets
+  its own value with `GeometryInstance3D::SetInstanceParam(name, value)` / `ClearInstanceParam` /
+  `ClearInstanceParams` / `GetInstanceParam`, so nodes sharing one material still differ (a node without a value
+  gets the material's, else 0; never the previous node's). Stored out of line (one pointer per node without any).
+  `Shader::InstanceUniforms()`, `ShaderSource::instance_uniforms`, `rendering::InstanceParam` (`shader.h`).
+  Faster game shaders: a material's params are uploaded only when the program doesn't have their current values
+  (`ShaderMaterial::Internal().Id()` / `Version()`; `SetParam` with the same value is no change), textures still
+  bound per draw; game-shader draws group by material in the sort key (the opaque key's 16 texture bits); the
+  engine inputs' locations are resolved once after linking (`GLShader::EngineInputs()`), not hashed per draw.
+  Tests: parsing (types, precision, comments, arrays / samplers / matrices / duplicates / more than 8 / non-mesh
+  shaders = errors), the node API, material versions and copies; GPU probe: five cubes, two materials on one
+  shader, set / unset / cut / cleared values, the same picture when drawn again with nothing uploaded.
 - Progressive bloom (first slice of 13.7, for Bluzzle's glow) as a post setting: `viewport.Post().Settings().bloom`
   {`enabled`, `threshold`, `knee`, `intensity`, `scatter`, `scale`, `max_levels`} (`rendering/post_settings.h`).
   The picture goes down in levels (from `scale` x the viewport, halved until `max_levels` or 16 px) with Jimenez's

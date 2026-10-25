@@ -15,6 +15,43 @@
 
 namespace wlw::rendering {
 
+namespace {
+
+bool IsInstanceUniform(const std::vector<InstanceUniform>& uniforms, const std::string& name) {
+  for (const InstanceUniform& uniform : uniforms) {
+    if (uniform.name == name) return true;
+  }
+  return false;
+}
+
+// The material's value for an instance uniform as a vec4; 0 if it has none (or one that isn't a float or vector).
+glm::vec4 MaterialValue(const ShaderMaterial& material, const std::string& name) {
+  const ShaderMaterial::Param* param = material.GetParam(name);
+  if (!param) return glm::vec4(0.0f);
+  return std::visit(
+      [](const auto& value) {
+        using T = std::decay_t<decltype(value)>;
+        if constexpr (std::is_same_v<T, float> || std::is_same_v<T, glm::vec2> || std::is_same_v<T, glm::vec3> ||
+                      std::is_same_v<T, glm::vec4>) {
+          return InstanceParamVec4(InstanceParam(value));
+        } else {
+          return glm::vec4(0.0f);
+        }
+      },
+      *param);
+}
+
+void Upload(GLint location, InstanceUniformType type, const glm::vec4& value) {
+  switch (type) {
+    case InstanceUniformType::Float: glUniform1f(location, value.x); break;
+    case InstanceUniformType::Vec2: glUniform2fv(location, 1, glm::value_ptr(value)); break;
+    case InstanceUniformType::Vec3: glUniform3fv(location, 1, glm::value_ptr(value)); break;
+    case InstanceUniformType::Vec4: glUniform4fv(location, 1, glm::value_ptr(value)); break;
+  }
+}
+
+}  // namespace
+
 GLShader::GLShader(const Shader& shader) {
   const ShaderSource& source = shader.Internal().Source();
   if (!source.ok) return;  // the text's error was logged when the Shader was made
@@ -41,6 +78,22 @@ GLShader::GLShader(const Shader& shader) {
     program_ = BuildProgram(label, {label, source.vertex, {"custom/mesh_vertex.glsl"}},
                             {label, source.fragment, {"custom/mesh_fragment.glsl"}});
   }
+  if (program_ == 0) return;
+
+  inputs_.model = Location("uModel");
+  inputs_.normal_matrix = Location("uNormalMatrix");
+  inputs_.instanced = Location("uInstanced");
+  inputs_.receives_shadow = Location("uReceivesShadow");
+  inputs_.shadow_map = Location("uShadowMap");
+  inputs_.projection = Location("uProjection");
+  inputs_.size = Location("uSize");
+  inputs_.source = Location("uSource");
+  inputs_.scene = Location("uScene");
+  inputs_.texel = Location("uTexel");
+  inputs_.output_size = Location("uOutputSize");
+  for (const InstanceUniform& uniform : source.instance_uniforms) {
+    instance_slots_.push_back({uniform.name, uniform.type, Location(uniform.name)});
+  }
 }
 
 GLShader::~GLShader() {
@@ -54,10 +107,26 @@ GLint GLShader::Location(const std::string& name) const {
 }
 
 int GLShader::ApplyParams(const ShaderMaterial& material, int first_unit) const {
+  const uint64_t id = material.Internal().Id();
+  const uint64_t version = material.Internal().Version();
+  if (id == material_id_ && version == material_version_ && first_unit == material_unit_) {
+    // The program has these values: only the textures, whose units other draws may have rebound.
+    int unit = first_unit;
+    for (const WTexture* texture : material_textures_) BindGLTexture(*texture, static_cast<unsigned int>(unit++));
+    glActiveTexture(GL_TEXTURE0);
+    return unit;
+  }
+  material_id_ = id;
+  material_version_ = version;
+  material_unit_ = first_unit;
+  material_textures_.clear();
+
+  const std::vector<InstanceUniform>& instance_uniforms = material.GetShader()->InstanceUniforms();
   int unit = first_unit;
   for (const auto& [name, param] : material.Params()) {
     const GLint location = Location(name);
-    if (location < 0) continue;  // not in this shader (or optimized away: unused)
+    if (location < 0) continue;                                // not in this shader (or optimized away: unused)
+    if (IsInstanceUniform(instance_uniforms, name)) continue;  // per draw: ApplyInstanceParams
     std::visit(
         [&](const auto& value) {
           using T = std::decay_t<decltype(value)>;
@@ -74,13 +143,33 @@ int GLShader::ApplyParams(const ShaderMaterial& material, int first_unit) const 
           } else if (value) {  // a texture
             BindGLTexture(*value, static_cast<unsigned int>(unit));
             glUniform1i(location, unit);
+            material_textures_.push_back(value.get());
             ++unit;
           }
         },
         param);
   }
+  for (InstanceSlot& slot : instance_slots_) slot.fallback = MaterialValue(material, slot.name);
   glActiveTexture(GL_TEXTURE0);
   return unit;
+}
+
+void GLShader::ApplyInstanceParams(const InstanceParams* node) const {
+  for (InstanceSlot& slot : instance_slots_) {
+    if (slot.location < 0) continue;
+    glm::vec4 value = slot.fallback;
+    if (node) {
+      for (const auto& [name, param] : *node) {
+        if (name == slot.name) {
+          value = InstanceParamVec4(param);
+          break;
+        }
+      }
+    }
+    if (value == slot.uploaded) continue;
+    Upload(slot.location, slot.type, value);
+    slot.uploaded = value;
+  }
 }
 
 }  // namespace wlw::rendering

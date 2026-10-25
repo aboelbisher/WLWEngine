@@ -545,12 +545,12 @@ class GLRenderingDriver : public RenderingDriver {
 
       const WTexture2D& source = *chain.Internal().TextureOf(step.source);
       BindGLTexture(source, 0);
-      glUniform1i(shader->Location("uSource"), 0);
+      glUniform1i(shader->EngineInputs().source, 0);
       BindGLTexture(*chain.Internal().TextureOf(kSceneTarget), 1);
-      glUniform1i(shader->Location("uScene"), 1);
-      glUniform2f(shader->Location("uTexel"), 1.0f / static_cast<float>(source.Width()),
+      glUniform1i(shader->EngineInputs().scene, 1);
+      glUniform2f(shader->EngineInputs().texel, 1.0f / static_cast<float>(source.Width()),
                   1.0f / static_cast<float>(source.Height()));
-      glUniform2f(shader->Location("uOutputSize"), static_cast<float>(step.size.x), static_cast<float>(step.size.y));
+      glUniform2f(shader->EngineInputs().output_size, static_cast<float>(step.size.x), static_cast<float>(step.size.y));
       int unit = 2;
       for (const auto& [uniform, texture] : step.inputs) {
         BindGLTexture(*chain.Internal().TextureOf(texture), static_cast<unsigned int>(unit));
@@ -723,8 +723,10 @@ class GLRenderingDriver : public RenderingDriver {
         }
         const auto index = static_cast<uint32_t>(draw_items_.size());
         draw_items_.push_back(item);
-        const uint64_t key = item.blend == BlendMode::Opaque ? OpaqueSortKey(program, item.texture, depth)
-                                                             : TransparentSortKey(depth, program);
+        // A game shader's draws group by material within the program (its params are uploaded once per group).
+        const auto group = item.custom ? static_cast<uint32_t>(item.custom->Internal().Id()) : item.texture;
+        const uint64_t key =
+            item.blend == BlendMode::Opaque ? OpaqueSortKey(program, group, depth) : TransparentSortKey(depth, program);
         draw_order_.push_back({key, index});
       }
     }
@@ -826,7 +828,7 @@ class GLRenderingDriver : public RenderingDriver {
         continue;
       }
       if (item.custom) {
-        UseShaderMaterial(*item.custom, *item.custom_program, slot, IsMultiMesh(*item.node),
+        UseShaderMaterial(*item.custom, *item.custom_program, slot, *item.node, IsMultiMesh(*item.node),
                           frame.shadow_active && item.node->ReceivesShadow());
       } else {
         const MeshProgram& program = *item.program;
@@ -957,19 +959,21 @@ class GLRenderingDriver : public RenderingDriver {
   }
 
   // A ShaderMaterial's shader with its node's matrices, whether it's shadowed (SceneShadow in
-  // wlw/shadows.glsl: the frame has a shadow light and the node receives it) and its params (the
-  // camera and lights come from the frame block). Its textures start at unit 2: units 0-1 are the
-  // mesh texture and the shadow map, which stay bound for the nodes drawn after.
+  // wlw/shadows.glsl: the frame has a shadow light and the node receives it), its params (the
+  // camera and lights come from the frame block) and the node's instance params. Its textures start at unit 2:
+  // units 0-1 are the mesh texture and the shadow map, which stay bound for the nodes drawn after.
   struct NodeSlot;  // (below)
-  void UseShaderMaterial(const ShaderMaterial& material, const GLShader& shader, const NodeSlot& slot, bool instanced,
-                         bool shadowed) {
+  void UseShaderMaterial(const ShaderMaterial& material, const GLShader& shader, const NodeSlot& slot,
+                         const scene::GeometryInstance3D& node, bool instanced, bool shadowed) {
     state_.UseProgram(shader.Program());
-    glUniformMatrix4fv(shader.Location("uModel"), 1, GL_FALSE, glm::value_ptr(slot.model));
-    glUniformMatrix3fv(shader.Location("uNormalMatrix"), 1, GL_FALSE, glm::value_ptr(slot.normal_matrix));
-    glUniform1i(shader.Location("uInstanced"), instanced);
-    glUniform1i(shader.Location("uReceivesShadow"), shadowed);
-    glUniform1i(shader.Location("uShadowMap"), 1);  // (-1, ignored, unless it includes wlw/shadows.glsl)
+    const GLShader::Inputs& inputs = shader.EngineInputs();
+    glUniformMatrix4fv(inputs.model, 1, GL_FALSE, glm::value_ptr(slot.model));
+    glUniformMatrix3fv(inputs.normal_matrix, 1, GL_FALSE, glm::value_ptr(slot.normal_matrix));
+    glUniform1i(inputs.instanced, instanced);
+    glUniform1i(inputs.receives_shadow, shadowed);
+    glUniform1i(inputs.shadow_map, 1);  // (-1, ignored, unless it includes wlw/shadows.glsl)
     shader.ApplyParams(material, 2);
+    shader.ApplyInstanceParams(node.GetInstanceParams());
   }
 
   // ---- Programs ----

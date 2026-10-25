@@ -5,13 +5,17 @@
 #include <memory>
 #include <optional>
 #include <span>
+#include <string>
+#include <utility>
 #include <vector>
 
+#include "wlw/core/color.h"
 #include "wlw/core/geometry.h"
 #include "wlw/core/model.h"
 #include "wlw/core/vertex_3d.h"
 #include "wlw/rendering/instance_buffer.h"
 #include "wlw/rendering/material.h"
+#include "wlw/rendering/shader.h"
 #include "wlw/scene/node.h"
 
 namespace wlw::scene {
@@ -29,6 +33,20 @@ class GeometryInstance3D : public Node3D {
 
   void SetMaterial(std::shared_ptr<rendering::Material> material) { material_ = std::move(material); }
   const std::shared_ptr<rendering::Material>& GetMaterial() const { return material_; }
+
+  // ---- Instance params ----
+  // This node's own value for an `instance uniform` of its ShaderMaterial's shader (rendering/shader.h), e.g.
+  // SetInstanceParam("uFlash", 2.0f): nodes sharing one material each get their own. Unset = the material's value
+  // (SetParam), else 0. Names the shader doesn't declare `instance` are ignored when drawing. For a
+  // MultiMeshInstance3D it applies to every copy. Stored apart from the node: a node without any pays one pointer.
+  void SetInstanceParam(const std::string& uniform, rendering::InstanceParam value);
+  void SetInstanceParam(const std::string& uniform, const Color& color) { SetInstanceParam(uniform, color.ToVec4()); }
+  void ClearInstanceParam(const std::string& uniform);  // back to the material's value
+  void ClearInstanceParams();
+  const rendering::InstanceParam* GetInstanceParam(const std::string& uniform) const;
+  using InstanceParams = rendering::InstanceParams;
+  // All of them (for the renderer); null when there are none.
+  const InstanceParams* GetInstanceParams() const { return instance_params_.get(); }
 
   // ---- Shadows ----
   // Opt-in per node (both default to false): a caster blocks the light of shadow-casting lights
@@ -59,6 +77,7 @@ class GeometryInstance3D : public Node3D {
  private:
   std::shared_ptr<core::Model<core::Vertex3D>> model_;
   std::shared_ptr<rendering::Material> material_;
+  std::unique_ptr<InstanceParams> instance_params_;  // null = none (most nodes)
   bool casts_shadow_ = false;
   bool receives_shadow_ = false;
 };

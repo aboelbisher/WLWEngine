@@ -7,6 +7,33 @@ bool SameBox(const wlw::AABB& a, const wlw::AABB& b) { return a.min == b.min && 
 
 }  // namespace
 
+void GeometryInstance3D::SetInstanceParam(const std::string& uniform, rendering::InstanceParam value) {
+  if (!instance_params_) instance_params_ = std::make_unique<InstanceParams>();
+  for (auto& [key, existing] : *instance_params_) {
+    if (key == uniform) {
+      existing = value;
+      return;
+    }
+  }
+  instance_params_->emplace_back(uniform, value);
+}
+
+void GeometryInstance3D::ClearInstanceParam(const std::string& uniform) {
+  if (!instance_params_) return;
+  std::erase_if(*instance_params_, [&uniform](const auto& entry) { return entry.first == uniform; });
+  if (instance_params_->empty()) instance_params_.reset();
+}
+
+void GeometryInstance3D::ClearInstanceParams() { instance_params_.reset(); }
+
+const rendering::InstanceParam* GeometryInstance3D::GetInstanceParam(const std::string& uniform) const {
+  if (!instance_params_) return nullptr;
+  for (const auto& [key, value] : *instance_params_) {
+    if (key == uniform) return &value;
+  }
+  return nullptr;
+}
+
 wlw::AABB GeometryInstance3D::ModelBox() const {
   if (!model_ || model_->meshes.empty()) return {{0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}};
   wlw::AABB box = model_->meshes.front()->GetLocalAABB();

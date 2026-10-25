@@ -65,6 +65,46 @@ Span FindFunction(const std::string& masked, const std::string& name) {
   return span;
 }
 
+// Each `instance uniform <type> <name>;` of the (masked) text into `out`, and the word `instance` blanked in
+// `text`, which leaves a plain uniform. Returns an error, or "" if they are all right.
+std::string ParseInstanceUniforms(const std::string& masked, std::string& text, ShaderTarget target,
+                                  std::vector<InstanceUniform>& out) {
+  const std::regex start("\\binstance\\s+uniform\\b");
+  const std::regex declaration("instance\\s+uniform\\s+(?:(?:lowp|mediump|highp)\\s+)?(\\w+)\\s+(\\w+)\\s*;");
+  for (auto it = std::sregex_iterator(masked.begin(), masked.end(), start); it != std::sregex_iterator(); ++it) {
+    if (target != ShaderTarget::Mesh) return "instance uniforms are for mesh shaders";
+    const auto at = masked.begin() + it->position(0);
+    std::smatch match;
+    if (!std::regex_search(at, masked.end(), match, declaration, std::regex_constants::match_continuous)) {
+      return "write 'instance uniform <float|vec2|vec3|vec4> <name>;' (no arrays or initial values)";
+    }
+    InstanceUniform uniform;
+    uniform.name = match[2].str();
+    const std::string type = match[1].str();
+    if (type == "float") {
+      uniform.type = InstanceUniformType::Float;
+    } else if (type == "vec2") {
+      uniform.type = InstanceUniformType::Vec2;
+    } else if (type == "vec3") {
+      uniform.type = InstanceUniformType::Vec3;
+    } else if (type == "vec4") {
+      uniform.type = InstanceUniformType::Vec4;
+    } else {
+      return "instance uniform " + uniform.name + ": '" + type + "' isn't float, vec2, vec3 or vec4";
+    }
+    for (const InstanceUniform& other : out) {
+      if (other.name == uniform.name) return "instance uniform " + uniform.name + " is declared twice";
+    }
+    if (out.size() == kMaxInstanceUniforms) {
+      return "more than " + std::to_string(kMaxInstanceUniforms) + " instance uniforms";
+    }
+    out.push_back(std::move(uniform));
+    const auto begin = static_cast<size_t>(it->position(0));
+    Blank(text, begin, begin + 8);  // "instance"
+  }
+  return "";
+}
+
 }  // namespace
 
 ShaderSource SplitShaderSource(const std::string& code) {
@@ -89,6 +129,8 @@ ShaderSource SplitShaderSource(const std::string& code) {
   }
   std::string text = code;
   Blank(text, static_cast<size_t>(match.position(0)), static_cast<size_t>(match.position(0) + match.length(0)));
+  result.error = ParseInstanceUniforms(masked, text, result.target, result.instance_uniforms);
+  if (!result.error.empty()) return result;
 
   const Span fragment = FindFunction(masked, "fragment");
   const Span vertex = FindFunction(masked, "vertex");

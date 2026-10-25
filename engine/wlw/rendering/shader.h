@@ -2,6 +2,12 @@
 
 #include <memory>
 #include <string>
+#include <type_traits>
+#include <utility>
+#include <variant>
+#include <vector>
+
+#include <glm/glm.hpp>
 
 #include "wlw/rendering/gpu_resource.h"
 
@@ -89,7 +95,41 @@ namespace wlw::rendering {
 // plus a sampler2D uniform for each of the pass's `inputs` (other passes' outputs, by name).
 // Samplers are mediump everywhere (fp16 holds RGBA8 and RGBA16F texels exactly), shadow and
 // integer samplers highp; every sampler type has a default, so sampler3D, sampler2DArray, isampler2D... work.
+//
+// Instance uniforms (mesh shaders only; Godot 4's qualifier, Unreal's Custom Primitive Data): a uniform each node
+// can set for itself, so nodes sharing one material still look different (one block flashing, the tray's own glint):
+//   instance uniform float uFlash;      // floats and vec2-4 (any precision), at most kMaxInstanceUniforms
+// A node's value (GeometryInstance3D::SetInstanceParam) wins; a node without one gets the material's (SetParam),
+// else 0. Set per draw, never inherited from the node drawn before. For a MultiMeshInstance3D the value is the whole
+// node's (per-copy values: aInstanceTint). No arrays, matrices or samplers (an error).
 enum class ShaderTarget { Mesh, Canvas, Post };
+
+inline constexpr size_t kMaxInstanceUniforms = 8;
+enum class InstanceUniformType { Float, Vec2, Vec3, Vec4 };
+struct InstanceUniform {
+  std::string name;
+  InstanceUniformType type = InstanceUniformType::Float;
+};
+
+// A node's value for an instance uniform. Another type than the uniform's is cut or padded with 0s.
+using InstanceParam = std::variant<float, glm::vec2, glm::vec3, glm::vec4>;
+inline glm::vec4 InstanceParamVec4(const InstanceParam& param) {
+  return std::visit(
+      [](const auto& value) {
+        using T = std::decay_t<decltype(value)>;
+        if constexpr (std::is_same_v<T, float>)
+          return glm::vec4(value, 0.0f, 0.0f, 0.0f);
+        else if constexpr (std::is_same_v<T, glm::vec2>)
+          return glm::vec4(value, 0.0f, 0.0f);
+        else if constexpr (std::is_same_v<T, glm::vec3>)
+          return glm::vec4(value, 0.0f);
+        else
+          return value;
+      },
+      param);
+}
+// A node's instance params, by uniform name (GeometryInstance3D::SetInstanceParam).
+using InstanceParams = std::vector<std::pair<std::string, InstanceParam>>;
 
 // A shader text split for the two GPU stages (no GPU needed; the backends add their inputs).
 struct ShaderSource {
@@ -98,6 +138,7 @@ struct ShaderSource {
   ShaderTarget target = ShaderTarget::Canvas;
   std::string fragment;  // the text without vertex(), + a main() that calls fragment()
   std::string vertex;    // the text without fragment(), + a main() that calls vertex(); empty = no vertex()
+  std::vector<InstanceUniform> instance_uniforms;  // in the text's order (`instance` removed: plain uniforms)
 };
 // Removed parts become blank lines, so line numbers stay the game's.
 ShaderSource SplitShaderSource(const std::string& code);
@@ -117,6 +158,8 @@ class Shader : public Resource {
   // False if its text is wrong or it didn't compile (both logged).
   bool IsValid() const { return source_.ok && !failed_; }
   const std::string& Name() const { return name_; }  // in error messages
+  // Its `instance uniform`s (see above), in the text's order.
+  const std::vector<InstanceUniform>& InstanceUniforms() const { return source_.instance_uniforms; }
 
   class InternalAccess;
   InternalAccess Internal() const;

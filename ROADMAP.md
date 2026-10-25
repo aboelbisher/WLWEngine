@@ -453,6 +453,11 @@ is ~850 lines of C++ + ~225 of Kotlin).
   culling; draw packets with 64-bit keys (pipeline, material, mesh, depth); automatic instancing of
   identical mesh + material runs; materials as resources with parameter blocks and bind groups
   (Unlit, SimpleLit and custom ShaderMaterials on one path).
+  Early slice done (2026-10-25, for Bluzzle's per-block looks): per-node values for game mesh shaders
+  (`instance uniform`, `GeometryInstance3D::SetInstanceParam`; Godot 4's instance uniforms, Unreal's Custom
+  Primitive Data); a material's params uploaded only when its (id, version) differs from what the program has,
+  game-shader draws grouped by material in the sort key, engine inputs' locations resolved after linking. Still
+  to do here: parameter blocks in a UBO (and per-copy instance params for multi-meshes), the rest of the item.
 - [ ] **9.6 Frame graph.** Passes declare transient and imported resources; compiling culls unused
   passes, aliases transient textures, derives load/store actions and barriers, and orders
   execution. Shadow, opaque, sky, transparent, sprites, picture canvas, post chain (PostPlan folded

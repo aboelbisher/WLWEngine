@@ -204,6 +204,65 @@ void fragment() {
   }
 }
 
+TEST_CASE("instance uniforms") {
+  // Nodes sharing one material, each with its own instance params: a node's value wins, else the material's, else 0,
+  // and a node without a value never keeps the one of the node drawn before it. A second material on the same shader
+  // makes the program switch params (and back on the second draw). Probes, no stored reference.
+  const std::shared_ptr<rendering::Shader> shader = rendering::Shader::Create(R"(shader_type mesh;
+uniform float uBase;
+instance uniform float uFlash;
+instance uniform vec2 uTint;
+void fragment() { FragColor = vec4(uFlash, uTint.y, uBase, 1.0); }
+)",
+                                                                              "test_instance");
+  REQUIRE((shader->IsValid() && shader->InstanceUniforms().size() == 2));
+  auto shared = rendering::ShaderMaterial::Create(shader);
+  shared->SetParam("uBase", 1.0f);
+  shared->SetParam("uFlash", 0.5f);  // the fallback for nodes without their own
+  auto other = rendering::ShaderMaterial::Create(shader);
+  other->SetParam("uFlash", 0.25f);
+  other->SetParam("uBase", 0.5f);
+  std::shared_ptr<rendering::Material> shared_material = std::move(shared);
+  std::shared_ptr<rendering::Material> other_material = std::move(other);
+
+  auto viewport = MakeViewport();
+  viewport->SetCamera(OrthoCamera(Vec3{0, -10, 0}, Vec3{0, 0, 0}, 10.0f));
+  // Left to right; the same depth, so they are drawn in this order within each material.
+  const std::array<float, 5> xs{-4.0f, -2.0f, 0.0f, 2.0f, 4.0f};
+  auto add = [&](float x, const std::shared_ptr<rendering::Material>& material) {
+    return AddMesh(*viewport, utils::CubeMesh(1.0f), material, {x, 0.0f, 0.0f});
+  };
+  auto set = add(xs[0], shared_material);
+  set->SetInstanceParam("uFlash", 1.0f);
+  set->SetInstanceParam("uTint", glm::vec2(0.0f, 1.0f));
+  add(xs[1], shared_material);  // nothing set: the material's uFlash, uTint 0
+  auto other_node = add(xs[2], other_material);
+  auto tinted = add(xs[3], shared_material);
+  tinted->SetInstanceParam("uTint", glm::vec4(0.0f, 0.5f, 0.0f, 0.0f));  // a vec4 for a vec2: cut
+  auto cleared = add(xs[4], shared_material);
+  cleared->SetInstanceParam("uFlash", 0.0f);
+  cleared->ClearInstanceParam("uFlash");  // back to the material's
+
+  const testing::Image image = gpu_tests::Render(viewport);
+  REQUIRE(image.width == gpu_tests::kSize);
+  auto probe = [&](float x) {
+    const int px = static_cast<int>(std::lround((x / 10.0f + 0.5f) * gpu_tests::kSize));
+    const uint8_t* pixel = image.Pixel(px, gpu_tests::kSize / 2);
+    return glm::ivec3(pixel[0], pixel[1], pixel[2]);
+  };
+  auto near = [](glm::ivec3 got, glm::ivec3 want) {
+    return glm::all(glm::lessThanEqual(glm::abs(got - want), glm::ivec3(2)));
+  };
+  CHECK_MESSAGE(near(probe(xs[0]), {255, 255, 255}), "set: " << probe(xs[0]).x << " " << probe(xs[0]).y);
+  CHECK_MESSAGE(near(probe(xs[1]), {128, 0, 255}), "unset: " << probe(xs[1]).x << " " << probe(xs[1]).y);
+  CHECK_MESSAGE(near(probe(xs[2]), {64, 0, 128}), "other material: " << probe(xs[2]).x << " " << probe(xs[2]).z);
+  CHECK_MESSAGE(near(probe(xs[3]), {128, 128, 255}), "tinted: " << probe(xs[3]).x << " " << probe(xs[3]).y);
+  CHECK_MESSAGE(near(probe(xs[4]), {128, 0, 255}), "cleared: " << probe(xs[4]).x << " " << probe(xs[4]).y);
+
+  // Drawn again with nothing changed (every upload skipped): the same picture.
+  gpu_tests::CheckSamePictures("instance_uniforms_again", image, gpu_tests::Render(viewport));
+}
+
 TEST_CASE("transparency") {
   // Two see-through cubes over an opaque one: drawn back to front after it, blended, no depth writes.
   auto viewport = MakeViewport();

@@ -179,7 +179,9 @@ engine/wlw/
               looked up at run time and #defined to the desktop names before TracyOpenGL.hpp; context made when a viewer
               connects; cvar profile.gpu_zones. Separate from GpuTimer.
               Custom shaders (shader.h): one text (shader_type canvas|mesh|post; fragment(), optional vertex()) -> Shader::Create(code) or Shader::FromFile(path) -> ShaderMaterial::Create(shader)
-              + SetParam(name, float/vec/mat4/texture); node/mesh SetMaterial or Canvas::ShaderRect. Engine inputs are prepended
+              + SetParam(name, float/vec/mat4/texture; uploaded only when the material (id, version) changes); node/mesh SetMaterial or
+              Canvas::ShaderRect. Per-node values: `instance uniform float uX;` in a mesh shader (float/vec2-4, max 8, parsed in
+              SplitShaderSource) + GeometryInstance3D::SetInstanceParam (node > material > 0, uploaded per draw when changed). Engine inputs are prepended
               (documented in shader.h; may #include wlw/lighting.glsl and use SceneLighting, wlw/shadows.glsl and SceneShadow; mesh shaders get uNormalMatrix
               and, in vertex(), WorldPosition(local) / WorldNormal(normal) = the engine's transforms). Data textures: WTexture2D::Create(w, h, {R8/RGB8/RGBA8/R16F/RGBA16F}) + Update (copied, uploaded before the next draw)
               Blending (blend_mode.h): Material::blend = Opaque / Alpha / Additive / Multiply (ShaderMaterial too), depth_write
