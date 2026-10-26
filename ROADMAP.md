@@ -378,7 +378,8 @@ is ~850 lines of C++ + ~225 of Kotlin).
   reads: glTF loads there), saves in Application Support; `idleTimerDisabled` = KeepScreenOn; haptics; thermal state
   into Quality.
 - [ ] **6.2 Native bridge and kit on iOS.** The Swift side of `BridgeCall`; Google Mobile Ads + UMP, the App
-  Tracking Transparency prompt; Game Center / iCloud for CloudSync.
+  Tracking Transparency prompt; Game Center / iCloud for CloudSync; Game Center leaderboards behind
+  `kit::Leaderboards`.
 - [ ] **6.3 Build and ship.** An Xcode project from CMake (`-G Xcode -DCMAKE_SYSTEM_NAME=iOS`, the signing team as
   an Xcode attribute) with Info.plist, launch screen, asset catalog, entitlements and the privacy manifest
   (PrivacyInfo.xcprivacy); App Store uploads need Xcode 26 and the iOS 26 SDK (since 2026-04-28; the iOS 27 SDK from

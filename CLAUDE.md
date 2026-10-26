@@ -274,7 +274,11 @@ kit/wlw/kit/  wlw::kit: game-level building blocks shared by games (separate tar
               Today, DailyLog streaks), cloud_sync.h (interface only),
               ads.h (Ads: AdMob via the bridge on Android, FakeAds on desktop; AdsConfig = test unit ids by default),
               ad_pacing.h (when an interstitial is due). kit/android/java/com/wlw/kit/AdMobService.kt = Kotlin side
-              (UMP consent, load/show/retry); games add that dir to their sourceSets and depend on play-services-ads + UMP
+              (UMP consent, load/show/retry); games add that dir to their sourceSets and depend on play-services-ads + UMP.
+              leaderboards.h (Leaderboards: sign-in state + SignIn(), Submit (waits while signed out), Load(board, span,
+              count) -> LeaderboardPage{top, player, players}; Play Games v2 via the bridge on Android, FakeLeaderboards
+              on desktop). kit/android/playgames/java/com/wlw/kit/PlayGamesService.kt = Kotlin side (service
+              "leaderboards"); its own dir so only games that use it need play-services-games-v2 + the manifest APP_ID
 samples/      small games, built only when the engine is the top-level project (desktop):
               snake/ (Snake + its rules tests)
 tests/        engine unit tests (no window/GPU: frame clock, conventions (axes, turns, camera on screen, lights, particles, primitive windings, glTF front), cameras (view = inverse world, fit modes, frustum, fly/orbit/follow controllers), node kinds, quality levels (down/up, back-off, settle, frame-time-only, lock, saved,

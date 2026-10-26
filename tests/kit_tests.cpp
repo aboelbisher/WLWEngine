@@ -1,5 +1,6 @@
 // Tests for wlw::kit: save files (backup, corruption, migrations), dates and streaks, merging
-// progress from two devices, the desktop fake ads and the interstitial pacing rules.
+// progress from two devices, the desktop fake ads, the interstitial pacing rules and leaderboards
+// (the fake, and the bridge side fed with the Kotlin service's messages).
 #include <filesystem>
 #include <string>
 #include <vector>
@@ -8,8 +9,10 @@
 #include "wlw/kit/ad_pacing.h"
 #include "wlw/kit/ads.h"
 #include "wlw/kit/daily.h"
+#include "wlw/kit/leaderboards.h"
 #include "wlw/kit/progress.h"
 #include "wlw/kit/save_store.h"
+#include "wlw/platform/bridge.h"
 #include "wlw/platform/platform.h"
 
 TEST_SUITE_BEGIN("kit");
@@ -277,6 +280,137 @@ TEST_CASE("ad pacing") {
   pacing.RewardedWatched(1130.0);  // the player chose to watch one: that counts
   CHECK(!pacing.InterstitialDue(1130.0));
   CHECK((pacing.GamesSinceAd() == 0 && pacing.GamesFinished() == 6));
+}
+
+TEST_CASE("fake leaderboards") {
+  FakeLeaderboards boards(0.5f);
+  boards.AddRivals("classic", 40, 10000, 7);
+  CHECK(boards.State() == Leaderboards::SignInState::SignedIn);
+
+  // Answers come later, in Update - never inside Load.
+  LeaderboardPage all, today;
+  int answers = 0;
+  boards.Load("classic", LeaderboardSpan::AllTime, 10, [&](const LeaderboardPage& page, bool ok) {
+    CHECK(ok);
+    all = page;
+    ++answers;
+  });
+  boards.Load("classic", LeaderboardSpan::Today, 10, [&](const LeaderboardPage& page, bool ok) {
+    CHECK(ok);
+    today = page;
+    ++answers;
+  });
+  CHECK(answers == 0);
+  boards.Update(0.3f);
+  CHECK(answers == 0);
+  boards.Update(0.3f);
+  REQUIRE(answers == 2);
+  CHECK((all.players == 40 && all.top.size() == 10 && !all.player));
+  CHECK((today.players > 0 && today.players < 40));  // fewer rivals played today
+  for (size_t i = 0; i < all.top.size(); ++i) {
+    CHECK(all.top[i].rank == static_cast<int64_t>(i) + 1);
+    if (i > 0) CHECK(all.top[i - 1].score >= all.top[i].score);
+  }
+
+  // The player's best counts in every span; a lower score changes nothing.
+  boards.Submit("classic", 9999999);
+  boards.Submit("classic", 5);
+  boards.Load("classic", LeaderboardSpan::Today, 3, [&](const LeaderboardPage& page, bool ok) {
+    CHECK(ok);
+    today = page;
+  });
+  boards.Update(1.0f);
+  REQUIRE(today.player);
+  CHECK((today.player->rank == 1 && today.player->score == 9999999 && today.player->is_player));
+  CHECK((today.top.size() == 3 && today.top[0].is_player && !today.top[1].is_player));
+
+  // A low score outside the top: the page still says where the player stands.
+  FakeLeaderboards low(0.0f);
+  low.AddRivals("rush", 30, 5000, 3);
+  low.Submit("rush", 0);
+  LeaderboardPage page;
+  low.Load("rush", LeaderboardSpan::AllTime, 5, [&](const LeaderboardPage& p, bool) { page = p; });
+  low.Update(0.0f);
+  REQUIRE(page.player);
+  CHECK((page.top.size() == 5 && page.player->rank == 31 && page.players == 31));
+
+  // Offline: loads fail.
+  boards.online = false;
+  bool failed = false;
+  boards.Load("classic", LeaderboardSpan::AllTime, 10,
+              [&](const LeaderboardPage& p, bool ok) { failed = !ok && p.top.empty(); });
+  boards.Update(1.0f);
+  CHECK(failed);
+}
+
+TEST_CASE("fake leaderboards: signing in") {
+  FakeLeaderboards boards(0.1f);
+  boards.SignOut();
+  bool failed = false;
+  boards.Load("classic", LeaderboardSpan::AllTime, 10, [&](const LeaderboardPage&, bool ok) { failed = !ok; });
+  boards.Update(0.2f);
+  CHECK(failed);
+
+  // Scores submitted while signed out wait for the sign-in; only the best is kept.
+  boards.Submit("classic", 300);
+  boards.Submit("classic", 200);
+  boards.sign_in_fails = true;  // the player cancels
+  boards.SignIn();
+  CHECK(boards.State() == Leaderboards::SignInState::Checking);
+  boards.Update(0.2f);
+  CHECK(boards.State() == Leaderboards::SignInState::SignedOut);
+  boards.sign_in_fails = false;
+  boards.SignIn();
+  boards.Update(0.2f);
+  CHECK(boards.State() == Leaderboards::SignInState::SignedIn);
+  LeaderboardPage page;
+  boards.Load("classic", LeaderboardSpan::Week, 10, [&](const LeaderboardPage& p, bool) { page = p; });
+  boards.Update(0.2f);
+  REQUIRE(page.player);
+  CHECK((page.player->score == 300 && page.players == 1 && page.player->name == "You"));
+}
+
+TEST_CASE("bridge leaderboards") {
+  // No platform side on desktop: the bridge implementation starts signed out, and loads fail
+  // through the message queue (not inside Load).
+  auto boards = Leaderboards::CreateBridge();
+  CHECK(boards->State() == Leaderboards::SignInState::SignedOut);
+  bool failed = false;
+  boards->Load("classic", LeaderboardSpan::AllTime, 10, [&](const LeaderboardPage&, bool ok) { failed = !ok; });
+  CHECK(!failed);
+  wlw::platform::DispatchBridgeMessages();
+  CHECK(failed);
+
+  // What the Kotlin service reports.
+  wlw::platform::PostBridgeMessage("leaderboards", "state", R"({"signed_in": true})");
+  wlw::platform::DispatchBridgeMessages();
+  CHECK(boards->State() == Leaderboards::SignInState::SignedIn);
+
+  // Answers carry the request's id (the second load: id 2). Here the test answers first; the
+  // failure the missing platform side causes then finds no load waiting and is ignored.
+  wlw::platform::PostBridgeMessage("leaderboards", "loaded", R"({"id": 2, "ok": true, "players": 1234,
+      "top": [{"rank": 1, "score": 9000, "name": "Ada", "me": false},
+              {"rank": 2, "score": 8000, "name": "Grace", "me": false}],
+      "player": {"rank": 57, "score": 1500, "name": "Me", "me": true}})");
+  LeaderboardPage page;
+  bool ok = false;
+  int answers = 0;
+  boards->Load("classic", LeaderboardSpan::Today, 2, [&](const LeaderboardPage& p, bool result) {
+    page = p;
+    ok = result;
+    ++answers;
+  });
+  wlw::platform::DispatchBridgeMessages();
+  REQUIRE((ok && answers == 1));
+  CHECK((page.players == 1234 && page.top.size() == 2));
+  CHECK((page.top[0].name == "Ada" && page.top[0].score == 9000 && page.top[1].rank == 2));
+  REQUIRE(page.player);
+  CHECK((page.player->rank == 57 && page.player->score == 1500 && page.player->is_player));
+
+  // Bad text is ignored, not a crash.
+  wlw::platform::PostBridgeMessage("leaderboards", "loaded", "not json");
+  wlw::platform::DispatchBridgeMessages();
+  CHECK(answers == 1);
 }
 
 TEST_SUITE_END();

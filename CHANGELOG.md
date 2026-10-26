@@ -11,6 +11,19 @@ listed under **Breaking** with its **Migration**. Shims added before that (`WLW_
 
 ## Unreleased
 
+- Leaderboards (for Bluzzle's global scores): `kit::Leaderboards` (leaderboards.h): `State()` (Checking / SignedIn /
+  SignedOut) and `SignIn()` for a button, `Submit(board, score)` (fire and forget; while signed out the best per
+  board waits and is sent at sign-in), `Load(board, LeaderboardSpan{Today, Week, AllTime}, count, done)` ->
+  `LeaderboardPage{top, player, players}`: the best entries, the player's own rank even outside the top, and how many
+  players. Callbacks run on the game thread in a later frame, never inside the call. Android: Play Games Services v2
+  through the bridge (`kit/android/playgames/java/com/wlw/kit/PlayGamesService.kt`, service "leaderboards": silent
+  sign-in at start, the player's row marked by id, loads in flight matched by request id, a board's cache skipped
+  after a submit); a game adds that folder to its sourceSets, depends on `play-services-games-v2` and names its
+  `com.google.android.gms.games.APP_ID` in the manifest. Desktop: `FakeLeaderboards` (made-up rivals per seed,
+  fewer in shorter spans, an answer delay, knobs `online`, `sign_in_fails`, `SignOut()`). Tests: the fake (ranks,
+  spans, the player outside the top, best kept, offline, sign-in waits) and the bridge side fed with the Kotlin
+  service's messages.
+
 - Canvas gradients and modulate (for Bluzzle's menu): `ui::LinearGradient` (vertical or horizontal, up to 8 stops,
   `Vertical({{at, color}, ...})`) and `Canvas::FillRect(rect, gradient, radius)`: one quad per span between stops
   (plus the flat ends), each keeping the whole rect's rounded-rect frame, so corners and edges stay exact and the

@@ -49,7 +49,7 @@ class Filter {
   float min_octave_ = 0.0f, max_octave_ = 0.0f;
   float octave_ = 0.0f;         // log2 of the cutoff now...
   float target_octave_ = 0.0f;  // ...and where it's going
-  uint32_t glide_frames_ = 0;  // frames left in the glide
+  uint32_t glide_frames_ = 0;   // frames left in the glide
   float a1_ = 0.0f, a2_ = 0.0f, a3_ = 0.0f;
   std::array<float, 2> ic1_{}, ic2_{};  // the two integrators' states, per channel
   bool running_ = false;                // the state follows the signal (false while open: bypassed)
