@@ -96,8 +96,8 @@ class FakeLeaderboards : public Leaderboards {
   std::string Describe() const override;
 
   // Knobs for trying the game's other paths (debug panel, tests).
-  bool online = true;           // false: every load fails, as with no network
-  bool sign_in_fails = false;   // SignIn() ends signed out, as when the player cancels
+  bool online = true;          // false: every load fails, as with no network
+  bool sign_in_fails = false;  // SignIn() ends signed out, as when the player cancels
   std::string player_name = "You";
   void SignOut() { state_ = SignInState::SignedOut; }
   // Adds `count` made-up rivals ("Player 1"...) to `board` with scores up to `max_score`, the

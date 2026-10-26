@@ -79,7 +79,7 @@ class BridgeLeaderboards : public Leaderboards {
   }
 
   std::string Describe() const override {
-    const char* state = state_ == SignInState::SignedIn    ? "signed in"
+    const char* state = state_ == SignInState::SignedIn   ? "signed in"
                         : state_ == SignInState::Checking ? "checking sign-in"
                                                           : "signed out";
     return std::string("Play Games leaderboards: ") + state + ", " + std::to_string(loads_.size()) + " loading, " +
@@ -195,7 +195,7 @@ void FakeLeaderboards::Load(const std::string& board, LeaderboardSpan span, int 
 }
 
 std::string FakeLeaderboards::Describe() const {
-  const char* state = state_ == SignInState::SignedIn    ? "signed in"
+  const char* state = state_ == SignInState::SignedIn   ? "signed in"
                       : state_ == SignInState::Checking ? "checking sign-in"
                                                         : "signed out";
   size_t scores = 0;
@@ -215,7 +215,8 @@ void FakeLeaderboards::AddRivals(const std::string& board, int count, int64_t ma
     rival.score = static_cast<int64_t>(static_cast<double>(unit) * unit * static_cast<double>(max_score));
     rival.spans = SpanBit(LeaderboardSpan::AllTime);
     if (random.Chance(0.5f)) rival.spans |= SpanBit(LeaderboardSpan::Week);
-    if ((rival.spans & SpanBit(LeaderboardSpan::Week)) && random.Chance(0.4f)) rival.spans |= SpanBit(LeaderboardSpan::Today);
+    if ((rival.spans & SpanBit(LeaderboardSpan::Week)) && random.Chance(0.4f))
+      rival.spans |= SpanBit(LeaderboardSpan::Today);
     scores.push_back(rival);
   }
 }
