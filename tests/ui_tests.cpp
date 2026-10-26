@@ -446,4 +446,73 @@ TEST_CASE("canvas shader rect") {
   CHECK((Near(v[5].color.r, 1.0f) && Near(v[5].color.g, 0.0f)));
 }
 
+// A gradient: strips between its stops (and flat ends), each drawing its part of the WHOLE rounded rect.
+TEST_CASE("canvas gradient") {
+  Canvas canvas;
+  canvas.Internal().BeginFrame({400.0f, 800.0f}, {400.0f, 800.0f});
+  const wlw::Color red{1, 0, 0, 1}, clear{1, 1, 1, 0}, blue{0, 0, 1, 1};
+  const Rect rect{{0.0f, 100.0f}, {200.0f, 300.0f}};  // 200 x 200, centre (100, 200)
+  canvas.FillRect(rect, LinearGradient::Vertical({{0.25f, red}, {0.5f, clear}, {0.75f, blue}}), 12.0f);
+  CHECK(canvas.QuadCount() == 4);  // flat top, red -> clear, clear -> blue, flat bottom
+  CHECK(canvas.Batches().size() == 1);
+  const auto& v = canvas.Vertices();
+  for (const UIVertex& corner : v) {
+    CHECK((corner.params.x == static_cast<float>(QuadKind::Rect) && Near(corner.params.y, 100.0f) &&
+           Near(corner.params.z, 100.0f) && Near(corner.params.w, 12.0f)));
+    CHECK(Near(corner.uv.y, corner.position.y - 200.0f));  // measured from the whole rect's centre
+  }
+  // The strips tile the rect: 100-150, 150-200, 200-250, 250-300.
+  CHECK((Near(v[0].position.y, 100.0f) && Near(v[2].position.y, 150.0f) && Near(v[4].position.y, 150.0f) &&
+         Near(v[10].position.y, 250.0f) && Near(v[14].position.y, 300.0f)));
+  CHECK((v[0].color == red && v[3].color == red));  // flat top
+  CHECK((v[4].color == red && v[5].color == red && v[6].color == clear && v[7].color == clear));
+  CHECK((v[12].color == blue && v[14].color == blue));  // flat bottom
+
+  // Stops at the ends: no flat strips. Horizontal: colours change left to right.
+  canvas.FillRect(rect, LinearGradient::Horizontal({{0.0f, red}, {1.0f, blue}}));
+  CHECK(canvas.QuadCount() == 5);
+  CHECK((v[16].color == red && v[17].color == blue && v[18].color == blue && v[19].color == red));
+  CHECK((Near(v[16].uv.x, -100.0f) && Near(v[17].uv.x, 100.0f)));
+  canvas.FillRect(rect, LinearGradient::Vertical({{0.5f, red}}));  // one stop: a plain rect
+  CHECK((canvas.QuadCount() == 6 && v[20].color == red && v[22].color == red));
+  canvas.FillRect(rect, LinearGradient{});  // no stops: nothing
+  CHECK(canvas.QuadCount() == 6);
+}
+
+// Modulate scopes multiply every colour drawn inside them, nest, and end with their scope.
+TEST_CASE("canvas modulate") {
+  Canvas canvas;
+  canvas.Internal().BeginFrame({400.0f, 800.0f}, {400.0f, 800.0f});
+  const Rect rect{{0.0f, 0.0f}, {10.0f, 10.0f}};
+  const wlw::Color gold{1.0f, 0.8f, 0.2f, 1.0f};
+  const auto& v = canvas.Vertices();
+  {
+    auto fade = canvas.Fade(0.5f);
+    canvas.FillRect(rect, gold);
+    CHECK((Near(v[0].color.a, 0.5f) && Near(v[0].color.g, 0.8f)));
+    {
+      auto tint = canvas.Modulate({0.5f, 1.0f, 1.0f, 0.5f});
+      canvas.Circle({5.0f, 5.0f}, 3.0f, gold);
+      CHECK((Near(v[4].color.a, 0.25f) && Near(v[4].color.r, 0.5f)));
+      canvas.Triangle({0, 0}, {10, 0}, {0, 10}, gold);
+      const std::shared_ptr<wlw::rendering::WTexture2D> texture = wlw::rendering::WTexture2D::Create(1, 1);
+      canvas.Image(rect, texture, {.tint = gold, .premultiplied = true});
+      CHECK(v[12].params.y == 1.0f);  // a premultiplied texture: ui.frag doesn't multiply it again
+      canvas.ShaderRect(rect, wlw::rendering::ShaderMaterial::Create(nullptr), gold);
+      CHECK(canvas.QuadCount() == 5);
+      for (size_t i = 8; i < 20; ++i) CHECK(Near(v[i].color.a, 0.25f));
+      canvas.Image(rect, texture, {.tint = gold});
+      CHECK(v[20].params.y == 0.0f);
+    }
+    CHECK(Near(canvas.CurrentModulate().a, 0.5f));  // the inner scope ended
+  }
+  CHECK(canvas.CurrentModulate() == wlw::Color(1, 1, 1, 1));
+  canvas.FillRect(rect, gold);
+  CHECK(v[24].color == gold);
+
+  auto left_open = canvas.Fade(0.1f);  // a new frame starts unmodulated
+  canvas.Internal().BeginFrame({400.0f, 800.0f}, {400.0f, 800.0f});
+  CHECK(canvas.CurrentModulate() == wlw::Color(1, 1, 1, 1));
+}
+
 TEST_SUITE_END();

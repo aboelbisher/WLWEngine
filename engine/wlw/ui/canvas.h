@@ -1,6 +1,8 @@
 #pragma once
 
+#include <array>
 #include <cstdint>
+#include <initializer_list>
 #include <memory>
 #include <string_view>
 #include <vector>
@@ -25,6 +27,10 @@ struct ImageStyle {
   Color tint{1.0f, 1.0f, 1.0f, 1.0f};   // multiplies the texture (white texture + tint = any colour)
   Rect uv{{0.0f, 0.0f}, {1.0f, 1.0f}};  // the part of the texture (sprite sheets); (0, 0) = first row uploaded
   rendering::BlendMode blend = rendering::BlendMode::Alpha;  // e.g. Additive for glows (see blend_mode.h)
+  // The texture's colours are already multiplied by its alpha: a viewport's texture (everything the engine draws
+  // is premultiplied). Drawn as straight alpha it would be multiplied twice: darker where it's see-through, a dark
+  // fringe where filtering mixes its edges with the clear colour.
+  bool premultiplied = false;
 };
 
 // How text looks. Outline and shadow come from the same SDF atlas (see Font).
@@ -50,6 +56,37 @@ struct TextStyle {
   }
 };
 
+// A colour ramp for Canvas::FillRect: colours at positions 0..1 across the rect (0 = top or left), straight
+// alpha, blended linearly between stops (in premultiplied space, so a fade to transparent doesn't darken).
+// Before the first stop and after the last, their colours hold. Up to kMaxStops; more are ignored.
+struct LinearGradient {
+  enum class Direction { Vertical, Horizontal };  // top -> bottom, left -> right
+  struct Stop {
+    float at = 0.0f;  // 0..1, in increasing order
+    Color color;
+  };
+  static constexpr size_t kMaxStops = 8;
+
+  Direction direction = Direction::Vertical;
+  std::array<Stop, kMaxStops> stops{};
+  size_t count = 0;
+
+  LinearGradient& Add(float at, const Color& color) {
+    if (count < kMaxStops) stops[count++] = {at, color};
+    return *this;
+  }
+  static LinearGradient Vertical(std::initializer_list<Stop> list) { return Of(Direction::Vertical, list); }
+  static LinearGradient Horizontal(std::initializer_list<Stop> list) { return Of(Direction::Horizontal, list); }
+
+ private:
+  static LinearGradient Of(Direction direction, std::initializer_list<Stop> list) {
+    LinearGradient gradient;
+    gradient.direction = direction;
+    for (const Stop& stop : list) gradient.Add(stop.at, stop.color);
+    return gradient;
+  }
+};
+
 // What the UI shader (shaders/ui.frag) draws for a quad: UIVertex::params.x. The values are ui.frag's
 // KIND_* defines (a test checks they agree); Shader quads are drawn by their material instead.
 enum class QuadKind : int { Text = 1, Rect = 2, Shader = 3, Image = 4, Triangle = 5, Arc = 6 };
@@ -59,9 +96,9 @@ struct UIVertex {
   glm::vec2 position{0.0f};  // Canvas units
   glm::vec2 uv{0.0f};        // text: atlas coordinate; rect: position relative to the rect centre
   Color color{1.0f, 1.0f, 1.0f, 1.0f};
-  glm::vec4 params{
-      0.0f};  // x = kind (QuadKind); text: y = SDF edge, z = Font::DistanceRange; rect: y,z = half size, w = radius;
-              // triangle: uv.x, uv.y, y = distances to its 3 edges; arc: y = radius, z = half thickness, w = half sweep
+  glm::vec4 params{0.0f};  // x = kind (QuadKind); text: y = SDF edge, z = Font::DistanceRange; rect: y,z = half size, w
+                           // = radius; triangle: uv.x, uv.y, y = distances to its 3 edges; arc: y = radius, z = half
+                           // thickness, w = half sweep; image: y = 1 if the texture is premultiplied
 };
 
 // A run of consecutive quads that can be drawn in one call: same blend mode, and at most one
@@ -94,6 +131,9 @@ class Canvas {
 
   // A filled rectangle; corner_radius rounds the corners (anti-aliased edges either way).
   void FillRect(const Rect& rect, const Color& color, float corner_radius = 0.0f);
+  // The same filled with a gradient: one quad per span between stops (plus the flat ends), each keeping the whole
+  // rect's shape, so rounded corners and edges stay exact.
+  void FillRect(const Rect& rect, const LinearGradient& gradient, float corner_radius = 0.0f);
   // A straight line with round ends, at any angle (e.g. over the 3D scene, between projected points).
   void Line(glm::vec2 from, glm::vec2 to, float thickness, const Color& color);
   // A filled circle.
@@ -123,8 +163,31 @@ class Canvas {
   // Texture alpha is straight (not premultiplied), like image files. Consecutive images with the
   // same texture and blend mode are ONE draw call (rectangles join any Alpha run), so thousands of
   // sprites stay cheap. A viewport's texture is upside down here (GL keeps row 0 at the bottom):
-  // pass uv = {{0, 1}, {1, 0}}.
+  // pass uv = {{0, 1}, {1, 0}}, and premultiplied = true.
   void Image(const Rect& rect, const std::shared_ptr<rendering::WTexture2D>& texture, const ImageStyle& style = {});
+
+  // Multiplies the colour (alpha too) of everything drawn while the returned scope lives: fades and tints a whole
+  // group of drawing (Godot's modulate). Scopes nest (their colours multiply); each frame starts at white. Each
+  // item is faded on its own, not the group as one picture: overlapping items show through each other. It only
+  // changes the look: a faded widget still takes taps.
+  //   { auto fade = canvas.Fade(0.5f); DrawCard(...); }
+  class ModulateScope {
+   public:
+    ModulateScope(const ModulateScope&) = delete;
+    ModulateScope& operator=(const ModulateScope&) = delete;
+    ~ModulateScope() { canvas_.modulate_ = previous_; }
+
+   private:
+    friend class Canvas;
+    ModulateScope(Canvas& canvas, const Color& color) : canvas_(canvas), previous_(canvas.modulate_) {
+      canvas.modulate_ = previous_ * color;
+    }
+    Canvas& canvas_;
+    Color previous_;
+  };
+  [[nodiscard]] ModulateScope Modulate(const Color& color) { return ModulateScope(*this, color); }
+  [[nodiscard]] ModulateScope Fade(float alpha) { return Modulate({1.0f, 1.0f, 1.0f, alpha}); }
+  const Color& CurrentModulate() const { return modulate_; }
 
   const std::vector<UIVertex>& Vertices() const { return vertices_; }  // 4 per quad
   const std::vector<UIBatch>& Batches() const { return batches_; }
@@ -146,6 +209,9 @@ class Canvas {
                const glm::vec2& uv_max, const Color& color, const glm::vec4& params);
   void AddQuad(const Font* font, const glm::vec2 (&corners)[4], const glm::vec2 (&uvs)[4], const Color& color,
                const glm::vec4& params);
+  // One colour per corner (in the corners' order), before the modulate.
+  void AddQuad(const Font* font, const glm::vec2 (&corners)[4], const glm::vec2 (&uvs)[4], const Color (&colors)[4],
+               const glm::vec4& params);
   // `pen` = the unturned baseline start; the glyphs are turned by `turn` (cos, sin) about `pivot`, then moved by
   // `offset`.
   void AddText(const Font& font, std::string_view text, glm::vec2 pen, float size, const Color& color, float edge,
@@ -153,6 +219,7 @@ class Canvas {
 
   glm::vec2 size_{1.0f};
   float pixels_per_unit_ = 1.0f;
+  Color modulate_{1.0f, 1.0f, 1.0f, 1.0f};  // see Modulate
   std::vector<UIVertex> vertices_;
   std::vector<UIBatch> batches_;
   std::vector<GlyphQuad> glyph_scratch_;  // reused: no allocation per Text() call

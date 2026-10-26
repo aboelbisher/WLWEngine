@@ -11,6 +11,17 @@ listed under **Breaking** with its **Migration**. Shims added before that (`WLW_
 
 ## Unreleased
 
+- Canvas gradients and modulate (for Bluzzle's menu): `ui::LinearGradient` (vertical or horizontal, up to 8 stops,
+  `Vertical({{at, color}, ...})`) and `Canvas::FillRect(rect, gradient, radius)`: one quad per span between stops
+  (plus the flat ends), each keeping the whole rect's rounded-rect frame, so corners and edges stay exact and the
+  strips meet without a seam. `Canvas::Modulate(color)` / `Fade(alpha)` return a scope that multiplies the colour of
+  everything drawn inside it (nested scopes multiply; each frame starts at white), Godot's modulate: per item, not
+  group compositing, and draw-only (a faded widget still takes taps). `ImageStyle::premultiplied` for textures
+  whose colour is already multiplied by alpha (a viewport's texture): no dark fringe where its edges are filtered.
+  The UI shader now premultiplies vertex colours in ui.vert, before interpolation, so a fade to transparent no
+  longer darkens halfway (identical output for one-colour quads). Tests: strips and uvs, modulate on every quad
+  kind, GPU check that a gradient's midpoint matches a flat rect of the mixed colour.
+
 - Live mix (early slice of 16.2, for Bluzzle's adaptive music): `audio::Filter` (filter.h), a two-pole low-pass /
   high-pass in the TPT state-variable form (Zavalishin / Simper), stable and click-free while its cutoff moves every
   sample (unlike a biquad, whose stored samples depend on the coefficients); the cutoff glides at an even speed in

@@ -100,8 +100,10 @@ float ArcCoverage(highp vec2 dx, highp vec2 dy) {
 
 void main() {
   if (vKind == KIND_IMAGE) {
-    // The texel (straight alpha, like image files) times the tint.
-    FragColor = Premultiply(texture(uTexture, vUV) * vColor);
+    // The texel (straight alpha like image files, or already premultiplied: vParams.y = 1) times the tint
+    // (premultiplied in ui.vert).
+    vec4 texel = texture(uTexture, vUV);
+    FragColor = (vParams.y > 0.5 ? texel : Premultiply(texel)) * vColor;
     return;
   }
   highp vec2 dx = dFdx(vUV);
@@ -116,5 +118,5 @@ void main() {
   } else {
     coverage = RoundedRectCoverage(dx, dy);
   }
-  FragColor = Premultiply(vec4(vColor.rgb, vColor.a * coverage));
+  FragColor = vColor * coverage;
 }

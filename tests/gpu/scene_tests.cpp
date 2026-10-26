@@ -542,6 +542,25 @@ TEST_CASE("canvas") {
   CheckGolden("canvas", viewport);
 }
 
+TEST_CASE("canvas gradient fades without darkening") {
+  // Red to transparent black: halfway is red at half alpha (premultiplied blending), the same as a flat rect of it,
+  // not the darker colour straight-alpha blending gives (half the red at half alpha).
+  auto viewport = MakeViewport();
+  viewport->SetScene(nullptr);
+  const float size = gpu_tests::kSize;
+  viewport->Internal().BeginCanvases({size, size}, {size, size});
+  ui::Canvas& canvas = viewport->GetCanvas();
+  canvas.FillRect({{0, 0}, {size, size * 0.5f}},
+                  ui::LinearGradient::Horizontal({{0.0f, Color{1, 0, 0, 1}}, {1.0f, Color{0, 0, 0, 0}}}));
+  canvas.FillRect({{0, size * 0.5f}, {size, size}}, Color{1, 0, 0, 0.5f});
+  const testing::Image image = gpu_tests::Render(viewport);
+  const int x = static_cast<int>(size * 0.5f);
+  const int gradient = image.Pixel(x, static_cast<int>(size * 0.25f))[0];
+  const int flat = image.Pixel(x, static_cast<int>(size * 0.75f))[0];
+  CHECK_MESSAGE(std::abs(gradient - flat) <= 3, gradient << " vs " << flat);
+  CHECK(image.Pixel(4, static_cast<int>(size * 0.25f))[0] > gradient);  // brighter near the opaque end
+}
+
 namespace {
 
 // Nodes whose transforms turn normals in every way the renderer handles: an uneven scale, a mirror,

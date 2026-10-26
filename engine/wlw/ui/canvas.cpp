@@ -21,6 +21,7 @@ void Canvas::BeginFrame(glm::vec2 framebuffer_pixels, glm::vec2 reference) {
   // "Fit": the largest scale at which the whole reference area is visible.
   pixels_per_unit_ = std::max(std::min(framebuffer_pixels.x / reference.x, framebuffer_pixels.y / reference.y), 1e-4f);
   size_ = framebuffer_pixels / pixels_per_unit_;
+  modulate_ = {1.0f, 1.0f, 1.0f, 1.0f};
   vertices_.clear();
   batches_.clear();
 }
@@ -38,8 +39,14 @@ void Canvas::AddQuad(const Font* font, const glm::vec2& min, const glm::vec2& ma
 
 void Canvas::AddQuad(const Font* font, const glm::vec2 (&corners)[4], const glm::vec2 (&uvs)[4], const Color& color,
                      const glm::vec4& params) {
+  const Color colors[4] = {color, color, color, color};
+  AddQuad(font, corners, uvs, colors, params);
+}
+
+void Canvas::AddQuad(const Font* font, const glm::vec2 (&corners)[4], const glm::vec2 (&uvs)[4],
+                     const Color (&colors)[4], const glm::vec4& params) {
   ++BatchFor(font, nullptr).quad_count;
-  for (int i = 0; i < 4; ++i) vertices_.push_back({corners[i], uvs[i], color, params});
+  for (int i = 0; i < 4; ++i) vertices_.push_back({corners[i], uvs[i], colors[i] * modulate_, params});
 }
 
 namespace {
@@ -88,6 +95,43 @@ void Canvas::FillRect(const Rect& rect, const Color& color, float corner_radius)
   AddQuad(nullptr, rect.min, rect.max, -half, half, color, {kKindRect, half.x, half.y, radius});
 }
 
+void Canvas::FillRect(const Rect& rect, const LinearGradient& gradient, float corner_radius) {
+  const size_t count = std::min(gradient.count, LinearGradient::kMaxStops);
+  if (count == 0) return;
+  if (count == 1) return FillRect(rect, gradient.stops[0].color, corner_radius);
+  // Split along the gradient into spans: a flat one before the first stop, one between each pair of stops, a flat
+  // one after the last. Every span is a quad whose uv still measures from the WHOLE rect's centre with the whole
+  // half size, so the shader draws the same rounded rect, cut into strips that meet exactly. Each strip's colour
+  // varies along one axis only, so its two triangles agree (no diagonal seam).
+  const glm::vec2 half = rect.Size() * 0.5f;
+  const glm::vec2 center = rect.Center();
+  const float radius = std::clamp(corner_radius, 0.0f, std::min(half.x, half.y));
+  const glm::vec4 params{kKindRect, half.x, half.y, radius};
+  const bool vertical = gradient.direction == LinearGradient::Direction::Vertical;
+  const auto span = [&](float t0, float t1, const Color& c0, const Color& c1) {
+    t0 = std::clamp(t0, 0.0f, 1.0f);
+    t1 = std::clamp(t1, 0.0f, 1.0f);
+    if (t1 <= t0) return;
+    glm::vec2 min = rect.min, max = rect.max;
+    if (vertical) {
+      min.y = rect.min.y + rect.Size().y * t0;
+      max.y = rect.min.y + rect.Size().y * t1;
+    } else {
+      min.x = rect.min.x + rect.Size().x * t0;
+      max.x = rect.min.x + rect.Size().x * t1;
+    }
+    const glm::vec2 corners[4] = {{min.x, min.y}, {max.x, min.y}, {max.x, max.y}, {min.x, max.y}};
+    const glm::vec2 uvs[4] = {corners[0] - center, corners[1] - center, corners[2] - center, corners[3] - center};
+    // Corner order: top left, top right, bottom right, bottom left.
+    const Color colors[4] = {c0, vertical ? c0 : c1, c1, vertical ? c1 : c0};
+    AddQuad(nullptr, corners, uvs, colors, params);
+  };
+  const auto& stops = gradient.stops;
+  span(0.0f, stops[0].at, stops[0].color, stops[0].color);
+  for (size_t i = 0; i + 1 < count; ++i) span(stops[i].at, stops[i + 1].at, stops[i].color, stops[i + 1].color);
+  span(stops[count - 1].at, 1.0f, stops[count - 1].color, stops[count - 1].color);
+}
+
 void Canvas::ShaderRect(const Rect& rect, std::shared_ptr<rendering::ShaderMaterial> material, const Color& tint) {
   if (!material) return;
   UIBatch batch;
@@ -98,17 +142,19 @@ void Canvas::ShaderRect(const Rect& rect, std::shared_ptr<rendering::ShaderMater
   batches_.push_back(std::move(batch));
   const glm::vec2 corners[4] = {rect.min, {rect.max.x, rect.min.y}, rect.max, {rect.min.x, rect.max.y}};
   const glm::vec2 uvs[4] = {{0.0f, 0.0f}, {1.0f, 0.0f}, {1.0f, 1.0f}, {0.0f, 1.0f}};
-  for (int i = 0; i < 4; ++i) vertices_.push_back({corners[i], uvs[i], tint, {kKindShader, 0.0f, 0.0f, 0.0f}});
+  for (int i = 0; i < 4; ++i)
+    vertices_.push_back({corners[i], uvs[i], tint * modulate_, {kKindShader, 0.0f, 0.0f, 0.0f}});
 }
 
 void Canvas::Image(const Rect& rect, const std::shared_ptr<rendering::WTexture2D>& texture, const ImageStyle& style) {
   if (!texture) return;
   ++BatchFor(nullptr, &texture, style.blend).quad_count;
   const Rect& uv = style.uv;
-  const Color& tint = style.tint;
+  const Color tint = style.tint * modulate_;
   const glm::vec2 corners[4] = {rect.min, {rect.max.x, rect.min.y}, rect.max, {rect.min.x, rect.max.y}};
   const glm::vec2 uvs[4] = {uv.min, {uv.max.x, uv.min.y}, uv.max, {uv.min.x, uv.max.y}};
-  for (int i = 0; i < 4; ++i) vertices_.push_back({corners[i], uvs[i], tint, {kKindImage, 0.0f, 0.0f, 0.0f}});
+  const glm::vec4 params{kKindImage, style.premultiplied ? 1.0f : 0.0f, 0.0f, 0.0f};
+  for (int i = 0; i < 4; ++i) vertices_.push_back({corners[i], uvs[i], tint, params});
 }
 
 void Canvas::Line(glm::vec2 from, glm::vec2 to, float thickness, const Color& color) {
@@ -155,7 +201,7 @@ void Canvas::Triangle(glm::vec2 a, glm::vec2 b, glm::vec2 c, const Color& color)
   ++BatchFor(nullptr, nullptr).quad_count;
   for (const glm::vec2& p : corners) {
     const glm::vec2 uv(glm::dot(p - b, n_bc), glm::dot(p - c, n_ca));
-    vertices_.push_back({p, uv, color, {kKindTriangle, glm::dot(p - a, n_ab), 0.0f, 0.0f}});
+    vertices_.push_back({p, uv, color * modulate_, {kKindTriangle, glm::dot(p - a, n_ab), 0.0f, 0.0f}});
   }
 }
 
