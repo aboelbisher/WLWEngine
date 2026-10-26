@@ -411,6 +411,15 @@ TEST_CASE("bridge leaderboards") {
   wlw::platform::PostBridgeMessage("leaderboards", "loaded", "not json");
   wlw::platform::DispatchBridgeMessages();
   CHECK(answers == 1);
+
+  // A player the service keeps off its public table (Play Games: a hidden profile): their score, rank 0.
+  wlw::platform::PostBridgeMessage("leaderboards", "loaded",
+                                   R"({"id": 3, "ok": true, "players": 0, "top": [],
+                                       "player": {"rank": 0, "score": 7, "me": true}})");
+  boards->Load("rush", LeaderboardSpan::AllTime, 10, [&](const LeaderboardPage& p, bool) { page = p; });
+  wlw::platform::DispatchBridgeMessages();
+  REQUIRE(page.player);
+  CHECK((page.top.empty() && page.player->rank == 0 && page.player->score == 7 && page.players == 0));
 }
 
 TEST_SUITE_END();

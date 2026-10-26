@@ -33,7 +33,7 @@ namespace wlw::kit {
 enum class LeaderboardSpan { Today, Week, AllTime };
 
 struct LeaderboardEntry {
-  int64_t rank = 0;  // 1 = the best
+  int64_t rank = 0;  // 1 = the best; 0 = unknown (the player has a score but no public rank, see `player`)
   int64_t score = 0;
   std::string name;        // the player's public name, UTF-8 (any script)
   bool is_player = false;  // the signed-in player's own entry
@@ -41,9 +41,11 @@ struct LeaderboardEntry {
 
 // One look at a leaderboard: the best entries and where the signed-in player stands.
 struct LeaderboardPage {
-  std::vector<LeaderboardEntry> top;       // best first
-  std::optional<LeaderboardEntry> player;  // none: no score from this player in this span yet
-  int64_t players = -1;                    // players with a score in this span (approximate); -1 = unknown
+  std::vector<LeaderboardEntry> top;  // best first
+  // The signed-in player's entry; none: no score in this span yet. Its rank is 0 when the service
+  // keeps them off public tables (Play Games: a profile that isn't visible to everyone).
+  std::optional<LeaderboardEntry> player;
+  int64_t players = -1;  // players with a score in this span (approximate); -1 = unknown
 };
 
 class Leaderboards {

@@ -113,9 +113,11 @@ class PlayGamesService(private val activity: Activity) : WlwService {
                     }
                     if (variant != null) {
                         result.put("players", variant.numScores)
-                        if (variant.hasPlayerInfo() && variant.playerRank != LeaderboardVariant.PLAYER_RANK_UNKNOWN.toLong()) {
+                        // A player whose Play Games profile isn't public has a score but no public
+                        // rank (they're left off public tables): rank 0 = unknown.
+                        if (variant.hasPlayerInfo() && variant.rawPlayerScore != LeaderboardVariant.PLAYER_SCORE_UNKNOWN.toLong()) {
                             result.put("player", JSONObject()
-                                .put("rank", variant.playerRank)
+                                .put("rank", maxOf(variant.playerRank, 0L))
                                 .put("score", variant.rawPlayerScore)
                                 .put("name", playerName)
                                 .put("me", true))

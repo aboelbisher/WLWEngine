@@ -18,7 +18,8 @@ listed under **Breaking** with its **Migration**. Shims added before that (`WLW_
   players. Callbacks run on the game thread in a later frame, never inside the call. Android: Play Games Services v2
   through the bridge (`kit/android/playgames/java/com/wlw/kit/PlayGamesService.kt`, service "leaderboards": silent
   sign-in at start, the player's row marked by id, loads in flight matched by request id, a board's cache skipped
-  after a submit); a game adds that folder to its sourceSets, depends on `play-services-games-v2` and names its
+  after a submit, the player's own score kept even without a public rank: rank 0 = unknown, as for a Play Games
+  profile that isn't visible to everyone, which public tables leave out); a game adds that folder to its sourceSets, depends on `play-services-games-v2` and names its
   `com.google.android.gms.games.APP_ID` in the manifest. Desktop: `FakeLeaderboards` (made-up rivals per seed,
   fewer in shorter spans, an answer delay, knobs `online`, `sign_in_fails`, `SignOut()`). Tests: the fake (ranks,
   spans, the player outside the top, best kept, offline, sign-in waits) and the bridge side fed with the Kotlin
