@@ -24,7 +24,9 @@ engine/wlw/
               android/java/com/wlw/AudioWatcher.kt (bridge "audio"; watches playback, never takes audio focus).
               Music: Audio::PlayMusic(path, MusicParams{fade, volume trim, intro, restart}) streams a file (decode thread ->
               lock-free ring -> 4 Mixer stream slots, equal-power crossfades; gapless intro -> loop; restarted playthroughs
-              freed when StreamSource::InUse() is false)
+              freed when StreamSource::InUse() is false). Live mix: each bus mixed into its own buffer, then shaped:
+              SetBusLowPass / SetBusHighPass (filter.h: TPT state-variable filter, cutoff glides in octaves, bypassed
+              when open), SetBusGain (dB glide), Duck(bus, DuckParams) (deepest wins); Levels(bus) for panels
   anim/       ease.h (Penner easing curves), tween.h (Tween<T>: value-type tweens the game owns and samples),
               shake.h (trauma-based screen shake: trauma decays, offset = trauma^2 x smooth noise),
               timeline.h (Timeline: beats placed Then / With / At on one clock; cues polled with Crossed; Skip)
@@ -298,7 +300,7 @@ tests/        engine unit tests (no window/GPU: frame clock, conventions (axes, 
               mali_offline_compiler/malioc --core Mali-G78 x.frag; from Git Bash with MSYS_NO_PATHCONV=1).
 benchmarks/   wlw_benchmarks (nanobench; top-level only, desktop + Android executable): no window/GPU, fixed seeds, one op =
               one frame's work. Groups: render (gather/cull/sort 1k, 10k, instance bounds 5k), transform (move flat/nested, read nested; 1k, 10k), fx (flow 20k,
-              particles 5k), ui (text 1k glyphs), audio (mix 24 voices). Add: WLW_BENCHMARK("group") { ctx.Run("group/name",
+              particles 5k), ui (text 1k glyphs), audio (mix 24 voices, music sweep + duck). Add: WLW_BENCHMARK("group") { ctx.Run("group/name",
               [&] { ... }); } (names are stable: baselines match by name). --out JSON, --baseline compare (warning past
               --threshold %, never a failure), --smoke = CTest "bench: smoke" (label bench). Baselines in
               benchmarks/baselines/: windows-local (owner's Ryzen 7 9800X3D, MSVC Release), linux-ci (bench.yml

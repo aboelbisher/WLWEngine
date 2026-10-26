@@ -8,6 +8,8 @@
 #include <optional>
 #include <vector>
 
+#include "wlw/audio/filter.h"
+
 namespace wlw::audio {
 
 // A sound decoded to raw PCM: 32-bit float, stereo interleaved (L R L R ...), at the mixer's
@@ -48,11 +50,32 @@ struct PlayParams {
   bool loop = false;
 };
 
+// Ducking: a bus dips while something important plays over it (music under a boom or a voice line),
+// then comes back. The level moves in dB at an even speed: down to `depth_db` over `attack`, stays
+// there `hold`, back up to 0 dB over `release` (seconds).
+struct DuckParams {
+  float depth_db = -6.0f;
+  float attack = 0.03f;
+  float hold = 0.3f;
+  float release = 0.5f;
+};
+
+// A bus's live state as of the last Mix() (debug panels, tests).
+struct BusLevels {
+  float low_pass_hz = 0.0f;
+  float high_pass_hz = 0.0f;
+  float gain_db = 0.0f;
+  float duck_db = 0.0f;
+};
+
 // Mixes all playing sounds into the output buffer. Two threads use it:
 //   game thread:  AddSound, Play, StopAll, volumes  (never blocks)
 //   audio thread: Mix, called by the OS every few milliseconds for the next block of samples
 // The audio thread must never wait (a late buffer is an audible click), so Play() doesn't touch
 // the voices directly: it drops a command into a lock-free ring buffer that Mix() drains.
+//
+// Each bus is mixed into its own buffer first, then shaped (low-pass, high-pass, gain, ducking: see
+// "Live mix") and added to the output. A bus with nothing set passes through untouched.
 class Mixer {
  public:
   using SoundId = int;
@@ -82,6 +105,18 @@ class Mixer {
   // 15-block line clear from becoming 15 stacked pops.
   int max_instances_per_sound = 4;
 
+  // ---- Live mix (game thread, through the command queue; glides and envelopes run on the audio thread) ----
+  // A bus's tone and level, changed smoothly while it plays (state the game sets each moment, like a
+  // snapshot: "paused" = muffled and quieter). Cutoffs glide in octaves (Filter); gains in dB.
+  // Filter::kHighestHz switches the low-pass off, Filter::kLowestHz the high-pass.
+  void SetBusLowPass(Bus bus, float hz, float glide_seconds = 0.3f);
+  void SetBusHighPass(Bus bus, float hz, float glide_seconds = 0.3f);
+  void SetBusGain(Bus bus, float db, float glide_seconds = 0.3f);  // on top of the bus volume
+  // Dips the bus (DuckParams). Ducks overlap by depth: the deepest one going on wins, and a duck
+  // arriving during another one's hold extends the hold.
+  void Duck(Bus bus, const DuckParams& params = {});
+  BusLevels Levels(Bus bus) const;
+
   // ---- Audio thread ----
   void Mix(float* out, uint32_t frames);  // writes frames * 2 floats (stereo)
 
@@ -90,12 +125,16 @@ class Mixer {
 
  private:
   struct Command {
-    enum class Kind : uint8_t { Play, StopAll, PlayStream } kind = Kind::Play;
+    enum class Kind : uint8_t { Play, StopAll, PlayStream, BusLowPass, BusHighPass, BusGain, Duck } kind = Kind::Play;
     const SoundData* sound = nullptr;
     PlayParams params;
     StreamSource* stream = nullptr;  // PlayStream
     float fade_seconds = 0.0f;
     float stream_volume = 1.0f;
+    Bus bus = Bus::Effects;  // the live-mix commands: which bus, the new value (Hz or dB), the glide time
+    float value = 0.0f;
+    float glide = 0.0f;
+    DuckParams duck;
   };
   struct Voice {
     const SoundData* sound = nullptr;  // null = free
@@ -112,6 +151,41 @@ class Mixer {
   void StartVoice(const Command& command);
   void StartStream(const Command& command);
   void MixStreams(float* out, uint32_t frames, float master);
+  void MixBlock(float* out, uint32_t frames);  // at most kBlock frames
+  void ApplyBusCommand(const Command& command);
+
+  // A level in dB moving at an even speed toward a target (the bus gain).
+  struct Glide {
+    float db = 0.0f;
+    float target = 0.0f;
+    float step = 0.0f;  // dB per frame, > 0
+    void Set(float to, float frames);
+    void Advance();
+  };
+  // The duck: down at `attack` dB per frame, held at the bottom `hold` frames, back up at `release`.
+  struct DuckEnvelope {
+    float db = 0.0f;
+    float target = 0.0f;  // the bottom while ducking, 0 after
+    float attack = 0.0f;
+    float release = 0.0f;
+    uint32_t hold = 0;
+    void Start(const DuckParams& params, float sample_rate);
+    void Advance();
+    bool Idle() const { return db == 0.0f && target == 0.0f; }
+  };
+  struct BusState {
+    Filter low_pass, high_pass;
+    Glide gain;
+    DuckEnvelope duck;
+  };
+  void ShapeBus(BusState& bus, float* samples, uint32_t frames);
+  static constexpr uint32_t kBlock = 512;                        // frames mixed per bus buffer pass
+  std::array<BusState, static_cast<size_t>(Bus::Count)> buses_;  // audio thread
+  std::vector<float> bus_mix_;                                   // kBlock stereo frames per bus, allocated once
+  struct LevelsOut {
+    std::atomic<float> low_pass{0.0f}, high_pass{0.0f}, gain{0.0f}, duck{0.0f};
+  };
+  std::array<LevelsOut, static_cast<size_t>(Bus::Count)> levels_;  // written by the audio thread
 
   // A streaming source and where it is in its fade: t = 0 silent .. 1 fully in; the gain is
   // volume x sin(t x pi/2). t moves by `step` per frame (up = fading in, down = fading out).

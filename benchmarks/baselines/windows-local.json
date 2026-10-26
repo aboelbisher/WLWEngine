@@ -7,6 +7,10 @@
       "us": 35.221,
       "error_pct": 1.5
     },
+    "audio/music sweep + duck": {
+      "us": 12.093,
+      "error_pct": 0.9
+    },
     "fx/flow update 20k": {
       "us": 20.366,
       "error_pct": 2.0

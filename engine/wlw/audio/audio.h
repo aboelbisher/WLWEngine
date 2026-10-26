@@ -59,6 +59,13 @@ class Audio {
   bool Muted() const { return mixer_->Muted(); }
   void SetMasterVolume(float volume) { mixer_->SetMasterVolume(volume); }
   void SetBusVolume(Bus bus, float volume);
+  // Live mix (Mixer): a bus's filters and gain glide to new values; ducks dip it for a moment.
+  //   Audio().SetBusLowPass(Bus::Music, 700.0f, 0.4f);  // paused: muffled
+  //   Audio().Duck(Bus::Music, {.depth_db = -6.0f});      // a boom: the music steps back
+  void SetBusLowPass(Bus bus, float hz, float glide_seconds = 0.3f) { mixer_->SetBusLowPass(bus, hz, glide_seconds); }
+  void SetBusHighPass(Bus bus, float hz, float glide_seconds = 0.3f) { mixer_->SetBusHighPass(bus, hz, glide_seconds); }
+  void SetBusGain(Bus bus, float db, float glide_seconds = 0.3f) { mixer_->SetBusGain(bus, db, glide_seconds); }
+  void Duck(Bus bus, const DuckParams& params = {}) { mixer_->Duck(bus, params); }
 
   // Stops the device while the app is in the background (no sound, no CPU) and restarts it.
   void Suspend();

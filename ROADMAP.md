@@ -620,6 +620,9 @@ is ~850 lines of C++ + ~225 of Kotlin).
   priorities, voice limits with stealing, virtual voices for inaudible sounds.
 - [ ] **16.2 Mixer graph.** User-defined buses (volume, mute, solo) with effects (biquad filters,
   compressor, limiter, reverb, delay), sends, ducking, snapshots with transitions; a mixer panel.
+  Early slice done (2026-10-26, for Bluzzle's adaptive music): per-bus buffers; `audio::Filter` (TPT SVF low-pass /
+  high-pass, cutoff glides in octaves, bypassed when open) as each bus's two filters; per-bus gain glides and ducking
+  (attack / hold / release, deepest wins). Snapshots are the game's (it sets a bus's values per moment).
 - [ ] **16.3 Spatial audio.** A listener on the camera; an AudioSource3D node (attenuation curves,
   cone, doppler, spread); equal-power panning; occlusion low-pass from physics raycasts.
 - [ ] **16.4 Clips and streaming.** Load types from the cooker, compressed-in-memory decoding, any

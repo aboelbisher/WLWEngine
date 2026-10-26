@@ -7,6 +7,10 @@
 
 namespace wlw::audio {
 
+namespace {
+constexpr float kLog2Of10Over20 = 0.16609640f;  // dB -> amplitude: 10^(dB/20) = 2^(dB x log2(10) / 20)
+}  // namespace
+
 std::optional<SoundData> Decode(const uint8_t* bytes, size_t size, uint32_t sample_rate) {
   // Ask the decoder for exactly what the mixer wants: float, stereo, the device's rate. miniaudio
   // converts channels and resamples on the way.
@@ -29,6 +33,13 @@ std::optional<SoundData> Decode(const uint8_t* bytes, size_t size, uint32_t samp
 Mixer::Mixer(uint32_t sample_rate, int max_voices) : sample_rate_(sample_rate), voices_(std::max(max_voices, 1)) {
   for (auto& volume : bus_volume_) volume.store(1.0f);
   stream_scratch_.resize(kStreamChunk * 2);  // here, so the audio thread never allocates
+  bus_mix_.resize(static_cast<size_t>(Bus::Count) * kBlock * 2);
+  for (size_t b = 0; b < buses_.size(); ++b) {
+    buses_[b].low_pass = Filter(Filter::Kind::LowPass, static_cast<float>(sample_rate));
+    buses_[b].high_pass = Filter(Filter::Kind::HighPass, static_cast<float>(sample_rate));
+    levels_[b].low_pass.store(buses_[b].low_pass.Cutoff());
+    levels_[b].high_pass.store(buses_[b].high_pass.Cutoff());
+  }
 }
 
 Mixer::SoundId Mixer::AddSound(SoundData data) {
@@ -114,23 +125,45 @@ void Mixer::Mix(float* out, uint32_t frames) {
       if (command.stream) command.stream->queued_.fetch_sub(1);  // ...so InUse() never blinks false
     } else if (command.kind == Command::Kind::StopAll) {
       for (Voice& voice : voices_) voice.sound = nullptr;
-    } else {
+    } else if (command.kind == Command::Kind::Play) {
       StartVoice(command);
+    } else {
+      ApplyBusCommand(command);
     }
     tail = (tail + 1) % kQueueSize;
     tail_.store(tail, std::memory_order_release);  // frees the slot for the game thread
   }
 
-  // 2. Add every playing voice into the (cleared) output.
-  std::fill(out, out + frames * 2, 0.0f);
-  const float master = muted_.load() ? 0.0f : master_.load();
+  // 2. Mix in blocks the size of the bus buffers.
+  for (uint32_t done = 0; done < frames;) {
+    const uint32_t n = std::min(kBlock, frames - done);
+    MixBlock(out + done * 2, n);
+    done += n;
+  }
   int active = 0;
+  for (const Voice& voice : voices_) active += voice.sound ? 1 : 0;
+  active_voices_.store(active);
+  for (size_t b = 0; b < buses_.size(); ++b) {
+    const BusState& bus = buses_[b];
+    levels_[b].low_pass.store(bus.low_pass.Cutoff());
+    levels_[b].high_pass.store(bus.high_pass.Cutoff());
+    levels_[b].gain.store(bus.gain.db);
+    levels_[b].duck.store(bus.duck.db);
+  }
+}
+
+void Mixer::MixBlock(float* out, uint32_t frames) {
+  // 1. Every playing voice into its bus's (cleared) buffer.
+  std::fill(bus_mix_.begin(), bus_mix_.end(), 0.0f);
+  const auto bus_buffer = [this](Bus bus) { return bus_mix_.data() + static_cast<size_t>(bus) * kBlock * 2; };
+  const float master = muted_.load() ? 0.0f : master_.load();
   for (Voice& voice : voices_) {
     if (!voice.sound) continue;
     const SoundData& sound = *voice.sound;
     const float bus = bus_volume_[static_cast<size_t>(voice.bus)].load() * master;
     const float left = voice.gain_left * bus;
     const float right = voice.gain_right * bus;
+    float* mix = bus_buffer(voice.bus);
     for (uint32_t i = 0; i < frames; ++i) {
       auto index = static_cast<uint32_t>(voice.position);
       if (index + 1 >= sound.frames) {
@@ -145,19 +178,134 @@ void Mixer::Mix(float* out, uint32_t frames) {
       const float t = static_cast<float>(voice.position - index);
       const float* a = &sound.samples[index * 2];
       const float* b = a + 2;
-      out[i * 2] += (a[0] + (b[0] - a[0]) * t) * left;
-      out[i * 2 + 1] += (a[1] + (b[1] - a[1]) * t) * right;
+      mix[i * 2] += (a[0] + (b[0] - a[0]) * t) * left;
+      mix[i * 2 + 1] += (a[1] + (b[1] - a[1]) * t) * right;
       voice.position += voice.step;
     }
-    if (voice.sound) ++active;
   }
-  active_voices_.store(active);
 
-  // 3. Music.
-  MixStreams(out, frames, master);
+  // 2. Music.
+  MixStreams(bus_buffer(Bus::Music), frames, master);
 
-  // 4. Several loud sounds can add up past full scale: clip rather than wrap around.
+  // 3. Each bus shaped (filters, gain, duck), then summed. Several loud sounds can add up past full
+  //    scale: clip rather than wrap around.
+  std::fill(out, out + frames * 2, 0.0f);
+  for (size_t b = 0; b < buses_.size(); ++b) {
+    float* mix = bus_buffer(static_cast<Bus>(b));
+    ShapeBus(buses_[b], mix, frames);
+    for (uint32_t i = 0; i < frames * 2; ++i) out[i] += mix[i];
+  }
   for (uint32_t i = 0; i < frames * 2; ++i) out[i] = std::clamp(out[i], -1.0f, 1.0f);
+}
+
+void Mixer::ShapeBus(BusState& bus, float* samples, uint32_t frames) {
+  bus.high_pass.Process(samples, frames);
+  bus.low_pass.Process(samples, frames);
+  if (bus.duck.Idle() && bus.gain.db == bus.gain.target) {
+    if (bus.gain.db == 0.0f) return;  // the usual case: untouched
+    const float g = std::exp2(bus.gain.db * kLog2Of10Over20);
+    for (uint32_t i = 0; i < frames * 2; ++i) samples[i] *= g;
+    return;
+  }
+  for (uint32_t i = 0; i < frames; ++i) {
+    bus.gain.Advance();
+    bus.duck.Advance();
+    const float g = std::exp2((bus.gain.db + bus.duck.db) * kLog2Of10Over20);  // dB -> amplitude
+    samples[i * 2] *= g;
+    samples[i * 2 + 1] *= g;
+  }
+}
+
+void Mixer::ApplyBusCommand(const Command& command) {
+  BusState& bus = buses_[static_cast<size_t>(command.bus)];
+  const float frames = command.glide * static_cast<float>(sample_rate_);
+  switch (command.kind) {
+    case Command::Kind::BusLowPass: bus.low_pass.SetCutoff(command.value, command.glide); break;
+    case Command::Kind::BusHighPass: bus.high_pass.SetCutoff(command.value, command.glide); break;
+    case Command::Kind::BusGain: bus.gain.Set(command.value, frames); break;
+    case Command::Kind::Duck: bus.duck.Start(command.duck, static_cast<float>(sample_rate_)); break;
+    default: break;
+  }
+}
+
+void Mixer::Glide::Set(float to, float frames) {
+  target = to;
+  if (frames < 1.0f) {
+    db = to;
+    return;
+  }
+  step = std::fabs(target - db) / frames;
+}
+
+void Mixer::Glide::Advance() {
+  if (db < target) db = std::min(db + step, target);
+  if (db > target) db = std::max(db - step, target);
+}
+
+void Mixer::DuckEnvelope::Start(const DuckParams& params, float sample_rate) {
+  const float depth = std::min(params.depth_db, 0.0f);
+  const auto frames = [sample_rate](float seconds) { return std::max(seconds * sample_rate, 1.0f); };
+  // Deepest wins: a shallower duck during a deeper one only stretches its hold.
+  if (target < 0.0f && depth > target) {
+    hold = std::max(hold, static_cast<uint32_t>(params.hold * sample_rate));
+    return;
+  }
+  target = depth;
+  attack = -depth / frames(params.attack);
+  release = -depth / frames(params.release);
+  hold = std::max(hold, static_cast<uint32_t>(params.hold * sample_rate));
+}
+
+void Mixer::DuckEnvelope::Advance() {
+  if (db > target) {
+    db = std::max(db - attack, target);  // going down
+  } else if (db < target) {
+    db = std::min(db + release, target);  // coming back up (or to a shallower bottom)
+  } else if (hold > 0) {
+    --hold;
+  } else {
+    target = 0.0f;  // released: rises from the next frame
+  }
+}
+
+void Mixer::SetBusLowPass(Bus bus, float hz, float glide_seconds) {
+  Command command;
+  command.kind = Command::Kind::BusLowPass;
+  command.bus = bus;
+  command.value = hz;
+  command.glide = glide_seconds;
+  Push(command);
+}
+
+void Mixer::SetBusHighPass(Bus bus, float hz, float glide_seconds) {
+  Command command;
+  command.kind = Command::Kind::BusHighPass;
+  command.bus = bus;
+  command.value = hz;
+  command.glide = glide_seconds;
+  Push(command);
+}
+
+void Mixer::SetBusGain(Bus bus, float db, float glide_seconds) {
+  Command command;
+  command.kind = Command::Kind::BusGain;
+  command.bus = bus;
+  command.value = db;
+  command.glide = glide_seconds;
+  Push(command);
+}
+
+void Mixer::Duck(Bus bus, const DuckParams& params) {
+  Command command;
+  command.kind = Command::Kind::Duck;
+  command.bus = bus;
+  command.duck = params;
+  Push(command);
+}
+
+BusLevels Mixer::Levels(Bus bus) const {
+  const LevelsOut& l = levels_[static_cast<size_t>(bus)];
+  return {l.low_pass.load(), l.high_pass.load(), l.gain.load(), l.duck.load()};
 }
 
 void Mixer::StartStream(const Command& command) {

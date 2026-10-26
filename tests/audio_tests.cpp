@@ -8,7 +8,9 @@
 
 #include "test_helpers.h"
 #include "wlw/audio/audio.h"
+#include "wlw/audio/filter.h"
 #include "wlw/audio/mixer.h"
+#include "wlw/core/random.h"
 #include "wlw/platform/platform.h"
 
 TEST_SUITE_BEGIN("audio");
@@ -319,4 +321,178 @@ TEST_CASE("many plays in one frame") {
   CHECK(mixer.ActiveVoices() <= 4);
 }
 
+// ---- Live mix: Filter, bus gain, ducking ----
+
+namespace {
+
+// RMS of the left channel after `skip` frames: how loud a steady signal comes out.
+float Rms(const std::vector<float>& stereo, size_t skip) {
+  double sum = 0.0;
+  size_t n = 0;
+  for (size_t i = skip; i < stereo.size() / 2; ++i, ++n) sum += double(stereo[i * 2]) * stereo[i * 2];
+  return n ? static_cast<float>(std::sqrt(sum / static_cast<double>(n))) : 0.0f;
+}
+
+std::vector<float> Sine(float hz, uint32_t frames, float level = 0.5f, uint32_t rate = kRate) {
+  std::vector<float> stereo(frames * 2);
+  for (uint32_t i = 0; i < frames; ++i) {
+    stereo[i * 2] = stereo[i * 2 + 1] = level * static_cast<float>(std::sin(2.0 * 3.14159265 * hz * i / rate));
+  }
+  return stereo;
+}
+
+// How much `filter` lets through of a sine at `hz` (1 = all, 0.5 = -6 dB).
+float Response(Filter filter, float hz) {
+  std::vector<float> s = Sine(hz, 9600);
+  filter.Process(s.data(), 9600);
+  return Rms(s, 4800) / (0.5f / std::sqrt(2.0f));
+}
+
+// A stream of a sine (for the music bus's filters).
+class SineStream : public StreamSource {
+ public:
+  SineStream(float hz, uint32_t rate) : step_(2.0 * 3.14159265 * hz / rate) {}
+  uint32_t Read(float* stereo, uint32_t frames) override {
+    for (uint32_t i = 0; i < frames; ++i)
+      stereo[i * 2] = stereo[i * 2 + 1] = 0.5f * static_cast<float>(std::sin(phase_ += step_));
+    return frames;
+  }
+
+ private:
+  double step_;
+  double phase_ = 0.0;
+};
+
+}  // namespace
+
+TEST_CASE("filter: response") {
+  const Filter low(Filter::Kind::LowPass, kRate);
+  Filter low_1k = low;
+  low_1k.SetCutoff(1000.0f, 0.0f);
+  CHECK(Near(Response(low_1k, 100.0f), 1.0f, 0.02f));     // well below the cutoff: passes
+  CHECK(Near(Response(low_1k, 1000.0f), 0.707f, 0.03f));  // at the cutoff: -3 dB (Q 0.707)
+  CHECK(Response(low_1k, 8000.0f) < 0.02f);               // 3 octaves above: 12 dB per octave, < -34 dB
+  Filter high(Filter::Kind::HighPass, kRate);
+  high.SetCutoff(1000.0f, 0.0f);
+  CHECK(Near(Response(high, 8000.0f), 1.0f, 0.02f));
+  CHECK(Near(Response(high, 1000.0f), 0.707f, 0.03f));
+  CHECK(Response(high, 125.0f) < 0.02f);
+
+  // Open (the default): untouched, bit for bit.
+  Filter open(Filter::Kind::LowPass, kRate);
+  CHECK(open.Open());
+  std::vector<float> s = Sine(3000.0f, 512), copy = s;
+  open.Process(s.data(), 512);
+  CHECK(s == copy);
+}
+
+TEST_CASE("filter: glides in octaves, leaves bypass without a step") {
+  Filter filter(Filter::Kind::LowPass, kRate);
+  std::vector<float> s = Sine(200.0f, kRate);  // 1 s of a low note: passes at any cutoff here
+  filter.Process(s.data(), 4800);              // open: bypassed
+  filter.SetCutoff(400.0f, 1.0f);              // from fully open (~20 kHz): 5.6 octaves down in 1 s
+  filter.Process(s.data() + 4800 * 2, 4800);
+  // Coming out of bypass the integrators start where the signal is: no jump at the seam.
+  float worst = 0.0f;
+  for (int i = 4790; i < 4900; ++i) worst = std::max(worst, std::fabs(s[(i + 1) * 2] - s[i * 2]));
+  CHECK(worst < 0.02f);  // a 200 Hz sine at 0.5 moves up to 0.013 a sample; a cold start would step by up to 0.5
+
+  filter.SetCutoff(400.0f, 0.0f);
+  filter.SetCutoff(6400.0f, 1.0f);  // 4 octaves up in 1 s
+  std::vector<float> buffer(4800 * 2, 0.0f);
+  for (int i = 0; i < 5; ++i) filter.Process(buffer.data(), 4800);
+  CHECK(Near(filter.Cutoff(), 1600.0f, 10.0f));  // halfway in time = halfway in octaves (2 of 4), not 3400 Hz
+  for (int i = 0; i < 5; ++i) filter.Process(buffer.data(), 4800);
+  CHECK(Near(filter.Cutoff(), 6400.0f, 1.0f));
+  CHECK(!filter.Open());
+  filter.SetCutoff(Filter::kHighestHz, 0.0f);
+  CHECK(filter.Open());
+}
+
+TEST_CASE("filter: random sweeps stay stable") {
+  // The reason for the SVF: cutoffs thrown around every few samples, with resonance, never blow up.
+  wlw::core::Random random(11u);
+  for (float q : {0.7071f, 4.0f}) {
+    Filter filter(Filter::Kind::LowPass, kRate, q);
+    std::vector<float> s(64 * 2);
+    float peak = 0.0f;
+    bool finite = true;
+    for (int block = 0; block < 2000; ++block) {
+      filter.SetCutoff(random.Range(20.0f, 20000.0f), random.Range(0.0f, 0.002f));
+      for (float& x : s) x = random.Range(-0.5f, 0.5f);
+      filter.Process(s.data(), 64);
+      for (float x : s) {
+        finite = finite && std::isfinite(x);
+        peak = std::max(peak, std::fabs(x));
+      }
+    }
+    CHECK(finite);
+    CHECK(peak < 0.5f * q * 4.0f);  // resonance lifts the cutoff band by about Q, never runs away
+  }
+}
+
+TEST_CASE("bus live mix: filter, gain, duck") {
+  Mixer mixer(kRate);
+  SineStream high_note(8000.0f, kRate);
+  mixer.PlayStream(&high_note, 0.001f);
+  std::vector<float> out = Mix(mixer, 4800);
+  CHECK(Near(Rms(out, 480), 0.354f, 0.01f));  // 0.5 / sqrt(2): untouched
+  mixer.SetBusLowPass(Bus::Music, 500.0f, 0.0f);
+  out = Mix(mixer, 4800);
+  CHECK(Rms(out, 480) < 0.354f * 0.01f);  // 4 octaves above the cutoff: -48 dB
+  CHECK(Near(mixer.Levels(Bus::Music).low_pass_hz, 500.0f, 1.0f));
+  CHECK(Near(mixer.Levels(Bus::Effects).low_pass_hz, Filter::kHighestHz, 1.0f));
+  mixer.SetBusLowPass(Bus::Music, Filter::kHighestHz, 0.0f);
+  mixer.SetBusHighPass(Bus::Music, 16000.0f, 0.0f);
+  out = Mix(mixer, 4800);
+  CHECK(Rms(out, 480) < 0.354f * 0.25f);  // the high-pass, an octave above: < -12 dB
+  mixer.SetBusHighPass(Bus::Music, Filter::kLowestHz, 0.0f);
+  mixer.PlayStream(nullptr, 0.001f);
+  Mix(mixer, 100);
+
+  // Gain and ducks, on a constant level (a 1000 Hz mixer: 1 frame = 1 ms).
+  Mixer slow(1000);
+  ConstantStream level(0.5f);
+  slow.PlayStream(&level, 0.001f);
+  Mix(slow, 10);
+  slow.SetBusGain(Bus::Music, 6.0f, 0.1f);
+  out = Mix(slow, 200);
+  CHECK(Near(out[49 * 2], 0.5f * 1.413f, 0.01f));  // halfway: +3 dB (gains glide in dB)
+  CHECK(Near(out[199 * 2], 0.5f * 1.995f, 0.01f));
+  slow.SetBusGain(Bus::Music, 0.0f, 0.0f);
+
+  slow.Duck(Bus::Music, {.depth_db = -6.0f, .attack = 0.1f, .hold = 0.1f, .release = 0.1f});
+  out = Mix(slow, 400);
+  CHECK(Near(out[49 * 2], 0.5f * 0.708f, 0.01f));   // -3 dB on the way down
+  CHECK(Near(out[99 * 2], 0.5f * 0.501f, 0.01f));   // at the bottom...
+  CHECK(Near(out[190 * 2], 0.5f * 0.501f, 0.01f));  // ...held
+  CHECK(Near(out[250 * 2], 0.5f * 0.708f, 0.02f));  // back up through -3 dB
+  CHECK(Near(out[399 * 2], 0.5f));
+
+  // Deepest wins: a lighter duck during a deep one doesn't lift it, it stretches the hold.
+  slow.Duck(Bus::Music, {.depth_db = -12.0f, .attack = 0.01f, .hold = 0.1f, .release = 0.1f});
+  Mix(slow, 50);
+  slow.Duck(Bus::Music, {.depth_db = -3.0f, .attack = 0.01f, .hold = 0.2f, .release = 0.1f});
+  out = Mix(slow, 200);
+  CHECK(Near(out[0], 0.5f * 0.251f, 0.01f));
+  CHECK(Near(out[150 * 2], 0.5f * 0.251f, 0.01f));  // still at -12 dB: the hold ran on
+  CHECK(Near(slow.Levels(Bus::Music).duck_db, -12.0f, 0.1f));
+  out = Mix(slow, 400);
+  CHECK(Near(out[399 * 2], 0.5f));
+}
+
+TEST_CASE("bus live mix: other buses untouched") {
+  // The music bus filtered, lifted and ducked; an effect on its own bus comes out exactly as before.
+  Mixer mixer(kRate);
+  const auto sound = mixer.AddSound(Constant(0.25f, 10000));
+  mixer.SetBusLowPass(Bus::Music, 300.0f, 0.0f);
+  mixer.SetBusHighPass(Bus::Music, 100.0f, 0.0f);
+  mixer.SetBusGain(Bus::Music, 6.0f, 0.1f);
+  mixer.Duck(Bus::Music);
+  mixer.Play(sound, {.volume = 0.5f});
+  const std::vector<float> out = Mix(mixer, 2000);
+  bool exact = true;
+  for (float s : out) exact = exact && s == 0.125f;
+  CHECK(exact);
+}
 TEST_SUITE_END();

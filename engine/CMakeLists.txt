@@ -29,6 +29,8 @@ add_library(wlw STATIC
   wlw/audio/audio.cpp
   wlw/audio/audio.h
   wlw/audio/audio_config.h
+  wlw/audio/filter.cpp
+  wlw/audio/filter.h
   wlw/audio/miniaudio_impl.cpp
   wlw/audio/mixer.cpp
   wlw/audio/mixer.h

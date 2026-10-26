@@ -11,6 +11,18 @@ listed under **Breaking** with its **Migration**. Shims added before that (`WLW_
 
 ## Unreleased
 
+- Live mix (early slice of 16.2, for Bluzzle's adaptive music): `audio::Filter` (filter.h), a two-pole low-pass /
+  high-pass in the TPT state-variable form (Zavalishin / Simper), stable and click-free while its cutoff moves every
+  sample (unlike a biquad, whose stored samples depend on the coefficients); the cutoff glides at an even speed in
+  octaves and lands exactly on time; fully open it is bypassed (no cost, output bit-exact) and leaves bypass without
+  a step. The Mixer now mixes each bus into its own buffer (512-frame blocks), shapes it, then sums: per bus
+  `SetBusLowPass` / `SetBusHighPass` (Hz, glide), `SetBusGain` (dB, glide) and `Duck(bus, DuckParams{depth_db,
+  attack, hold, release})` (deepest duck wins, later ones stretch the hold); `Levels(bus)` reports cutoffs, gain
+  and duck after each Mix. All through the command queue; `Audio` forwards them. Tests: responses (-3 dB at the
+  cutoff, 12 dB per octave), bypass bit-exact, octave glide timing, random sweeps with resonance stay bounded, gain
+  and duck envelopes, deepest-wins, other buses untouched. Benchmark `audio/music sweep + duck` (12 us per 512
+  frames on the Ryzen; `audio/mix 24 voices` unchanged).
+
 - Music (early slice of 16.4, for Bluzzle's soundtrack): `Audio::PlayMusic(path, MusicParams)` with
   `MusicParams{fade, volume, intro, restart}` (audio.h). `volume` is a per-track trim (playing the same track again
   only changes it); `intro` is a file played once straight into the track's loop, sample-exact (decoded into the

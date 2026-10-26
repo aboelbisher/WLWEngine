@@ -63,8 +63,39 @@ void MixerBenchmarks(bench::Context& ctx) {
   if (mixer.ActiveVoices() != 24) std::fprintf(stderr, "audio/mix: %d voices playing, not 24\n", mixer.ActiveVoices());
 }
 
+// The music bus with its live mix busy: a stream of noise through the low-pass while it glides
+// (coefficients recomputed every sample) and a duck going on. One block of 512 frames, like above.
+class NoiseStream : public audio::StreamSource {
+ public:
+  uint32_t Read(float* stereo, uint32_t frames) override {
+    for (uint32_t i = 0; i < frames * 2; ++i) stereo[i] = random_.Range(-0.3f, 0.3f);
+    return frames;
+  }
+
+ private:
+  core::Random random_{3u};
+};
+
+void LiveMixBenchmarks(bench::Context& ctx) {
+  constexpr uint32_t kFrames = 512;
+  audio::Mixer mixer(48000);
+  NoiseStream noise;
+  mixer.PlayStream(&noise, 0.001f);
+  std::vector<float> out(kFrames * 2);
+  bool high = false;
+  ctx.Run("audio/music sweep + duck", [&] {
+    high = !high;
+    mixer.SetBusLowPass(audio::Bus::Music, high ? 8000.0f : 400.0f, 1.0f);  // always mid-glide
+    mixer.Duck(audio::Bus::Music, {.depth_db = -6.0f, .attack = 0.05f, .hold = 0.0f, .release = 1.0f});
+    mixer.Mix(out.data(), kFrames);
+    bench::Context::Keep(out[0]);
+  });
+}
 }  // namespace
 
 WLW_BENCHMARK("ui") { TextBenchmarks(ctx); }
 
-WLW_BENCHMARK("audio") { MixerBenchmarks(ctx); }
+WLW_BENCHMARK("audio") {
+  MixerBenchmarks(ctx);
+  LiveMixBenchmarks(ctx);
+}
