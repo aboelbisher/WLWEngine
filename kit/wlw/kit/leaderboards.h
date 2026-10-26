@@ -100,6 +100,7 @@ class FakeLeaderboards : public Leaderboards {
   // Knobs for trying the game's other paths (debug panel, tests).
   bool online = true;          // false: every load fails, as with no network
   bool sign_in_fails = false;  // SignIn() ends signed out, as when the player cancels
+  bool public_profile = true;  // false: the player is left off the tables (rank 0), as with a hidden Play Games profile
   std::string player_name = "You";
   void SignOut() { state_ = SignInState::SignedOut; }
   // Adds `count` made-up rivals ("Player 1"...) to `board` with scores up to `max_score`, the

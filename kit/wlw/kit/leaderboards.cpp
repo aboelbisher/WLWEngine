@@ -236,9 +236,15 @@ void FakeLeaderboards::Record(const std::string& board, int64_t score) {
 
 LeaderboardPage FakeLeaderboards::Page(const std::string& board, LeaderboardSpan span, int count) const {
   std::vector<const Score*> ranked;
+  const Score* hidden = nullptr;  // the player, left off the public table
   if (const auto it = boards_.find(board); it != boards_.end()) {
     for (const Score& score : it->second) {
-      if (score.spans & SpanBit(span)) ranked.push_back(&score);
+      if (!(score.spans & SpanBit(span))) continue;
+      if (score.player && !public_profile) {
+        hidden = &score;
+      } else {
+        ranked.push_back(&score);
+      }
     }
   }
   // Best first; equal scores keep the order they arrived in.
@@ -250,6 +256,7 @@ LeaderboardPage FakeLeaderboards::Page(const std::string& board, LeaderboardSpan
     if (i < count) page.top.push_back(entry);
     if (entry.is_player) page.player = entry;
   }
+  if (hidden) page.player = LeaderboardEntry{0, hidden->score, hidden->name, true};
   return page;
 }
 

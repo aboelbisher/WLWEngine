@@ -1,6 +1,7 @@
 // Tests for wlw::kit: save files (backup, corruption, migrations), dates and streaks, merging
 // progress from two devices, the desktop fake ads, the interstitial pacing rules and leaderboards
 // (the fake, and the bridge side fed with the Kotlin service's messages).
+#include <algorithm>
 #include <filesystem>
 #include <string>
 #include <vector>
@@ -333,6 +334,15 @@ TEST_CASE("fake leaderboards") {
   low.Update(0.0f);
   REQUIRE(page.player);
   CHECK((page.top.size() == 5 && page.player->rank == 31 && page.players == 31));
+
+  // A hidden profile: the score is known, the rank isn't, and the public table leaves the player out.
+  boards.public_profile = false;
+  boards.Load("classic", LeaderboardSpan::AllTime, 25, [&](const LeaderboardPage& p, bool) { page = p; });
+  boards.Update(1.0f);
+  REQUIRE(page.player);
+  CHECK((page.player->rank == 0 && page.player->score == 9999999 && page.players == 40));
+  CHECK(std::none_of(page.top.begin(), page.top.end(), [](const LeaderboardEntry& e) { return e.is_player; }));
+  boards.public_profile = true;
 
   // Offline: loads fail.
   boards.online = false;

@@ -21,8 +21,8 @@ listed under **Breaking** with its **Migration**. Shims added before that (`WLW_
   after a submit, the player's own score kept even without a public rank: rank 0 = unknown, as for a Play Games
   profile that isn't visible to everyone, which public tables leave out); a game adds that folder to its sourceSets, depends on `play-services-games-v2` and names its
   `com.google.android.gms.games.APP_ID` in the manifest. Desktop: `FakeLeaderboards` (made-up rivals per seed,
-  fewer in shorter spans, an answer delay, knobs `online`, `sign_in_fails`, `SignOut()`). Tests: the fake (ranks,
-  spans, the player outside the top, best kept, offline, sign-in waits) and the bridge side fed with the Kotlin
+  fewer in shorter spans, an answer delay, knobs `online`, `sign_in_fails`, `public_profile`, `SignOut()`). Tests: the fake (ranks,
+  spans, the player outside the top, a hidden profile, best kept, offline, sign-in waits) and the bridge side fed with the Kotlin
   service's messages.
 
 - Canvas gradients and modulate (for Bluzzle's menu): `ui::LinearGradient` (vertical or horizontal, up to 8 stops,
