@@ -11,6 +11,22 @@ listed under **Breaking** with its **Migration**. Shims added before that (`WLW_
 
 ## Unreleased
 
+- Music (early slice of 16.4, for Bluzzle's soundtrack): `Audio::PlayMusic(path, MusicParams)` with
+  `MusicParams{fade, volume, intro, restart}` (audio.h). `volume` is a per-track trim (playing the same track again
+  only changes it); `intro` is a file played once straight into the track's loop, sample-exact (decoded into the
+  same chunk: miniaudio's own chaining stops at the end of the chain); `restart` (or an intro) starts a new
+  playthrough from the top, the old one finishes its fade and is freed once the mixer no longer holds it
+  (`StreamSource::InUse()`: a queued PlayStream or a slot). Without them a track resumes where it was, as before.
+  Music files are read once and shared between playthroughs; `Audio::MusicStreamCount()`.
+  Mixer: fades are equal-power (gain = volume x sin(t pi/2): a crossfade keeps the loudness level instead of a
+  3 dB dip), `PlayStream(source, fade, volume)`, `kStreamSlots` = 4 (the current stream + 3 fading; past that the
+  quietest is dropped). Stop then play inside a fade no longer cuts the fading track: a stream still fading out
+  turns round from where it is. Tests: the curve, trims, no cuts across three quick switches, in-use tracking,
+  the intro-to-loop seam and the loop's own seams frame-exact, restarts freed.
+- **Breaking:** `Audio::PlayMusic(path, float fade_seconds)` takes `MusicParams`. **Migration:**
+  `PlayMusic(path, 2.5f)` -> `PlayMusic(path, {.fade = 2.5f})`. A fade's midpoint is now 0.707 of the volume
+  (was 0.5).
+
 - `anim::Timeline` (anim/timeline.h, for Bluzzle's game-over sequence): beats on one clock, placed `Then` (after
   the last beat added, with an optional gap), `With` (with its start, plus an offset) or `At` a time; a plain value
   like `Tween`, the owner calls `Update(dt)` and reads `Progress` / `Elapsed` / `Started` / `Done` per beat. No

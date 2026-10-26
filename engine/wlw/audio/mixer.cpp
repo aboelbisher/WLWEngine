@@ -44,12 +44,14 @@ void Mixer::Play(SoundId sound, const PlayParams& params) {
   Push(command);
 }
 
-void Mixer::PlayStream(StreamSource* source, float fade_seconds) {
+void Mixer::PlayStream(StreamSource* source, float fade_seconds, float volume) {
   Command command;
   command.kind = Command::Kind::PlayStream;
   command.stream = source;
   command.fade_seconds = fade_seconds;
-  Push(command);
+  command.stream_volume = volume;
+  if (source) source->queued_.fetch_add(1);  // in use from now on, before the audio thread can see it
+  if (!Push(command) && source) source->queued_.fetch_sub(1);
 }
 
 void Mixer::StopAll() {
@@ -108,7 +110,8 @@ void Mixer::Mix(float* out, uint32_t frames) {
   while (tail != head_.load(std::memory_order_acquire)) {
     const Command& command = queue_[tail];
     if (command.kind == Command::Kind::PlayStream) {
-      StartStream(command);
+      StartStream(command);                                      // marks the source as in a slot first...
+      if (command.stream) command.stream->queued_.fetch_sub(1);  // ...so InUse() never blinks false
     } else if (command.kind == Command::Kind::StopAll) {
       for (Voice& voice : voices_) voice.sound = nullptr;
     } else {
@@ -158,18 +161,47 @@ void Mixer::Mix(float* out, uint32_t frames) {
 }
 
 void Mixer::StartStream(const Command& command) {
-  // The current stream (if any) becomes the one fading out; whatever was fading before is cut.
-  const float fade_frames = std::max(command.fade_seconds, 0.001f) * static_cast<float>(sample_rate_);
-  if (streams_[0].source == command.stream) return;  // already playing
-  streams_[1] = streams_[0];
-  streams_[1].target = 0.0f;
-  streams_[1].step = streams_[1].gain / fade_frames;
-  streams_[0] = {};
-  if (!command.stream) return;  // just a fade-out
-  streams_[0].source = command.stream;
-  streams_[0].gain = 0.0f;
-  streams_[0].target = 1.0f;
-  streams_[0].step = 1.0f / fade_frames;
+  const float step = 1.0f / (std::max(command.fade_seconds, 0.001f) * static_cast<float>(sample_rate_));
+  StreamSource* source = command.stream;
+  StreamSlot& current = streams_[0];
+  if (source && current.source == source) {  // already playing: a new volume (and it keeps fading in)
+    current.volume = command.stream_volume;
+    current.step = step;
+    return;
+  }
+  // The current stream fades out from where it is, in a free slot; if every slot is fading, the
+  // quietest is dropped (by then it's nearly silent).
+  if (current.source) {
+    StreamSlot* into = nullptr;
+    for (size_t i = 1; i < kStreamSlots && !into; ++i) {
+      if (!streams_[i].source) into = &streams_[i];
+    }
+    if (!into) {
+      into = &streams_[1];
+      for (size_t i = 2; i < kStreamSlots; ++i) {
+        if (streams_[i].Gain() < into->Gain()) into = &streams_[i];
+      }
+      FreeSlot(*into);
+    }
+    *into = current;
+    into->step = -step;
+    current = {};
+  }
+  if (!source) return;  // just a fade-out
+  current = {source, 0.0f, step, command.stream_volume};
+  for (size_t i = 1; i < kStreamSlots; ++i) {
+    if (streams_[i].source != source) continue;
+    current.t = streams_[i].t;  // still fading out: it turns round, without a cut
+    streams_[i] = {};
+  }
+  source->in_slot_.store(true);
+}
+
+float Mixer::StreamSlot::Gain() const { return volume * std::sin(t * 1.57079633f); }
+
+void Mixer::FreeSlot(StreamSlot& slot) {
+  if (slot.source) slot.source->in_slot_.store(false);  // its owner may free it now: not touched again
+  slot = {};
 }
 
 void Mixer::MixStreams(float* out, uint32_t frames, float master) {
@@ -181,16 +213,14 @@ void Mixer::MixStreams(float* out, uint32_t frames, float master) {
       const uint32_t want = std::min(kStreamChunk, frames - done);
       const uint32_t got = slot.source->Read(stream_scratch_.data(), want);
       for (uint32_t i = 0; i < got; ++i) {
-        // Move the gain one step towards its target per frame: a linear fade.
-        if (slot.gain < slot.target) slot.gain = std::min(slot.gain + slot.step, slot.target);
-        if (slot.gain > slot.target) slot.gain = std::max(slot.gain - slot.step, slot.target);
-        const float g = slot.gain * bus;
+        slot.t = std::clamp(slot.t + slot.step, 0.0f, 1.0f);
+        const float g = slot.Gain() * bus;
         out[(done + i) * 2] += stream_scratch_[i * 2] * g;
         out[(done + i) * 2 + 1] += stream_scratch_[i * 2 + 1] * g;
       }
       done += got;
       // Ended, or faded all the way out: the slot is free.
-      if (got < want || (slot.target == 0.0f && slot.gain <= 0.0f)) slot = {};
+      if (got < want || (slot.step < 0.0f && slot.t <= 0.0f)) FreeSlot(slot);
     }
   }
 }

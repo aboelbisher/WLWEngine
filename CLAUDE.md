@@ -22,7 +22,9 @@ engine/wlw/
               voices with pitch/pan, per-sound caps, buses). App().Audio(); silent in background (Suspend), during calls /
               alarms (SetInterrupted); music steps aside for the player's own (SetOtherMusicPlaying); fed by
               android/java/com/wlw/AudioWatcher.kt (bridge "audio"; watches playback, never takes audio focus).
-              Music: Audio::PlayMusic streams a file (decode thread -> lock-free ring -> Mixer stream slots with crossfades)
+              Music: Audio::PlayMusic(path, MusicParams{fade, volume trim, intro, restart}) streams a file (decode thread ->
+              lock-free ring -> 4 Mixer stream slots, equal-power crossfades; gapless intro -> loop; restarted playthroughs
+              freed when StreamSource::InUse() is false)
   anim/       ease.h (Penner easing curves), tween.h (Tween<T>: value-type tweens the game owns and samples),
               shake.h (trauma-based screen shake: trauma decays, offset = trauma^2 x smooth noise),
               timeline.h (Timeline: beats placed Then / With / At on one clock; cues polled with Crossed; Skip)

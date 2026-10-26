@@ -23,12 +23,22 @@ struct Audio::Device {
 //
 // The ring is single-producer (decode thread) / single-consumer (audio thread): `written` and
 // `read` count frames forever; only the producer moves `written`, only the consumer `read`.
+//
+// With an intro, the intro is decoded first and the same chunk carries on in the loop's decoder:
+// the seam is sample-exact. (miniaudio's own chaining, ma_data_source_set_next, stops at the end of
+// the chain: only the head's looping flag counts.)
 struct Audio::MusicStream final : StreamSource {
   static constexpr size_t kChunk = 2048;  // frames decoded per step
 
-  std::vector<uint8_t> bytes;  // the decoder reads from here: must outlive it
-  ma_decoder decoder{};
+  std::string path;      // the loop's file: which track this is
+  bool retired = false;  // replaced by a newer playthrough of the same track: freed when not InUse
+  Bytes bytes;           // the decoders read from here: must outlive them
+  Bytes intro_bytes;
+  ma_decoder decoder{};  // the loop
+  ma_decoder intro{};
   bool ready = false;
+  bool in_intro = false;  // intro decoder initialised and not finished
+  bool has_intro = false;
   std::vector<float> ring;     // capacity * 2 floats (stereo)
   size_t capacity = 0;         // in frames
   std::vector<float> scratch;  // decode thread's buffer
@@ -37,6 +47,7 @@ struct Audio::MusicStream final : StreamSource {
 
   ~MusicStream() override {
     if (ready) ma_decoder_uninit(&decoder);
+    if (has_intro) ma_decoder_uninit(&intro);
   }
 
   // Decode thread: top the ring up.
@@ -46,8 +57,16 @@ struct Audio::MusicStream final : StreamSource {
       const size_t free = capacity - (w - read.load(std::memory_order_acquire));
       if (free < kChunk) return;
       ma_uint64 got = 0;
-      // Through the data-source API, which handles looping (back to the start at the end).
-      ma_data_source_read_pcm_frames(&decoder, scratch.data(), kChunk, &got);
+      if (in_intro) {
+        ma_data_source_read_pcm_frames(&intro, scratch.data(), kChunk, &got);
+        if (got < kChunk) in_intro = false;  // over: the rest of this chunk comes from the loop
+      }
+      if (!in_intro && got < kChunk) {
+        // Through the data-source API, which handles looping (back to the start at the end).
+        ma_uint64 more = 0;
+        ma_data_source_read_pcm_frames(&decoder, scratch.data() + got * 2, kChunk - got, &more);
+        got += more;
+      }
       if (got == 0) return;
       for (size_t i = 0; i < got; ++i) {
         const size_t at = ((w + i) % capacity) * 2;
@@ -81,7 +100,8 @@ void Audio::DecodeLoop() {
     {
       WLW_PROFILE_SCOPE("Decode music");
       std::lock_guard<std::mutex> lock(music_mutex_);
-      for (auto& [path, stream] : music_) stream->Fill();
+      for (auto& stream : music_) stream->Fill();
+      FreeRetiredMusic();  // a restarted track's old playthrough, once it has faded out
     }
     std::this_thread::sleep_for(std::chrono::milliseconds(10));  // the ring holds ~1 s: plenty of slack
   }
@@ -161,39 +181,75 @@ Audio::SoundId Audio::Load(const std::string& path) {
   return mixer_->AddSound(std::move(*data));
 }
 
-bool Audio::PlayMusic(const std::string& path, float fade_seconds) {
+Audio::Bytes Audio::MusicFile(const std::string& path) {
+  auto it = music_files_.find(path);
+  if (it != music_files_.end()) return it->second;
+  std::optional<std::vector<uint8_t>> bytes = platform::ReadFile(path);
+  if (!bytes) {
+    WLW_LOG(LogAudio, Error, "Music not found: %s", path.c_str());
+    return nullptr;
+  }
+  Bytes shared = std::make_shared<const std::vector<uint8_t>>(std::move(*bytes));
+  music_files_.emplace(path, shared);
+  return shared;
+}
+
+bool Audio::PlayMusic(const std::string& path, const MusicParams& params) {
   std::unique_lock<std::mutex> lock(music_mutex_);  // the decode thread walks music_
-  auto it = music_.find(path);
-  if (it == music_.end()) {
-    std::optional<std::vector<uint8_t>> bytes = platform::ReadFile(path);
-    if (!bytes) {
-      WLW_LOG(LogAudio, Error, "Music not found: %s", path.c_str());
-      return false;
-    }
-    auto stream = std::make_unique<MusicStream>();
-    stream->bytes = std::move(*bytes);
+  // The playthrough to resume: the newest of this track (older ones are retired).
+  MusicStream* stream = nullptr;
+  for (auto& s : music_) {
+    if (s->path == path && !s->retired) stream = s.get();
+  }
+  if (!stream || params.restart || !params.intro.empty()) {
+    auto fresh = std::make_unique<MusicStream>();
+    fresh->path = path;
+    fresh->bytes = MusicFile(path);
+    if (!fresh->bytes) return false;
     // Decoded straight to what the mixer wants: float, stereo, the device's rate (resampled).
     const ma_decoder_config config = ma_decoder_config_init(ma_format_f32, 2, mixer_->SampleRate());
-    if (ma_decoder_init_memory(stream->bytes.data(), stream->bytes.size(), &config, &stream->decoder) != MA_SUCCESS) {
+    if (ma_decoder_init_memory(fresh->bytes->data(), fresh->bytes->size(), &config, &fresh->decoder) != MA_SUCCESS) {
       WLW_LOG(LogAudio, Error, "Can't decode music: %s", path.c_str());
       return false;
     }
-    stream->ready = true;
-    ma_data_source_set_looping(&stream->decoder, MA_TRUE);
-    stream->capacity = mixer_->SampleRate();  // one second
-    stream->ring.assign(stream->capacity * 2, 0.0f);
-    stream->scratch.assign(MusicStream::kChunk * 2, 0.0f);
-    stream->Fill();  // a head start, before the mixer reads (the decode thread isn't on it yet)
-    it = music_.emplace(path, std::move(stream)).first;
+    fresh->ready = true;
+    ma_data_source_set_looping(&fresh->decoder, MA_TRUE);
+    if (!params.intro.empty()) {
+      fresh->intro_bytes = MusicFile(params.intro);
+      if (fresh->intro_bytes && ma_decoder_init_memory(fresh->intro_bytes->data(), fresh->intro_bytes->size(), &config,
+                                                       &fresh->intro) == MA_SUCCESS) {
+        fresh->has_intro = fresh->in_intro = true;
+      } else {
+        WLW_LOG(LogAudio, Error, "Can't play the intro %s: the track starts without it", params.intro.c_str());
+      }
+    }
+    fresh->capacity = mixer_->SampleRate();  // one second
+    fresh->ring.assign(fresh->capacity * 2, 0.0f);
+    fresh->scratch.assign(MusicStream::kChunk * 2, 0.0f);
+    fresh->Fill();  // a head start, before the mixer reads (the decode thread may not be on it yet)
+    if (stream) stream->retired = true;
+    stream = fresh.get();
+    music_.push_back(std::move(fresh));
   }
-  StreamSource* source = it->second.get();
+  FreeRetiredMusic();
   lock.unlock();
   if (!decode_thread_.joinable()) {
     decoding_.store(true);
     decode_thread_ = std::thread([this] { DecodeLoop(); });
   }
-  mixer_->PlayStream(source, fade_seconds);
+  mixer_->PlayStream(stream, params.fade, params.volume);
   return true;
+}
+
+void Audio::FreeRetiredMusic() {
+  // Only retired playthroughs: nothing can hand them to the mixer again, so once the mixer lets go
+  // (InUse false) the audio thread never reads them again.
+  std::erase_if(music_, [](const std::unique_ptr<MusicStream>& s) { return s->retired && !s->InUse(); });
+}
+
+size_t Audio::MusicStreamCount() {
+  std::lock_guard<std::mutex> lock(music_mutex_);
+  return music_.size();
 }
 
 void Audio::Suspend() {

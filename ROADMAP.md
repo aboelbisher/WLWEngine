@@ -624,6 +624,9 @@ is ~850 lines of C++ + ~225 of Kotlin).
   cone, doppler, spread); equal-power panning; occlusion low-pass from physics raycasts.
 - [ ] **16.4 Clips and streaming.** Load types from the cooker, compressed-in-memory decoding, any
   clip streamable, ref-counted unload, music playlists with crossfades and stingers.
+  Early slice done (2026-10-26, for Bluzzle's music): `MusicParams` (fade, volume trim, a gapless intro, restart),
+  equal-power crossfades over 4 stream slots (a fading stream is picked up again, not cut), restarted playthroughs
+  freed once the mixer lets go (`StreamSource::InUse`).
 - [ ] **16.5 Platform audio.** AAudio performance mode, output-device changes (headphones), latency
   reporting; web specifics with 8.3.
 

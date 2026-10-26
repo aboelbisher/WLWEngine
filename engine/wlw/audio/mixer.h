@@ -29,6 +29,15 @@ class StreamSource {
  public:
   virtual ~StreamSource() = default;
   virtual uint32_t Read(float* stereo, uint32_t frames) = 0;
+  // True while the mixer may still read this source: a PlayStream naming it is queued, or one of
+  // its stream slots holds it (playing or fading out). Its owner may destroy it once this is false,
+  // as long as it doesn't hand it to PlayStream again.
+  bool InUse() const { return queued_.load() > 0 || in_slot_.load(); }
+
+ private:
+  friend class Mixer;
+  std::atomic<int> queued_{0};        // PlayStream commands not yet taken by the audio thread
+  std::atomic<bool> in_slot_{false};  // written by the audio thread
 };
 
 struct PlayParams {
@@ -54,10 +63,15 @@ class Mixer {
   SoundId AddSound(SoundData data);  // game thread; the data lives as long as the mixer
   void Play(SoundId sound, const PlayParams& params = {});
   void StopAll();
-  // Streams `source` on Bus::Music, fading in over `fade_seconds`; the stream playing before fades
-  // out over the same time (a crossfade). nullptr fades the music out. The source must outlive
-  // its playing (Audio keeps the music streams for its whole life).
-  void PlayStream(StreamSource* source, float fade_seconds);
+  // Streams `source` on Bus::Music at `volume`, fading in over `fade_seconds`; the stream playing
+  // before fades out over the same time (a crossfade). Fades are equal-power (gain = volume x
+  // sin(t x pi/2), t going 0..1), so a crossfade between equally loud tracks keeps the loudness level.
+  // A source still fading out is picked up again from where its fade is (no cut, no restart); the
+  // one already playing only takes the new volume. nullptr fades the music out. Several fades can
+  // overlap (kStreamSlots - 1 fading at once; past that the quietest is dropped). The source must
+  // stay alive while InUse().
+  void PlayStream(StreamSource* source, float fade_seconds, float volume = 1.0f);
+  static constexpr size_t kStreamSlots = 4;  // the current stream + the ones fading out
 
   // ---- Settings (game thread; read by the audio thread) ----
   void SetMasterVolume(float volume) { master_.store(volume); }
@@ -81,6 +95,7 @@ class Mixer {
     PlayParams params;
     StreamSource* stream = nullptr;  // PlayStream
     float fade_seconds = 0.0f;
+    float stream_volume = 1.0f;
   };
   struct Voice {
     const SoundData* sound = nullptr;  // null = free
@@ -98,14 +113,18 @@ class Mixer {
   void StartStream(const Command& command);
   void MixStreams(float* out, uint32_t frames, float master);
 
-  // A streaming source with a gain moving linearly towards a target (fades without clicks).
+  // A streaming source and where it is in its fade: t = 0 silent .. 1 fully in; the gain is
+  // volume x sin(t x pi/2). t moves by `step` per frame (up = fading in, down = fading out).
   struct StreamSlot {
     StreamSource* source = nullptr;
-    float gain = 0.0f;
-    float target = 0.0f;
-    float step = 0.0f;  // gain change per frame
+    float t = 0.0f;
+    float step = 0.0f;
+    float volume = 1.0f;
+    float Gain() const;
   };
-  std::array<StreamSlot, 2> streams_;             // [0] = current, [1] = the one fading out (audio thread)
+  void FreeSlot(StreamSlot& slot);
+  // [0] = current, the others fading out (audio thread).
+  std::array<StreamSlot, kStreamSlots> streams_;
   std::vector<float> stream_scratch_;             // decode buffer, allocated once (never in Mix)
   static constexpr uint32_t kStreamChunk = 1024;  // frames decoded per step
 

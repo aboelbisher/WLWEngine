@@ -6,11 +6,20 @@
 #include <mutex>
 #include <string>
 #include <thread>
+#include <vector>
 
 #include "wlw/audio/audio_config.h"
 #include "wlw/audio/mixer.h"
 
 namespace wlw::audio {
+
+// How Audio::PlayMusic starts a track.
+struct MusicParams {
+  float fade = 1.5f;     // seconds: this track fades in while the one before fades out
+  float volume = 1.0f;   // this track's level: a trim that evens out tracks mastered louder or quieter
+  std::string intro;     // a file played once first, straight into the track's loop (no gap): a jingle
+  bool restart = false;  // from the top, even if the track was playing or paused (else it resumes)
+};
 
 // The game's sound output: one playback device (miniaudio: WASAPI on Windows, AAudio/OpenSL ES on
 // Android...) whose callback pulls mixed samples from a Mixer. Owned by Application.
@@ -36,10 +45,15 @@ class Audio {
 
   // Background music: streamed, i.e. decoded bit by bit (on a background thread) while it plays, so a
   // long song costs its file size in memory instead of its decoded size (4 minutes of stereo is
-  // ~40 MB as floats). Loops forever, on Bus::Music, crossfading from the previous track.
-  // Playing the track that's already playing does nothing. False if the file can't be opened.
-  bool PlayMusic(const std::string& path, float fade_seconds = 1.5f);
+  // ~40 MB as floats). Loops forever, on Bus::Music, crossfading (equal-power) from the previous track.
+  //   Audio().PlayMusic("music/stage_2.ogg", {.fade = 0.6f, .volume = 0.9f});
+  //   Audio().PlayMusic("music/win_loop.ogg", {.fade = 0.2f, .intro = "music/win_jingle.ogg"});
+  // The track already playing only takes the new volume. A track played before and faded away resumes
+  // where it was, unless `restart` (or an `intro`) asks for a new playthrough from the top; the old one
+  // finishes its fade and is freed. False if a file can't be opened.
+  bool PlayMusic(const std::string& path, const MusicParams& params = {});
   void StopMusic(float fade_seconds = 1.0f) { mixer_->PlayStream(nullptr, fade_seconds); }
+  size_t MusicStreamCount();  // playthroughs alive (playing, fading, kept to resume): tests, debug panels
 
   void SetMuted(bool muted) { mixer_->SetMuted(muted); }
   bool Muted() const { return mixer_->Muted(); }
@@ -64,7 +78,7 @@ class Audio {
 
  private:
   struct Device;       // miniaudio's device, kept out of this header
-  struct MusicStream;  // a miniaudio decoder over a file in memory
+  struct MusicStream;  // one playthrough: miniaudio decoders over files in memory
   std::unique_ptr<Mixer> mixer_;
   std::unique_ptr<Device> device_;
   bool suspended_ = false;
@@ -72,9 +86,14 @@ class Audio {
   void UpdateDevice();  // starts or stops the device from the two flags
   bool other_music_ = false;
   float music_volume_ = 1.0f;  // Bus::Music's volume as the game set it
-  // Every music file opened so far, by path. Kept until the end (the mixer may still be reading
-  // one); ~Audio stops the device before any of them is destroyed.
-  std::map<std::string, std::unique_ptr<MusicStream>> music_;  // guarded by music_mutex_
+  // Every music file read so far, by path (a restart decodes the same bytes again).
+  using Bytes = std::shared_ptr<const std::vector<uint8_t>>;
+  std::map<std::string, Bytes> music_files_;  // guarded by music_mutex_
+  Bytes MusicFile(const std::string& path);   // read once; null if missing
+  // Every playthrough alive. A retired one (replaced by a restart) is destroyed once the mixer no
+  // longer holds it (StreamSource::InUse); ~Audio stops the device before any of them is destroyed.
+  std::vector<std::unique_ptr<MusicStream>> music_;  // guarded by music_mutex_
+  void FreeRetiredMusic();                           // with music_mutex_ held
   // The music decode thread (started by the first PlayMusic): keeps every stream's ring topped up.
   void DecodeLoop();
   std::mutex music_mutex_;
