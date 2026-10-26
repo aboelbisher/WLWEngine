@@ -103,7 +103,7 @@ class FakeLeaderboards : public Leaderboards {
   bool public_profile = true;  // false: the player is left off the tables (rank 0), as with a hidden Play Games profile
   std::string player_name = "You";
   void SignOut() { state_ = SignInState::SignedOut; }
-  // Adds `count` made-up rivals ("Player 1"...) to `board` with scores up to `max_score`, the
+  // Adds `count` made-up rivals ("SwiftOtter"...) to `board` with scores up to `max_score`, the
   // same ones for the same seed. About half of them also played this week, a fifth today.
   void AddRivals(const std::string& board, int count, int64_t max_score, uint64_t seed = 1);
 

@@ -205,11 +205,19 @@ std::string FakeLeaderboards::Describe() const {
 }
 
 void FakeLeaderboards::AddRivals(const std::string& board, int count, int64_t max_score, uint64_t seed) {
+  // Handles like real players pick ("SwiftOtter", "Pixel_Fox27"), ASCII only. A stream of their own,
+  // so the scores stay the same ones for the same seed.
+  static constexpr const char* kFirst[] = {"Swift",  "Lucky", "Quiet", "Brave", "Clever", "Sunny", "Mighty", "Happy",
+                                           "Cosmic", "Pixel", "Turbo", "Lazy",  "Golden", "Ninja", "Royal",  "Frosty"};
+  static constexpr const char* kSecond[] = {"Fox",   "Owl",    "Tiger", "Panda", "Comet", "Wizard", "Otter", "Falcon",
+                                            "Koala", "Badger", "Raven", "Moose", "Gecko", "Lynx",   "Yeti",  "Puffin"};
+  core::Random names(seed ^ 0x9E3779B97F4A7C15ull);
   core::Random random(seed);
   std::vector<Score>& scores = boards_[board];
   for (int i = 0; i < count; ++i) {
     Score rival;
-    rival.name = "Player " + std::to_string(i + 1);
+    rival.name = std::string(kFirst[names.Below(16)]) + (names.Chance(0.25f) ? "_" : "") + kSecond[names.Below(16)];
+    if (names.Chance(0.4f)) rival.name += std::to_string(1 + names.Below(99));
     // Squared: most rivals score low, a few high, as on real boards.
     const float unit = random.Unit();
     rival.score = static_cast<int64_t>(static_cast<double>(unit) * unit * static_cast<double>(max_score));
