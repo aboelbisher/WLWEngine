@@ -1,10 +1,11 @@
-// Tests for wlw/anim: easing curves, Tween, Shake and Timeline.
+// Tests for wlw/anim: easing curves, Tween, Shake, Timeline and Spring.
 #include <algorithm>
 
 #include <glm/glm.hpp>
 
 #include "test_helpers.h"
 #include "wlw/anim/shake.h"
+#include "wlw/anim/spring.h"
 #include "wlw/anim/timeline.h"
 #include "wlw/anim/tween.h"
 
@@ -174,6 +175,97 @@ TEST_CASE("timeline cues are crossed once") {
   CHECK((t.Crossed(first) && t.Crossed(one) && t.Crossed(three)));
   t.Clear();
   CHECK((Near(t.Duration(), 0.0f) && t.Finished()));
+}
+
+// Steps `spring` for `seconds` in steps of `dt`, returning the furthest it went past the target (the
+// target minus the value, for a spring that starts below it).
+static float RunSpring(Spring<float>& spring, float seconds, float dt) {
+  float overshoot = 0.0f;
+  for (float t = 0.0f; t < seconds - 1e-6f; t += dt) {
+    spring.Update(dt);
+    overshoot = std::max(overshoot, spring.Value() - spring.target);
+  }
+  return overshoot;
+}
+
+TEST_CASE("spring settles on its target") {
+  for (float zeta : {0.2f, 0.7f, 1.0f, 2.0f}) {
+    Spring<float> s(3.0f, zeta);
+    s.target = 1.0f;
+    RunSpring(s, 5.0f, 1.0f / 60.0f);
+    CHECK((Near(s.Value(), 1.0f, 1e-3f) && s.AtRest()));
+  }
+  Spring<float> idle(3.0f, 0.5f, 2.0f);  // starts on its target: stays there
+  idle.Update(1.0f);
+  CHECK((Near(idle.Value(), 2.0f) && idle.AtRest()));
+}
+
+TEST_CASE("spring damping: bouncy overshoots, critical doesn't") {
+  Spring<float> bouncy(3.0f, 0.3f);
+  bouncy.target = 1.0f;
+  CHECK(RunSpring(bouncy, 2.0f, 1.0f / 60.0f) > 0.3f);  // zeta 0.3: ~37% past the target
+
+  Spring<float> critical(3.0f, 1.0f);
+  critical.target = 1.0f;
+  CHECK(RunSpring(critical, 2.0f, 1.0f / 60.0f) <= 1e-6f);
+
+  Spring<float> slow(3.0f, 3.0f);
+  slow.target = 1.0f;
+  CHECK(RunSpring(slow, 2.0f, 1.0f / 60.0f) <= 1e-6f);
+  CHECK(slow.Value() < critical.Value());  // overdamped arrives later
+}
+
+TEST_CASE("spring is frame-rate independent") {
+  // The exact solution: 60 Hz, 30 Hz and one big step land on the same value and velocity.
+  for (float zeta : {0.3f, 1.0f, 1.8f}) {
+    Spring<float> a(2.5f, zeta), b(2.5f, zeta), c(2.5f, zeta);
+    for (Spring<float>* s : {&a, &b, &c}) {
+      s->target = 1.0f;
+      s->Kick(-3.0f);
+    }
+    RunSpring(a, 0.5f, 1.0f / 60.0f);
+    RunSpring(b, 0.5f, 1.0f / 30.0f);
+    c.Update(0.5f);
+    CHECK((Near(a.Value(), b.Value(), 1e-4f) && Near(a.Value(), c.Value(), 1e-4f)));
+    CHECK((Near(a.Velocity(), b.Velocity(), 1e-3f) && Near(a.Velocity(), c.Velocity(), 1e-3f)));
+  }
+  Spring<float> stiff(30.0f, 0.1f);  // a stiff spring and a long frame: still bounded
+  stiff.target = 1.0f;
+  stiff.Update(0.25f);
+  CHECK(std::abs(stiff.Value()) < 2.0f);
+}
+
+TEST_CASE("spring kicks add velocity") {
+  Spring<float> s(4.0f, 0.4f);
+  s.Kick(2.0f);
+  CHECK(Near(s.Velocity(), 2.0f));
+  s.Kick(1.0f);
+  CHECK(Near(s.Velocity(), 3.0f));
+  s.Update(0.02f);
+  CHECK(s.Value() > 0.0f);  // moves the kick's way first...
+  RunSpring(s, 4.0f, 1.0f / 60.0f);
+  CHECK(s.AtRest());  // ...and settles back on the target (0)
+
+  s.SnapTo(5.0f);  // a jump: at rest there, then pulled back
+  CHECK((Near(s.Value(), 5.0f) && Near(s.Velocity(), 0.0f) && !s.AtRest()));
+}
+
+TEST_CASE("spring of vectors") {
+  Spring<glm::vec3> v(5.0f, 0.35f);
+  v.Kick({0.0f, 1.0f, -2.0f});
+  v.Update(0.02f);
+  CHECK((v.Value().y > 0.0f && v.Value().z < 0.0f && Near(v.Value().x, 0.0f)));
+  for (int i = 0; i < 240; ++i) v.Update(1.0f / 60.0f);
+  CHECK(v.AtRest());
+
+  // Each component moves like a float spring with the same settings.
+  Spring<float> y(5.0f, 0.35f);
+  y.Kick(1.0f);
+  Spring<glm::vec2> xy(5.0f, 0.35f);
+  xy.Kick({0.0f, 1.0f});
+  y.Update(0.13f);
+  xy.Update(0.13f);
+  CHECK(Near(xy.Value().y, y.Value()));
 }
 
 TEST_SUITE_END();

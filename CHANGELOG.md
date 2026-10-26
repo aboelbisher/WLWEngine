@@ -11,6 +11,13 @@ listed under **Breaking** with its **Migration**. Shims added before that (`WLW_
 
 ## Unreleased
 
+- `anim::Spring<T>` (anim/spring.h, for Bluzzle's line-clear knocks): a damped spring pulling a value (float,
+  glm::vec2/3) towards `target`, set by `frequency` (Hz) and `damping` (zeta: < 1 bouncy, 1 critical, > 1 sluggish);
+  `Kick(velocity)`, `SnapTo(value)`, `Update(dt)`, `Value()`, `Velocity()`, `AtRest(epsilon)`. Each Update steps the
+  exact solution (under-, critically and overdamped cases), so it is stable at any dt and frame-rate independent,
+  unlike semi-implicit Euler. Unlike a Tween it can be re-aimed or kicked again mid-motion. Tests: settles, overshoot
+  vs zeta, 60 Hz = 30 Hz = one step, kicks add, vectors.
+
 - Leaderboards (for Bluzzle's global scores): `kit::Leaderboards` (leaderboards.h): `State()` (Checking / SignedIn /
   SignedOut) and `SignIn()` for a button, `Submit(board, score)` (fire and forget; while signed out the best per
   board waits and is sent at sign-in), `Load(board, LeaderboardSpan{Today, Week, AllTime}, count, done)` ->

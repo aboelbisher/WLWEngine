@@ -29,7 +29,8 @@ engine/wlw/
               when open), SetBusGain (dB glide), Duck(bus, DuckParams) (deepest wins); Levels(bus) for panels
   anim/       ease.h (Penner easing curves), tween.h (Tween<T>: value-type tweens the game owns and samples),
               shake.h (trauma-based screen shake: trauma decays, offset = trauma^2 x smooth noise),
-              timeline.h (Timeline: beats placed Then / With / At on one clock; cues polled with Crossed; Skip)
+              timeline.h (Timeline: beats placed Then / With / At on one clock; cues polled with Crossed; Skip),
+              spring.h (Spring<T>: damped spring by frequency + damping ratio, exact step: Kick, SnapTo, AtRest)
   fx/         ParticleSystem: CPU simulation (fixed capacity, swap-remove, bursts, Emit = one exact particle,
               optional Floor rectangle in XY at a height in z they bounce on and fall past; gravity -Z; BurstSettings::spread /
               max_spin and Particle::angles / angular_velocity in radians); WriteTo(MultiMeshInstance3D&) = WriteInstances, rows of
