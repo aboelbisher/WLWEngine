@@ -4,6 +4,7 @@
 [![Release](https://img.shields.io/github/v/release/aboelbisher/WLWEngine?sort=semver)](https://github.com/aboelbisher/WLWEngine/releases)
 ![C++20](https://img.shields.io/badge/C%2B%2B-20-00599C?logo=cplusplus)
 ![OpenGL 3.3 / GLES 3.0](https://img.shields.io/badge/OpenGL-3.3%20%2F%20ES%203.0-5586A4?logo=opengl)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 ![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Android-lightgrey)
 
 A C++20 / OpenGL game engine for mobile-first 3D and 2D games. One renderer serves desktop GL 3.3 and
@@ -144,3 +145,8 @@ Pre-1.0: the API still changes between minor versions, and every change is liste
 [CHANGELOG.md](CHANGELOG.md) with a migration note. One minor version per finished roadmap phase; the latest is
 [v0.3.0](https://github.com/aboelbisher/WLWEngine/releases/tag/v0.3.0). [ROADMAP.md](ROADMAP.md) holds the plan:
 next come an editor for the engine's games, then iOS. The engine is used by Bluzzle, a block puzzle for phones.
+
+## License
+
+[MIT](LICENSE). The vendored libraries in `third_party/` keep their own licences (MIT, BSD-3-Clause, Apache-2.0,
+public domain), listed in [third_party/README.md](third_party/README.md).
