@@ -33,7 +33,8 @@ engine/wlw/
               spring.h (Spring<T>: damped spring by frequency + damping ratio, exact step: Kick, SnapTo, AtRest)
               curve.h (Curve: Hermite keys, Smooth (Catmull-Rom) / Linear / Constant, Evaluate exact, Sample from a 64-point
               baked table), gradient.h (Gradient: colour stops, Linear / Constant, baked the same way); Unity AnimationCurve /
-              Gradient, Godot Curve / Gradient
+              Gradient, Godot Curve / Gradient; bezier.h (CubicBezier<T>: Point / Tangent / Through(from, to, bend);
+              ArcLength<T, N>: N + 1 even-t samples, TimeAt(fraction of the length) -> t for an even or eased pace)
   fx/         ParticleSystem: CPU simulation (fixed capacity, swap-remove, bursts, Emit = one exact particle,
               optional Floor rectangle in XY at a height in z they bounce on and fall past; gravity -Z; BurstSettings::spread /
               max_spin and Particle::angles / angular_velocity in radians); WriteTo(MultiMeshInstance3D&) = WriteInstances, rows of
@@ -43,7 +44,10 @@ engine/wlw/
               Particle::intensity / BurstSettings::intensity (HDR, billboards only). Shockwaves (shockwaves.h): up to
               kMaxRipples rings, Add(center, ShockwaveSettings) (a full set replaces the wave nearest its end), Update(dt),
               WriteTo(PostSettings&) = every ripple slot; ShockwaveAt(center, settings, age) = the shape (radius OutCubic,
-              width linear, push fades in over 10% of the life and out as (1 - t)^2). FlowParticles (flow_particles.h):
+              width linear, push fades in over 10% of the life and out as (1 - t)^2). Trail (trail.h): the head's last
+              `lifetime` seconds of points (fixed capacity, min_distance), Write(span<BillboardInstance>) = one stretched
+              quad per segment, head first, tail cut at exactly `lifetime`, width / intensity / colour tapering along
+              it. FlowParticles (flow_particles.h):
               10-20k dots along paths (liquid in pipes; not a fluid sim), SoA arrays, paths resampled evenly (O(1)
               lookup), SetNext routing (round robin; none = fade out), SetStop = a gate dots queue behind (the line
               grows back up the path), emitters; WriteTo(SpriteBatch) packs 16 B/dot + bounds. SetDensity(0..1) scales emitters + queue packing (count only;

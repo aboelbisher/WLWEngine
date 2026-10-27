@@ -13,6 +13,7 @@ message(STATUS "WLWengine platform: ${WLW_PLATFORM}")
 add_library(wlw STATIC
   wlw/version.h.in
 
+  wlw/anim/bezier.h
   wlw/anim/curve.h
   wlw/anim/ease.h
   wlw/anim/gradient.h
@@ -80,6 +81,8 @@ add_library(wlw STATIC
   wlw/fx/particle_system.h
   wlw/fx/shockwaves.cpp
   wlw/fx/shockwaves.h
+  wlw/fx/trail.cpp
+  wlw/fx/trail.h
 
   wlw/math/exact_cover.cpp
   wlw/math/bit_grid.h

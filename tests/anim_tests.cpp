@@ -1,9 +1,10 @@
-// Tests for wlw/anim: easing curves, Tween, Shake, Timeline, Spring, Curve and Gradient.
+// Tests for wlw/anim: easing curves, Tween, Shake, Timeline, Spring, Curve, Gradient, CubicBezier and ArcLength.
 #include <algorithm>
 
 #include <glm/glm.hpp>
 
 #include "test_helpers.h"
+#include "wlw/anim/bezier.h"
 #include "wlw/anim/curve.h"
 #include "wlw/anim/gradient.h"
 #include "wlw/anim/shake.h"
@@ -325,6 +326,66 @@ TEST_CASE("gradient linear, constant, ends") {
   CHECK((steps.Evaluate(0.49f) == white && steps.Evaluate(0.5f) == red && steps.Evaluate(0.99f) == red));
   CHECK((steps.Sample(0.4f) == white && steps.Sample(0.6f) == red && steps.Sample(1.0f) == clear));
   CHECK((Gradient().Sample(0.5f) == white && Gradient::Solid(red).Evaluate(0.7f) == red));
+}
+
+// ---- CubicBezier / ArcLength ----
+
+TEST_CASE("bezier ends, tangents and Through") {
+  const CubicBezier<glm::vec2> c{{0, 0}, {1, 2}, {3, 2}, {4, 0}};
+  CHECK((c.Point(0.0f) == glm::vec2(0, 0) && c.Point(1.0f) == glm::vec2(4, 0)));
+  CHECK((c.Point(-1.0f) == c.Point(0.0f) && c.Point(2.0f) == c.Point(1.0f)));  // clamped
+  // Leaves towards p1, arrives from p2: the tangents at the ends are 3 (p1 - p0) and 3 (p3 - p2).
+  CHECK((Near(c.Tangent(0.0f).x, 3.0f) && Near(c.Tangent(0.0f).y, 6.0f)));
+  CHECK((Near(c.Tangent(1.0f).x, 3.0f) && Near(c.Tangent(1.0f).y, -6.0f)));
+  // Symmetric control points: the middle is on the axis, at 3/4 of the handles' height, heading straight across.
+  CHECK((Near(c.Point(0.5f).x, 2.0f) && Near(c.Point(0.5f).y, 1.5f) && Near(c.Tangent(0.5f).y, 0.0f)));
+  // The tangent is the derivative (a central difference agrees).
+  const float h = 1e-3f;
+  const glm::vec2 numeric = (c.Point(0.3f + h) - c.Point(0.3f - h)) / (2.0f * h);
+  CHECK((Near(numeric.x, c.Tangent(0.3f).x, 1e-2f) && Near(numeric.y, c.Tangent(0.3f).y, 1e-2f)));
+
+  // Through: no bend = the straight line at an even pace; a bend bows the middle out by 3/4 of it.
+  const auto line = CubicBezier<glm::vec3>::Through({0, 0, 0}, {6, 0, 0}, glm::vec3(0.0f));
+  CHECK((Near(line.Point(0.25f).x, 1.5f) && Near(line.Point(0.5f).x, 3.0f) && Near(line.Point(0.5f).y, 0.0f)));
+  const auto bowed = CubicBezier<glm::vec3>::Through({0, 0, 0}, {6, 0, 0}, {0, 2, 0});
+  CHECK((Near(bowed.Point(0.5f).x, 3.0f) && Near(bowed.Point(0.5f).y, 1.5f)));
+  CHECK((bowed.Point(1.0f) == glm::vec3(6, 0, 0)));
+  // Floats work too (a path in one dimension).
+  CHECK(Near(CubicBezier<float>{0.0f, 0.0f, 1.0f, 1.0f}.Point(0.5f), 0.5f));
+}
+
+TEST_CASE("arc length: length, even pace, edge cases") {
+  // A straight line: exact.
+  const ArcLength<glm::vec3> straight(CubicBezier<glm::vec3>::Through({0, 0, 0}, {3, 4, 0}, glm::vec3(0.0f)));
+  CHECK(Near(straight.Length(), 5.0f));
+  CHECK((Near(straight.TimeAt(0.0f), 0.0f) && Near(straight.TimeAt(0.5f), 0.5f) && Near(straight.TimeAt(1.0f), 1.0f)));
+  CHECK((Near(straight.TimeAt(-1.0f), 0.0f) && Near(straight.TimeAt(2.0f), 1.0f)));
+
+  // Bunched control points: t runs at an uneven pace (slow near p0, where p0 = p1), the table evens it out.
+  const CubicBezier<glm::vec2> uneven{{0, 0}, {0, 0}, {1, 3}, {4, 0}};
+  const ArcLength<glm::vec2, 64> table(uneven);
+  float fine = 0.0f;  // the length with 4096 chords
+  for (int i = 0; i < 4096; ++i) fine += glm::length(uneven.Point((i + 1) / 4096.0f) - uneven.Point(i / 4096.0f));
+  CHECK(Near(table.Length(), fine, fine * 0.002f));
+  // Ten even steps of distance: each about a tenth of the length (raw t steps differ by far more).
+  float shortest = 1e9f, longest = 0.0f, raw_shortest = 1e9f, raw_longest = 0.0f;
+  for (int i = 0; i < 10; ++i) {
+    const float step = glm::length(uneven.Point(table.TimeAt((i + 1) / 10.0f)) - uneven.Point(table.TimeAt(i / 10.0f)));
+    shortest = std::min(shortest, step);
+    longest = std::max(longest, step);
+    const float raw = glm::length(uneven.Point((i + 1) / 10.0f) - uneven.Point(i / 10.0f));
+    raw_shortest = std::min(raw_shortest, raw);
+    raw_longest = std::max(raw_longest, raw);
+  }
+  CHECK(longest / shortest < 1.02f);
+  CHECK(raw_longest / raw_shortest > 3.0f);
+  // The default 16 segments: within 1% of the length.
+  CHECK(Near(ArcLength<glm::vec2>(uneven).Length(), fine, fine * 0.01f));
+
+  // No length at all: t = the fraction.
+  const ArcLength<glm::vec2> point(CubicBezier<glm::vec2>{{1, 1}, {1, 1}, {1, 1}, {1, 1}});
+  CHECK((Near(point.Length(), 0.0f) && Near(point.TimeAt(0.3f), 0.3f)));
+  CHECK(Near(ArcLength<glm::vec2>().TimeAt(0.4f), 0.4f));  // default: empty
 }
 
 TEST_SUITE_END();

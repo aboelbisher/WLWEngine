@@ -1,5 +1,5 @@
 // Tests for wlw::fx: ParticleSystem (spawning, lifetime, motion, capacity, instances), FlowParticles
-// (paths, routing, queues, emitters, sprites), scene::SpriteBatch, scene::BillboardBatch and Shockwaves.
+// (paths, routing, queues, emitters, sprites), scene::SpriteBatch, scene::BillboardBatch, Shockwaves and Trail.
 #include <algorithm>
 #include <cmath>
 #include <memory>
@@ -12,6 +12,7 @@
 #include "wlw/fx/flow_particles.h"
 #include "wlw/fx/particle_system.h"
 #include "wlw/fx/shockwaves.h"
+#include "wlw/fx/trail.h"
 #include "wlw/scene/billboard_batch.h"
 #include "wlw/scene/geometry_instance.h"
 #include "wlw/scene/node.h"
@@ -566,6 +567,74 @@ TEST_CASE("shockwaves into the post settings") {
   CHECK((post.ripples[0].center == glm::vec2(0.9f, 0.9f) && post.ripples[1].center == glm::vec2(0.1f, 0.5f)));
   waves.Clear();
   CHECK(!waves.Active());
+}
+
+// ---- Trail ----
+
+TEST_CASE("trail points: push, min distance, capacity, ageing") {
+  wlw::fx::Trail trail(4);
+  trail.settings.lifetime = 1.0f;
+  CHECK((trail.Empty() && trail.SegmentCount() == 0 && trail.Capacity() == 4));
+  trail.Push({0, 0, 0});
+  CHECK((trail.PointCount() == 1 && trail.Empty()));  // one point: nothing to draw yet
+  trail.Push({1, 0, 0});
+  CHECK((trail.PointCount() == 2 && !trail.Empty() && trail.SegmentCount() == 1));
+  // Within min_distance of the last kept point, the newest point follows the head instead of adding one.
+  trail.settings.min_distance = 0.5f;
+  trail.Push({0.2f, 0, 0});
+  CHECK(trail.PointCount() == 2);
+  trail.Push({2, 0, 0});
+  trail.Push({3, 0, 0});
+  trail.Push({4, 0, 0});  // full (4): the oldest went
+  CHECK(trail.PointCount() == 4);
+
+  // Ageing: a point goes once the next one is past the lifetime too; the last one goes when it is.
+  wlw::fx::Trail fading(8);
+  fading.settings.lifetime = 0.5f;
+  fading.Push({0, 0, 0});
+  fading.Update(0.3f);
+  fading.Push({1, 0, 0});
+  fading.Update(0.3f);  // ages 0.6 and 0.3: the first is kept (it marks where the tail is cut)
+  CHECK(fading.PointCount() == 2);
+  fading.Update(0.3f);  // 0.9 and 0.6: both past it
+  CHECK(fading.PointCount() == 0);
+  fading.Update(-1.0f);  // nothing happens
+  CHECK(fading.PointCount() == 0);
+}
+
+TEST_CASE("trail quads: segments, tail cut, taper, colour") {
+  wlw::fx::Trail trail(8);
+  trail.settings = {.lifetime = 1.0f, .width = 0.4f, .color = {1.0f, 0.5f, 0.0f, 1.0f}, .intensity = 2.0f};
+  trail.Push({0, 0, 0});
+  trail.Update(0.4f);
+  trail.Push({2, 0, 0});
+  trail.Update(0.4f);
+  trail.Push({2, 2, 0});  // ages: 0.8, 0.4, 0
+  std::vector<wlw::rendering::BillboardInstance> out(8);
+  REQUIRE(trail.Write(out) == 2);
+  // Head first: the newest segment, from (2, 0) to (2, 2): centred between, stretched along it, its middle 0.2 old.
+  CHECK((out[0].position == glm::vec3(2, 1, 0) && out[0].stretch == glm::vec3(0, 2, 0)));
+  CHECK((Near(out[0].size, 0.4f * 0.8f, 1e-3f) && Near(out[0].intensity, 2.0f * 0.8f, 1e-3f)));
+  CHECK(out[0].color == wlw::Color32(wlw::Color{1.0f, 0.5f, 0.0f, 1.0f}).Packed());
+  CHECK((out[1].position == glm::vec3(1, 0, 0) && Near(out[1].size, 0.4f * 0.4f, 1e-3f)));
+
+  // Past the lifetime, the oldest segment is cut where the trail is exactly `lifetime` old.
+  trail.Update(0.4f);  // ages: 1.2, 0.8, 0.4
+  REQUIRE(trail.Write(out) == 2);
+  // (2, 0) is 0.8 old, (0, 0) 1.2: 1.0 is halfway, so the segment runs from (2, 0) back to (1, 0).
+  CHECK((Near(out[1].position.x, 1.5f) && Near(out[1].stretch.x, 1.0f)));
+  CHECK(Near(out[1].size, 0.4f * 0.1f, 1e-3f));  // its middle is 0.9 old
+
+  // A short output: as many as fit, head first. A gradient tints along the trail.
+  CHECK(trail.Write(std::span(out).first(1)) == 1);
+  trail.settings.color_over_trail = wlw::anim::Gradient::Solid({0.0f, 1.0f, 1.0f, 0.5f});
+  trail.Write(out);
+  CHECK(out[0].color == wlw::Color32(wlw::Color{0.0f, 0.5f, 0.0f, 0.5f}).Packed());
+  // A head that stood still: a zero-length segment draws nothing.
+  wlw::fx::Trail still(4);
+  still.Push({1, 1, 1});
+  still.Push({1, 1, 1});
+  CHECK((still.SegmentCount() == 1 && still.Write(out) == 0));
 }
 
 TEST_SUITE_END();

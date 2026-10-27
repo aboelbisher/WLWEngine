@@ -11,6 +11,19 @@ listed under **Breaking** with its **Migration**. Shims added before that (`WLW_
 
 ## Unreleased
 
+- `anim::CubicBezier<T>` and `anim::ArcLength<T, N>` (anim/bezier.h, for Bluzzle's rewards flying to the score):
+  a cubic Bezier path (float, glm::vec2/3) with `Point(t)`, `Tangent(t)` and `Through(from, to, bend)` (control
+  points at the thirds of the line, pushed by `bend`: no bend = the line at an even pace); `ArcLength` samples a curve
+  at N + 1 even t (default 16 segments) and maps a fraction of its length to t (`TimeAt`, `Length`), for an even or
+  eased pace along it. Tests: ends, tangents vs a numeric derivative, Through's bow, length vs 4096 chords, even
+  steps on a curve with bunched control points, no-length curves.
+- `fx::Trail` (fx/trail.h, a comet's tail behind a moving point; Unity's TrailRenderer, Unreal's ribbons): the game
+  pushes the head every frame, the trail keeps the points for `TrailSettings::lifetime` (Unity's min vertex
+  distance: `min_distance`; fixed capacity, the oldest goes) and `Write(span<BillboardInstance>)` emits one stretched
+  billboard per segment, head first, the oldest cut where the trail is exactly `lifetime` old; width, intensity and
+  colour taper along it (`width_over_trail`, `intensity_over_trail` curves, `color_over_trail` gradient). Quads,
+  not a ribbon mesh: no new renderer path, one draw with the rest of the batch (neighbours overlap at their round
+  ends). Tests: push / min distance / capacity / ageing, segment quads, the tail cut, taper, tint.
 - Text styles and per-glyph effects (ROADMAP 15.4; TextMeshPro's face/glow and per-character vertex animation,
   Godot's RichTextEffect / CharFXTransform): `Canvas::Text(..., style, effect)` takes an optional `GlyphEffect`
   (`std::function<void(GlyphFx&)>`), called once per glyph with its index, order, count and centre, returning an
