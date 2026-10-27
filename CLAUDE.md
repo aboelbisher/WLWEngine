@@ -163,8 +163,18 @@ engine/wlw/
               radius, width, strength, chroma}, viewport heights: the picture under a ring is read from further in, push x
               (1 - x^2)^2 across it; chroma = red / blue pushed 1 +- chroma as far), chromatic_aberration {intensity at the
               corners, growing with distance^2}, vignette {intensity, smoothness, center, color; after exposure, before the
-              tone map}. Distorts() (a uniform branch: idle = one read) also moves the bloom read; inactive ripples
-              (strength 0) don't count for NeedsOutputPass. fx::Shockwaves animates ripples (fx/ above).
+              tone map}. Distorts() also moves the bloom read; inactive ripples (strength 0) don't count for
+              NeedsOutputPass. fx::Shockwaves animates ripples (fx/ above). The output pass is compiled in 8 variants
+              (Shader::Create defines DISTORT = Distorts(), BLOOM, DISTORTION_BUFFER = the buffer drawn this frame; all made
+              at start so the warm-up compiles them: MakeOutputPasses / OutputPass), ring params as vec4 arrays.
+              DISTORTION BUFFER (distortion {enabled, scale 0.5, strength, chroma}; Unreal's distortion pass / HDRP's
+              buffer): draws whose material has Material::distortion (billboards: BillboardDistortion quad program; mesh
+              nodes only with a ShaderMaterial, FragColor.rg = the push; others skipped) leave the main pass for
+              distortion_order_, drawn after the Picture layers (DrawDistortionPass) Additive, no depth test, into
+              PostChain's RG16F DistortionTarget (scale x render size, made on the first frame that draws) cleared to 0;
+              offsets = how far the picture moves, viewport fractions (+y up); the output pass reads uv - offset x strength.
+              Off, no output pass or no RG16F (CanDrawDistortion, logged once): the draws are skipped. Frames with no
+              distortion draws: no clear, no read (no DISTORTION_BUFFER). Stats: distortion_draws / _width / _height.
               bloom {enabled, threshold, knee, intensity, scatter, scale, max_levels} (cvar r.bloom = SetBloomOverride):
               steps kBloomDownPass levels 0..n-1 (shaders/post/bloom_down.glsl: Jimenez 13-tap; level 0 also soft-knee
               threshold per tap + Karis average per box) then kBloomUpPass n-2..0 (bloom_up.glsl: 3x3 tent of the level
@@ -199,8 +209,10 @@ engine/wlw/
               timestamp zones (shadow, main pass, canvas, post passes, overlays); GLES: EXT_disjoint_timer_query functions
               looked up at run time and #defined to the desktop names before TracyOpenGL.hpp; context made when a viewer
               connects; cvar profile.gpu_zones. Separate from GpuTimer.
-              Custom shaders (shader.h): one text (shader_type canvas|mesh|post; fragment(), optional vertex()) -> Shader::Create(code) or Shader::FromFile(path) -> ShaderMaterial::Create(shader)
-              + SetParam(name, float/vec/mat4/texture; uploaded only when the material (id, version) changes); node/mesh SetMaterial or
+              Custom shaders (shader.h): one text (shader_type canvas|mesh|post; fragment(), optional vertex()) -> Shader::Create(code, name,
+              defines = a variant: #defines before the text, ShaderSource::defines -> BuildProgram) or Shader::FromFile(path) -> ShaderMaterial::Create(shader)
+              + SetParam(name, float/vec/mat4/texture/vector<float>/vector<vec4> (uniform arrays from element 0); uploaded only when the
+              material (id, version) changes); node/mesh SetMaterial or
               Canvas::ShaderRect. Per-node values: `instance uniform float uX;` in a mesh shader (float/vec2-4, max 8, parsed in
               SplitShaderSource) + GeometryInstance3D::SetInstanceParam (node > material > 0, uploaded per draw when changed). Engine inputs are prepended
               (documented in shader.h; may #include wlw/lighting.glsl and use SceneLighting, wlw/shadows.glsl and SceneShadow; mesh shaders get uNormalMatrix
@@ -240,7 +252,10 @@ engine/wlw/
               the quad in view space (round: turned by rotation; stretched: along the stretch's on-screen direction, longer by its
               on-screen length); 3D AABB bounds (SetBounds / FitBounds = rendering::BillboardBounds); material = blend (Additive
               default, never sorted) + shape texture (TEXTURED) or the computed dot. GL: GLQuadBuffer = the shared no-vertex-buffer
-              instanced quad (GLSpriteBuffer, GLBillboardBuffer); driver: QuadProgramFor(Sprite|Billboard, textured), AddQuadItem.
+              instanced quad (GLSpriteBuffer, GLBillboardBuffer); driver: QuadProgramFor(Sprite|Billboard|BillboardDistortion,
+              textured), AddQuadItem. A distortion material (Material::distortion): the DISTORTION variant writes offsets
+              (texture rg = direction in the quad's axes, a = size; no texture: a lens) x the quad's on-screen half axes
+              (vAxes) x color.a x intensity (negative pulls in) into the distortion buffer (post settings above).
               RenderStats::instance_bytes = per-copy data uploaded this frame.
               Scene (scene.h) = the world: nodes, lights, skybox; owned by nobody who looks at it. Viewport (viewport.h) =
               "draw this Scene from this camera into this picture" + a 2D Canvas over it (like Godot's SubViewport):
@@ -290,7 +305,8 @@ engine/wlw/
   utils/      image/glTF loaders (glTF turned from Y up: models face -Y), texture cache, primitives.h (CubeMesh, BeveledCubeMesh, SphereMesh, CylinderMesh, GemMesh, PyramidFrustumMesh, PlaneMesh: procedural cube,
               bevelled cube, sphere, cylinder, gem, pyramid frustum, plane = XY ground; Z up, CCW outward faces),
               textures.h (procedural textures: RadialFalloffTexture = a soft (1-d²)² dot for glows, particles, metaballs;
-              StarTexture (N tapered rays + a soft core), RingTexture (soft ring at a radius); AlphaShapePixels = the helper)
+              StarTexture (N tapered rays + a soft core), RingTexture (soft ring at a radius); AlphaShapePixels = the helper;
+              RingDistortionTexture = a direction map (rg outwards, y up; a = Ripple's profile) for distortion billboards)
 kit/wlw/kit/  wlw::kit: game-level building blocks shared by games (separate target on top of the engine; the
               engine never includes it). SaveStore (JSON file, atomic write, .bak fallback, versions + migrations),
               progress.h (DeviceId, Counters, Scores, LevelProgress: all mergeable, for cloud sync), daily.h (Date,

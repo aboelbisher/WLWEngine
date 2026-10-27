@@ -11,6 +11,23 @@ listed under **Breaking** with its **Migration**. Shims added before that (`WLW_
 
 ## Unreleased
 
+- Distortion buffer (ROADMAP 13.7; Unreal's distortion pass, HDRP's distortion buffer), the general form of the
+  ripples: `PostSettings::distortion` {enabled, scale = 0.5, strength, chroma}. Draws with `Material::distortion`
+  don't colour the picture: they add screen offsets (how far the picture moves, viewport fractions, +y up) into an
+  RG16F target after the 3D and Picture layers (no depth test, Additive), and the output pass reads the picture from
+  where it came. Billboards: the `DISTORTION` quad variant, texture rg = the push's direction in the quad's own axes
+  (a normal-map-like direction map) and alpha its size, x the quad's on-screen half size x colour alpha x intensity
+  (negative pulls in; no texture: a lens); particles through their BillboardBatch; a mesh with a ShaderMaterial writes
+  FragColor.rg. `utils::RingDistortionTexture` / `RingDistortionPixels` (outward ring, Ripple's profile). The target is
+  made on the first frame something distorts and only cleared and read on such frames; GPUs that can't draw into half
+  floats skip the draws (logged once). `TextureFormat::RG16F`. `RenderStats::distortion_draws` / `distortion_width` /
+  `distortion_height`. Tests: settings, ring texture, GPU probes (a lens moves a radial picture by the expected amount,
+  signed, half-size buffer, nothing drawn or made while off) + golden "post_distortion" (reference from CI).
+- Shader variants and array params: `Shader::Create(code, name, defines)` compiles the text with #defines in front (one
+  `Shader` per variant; Unity's keywords, Godot's per-feature variants); `ShaderMaterial::SetParam` takes
+  `std::vector<float>` and `std::vector<glm::vec4>` for uniform arrays. The output pass uses both: 8 variants (DISTORT,
+  BLOOM, DISTORTION_BUFFER) compiled at warm-up instead of runtime branches, ring params as `vec4` arrays instead of
+  a packed mat4 (the picture is unchanged: golden "post_ripple" passes). Golden "post_ripple" reference from CI.
 - Shockwaves, chromatic aberration and vignette (for Bluzzle's big clears), all in the output pass (no extra
   full-screen pass: on mobile a pass costs mostly its read and write of every pixel). `PostSettings::ripples`
   (`kMaxRipples` = 4 `rendering::Ripple` {center 0..1 from the top-left, radius, width, strength, chroma}, in viewport
