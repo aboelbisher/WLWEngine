@@ -122,7 +122,9 @@ TEST_CASE("engine shader files") {
                            "custom/mesh_default.vert",
                            "custom/mesh_fragment.glsl",
                            "sprite.vert",
-                           "sprite.frag"}) {
+                           "sprite.frag",
+                           "billboard.vert",
+                           "billboard.frag"}) {
     if (!FindShaderFile(name)) std::printf("  missing engine shader file %s\n", name);
     CHECK(FindShaderFile(name) != nullptr);
   }
@@ -148,6 +150,10 @@ TEST_CASE("engine shader files") {
     check_stage("sprite.vert", defines);
     defines.back() = "WLW_FRAGMENT";
     check_stage("sprite.frag", defines);
+    defines.back() = "WLW_VERTEX";  // the billboard batches' program, the same variants
+    check_stage("billboard.vert", defines);
+    defines.back() = "WLW_FRAGMENT";
+    check_stage("billboard.frag", defines);
   }
   for (const char* file : {"shadow.vert", "skybox.vert", "ui.vert", "custom/canvas.vert"})
     check_stage(file, {"WLW_VERTEX"});

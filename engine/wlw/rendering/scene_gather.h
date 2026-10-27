@@ -13,6 +13,7 @@ class Scene;
 class GeometryInstance3D;
 class Light3D;
 class SpriteBatch;
+class BillboardBatch;
 }  // namespace wlw::scene
 
 // The CPU half of drawing a viewport, with no GL in it: walk the scene once (GatherScene), then
@@ -32,9 +33,14 @@ struct SceneGather {
     scene::SpriteBatch* batch;
     AABB box;  // world bounds (its SetBounds box through its transform)
   };
+  struct Billboards {
+    scene::BillboardBatch* batch;
+    AABB box;  // world bounds (its SetBounds box through its transform)
+  };
   std::vector<const scene::Light3D*> lights;  // visible light nodes
   std::vector<Drawable> drawables;            // visible mesh / multi-mesh nodes with something to draw
   std::vector<Sprites> sprites;               // visible sprite batches with dots (no shadows)
+  std::vector<Billboards> billboards;         // visible billboard batches with quads (no shadows)
   AABB casters{}, receivers{};                // around every shadow caster / receiver
   bool has_casters = false, has_receivers = false;
 
@@ -42,8 +48,8 @@ struct SceneGather {
 };
 
 // Walks `scene` once (depth first, hidden branches skipped): visible lights, drawables (with their world boxes), sprite
-// batches, and the boxes around shadow casters and receivers. Appends to `out` (Clear it first). The node types are
-// told apart by Node3D::Kind() (no virtual call per node).
+// and billboard batches, and the boxes around shadow casters and receivers. Appends to `out` (Clear it first). The node
+// types are told apart by Node3D::Kind() (no virtual call per node).
 void GatherScene(const scene::Scene& scene, SceneGather& out);
 
 // What the camera sees, with what drawing it needs, worked out once per node.
@@ -59,18 +65,25 @@ struct VisibleSet {
     glm::mat4 model;
     float depth;
   };
+  struct Billboards {
+    scene::BillboardBatch* batch;
+    glm::mat4 model;
+    float depth;
+  };
   std::vector<Node> nodes;  // in gather order
   std::vector<Sprites> sprites;
-  int culled = 0;  // drawables and sprite batches outside the frustum
+  std::vector<Billboards> billboards;
+  int culled = 0;  // drawables, sprite and billboard batches outside the frustum
 
   void Clear() {
     nodes.clear();
     sprites.clear();
+    billboards.clear();
     culled = 0;
   }
 };
 
-// Frustum-culls `gather`'s drawables and sprite batches against `view_projection` and fills `out`
+// Frustum-culls `gather`'s drawables, sprite and billboard batches against `view_projection` and fills `out`
 // (cleared first). `view` gives the depths. Nodes sharing no layer with `cull_mask` (the camera's,
 // Camera3D::GetCullMask) are left out first (not counted in `culled`).
 void CullScene(const SceneGather& gather, const glm::mat4& view, const glm::mat4& view_projection, VisibleSet& out,

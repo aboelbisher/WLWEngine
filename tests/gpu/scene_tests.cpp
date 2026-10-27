@@ -19,6 +19,7 @@
 #include "wlw/rendering/shader.h"
 #include "wlw/rendering/shader_material.h"
 #include "wlw/rendering/texture.h"
+#include "wlw/scene/billboard_batch.h"
 #include "wlw/scene/camera_3d.h"
 #include "wlw/scene/geometry_instance.h"
 #include "wlw/scene/light.h"
@@ -314,6 +315,82 @@ TEST_CASE("sprites") {
   }
   dots->FitBounds();
   CheckGolden("sprites", viewport);
+}
+
+namespace {
+
+// How many pixels from (x, y) on, stepping by (dx, dy), are lit: red above 60 (the background has 20).
+int LitRun(const testing::Image& image, int x, int y, int dx, int dy) {
+  int run = 0;
+  while (x >= 0 && y >= 0 && x < gpu_tests::kSize && y < gpu_tests::kSize && image.Pixel(x, y)[0] > 60) {
+    ++run;
+    x += dx;
+    y += dy;
+  }
+  return run;
+}
+
+}  // namespace
+
+TEST_CASE("billboards face the camera and stretch on screen") {
+  // A camera tilted 39 degrees down: a quad lying in a world plane would look squashed, a billboard doesn't.
+  auto viewport = MakeViewport();
+  viewport->SetCamera(OrthoCamera({0, -10, 8}, {0, 0, 0}, 10.0f));  // 25.6 pixels per unit
+  auto quads = std::make_shared<scene::BillboardBatch>(4);
+  viewport->GetScene()->Root().AddChild(quads);
+  std::span<rendering::BillboardInstance> out = quads->Write(2);
+  out[0] = {.position = {-2.0f, 0.0f, 0.0f}, .size = 2.0f};
+  // World +X is screen-horizontal here: 1 wide, 1 + 2 long.
+  out[1] = {.position = {2.0f, 0.0f, 0.0f}, .size = 1.0f, .stretch = {2.0f, 0.0f, 0.0f}, .rotation = 1.0f};
+  quads->FitBounds();
+  const testing::Image image = gpu_tests::Render(viewport);
+  REQUIRE(!image.Empty());
+  // Round: as tall as wide (the soft edge cut at the same level both ways).
+  const int x0 = 128 - 51, y0 = 128;
+  const int wide = LitRun(image, x0, y0, 1, 0) + LitRun(image, x0, y0, -1, 0);
+  const int tall = LitRun(image, x0, y0, 0, 1) + LitRun(image, x0, y0, 0, -1);
+  CHECK_MESSAGE((wide > 30 && std::abs(wide - tall) <= 2), wide << " x " << tall);
+  // Stretched: three times as long as wide, along the stretch (its rotation ignored).
+  const int x1 = 128 + 51;
+  const int length = LitRun(image, x1, y0, 1, 0) + LitRun(image, x1, y0, -1, 0);
+  const int width = LitRun(image, x1, y0, 0, 1) + LitRun(image, x1, y0, 0, -1);
+  CHECK_MESSAGE((width > 10 && std::abs(length - 3 * width) <= 4), length << " x " << width);
+}
+
+TEST_CASE("billboards") {
+  // BillboardBatch: soft round quads at different depths, streaks along every axis, dimmed by intensity, and a
+  // textured batch of turned stars, all seen through a tilted orthographic camera.
+  auto viewport = MakeViewport();
+  viewport->SetCamera(OrthoCamera({6, -10, 7}, {0, 0, 0}, 10.0f));
+  auto dots = std::make_shared<scene::BillboardBatch>(64);
+  viewport->GetScene()->Root().AddChild(dots);
+  constexpr int kRing = 12;
+  std::span<rendering::BillboardInstance> out = dots->Write(kRing + 3);
+  for (int i = 0; i < kRing; ++i) {
+    const float angle = 6.2831853f * static_cast<float>(i) / kRing;
+    const float t = static_cast<float>(i) / kRing;
+    out[i] = {.position = {3.0f * std::cos(angle), 3.0f * std::sin(angle), 0.0f},
+              .size = 0.6f + 0.6f * t,
+              .color = Color32(Color{1.0f - t, 0.5f, t, 1.0f}).Packed(),
+              .intensity = 0.5f + 0.5f * t};
+  }
+  out[kRing] = {.position = {0, 0, 2.0f}, .size = 0.5f, .stretch = {0, 0, 3.0f}, .color = 0xFF40FFFFu};  // up
+  out[kRing + 1] = {.position = {0, 0, 0}, .size = 0.4f, .stretch = {4.0f, 0, 0}, .color = 0xFFFFC040u};
+  out[kRing + 2] = {.position = {0, 0, 0}, .size = 0.4f, .stretch = {0, 4.0f, 0}, .color = 0xFF40C0FFu};
+  dots->FitBounds();
+
+  auto stars = std::make_shared<scene::BillboardBatch>(8);
+  stars->GetMaterial()->SetTexture(utils::StarTexture(64));
+  viewport->GetScene()->Root().AddChild(stars);
+  std::span<rendering::BillboardInstance> shine = stars->Write(3);
+  for (int i = 0; i < 3; ++i) {
+    shine[i] = {.position = {-3.0f + 3.0f * static_cast<float>(i), 0.0f, -2.5f},
+                .size = 2.0f,
+                .rotation = 0.4f * static_cast<float>(i),
+                .color = 0xFFFFFFFFu};
+  }
+  stars->FitBounds();
+  CheckGolden("billboards", viewport);
 }
 
 namespace {

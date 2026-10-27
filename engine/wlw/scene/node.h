@@ -20,6 +20,7 @@ enum class NodeKind : uint8_t {
   MeshInstance,       // MeshInstance3D (geometry_instance.h)
   MultiMeshInstance,  // MultiMeshInstance3D (geometry_instance.h)
   SpriteBatch,        // SpriteBatch (sprite_batch.h)
+  BillboardBatch,     // BillboardBatch (billboard_batch.h)
   Light,              // Light3D and its types (light.h)
   Camera,             // Camera3D (camera_3d.h)
 };
@@ -33,6 +34,7 @@ enum class NodeKind : uint8_t {
 //   │  ├─ MeshInstance3D        draws its model once
 //   │  └─ MultiMeshInstance3D   draws it once per copy, in one draw call
 //   ├─ SpriteBatch              thousands of soft dots in one draw call (sprite_batch.h)
+//   ├─ BillboardBatch           camera-facing quads (sparks, streaks, flares) in one draw call (billboard_batch.h)
 //   ├─ Light3D                  DirectionalLight3D, PointLight3D, SpotLight3D (light.h)
 //   └─ Camera3D                 a view into the scene (camera_3d.h)
 //

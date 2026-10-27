@@ -3,6 +3,7 @@
 #include <algorithm>
 
 #include "wlw/core/normal_matrix.h"
+#include "wlw/scene/billboard_batch.h"
 #include "wlw/scene/geometry_instance.h"
 #include "wlw/scene/light.h"
 #include "wlw/scene/scene.h"
@@ -30,6 +31,7 @@ void SceneGather::Clear() {
   lights.clear();
   drawables.clear();
   sprites.clear();
+  billboards.clear();
   has_casters = has_receivers = false;
 }
 
@@ -51,6 +53,11 @@ void GatherOne(scene::Node3D& node, SceneGather& out) {
     case scene::NodeKind::SpriteBatch: {
       auto& sprites = static_cast<scene::SpriteBatch&>(node);
       if (!sprites.Empty()) out.sprites.push_back({&sprites, sprites.WorldBounds()});
+      return;
+    }
+    case scene::NodeKind::BillboardBatch: {
+      auto& billboards = static_cast<scene::BillboardBatch&>(node);
+      if (!billboards.Empty()) out.billboards.push_back({&billboards, billboards.WorldBounds()});
       return;
     }
     case scene::NodeKind::Light: out.lights.push_back(static_cast<const scene::Light3D*>(&node)); return;
@@ -94,6 +101,14 @@ void CullScene(const SceneGather& gather, const glm::mat4& view, const glm::mat4
       continue;
     }
     out.sprites.push_back({sprites.batch, sprites.batch->GetWorldMatrix(), ViewDepth(view, sprites.box)});
+  }
+  for (const SceneGather::Billboards& billboards : gather.billboards) {
+    if ((billboards.batch->GetLayers() & cull_mask) == 0) continue;
+    if (!Overlaps(frustum, billboards.box)) {
+      ++out.culled;
+      continue;
+    }
+    out.billboards.push_back({billboards.batch, billboards.batch->GetWorldMatrix(), ViewDepth(view, billboards.box)});
   }
 }
 

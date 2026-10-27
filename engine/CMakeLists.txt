@@ -157,6 +157,7 @@ add_library(wlw STATIC
   wlw/scene/scene.cpp
   wlw/scene/scene.h
   wlw/scene/shadow_map.h
+  wlw/scene/billboard_batch.h
   wlw/scene/sprite_batch.h
   wlw/scene/viewport.h
   wlw/scene/window.h

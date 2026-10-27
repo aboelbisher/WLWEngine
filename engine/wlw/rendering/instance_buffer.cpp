@@ -28,4 +28,17 @@ AABB InstanceBounds(std::span<const Instance> instances, const AABB& mesh_box) {
   return {low, high};
 }
 
+AABB BillboardBounds(std::span<const BillboardInstance> billboards) {
+  if (billboards.empty()) return {{0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}};
+  glm::vec3 low(std::numeric_limits<float>::max());
+  glm::vec3 high(std::numeric_limits<float>::lowest());
+  for (const BillboardInstance& b : billboards) {
+    // A stretched quad reaches half the stretch out on each side of its centre, plus half its width beyond the ends.
+    const glm::vec3 reach = glm::abs(b.stretch) * 0.5f + glm::vec3(b.size * 0.5f);
+    low = glm::min(low, b.position - reach);
+    high = glm::max(high, b.position + reach);
+  }
+  return {low, high};
+}
+
 }  // namespace wlw::rendering

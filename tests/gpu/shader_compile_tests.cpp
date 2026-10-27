@@ -142,6 +142,8 @@ void CompileEverything() {
   engine("shadow", "shadow.vert", "shadow.frag", {"INSTANCED"});
   engine("sprite", "sprite.vert", "sprite.frag", {});
   engine("sprite", "sprite.vert", "sprite.frag", {"TEXTURED"});
+  engine("billboard", "billboard.vert", "billboard.frag", {});
+  engine("billboard", "billboard.vert", "billboard.frag", {"TEXTURED"});
   engine("skybox", "skybox.vert", "skybox.frag", {});
   engine("ui", "ui.vert", "ui.frag", {});
 

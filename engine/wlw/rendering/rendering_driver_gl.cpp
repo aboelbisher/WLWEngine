@@ -36,6 +36,7 @@
 #include "wlw/scene/geometry_instance.h"
 #include "wlw/scene/light.h"
 #include "wlw/scene/shadow_map.h"
+#include "wlw/scene/billboard_batch.h"
 #include "wlw/scene/sprite_batch.h"
 #include "wlw/scene/window.h"
 #include "wlw/ui/ui_renderer.h"
@@ -153,7 +154,7 @@ class GLRenderingDriver : public RenderingDriver {
   }
 
   // What one viewport draws, gathered from its scene before any drawing starts.
-  // The scene part (lights, drawables, sprites, shadow boxes) is GL-free: scene_gather.h.
+  // The scene part (lights, drawables, sprite + billboard batches, shadow boxes) is GL-free: scene_gather.h.
   struct Frame : SceneGather {
     const scene::Light3D* shadow_light = nullptr;  // the directional light that casts shadows, if any
     bool shadow_active = false;                    // a shadow map is drawn this frame
@@ -234,7 +235,12 @@ class GLRenderingDriver : public RenderingDriver {
       viewport.GetScene()->ForEachNode([&](scene::Node3D& node) {
         switch (node.Kind()) {
           case scene::NodeKind::SpriteBatch:
-            SpriteProgramFor(SpriteTexture(static_cast<const scene::SpriteBatch&>(node)) != nullptr);
+            QuadProgramFor(QuadShader::Sprite,
+                           MaterialTexture(static_cast<const scene::SpriteBatch&>(node).GetMaterial()) != nullptr);
+            break;
+          case scene::NodeKind::BillboardBatch:
+            QuadProgramFor(QuadShader::Billboard,
+                           MaterialTexture(static_cast<const scene::BillboardBatch&>(node).GetMaterial()) != nullptr);
             break;
           case scene::NodeKind::Light: {
             const auto* light = static_cast<const scene::Light3D*>(&node);
@@ -731,29 +737,40 @@ class GLRenderingDriver : public RenderingDriver {
       }
     }
 
-    // Sprite batches: one item each (one instanced call for all its dots), the engine's sprite program.
-    for (const VisibleSet::Sprites& sprites : visible_.sprites) {
-      scene::SpriteBatch* batch = sprites.batch;
-      const float depth = sprites.depth;
-      const WTexture* texture = SpriteTexture(*batch);
-      const SpriteProgram& program = SpriteProgramFor(texture != nullptr);
-      if (program.id == 0) continue;  // didn't compile (logged)
-
-      DrawItem item;
-      item.sprites = batch;
-      item.sprite_program = &program;
-      item.node_slot = static_cast<uint32_t>(node_slots_.size());
-      node_slots_.push_back({nullptr, sprites.model, glm::mat3(1.0f), nullptr});
-      item.material = batch->GetMaterial().get();
-      item.blend = item.material ? item.material->blend : BlendMode::Additive;
-      item.depth_write = item.material ? item.material->DepthWrite() : false;
-      if (texture) item.texture = GLTexture(*texture);
-      const auto index = static_cast<uint32_t>(draw_items_.size());
-      draw_items_.push_back(item);
-      const uint64_t key = item.blend == BlendMode::Opaque ? OpaqueSortKey(program.id, item.texture, depth)
-                                                           : TransparentSortKey(depth, program.id);
-      draw_order_.push_back({key, index});
+    // Sprite and billboard batches: one item each (one instanced call for all its quads), the engine's quad programs.
+    for (const VisibleSet::Sprites& sprites : visible_.sprites)
+      AddQuadItem(QuadShader::Sprite, sprites.batch, sprites.batch->GetMaterial(), sprites.model, sprites.depth);
+    for (const VisibleSet::Billboards& billboards : visible_.billboards) {
+      AddQuadItem(QuadShader::Billboard, billboards.batch, billboards.batch->GetMaterial(), billboards.model,
+                  billboards.depth);
     }
+  }
+
+  // The engine programs that draw instanced quads (one per batch type).
+  enum class QuadShader : uint8_t { Sprite, Billboard };
+
+  // A sprite or billboard batch's draw item: its program (plain or TEXTURED), blend and sort key.
+  void AddQuadItem(QuadShader shader, scene::Node3D* batch, const std::shared_ptr<Material>& material,
+                   const glm::mat4& model, float depth) {
+    const WTexture* texture = MaterialTexture(material);
+    const QuadProgram& program = QuadProgramFor(shader, texture != nullptr);
+    if (program.id == 0) return;  // didn't compile (logged)
+
+    DrawItem item;
+    item.quads = batch;
+    item.quad_shader = shader;
+    item.quad_program = &program;
+    item.node_slot = static_cast<uint32_t>(node_slots_.size());
+    node_slots_.push_back({nullptr, model, glm::mat3(1.0f), nullptr});
+    item.material = material.get();
+    item.blend = item.material ? item.material->blend : BlendMode::Additive;
+    item.depth_write = item.material ? item.material->DepthWrite() : false;
+    if (texture) item.texture = GLTexture(*texture);
+    const auto index = static_cast<uint32_t>(draw_items_.size());
+    draw_items_.push_back(item);
+    const uint64_t key = item.blend == BlendMode::Opaque ? OpaqueSortKey(program.id, item.texture, depth)
+                                                         : TransparentSortKey(depth, program.id);
+    draw_order_.push_back({key, index});
   }
 
   // --- 4. SHADOWS: every caster's depth, seen from the shadow light ---
@@ -823,8 +840,8 @@ class GLRenderingDriver : public RenderingDriver {
       state_.SetDepthWrite(item.depth_write);
       if (IsTransparentKey(order.key)) ++stats.transparent_draw_calls;
       const glm::mat4& model = slot.model;
-      if (item.sprites) {
-        DrawSprites(item, model, stats);
+      if (item.quads) {
+        DrawQuads(item, model, stats);
         continue;
       }
       if (item.custom) {
@@ -901,25 +918,37 @@ class GLRenderingDriver : public RenderingDriver {
   }
 
   struct DrawItem;  // (below)
-  // A sprite batch: its dots to the GPU if they changed (16 bytes each), then one instanced call.
-  void DrawSprites(const DrawItem& item, const glm::mat4& model, scene::RenderStats& stats) {
-    scene::SpriteBatch& batch = *item.sprites;
-    if (!batch.Internal().GetSpriteBuffer())
-      batch.Internal().SetSpriteBuffer(std::make_unique<GLSpriteBuffer>(batch.Capacity()));
-    auto* buffer = static_cast<GLSpriteBuffer*>(batch.Internal().GetSpriteBuffer());
-    stats.instance_bytes += static_cast<int>(buffer->Upload(batch.Sprites(), batch.Internal().Version()));
-    state_.UseProgram(item.sprite_program->id);
-    glUniformMatrix4fv(item.sprite_program->model, 1, GL_FALSE, glm::value_ptr(model));
+  // A sprite or billboard batch: its quads to the GPU if they changed (16 / 40 bytes each), then one instanced call.
+  void DrawQuads(const DrawItem& item, const glm::mat4& model, scene::RenderStats& stats) {
+    const GLQuadBuffer* buffer = nullptr;
+    GLsizei count = 0;
+    if (item.quad_shader == QuadShader::Sprite) {
+      auto& batch = static_cast<scene::SpriteBatch&>(*item.quads);
+      if (!batch.Internal().GetSpriteBuffer())
+        batch.Internal().SetSpriteBuffer(std::make_unique<GLSpriteBuffer>(batch.Capacity()));
+      auto* sprites = static_cast<GLSpriteBuffer*>(batch.Internal().GetSpriteBuffer());
+      stats.instance_bytes += static_cast<int>(sprites->Upload(batch.Sprites(), batch.Internal().Version()));
+      buffer = sprites;
+      count = static_cast<GLsizei>(batch.Count());
+    } else {
+      auto& batch = static_cast<scene::BillboardBatch&>(*item.quads);
+      if (!batch.Internal().GetBuffer())
+        batch.Internal().SetBuffer(std::make_unique<GLBillboardBuffer>(batch.Capacity()));
+      auto* billboards = static_cast<GLBillboardBuffer*>(batch.Internal().GetBuffer());
+      stats.instance_bytes += static_cast<int>(billboards->Upload(batch.Billboards(), batch.Internal().Version()));
+      buffer = billboards;
+      count = static_cast<GLsizei>(batch.Count());
+    }
+    state_.UseProgram(item.quad_program->id);
+    glUniformMatrix4fv(item.quad_program->model, 1, GL_FALSE, glm::value_ptr(model));
     if (item.texture) state_.BindTexture0(item.texture);
-    const auto count = static_cast<GLsizei>(batch.Count());
     buffer->Draw(count);
     stats.instances += count;
     ++stats.draw_calls;
   }
 
-  // The texture shaping a batch's dots (its material's), else null: the shader's own falloff.
-  static const WTexture* SpriteTexture(const scene::SpriteBatch& batch) {
-    const auto& material = batch.GetMaterial();
+  // The texture shaping a batch's quads (its material's), else null: the shader's own falloff.
+  static const WTexture* MaterialTexture(const std::shared_ptr<Material>& material) {
     return material && material->HasTexture() ? material->GetTexture().get() : nullptr;
   }
 
@@ -987,26 +1016,27 @@ class GLRenderingDriver : public RenderingDriver {
     GLuint id = 0;
     GLint model = -1;
   };
-  using SpriteProgram = ShadowProgram;  // also just a program and its uModel
+  using QuadProgram = ShadowProgram;  // also just a program and its uModel
 
   // One mesh to draw this frame (main pass), made by BuildDrawList; drawn in the order of its key.
   struct DrawItem {
-    scene::GeometryInstance3D* node = nullptr;  // the mesh's node (null for sprites)
+    scene::GeometryInstance3D* node = nullptr;  // the mesh's node (null for quads)
     core::Mesh<core::Vertex3D>* mesh = nullptr;
-    uint32_t node_slot = 0;                         // its node's per-frame data (node_slots_)
-    const Material* material = nullptr;             // the material deciding its look (mesh's, else node's)
-    const ShaderMaterial* custom = nullptr;         // drawn with this material's shader...
-    const GLShader* custom_program = nullptr;       // (its program)
-    const MeshProgram* program = nullptr;           // ...or with this engine variant
-    scene::SpriteBatch* sprites = nullptr;          // a sprite batch instead of a mesh (mesh is null)...
-    const SpriteProgram* sprite_program = nullptr;  // ...with the sprite program
-    GLuint texture = 0;                             // engine variant / sprites: its texture on unit 0 (0 = none)
+    uint32_t node_slot = 0;                       // its node's per-frame data (node_slots_)
+    const Material* material = nullptr;           // the material deciding its look (mesh's, else node's)
+    const ShaderMaterial* custom = nullptr;       // drawn with this material's shader...
+    const GLShader* custom_program = nullptr;     // (its program)
+    const MeshProgram* program = nullptr;         // ...or with this engine variant
+    scene::Node3D* quads = nullptr;               // a sprite / billboard batch instead of a mesh (mesh is null)...
+    QuadShader quad_shader = QuadShader::Sprite;  // (which of the two)
+    const QuadProgram* quad_program = nullptr;    // ...with its quad program
+    GLuint texture = 0;                           // engine variant / quads: its texture on unit 0 (0 = none)
     BlendMode blend = BlendMode::Opaque;
     bool depth_write = true;
   };
   // What a node's meshes share, worked out once per frame.
   struct NodeSlot {
-    scene::GeometryInstance3D* node = nullptr;  // null for a sprite batch
+    scene::GeometryInstance3D* node = nullptr;  // null for a sprite / billboard batch
     glm::mat4 model{1.0f};                      // world matrix (walks the parents once)
     glm::mat3 normal_matrix{1.0f};              // core::NormalMatrix(model) (instanced: the node's part)
     GLInstanceBuffer* instances = nullptr;      // instanced nodes (set just before drawing)
@@ -1042,15 +1072,18 @@ class GLRenderingDriver : public RenderingDriver {
     return program;
   }
 
-  // The sprite batches' program: plain (the dot computed) or TEXTURED (the dot from its texture).
-  const SpriteProgram& SpriteProgramFor(bool textured) {
-    SpriteProgram& program = sprite_programs_[textured ? 1 : 0];
-    if (program.id != 0 || sprite_failed_[textured ? 1 : 0]) return program;
+  // A sprite / billboard batches' program: plain (the dot computed) or TEXTURED (the shape from its texture).
+  const QuadProgram& QuadProgramFor(QuadShader shader, bool textured) {
+    const int kind = shader == QuadShader::Sprite ? 0 : 1;
+    QuadProgram& program = quad_programs_[kind][textured ? 1 : 0];
+    if (program.id != 0 || quad_failed_[kind][textured ? 1 : 0]) return program;
     const auto start = std::chrono::steady_clock::now();
-    program.id = BuildEngineProgram("sprite.vert", "sprite.frag",
-                                    textured ? std::vector<std::string>{"TEXTURED"} : std::vector<std::string>{});
+    const char* name = kind == 0 ? "sprite" : "billboard";
+    program.id =
+        BuildEngineProgram(kind == 0 ? "sprite.vert" : "billboard.vert", kind == 0 ? "sprite.frag" : "billboard.frag",
+                           textured ? std::vector<std::string>{"TEXTURED"} : std::vector<std::string>{});
     if (program.id == 0) {
-      sprite_failed_[textured ? 1 : 0] = true;  // logged once, not retried every frame
+      quad_failed_[kind][textured ? 1 : 0] = true;  // logged once, not retried every frame
       return program;
     }
     program.model = glGetUniformLocation(program.id, "uModel");
@@ -1060,7 +1093,8 @@ class GLRenderingDriver : public RenderingDriver {
     }
     if (warmed_up_) {
       const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
-      WLW_LOG(LogRender, Info, "Sprite shader compiled during play (%.1f ms)%s", ms, textured ? ": TEXTURED" : "");
+      WLW_LOG(LogRender, Info, "Quad shader compiled during play (%.1f ms): %s%s", ms, name,
+              textured ? " TEXTURED" : "");
     }
     return program;
   }
@@ -1135,8 +1169,10 @@ class GLRenderingDriver : public RenderingDriver {
       for (const ShadowProgram& program : shadow_programs_) {
         if (program.id) glDeleteProgram(program.id);
       }
-      for (const SpriteProgram& program : sprite_programs_) {
-        if (program.id) glDeleteProgram(program.id);
+      for (const auto& programs : quad_programs_) {
+        for (const QuadProgram& program : programs) {
+          if (program.id) glDeleteProgram(program.id);
+        }
       }
       if (skybox_program_) glDeleteProgram(skybox_program_);
       if (frame_ubo_) glDeleteBuffers(1, &frame_ubo_);
@@ -1162,8 +1198,8 @@ class GLRenderingDriver : public RenderingDriver {
 
   std::unordered_map<uint32_t, MeshProgram> mesh_programs_;  // by variant key
   ShadowProgram shadow_programs_[2];                         // plain, instanced
-  SpriteProgram sprite_programs_[2];                         // computed dot, textured dot
-  bool sprite_failed_[2] = {false, false};
+  QuadProgram quad_programs_[2][2];                          // [sprite, billboard][computed dot, textured]
+  bool quad_failed_[2][2] = {};
   GLuint skybox_program_ = 0;
   GLint skybox_ray_ = -1;                     // its uSkyRay
   GLuint post_vao_ = 0;                       // empty: post passes draw a triangle made in the shader

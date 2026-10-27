@@ -1,5 +1,5 @@
 // Tests for wlw::fx: ParticleSystem (spawning, lifetime, motion, capacity, instances), FlowParticles
-// (paths, routing, queues, emitters, sprites) and scene::SpriteBatch.
+// (paths, routing, queues, emitters, sprites), scene::SpriteBatch and scene::BillboardBatch.
 #include <algorithm>
 #include <cmath>
 #include <memory>
@@ -11,6 +11,7 @@
 #include "test_helpers.h"
 #include "wlw/fx/flow_particles.h"
 #include "wlw/fx/particle_system.h"
+#include "wlw/scene/billboard_batch.h"
 #include "wlw/scene/geometry_instance.h"
 #include "wlw/scene/node.h"
 #include "wlw/scene/sprite_batch.h"
@@ -255,6 +256,32 @@ TEST_CASE("sprite batch") {
   batch.SetPosition({10.0f, 0.0f, 2.0f});
   const wlw::AABB world = batch.WorldBounds();
   CHECK((Near(world.min.x, 9.0f) && Near(world.max.x, 14.5f) && Near(world.min.z, 2.0f) && Near(world.max.z, 2.0f)));
+  batch.Clear();
+  CHECK((batch.Empty() && batch.Internal().Version() == before + 2));
+}
+
+// ---- BillboardBatch: the 40-byte camera-facing quads ----
+
+TEST_CASE("billboard batch") {
+  using wlw::rendering::BillboardInstance;
+  CHECK(sizeof(BillboardInstance) == 40);
+  wlw::scene::BillboardBatch batch(2);
+  CHECK((batch.Kind() == wlw::scene::NodeKind::BillboardBatch && batch.GetMaterial() &&
+         batch.GetMaterial()->blend == wlw::rendering::BlendMode::Additive));
+  const uint64_t before = batch.Internal().Version();
+  auto out = batch.Write(5);
+  CHECK((out.size() == 2 && batch.Count() == 2 && batch.Internal().Version() == before + 1));  // cut at the capacity
+  out[0] = {.position = {0.0f, 0.0f, 1.0f}, .size = 2.0f};
+  out[1] = {.position = {4.0f, 0.0f, 0.0f}, .size = 1.0f, .stretch = {0.0f, -3.0f, 1.0f}};
+  batch.FitBounds();
+  // The round one reaches half its size every way; the streak half its stretch more per axis.
+  CHECK((batch.Bounds().min == glm::vec3(-1.0f, -2.0f, -1.0f) && batch.Bounds().max == glm::vec3(4.5f, 2.0f, 2.0f)));
+  batch.SetPosition({10.0f, 0.0f, 0.0f});
+  batch.SetScale(glm::vec3(2.0f));
+  const wlw::AABB world = batch.WorldBounds();
+  CHECK((Near(world.min.x, 8.0f) && Near(world.max.x, 19.0f) && Near(world.max.z, 4.0f)));
+  CHECK((wlw::rendering::BillboardBounds({}).min == glm::vec3(0.0f) &&
+         wlw::rendering::BillboardBounds({}).max == glm::vec3(0.0f)));
   batch.Clear();
   CHECK((batch.Empty() && batch.Internal().Version() == before + 2));
 }

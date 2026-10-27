@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <initializer_list>
 #include <span>
 
 #include "wlw/platform/platform.h"
@@ -77,47 +78,50 @@ class GLInstanceBuffer : public WInstanceBuffer {
   uint64_t uploaded_version_ = UINT64_MAX;  // nothing uploaded yet
 };
 
-// A SpriteBatch's dots on the GPU: 16 bytes each (SpriteInstance), read by shaders/sprite.vert at
-// locations 4 (x, y, size) and 5 (RGBA8 colour, scaled to 0..1). It has its own vertex array with
-// only these per-instance attributes: the quad's 4 corners come from gl_VertexID, so there is no
-// vertex buffer at all. Drawn as a triangle strip of 4 vertices, once per dot, in one call.
-class GLSpriteBuffer : public WInstanceBuffer {
- public:
-  static constexpr GLuint kSpriteLocation = 4;
-  static constexpr GLuint kColorLocation = 5;
+// One per-instance attribute of a GLQuadBuffer: `components` values of `type` at `offset` in each instance.
+struct QuadAttribute {
+  GLuint location;
+  GLint components;
+  GLenum type;
+  bool normalized;  // integer types read as 0..1
+  size_t offset;
+};
 
-  explicit GLSpriteBuffer(size_t capacity)
-      : capacity_bytes_(static_cast<GLsizeiptr>(std::max<size_t>(capacity, 1) * sizeof(SpriteInstance))) {
+// Instanced quads with no vertex buffer at all: the quad's 4 corners come from gl_VertexID in the vertex shader, and
+// a vertex array holds only per-instance attributes (divisor 1) into one buffer sized for the batch's capacity once.
+// Drawn as a triangle strip of 4 vertices, once per instance, in one call. The base of the sprite and billboard
+// buffers (GL-only; owned by the node like any WInstanceBuffer).
+class GLQuadBuffer : public WInstanceBuffer {
+ public:
+  GLQuadBuffer(size_t capacity, size_t stride, std::initializer_list<QuadAttribute> attributes)
+      : capacity_bytes_(static_cast<GLsizeiptr>(std::max<size_t>(capacity, 1) * stride)) {
     glGenVertexArrays(1, &vao_);
     glGenBuffers(1, &vbo_);
     glBindVertexArray(vao_);
     glBindBuffer(GL_ARRAY_BUFFER, vbo_);
     glBufferData(GL_ARRAY_BUFFER, capacity_bytes_, nullptr, GL_DYNAMIC_DRAW);
-    const GLsizei stride = sizeof(SpriteInstance);
-    glEnableVertexAttribArray(kSpriteLocation);
-    glVertexAttribPointer(kSpriteLocation, 3, GL_FLOAT, GL_FALSE, stride,
-                          reinterpret_cast<void*>(offsetof(SpriteInstance, position)));  // position.xy, size
-    glVertexAttribDivisor(kSpriteLocation, 1);
-    glEnableVertexAttribArray(kColorLocation);
-    glVertexAttribPointer(kColorLocation, 4, GL_UNSIGNED_BYTE, GL_TRUE, stride,
-                          reinterpret_cast<void*>(offsetof(SpriteInstance, color)));
-    glVertexAttribDivisor(kColorLocation, 1);
+    for (const QuadAttribute& a : attributes) {
+      glEnableVertexAttribArray(a.location);
+      glVertexAttribPointer(a.location, a.components, a.type, a.normalized ? GL_TRUE : GL_FALSE,
+                            static_cast<GLsizei>(stride), reinterpret_cast<void*>(a.offset));
+      glVertexAttribDivisor(a.location, 1);
+    }
     glBindVertexArray(0);
   }
-  ~GLSpriteBuffer() override {
+  ~GLQuadBuffer() override {
     if (!platform::HasCurrentGLContext()) return;
     glDeleteBuffers(1, &vbo_);
     glDeleteVertexArrays(1, &vao_);
   }
 
-  // Copies the dots to the GPU if they changed since the last upload (the storage was sized for
-  // the batch's capacity once). Returns the bytes copied (0 = unchanged).
-  size_t Upload(std::span<const SpriteInstance> sprites, uint64_t version) {
+  // Copies the instances to the GPU if they changed since the last upload (cut at the capacity). Returns the bytes
+  // copied (0 = unchanged).
+  size_t UploadBytes(const void* data, size_t size_bytes, uint64_t version) {
     if (version == uploaded_version_) return 0;
     uploaded_version_ = version;
-    const auto bytes = static_cast<GLsizeiptr>(std::min(sprites.size_bytes(), static_cast<size_t>(capacity_bytes_)));
+    const auto bytes = static_cast<GLsizeiptr>(std::min(size_bytes, static_cast<size_t>(capacity_bytes_)));
     if (bytes == 0) return 0;
-    GLInstanceBuffer::UploadOrphaned(vbo_, capacity_bytes_, sprites.data(), bytes);
+    GLInstanceBuffer::UploadOrphaned(vbo_, capacity_bytes_, data, bytes);
     return static_cast<size_t>(bytes);
   }
 
@@ -132,6 +136,44 @@ class GLSpriteBuffer : public WInstanceBuffer {
   GLuint vbo_ = 0;
   GLsizeiptr capacity_bytes_;
   uint64_t uploaded_version_ = UINT64_MAX;
+};
+
+// A SpriteBatch's dots on the GPU: 16 bytes each (SpriteInstance), read by shaders/sprite.vert at
+// locations 4 (x, y, size) and 5 (RGBA8 colour, scaled to 0..1).
+class GLSpriteBuffer : public GLQuadBuffer {
+ public:
+  static constexpr GLuint kSpriteLocation = 4;
+  static constexpr GLuint kColorLocation = 5;
+
+  explicit GLSpriteBuffer(size_t capacity)
+      : GLQuadBuffer(capacity, sizeof(SpriteInstance),
+                     {{kSpriteLocation, 3, GL_FLOAT, false, offsetof(SpriteInstance, position)},  // position.xy, size
+                      {kColorLocation, 4, GL_UNSIGNED_BYTE, true, offsetof(SpriteInstance, color)}}) {}
+
+  size_t Upload(std::span<const SpriteInstance> sprites, uint64_t version) {
+    return UploadBytes(sprites.data(), sprites.size_bytes(), version);
+  }
+};
+
+// A BillboardBatch's quads on the GPU: 40 bytes each (BillboardInstance), read by shaders/billboard.vert at
+// locations 4 (centre, size), 5 (stretch, rotation), 6 (RGBA8 colour, scaled to 0..1) and 7 (intensity).
+class GLBillboardBuffer : public GLQuadBuffer {
+ public:
+  static constexpr GLuint kCenterLocation = 4;
+  static constexpr GLuint kStretchLocation = 5;
+  static constexpr GLuint kColorLocation = 6;
+  static constexpr GLuint kIntensityLocation = 7;
+
+  explicit GLBillboardBuffer(size_t capacity)
+      : GLQuadBuffer(capacity, sizeof(BillboardInstance),
+                     {{kCenterLocation, 4, GL_FLOAT, false, offsetof(BillboardInstance, position)},  // + size
+                      {kStretchLocation, 4, GL_FLOAT, false, offsetof(BillboardInstance, stretch)},  // + rotation
+                      {kColorLocation, 4, GL_UNSIGNED_BYTE, true, offsetof(BillboardInstance, color)},
+                      {kIntensityLocation, 1, GL_FLOAT, false, offsetof(BillboardInstance, intensity)}}) {}
+
+  size_t Upload(std::span<const BillboardInstance> billboards, uint64_t version) {
+    return UploadBytes(billboards.data(), billboards.size_bytes(), version);
+  }
 };
 
 }  // namespace wlw::rendering

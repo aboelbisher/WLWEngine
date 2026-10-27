@@ -132,4 +132,26 @@ TEST_CASE("radial falloff") {
   CHECK(utils::RadialFalloffPixels(0).size() == 4);  // at least one texel
 }
 
+TEST_CASE("star and ring textures") {
+  constexpr int size = 64;
+  const std::vector<uint8_t> star = utils::StarPixels(size);  // 4 rays: right, up, left, down
+  auto star_alpha = [&](int x, int y) { return static_cast<int>(star[(y * size + x) * 4 + 3]); };
+  CHECK((star.size() == size * size * 4 && star[0] == 255 && star_alpha(32, 32) > 240));  // white, bright core
+  // Along a ray it reaches far out; between rays (the diagonals) only the core shows.
+  CHECK((star_alpha(44, 32) > 40 && star_alpha(19, 32) > 40 && star_alpha(32, 19) > 40 && star_alpha(32, 44) > 40));
+  CHECK((star_alpha(46, 46) == 0 && star_alpha(18, 18) == 0));
+  CHECK((star_alpha(0, 0) == 0 && star_alpha(63, 32) < 5));  // nothing at the rim
+  CHECK(star_alpha(44, 32) == star_alpha(19, 32));           // symmetric
+  const std::vector<uint8_t> three = utils::StarPixels(size, 3);
+  CHECK(three[(32 * size + 44) * 4 + 3] > 40);  // the first ray points right
+  CHECK(three[(32 * size + 19) * 4 + 3] == 0);  // and none points left
+
+  const std::vector<uint8_t> ring = utils::RingPixels(size, 0.7f, 0.2f);
+  auto ring_alpha = [&](int x, int y) { return static_cast<int>(ring[(y * size + x) * 4 + 3]); };
+  // Peak on the ring line (0.7 x 32 = 22 texels out), nothing at the centre or past the width.
+  CHECK((ring_alpha(32 + 22, 32) > 240 && ring_alpha(32, 32) == 0 && ring_alpha(32 + 31, 32) == 0));
+  CHECK((ring_alpha(32 - 22, 32) > 240 && ring_alpha(32, 32 - 22) > 240));
+  CHECK((utils::StarTexture(8) != nullptr && utils::RingTexture(8) != nullptr));
+}
+
 TEST_SUITE_END();
