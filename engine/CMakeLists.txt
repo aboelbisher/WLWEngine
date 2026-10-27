@@ -13,7 +13,9 @@ message(STATUS "WLWengine platform: ${WLW_PLATFORM}")
 add_library(wlw STATIC
   wlw/version.h.in
 
+  wlw/anim/curve.h
   wlw/anim/ease.h
+  wlw/anim/gradient.h
   wlw/anim/shake.h
   wlw/anim/timeline.h
   wlw/anim/tween.h

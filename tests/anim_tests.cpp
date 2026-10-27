@@ -1,9 +1,11 @@
-// Tests for wlw/anim: easing curves, Tween, Shake, Timeline and Spring.
+// Tests for wlw/anim: easing curves, Tween, Shake, Timeline, Spring, Curve and Gradient.
 #include <algorithm>
 
 #include <glm/glm.hpp>
 
 #include "test_helpers.h"
+#include "wlw/anim/curve.h"
+#include "wlw/anim/gradient.h"
 #include "wlw/anim/shake.h"
 #include "wlw/anim/spring.h"
 #include "wlw/anim/timeline.h"
@@ -266,6 +268,63 @@ TEST_CASE("spring of vectors") {
   y.Update(0.13f);
   xy.Update(0.13f);
   CHECK(Near(xy.Value().y, y.Value()));
+}
+
+// ---- Curve: Hermite keys, baked ----
+
+TEST_CASE("curve linear and constant") {
+  const Curve line = Curve::Linear({{0.0f, 1.0f}, {0.5f, 3.0f}, {1.0f, 0.0f}});
+  CHECK((Near(line.Evaluate(0.25f), 2.0f) && Near(line.Evaluate(0.5f), 3.0f) && Near(line.Evaluate(0.75f), 1.5f)));
+  CHECK((Near(line.Evaluate(-1.0f), 1.0f) && Near(line.Evaluate(2.0f), 0.0f)));  // held past the ends
+  CHECK((Near(Curve::Constant(0.4f).Evaluate(-3.0f), 0.4f) && Near(Curve::Constant(0.4f).Sample(7.0f), 0.4f)));
+  CHECK((Near(Curve().Evaluate(0.3f), 1.0f) && Near(Curve().Sample(0.3f), 1.0f)));  // default: a neutral multiplier
+}
+
+TEST_CASE("curve smooth passes through its keys") {
+  const Curve hump = Curve::Smooth({{0.0f, 0.0f}, {0.3f, 1.0f}, {1.0f, 0.0f}});
+  CHECK((Near(hump.Evaluate(0.0f), 0.0f) && Near(hump.Evaluate(0.3f), 1.0f) && Near(hump.Evaluate(1.0f), 0.0f)));
+  // The inner key is a peak (its tangent is the slope from 0 to 1: flat here), the ends start flat.
+  CHECK((hump.Evaluate(0.29f) < 1.0f && hump.Evaluate(0.31f) < 1.0f));
+  CHECK(hump.Evaluate(0.02f) < 0.02f);  // flat start: slower than a straight line (0.067)
+  // Rising before the peak, falling after it.
+  bool shaped = true;
+  for (float t = 0.01f; t < 0.3f; t += 0.01f) shaped = shaped && hump.Evaluate(t) >= hump.Evaluate(t - 0.01f);
+  for (float t = 0.31f; t <= 1.0f; t += 0.01f) shaped = shaped && hump.Evaluate(t) <= hump.Evaluate(t - 0.01f);
+  CHECK(shaped);
+}
+
+TEST_CASE("curve tangents, keys in any order, baked table") {
+  // Explicit tangents: 0 -> 1 leaving with slope 2 and arriving flat = an ease-out (above the line at the middle).
+  const Curve ease_out({Curve::Key{0.0f, 0.0f, 0.0f, 2.0f}, Curve::Key{1.0f, 1.0f, 0.0f, 0.0f}});
+  CHECK(Near(ease_out.Evaluate(0.5f), 0.75f));  // h00*0 + h10*2 + h01*1 + h11*0 at s = 0.5: 0.25 + 0.5
+  // Keys are sorted, AddKey keeps the order, and the time range may be anything.
+  Curve curve = Curve::Linear({{4.0f, 10.0f}, {2.0f, 0.0f}});
+  CHECK((curve.Keys().front().time == 2.0f && Near(curve.Evaluate(3.0f), 5.0f) && Near(curve.Sample(3.0f), 5.0f)));
+  curve.AddKey({3.0f, 8.0f, 0.0f, 0.0f});
+  CHECK((curve.Keys()[1].time == 3.0f && Near(curve.Sample(3.0f), 8.0f, 0.3f)));
+  // The table is close to the exact curve everywhere (64 points, linear between).
+  const Curve hump = Curve::Smooth({{0.0f, 0.0f}, {0.3f, 1.0f}, {1.0f, 0.0f}});
+  float worst = 0.0f;
+  for (float t = -0.1f; t <= 1.1f; t += 0.001f) worst = std::max(worst, std::abs(hump.Sample(t) - hump.Evaluate(t)));
+  CHECK(worst < 0.005f);  // h² / 8 x the largest bend: 0.0159² / 8 x 67 = 0.0021
+}
+
+// ---- Gradient ----
+
+TEST_CASE("gradient linear, constant, ends") {
+  const wlw::Color white{1, 1, 1, 1}, red{1, 0, 0, 1}, clear{0, 0, 1, 0};
+  const Gradient fade({{0.0f, white}, {0.5f, red}, {1.0f, clear}});
+  const wlw::Color quarter = fade.Evaluate(0.25f), three_quarters = fade.Evaluate(0.75f);
+  CHECK((Near(quarter.r, 1.0f) && Near(quarter.g, 0.5f) && Near(quarter.a, 1.0f)));
+  CHECK((Near(three_quarters.r, 0.5f) && Near(three_quarters.b, 0.5f) && Near(three_quarters.a, 0.5f)));
+  CHECK((fade.Evaluate(-1.0f) == white && fade.Evaluate(2.0f) == clear));
+  const wlw::Color sampled = fade.Sample(0.25f);
+  CHECK((Near(sampled.g, 0.5f, 0.01f) && Near(fade.Sample(1.0f).a, 0.0f)));
+
+  const Gradient steps({{0.0f, white}, {0.5f, red}, {1.0f, clear}}, Gradient::Interpolation::Constant);
+  CHECK((steps.Evaluate(0.49f) == white && steps.Evaluate(0.5f) == red && steps.Evaluate(0.99f) == red));
+  CHECK((steps.Sample(0.4f) == white && steps.Sample(0.6f) == red && steps.Sample(1.0f) == clear));
+  CHECK((Gradient().Sample(0.5f) == white && Gradient::Solid(red).Evaluate(0.7f) == red));
 }
 
 TEST_SUITE_END();
