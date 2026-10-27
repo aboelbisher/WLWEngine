@@ -11,6 +11,9 @@ listed under **Breaking** with its **Migration**. Shims added before that (`WLW_
 
 ## Unreleased
 
+- Fix: the GL driver kept one shadow map and reallocated it whenever a light asked for another size, so two scenes
+  with different `ShadowSettings::map_size` in one frame (Bluzzle's board at 2048 and its menu logo's viewport at
+  1024) deleted and recreated a depth texture and framebuffer twice a frame. It now keeps one map per size asked for.
 - `platform::ReduceMotion()` (for Bluzzle's "Reduce motion" setting; Unity/Unreal leave it to plugins, iOS has
   UIAccessibilityIsReduceMotionEnabled): whether the player asked the OS for less motion, the default for a game's own
   option (no shake, zooms or full-screen distortion; softer flashes). Android: "Remove animations" (Settings.Global

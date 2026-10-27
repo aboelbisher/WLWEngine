@@ -700,7 +700,7 @@ class GLRenderingDriver : public RenderingDriver {
     const scene::Light3D& light = *frame.shadow_light;
     if (!EnsureShadowMap(light.shadow.map_size)) return;
     frame.shadow_frustum = scene::FitDirectionalShadow(
-        light.GetDirection(), frame.casters, frame.has_receivers ? frame.receivers : frame.casters, shadow_map_size_);
+        light.GetDirection(), frame.casters, frame.has_receivers ? frame.receivers : frame.casters, shadow_->size);
     frame.shadow_active = true;
   }
 
@@ -727,7 +727,7 @@ class GLRenderingDriver : public RenderingDriver {
       const scene::ShadowSettings& settings = frame.shadow_light->shadow;
       block.light_space = frame.shadow_frustum.ViewProjection();
       block.view_forward.w = settings.strength;
-      block.shadow_params = {settings.softness, 1.0f / static_cast<float>(shadow_map_size_),
+      block.shadow_params = {settings.softness, 1.0f / static_cast<float>(shadow_->size),
                              frame.shadow_frustum.texel_world * 1.5f, 0.0f};
     }
     SetFrameLights(block, frame.lights, frame.shadow_active ? frame.shadow_light : nullptr);
@@ -845,8 +845,8 @@ class GLRenderingDriver : public RenderingDriver {
     WLW_PROFILE_GPU_ZONE("Shadow pass");
     GLint previous_framebuffer = 0;  // not always 0: the platform may draw into its own
     glGetIntegerv(GL_FRAMEBUFFER_BINDING, &previous_framebuffer);
-    glBindFramebuffer(GL_FRAMEBUFFER, shadow_framebuffer_);
-    glViewport(0, 0, shadow_map_size_, shadow_map_size_);
+    glBindFramebuffer(GL_FRAMEBUFFER, shadow_->framebuffer);
+    glViewport(0, 0, shadow_->size, shadow_->size);
     state_.SetBlendMode(BlendMode::Opaque);
     state_.SetDepthWrite(true);
     glClear(GL_DEPTH_BUFFER_BIT);
@@ -891,7 +891,7 @@ class GLRenderingDriver : public RenderingDriver {
     // The shadow map on texture unit 1 (unit 0: the mesh's texture; units 2+: ShaderMaterials').
     if (frame.shadow_active) {
       glActiveTexture(GL_TEXTURE1);
-      glBindTexture(GL_TEXTURE_2D, shadow_texture_);
+      glBindTexture(GL_TEXTURE_2D, shadow_->texture);
       glActiveTexture(GL_TEXTURE0);
     }
 
@@ -1222,17 +1222,29 @@ class GLRenderingDriver : public RenderingDriver {
     return name.empty() ? " (none)" : name;
   }
 
-  // ---- Shadow map ----
+  // ---- Shadow maps ----
+  struct ShadowMap {
+    GLuint framebuffer = 0;
+    GLuint texture = 0;
+    int size = 0;
+  };
+
+  // One per size asked for, kept: two scenes whose lights ask for different sizes (a game's board and a
+  // logo's viewport, say) each draw into their own instead of reallocating one map twice a frame.
   bool EnsureShadowMap(int map_size) {
     map_size = std::clamp(map_size, 64, 4096);
-    if (shadow_framebuffer_ != 0 && shadow_map_size_ == map_size) return true;
+    if (const auto found = shadow_maps_.find(map_size); found != shadow_maps_.end()) {
+      shadow_ = &found->second;
+      return true;
+    }
     if (shadow_failed_) return false;
-    DeleteShadowMap();
 
     // A depth texture that compares when sampled (sampler2DShadow), with linear filtering so the
     // GPU blends the 4 nearest comparisons. Outside the map counts as lit (the shader checks).
-    glGenTextures(1, &shadow_texture_);
-    glBindTexture(GL_TEXTURE_2D, shadow_texture_);
+    ShadowMap map;
+    map.size = map_size;
+    glGenTextures(1, &map.texture);
+    glBindTexture(GL_TEXTURE_2D, map.texture);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24, map_size, map_size, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT,
                  nullptr);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -1245,9 +1257,9 @@ class GLRenderingDriver : public RenderingDriver {
 
     GLint previous_framebuffer = 0;
     glGetIntegerv(GL_FRAMEBUFFER_BINDING, &previous_framebuffer);
-    glGenFramebuffers(1, &shadow_framebuffer_);
-    glBindFramebuffer(GL_FRAMEBUFFER, shadow_framebuffer_);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, shadow_texture_, 0);
+    glGenFramebuffers(1, &map.framebuffer);
+    glBindFramebuffer(GL_FRAMEBUFFER, map.framebuffer);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, map.texture, 0);
     const GLenum none = GL_NONE;
     glDrawBuffers(1, &none);  // depth only: no colour is written...
     glReadBuffer(GL_NONE);    // ...or read
@@ -1255,21 +1267,25 @@ class GLRenderingDriver : public RenderingDriver {
     glBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(previous_framebuffer));
     if (!complete) {
       WLW_LOG(LogRender, Error, "Shadow map framebuffer incomplete: shadows are off");
-      DeleteShadowMap();
+      DeleteShadowMap(map);
       shadow_failed_ = true;
       return false;
     }
-    shadow_map_size_ = map_size;
+    shadow_ = &shadow_maps_.emplace(map_size, map).first->second;  // unordered_map: the pointer stays valid
     WLW_LOG(LogRender, Info, "Shadow map: %d x %d", map_size, map_size);
     return true;
   }
 
-  void DeleteShadowMap() {
-    if (shadow_framebuffer_) glDeleteFramebuffers(1, &shadow_framebuffer_);
-    if (shadow_texture_) glDeleteTextures(1, &shadow_texture_);
-    shadow_framebuffer_ = 0;
-    shadow_texture_ = 0;
-    shadow_map_size_ = 0;
+  static void DeleteShadowMap(ShadowMap& map) {
+    if (map.framebuffer) glDeleteFramebuffers(1, &map.framebuffer);
+    if (map.texture) glDeleteTextures(1, &map.texture);
+    map = {};
+  }
+
+  void DeleteShadowMaps() {
+    for (auto& [_, map] : shadow_maps_) DeleteShadowMap(map);
+    shadow_maps_.clear();
+    shadow_ = nullptr;
   }
 
   ~GLRenderingDriver() override {
@@ -1293,7 +1309,7 @@ class GLRenderingDriver : public RenderingDriver {
       }
       if (skybox_program_) glDeleteProgram(skybox_program_);
       if (frame_ubo_) glDeleteBuffers(1, &frame_ubo_);
-      DeleteShadowMap();
+      DeleteShadowMaps();
       glDeleteVertexArrays(1, &post_vao_);
       copy_shader_.reset();
       for (PostPass& pass : output_passes_) pass.material.reset();
@@ -1356,10 +1372,9 @@ class GLRenderingDriver : public RenderingDriver {
   uint32_t scene_cull_mask_ = 0xFFFFFFFFu;  // the camera's layers
 
   // Shadows (see DrawShadowMap).
-  GLuint shadow_framebuffer_ = 0;
-  GLuint shadow_texture_ = 0;
-  int shadow_map_size_ = 0;
-  bool shadow_failed_ = false;  // the framebuffer was refused once: don't retry every frame
+  std::unordered_map<int, ShadowMap> shadow_maps_;  // by size
+  ShadowMap* shadow_ = nullptr;                     // this viewport's, set by EnsureShadowMap
+  bool shadow_failed_ = false;                      // the framebuffer was refused once: don't retry every frame
   bool warned_shadow_type_ = false;
 };
 
