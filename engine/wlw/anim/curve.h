@@ -68,8 +68,8 @@ class Curve {
     if (t <= keys_.front().time) return keys_.front().value;
     if (t >= keys_.back().time) return keys_.back().value;
     // The first key after t (exists: t is inside the range).
-    const auto right = std::upper_bound(keys_.begin(), keys_.end(), t,
-                                        [](float time, const Key& key) { return time < key.time; });
+    const auto right =
+        std::upper_bound(keys_.begin(), keys_.end(), t, [](float time, const Key& key) { return time < key.time; });
     const Key& b = *right;
     const Key& a = *(right - 1);
     const float span = b.time - a.time;
@@ -94,9 +94,9 @@ class Curve {
   const std::vector<Key>& Keys() const { return keys_; }
   // Adds a key (kept in time order) / replaces them all; the table is baked again.
   void AddKey(const Key& key) {
-    keys_.insert(std::upper_bound(keys_.begin(), keys_.end(), key.time,
-                                  [](float time, const Key& k) { return time < k.time; }),
-                 key);
+    keys_.insert(
+        std::upper_bound(keys_.begin(), keys_.end(), key.time, [](float time, const Key& k) { return time < k.time; }),
+        key);
     Changed();
   }
   void SetKeys(std::vector<Key> keys) {
