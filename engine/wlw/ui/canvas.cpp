@@ -17,6 +17,25 @@ constexpr float kKindTriangle = static_cast<float>(QuadKind::Triangle);
 constexpr float kKindArc = static_cast<float>(QuadKind::Arc);
 }  // namespace
 
+Color LinearGradient::At(float t) const {
+  const size_t n = std::min(count, kMaxStops);
+  if (n == 0) return {1.0f, 1.0f, 1.0f, 0.0f};
+  if (t <= stops[0].at) return stops[0].color;
+  for (size_t i = 0; i + 1 < n; ++i) {
+    if (t > stops[i + 1].at) continue;
+    const Color& a = stops[i].color;
+    const Color& b = stops[i + 1].color;
+    const float span = stops[i + 1].at - stops[i].at;
+    const float k = span > 0.0f ? (t - stops[i].at) / span : 1.0f;
+    // Mixed premultiplied (what the GPU's interpolation of premultiplied corners gives), then back to straight.
+    const float alpha = a.a + (b.a - a.a) * k;
+    if (alpha <= 0.0f) return b.WithAlpha(0.0f);
+    const auto mix = [&](float ca, float cb) { return (ca * a.a + (cb * b.a - ca * a.a) * k) / alpha; };
+    return {mix(a.r, b.r), mix(a.g, b.g), mix(a.b, b.b), alpha};
+  }
+  return stops[n - 1].color;
+}
+
 void Canvas::BeginFrame(glm::vec2 framebuffer_pixels, glm::vec2 reference) {
   // "Fit": the largest scale at which the whole reference area is visible.
   pixels_per_unit_ = std::max(std::min(framebuffer_pixels.x / reference.x, framebuffer_pixels.y / reference.y), 1e-4f);
@@ -44,8 +63,8 @@ void Canvas::AddQuad(const Font* font, const glm::vec2 (&corners)[4], const glm:
 }
 
 void Canvas::AddQuad(const Font* font, const glm::vec2 (&corners)[4], const glm::vec2 (&uvs)[4],
-                     const Color (&colors)[4], const glm::vec4& params) {
-  ++BatchFor(font, nullptr).quad_count;
+                     const Color (&colors)[4], const glm::vec4& params, rendering::BlendMode blend) {
+  ++BatchFor(font, nullptr, blend).quad_count;
   for (int i = 0; i < 4; ++i) vertices_.push_back({corners[i], uvs[i], colors[i] * modulate_, params});
 }
 
@@ -178,7 +197,8 @@ void Canvas::Circle(glm::vec2 center, float radius, const Color& color) {
   FillRect({center - glm::vec2(radius), center + glm::vec2(radius)}, color, radius);
 }
 
-void Canvas::Triangle(glm::vec2 a, glm::vec2 b, glm::vec2 c, const Color& color) {
+void Canvas::Triangle(glm::vec2 a, glm::vec2 b, glm::vec2 c, const Color& color_a, const Color& color_b,
+                      const Color& color_c) {
   const auto cross = [](glm::vec2 u, glm::vec2 v) { return u.x * v.y - u.y * v.x; };
   const float area2 = cross(b - a, c - a);
   if (std::fabs(area2) < 1e-6f) return;
@@ -199,9 +219,11 @@ void Canvas::Triangle(glm::vec2 a, glm::vec2 b, glm::vec2 c, const Color& color)
   const glm::vec2 corners[4] = {out(a, n_ab, n_ca), out(b, n_ab, n_bc), out(c, n_bc, n_ca), out(c, n_bc, n_ca)};
   // One quad whose 4th corner repeats the 3rd: its second half (0-2-3) is empty.
   ++BatchFor(nullptr, nullptr).quad_count;
-  for (const glm::vec2& p : corners) {
+  const Color colors[4] = {color_a, color_b, color_c, color_c};
+  for (int i = 0; i < 4; ++i) {
+    const glm::vec2& p = corners[i];
     const glm::vec2 uv(glm::dot(p - b, n_bc), glm::dot(p - c, n_ca));
-    vertices_.push_back({p, uv, color * modulate_, {kKindTriangle, glm::dot(p - a, n_ab), 0.0f, 0.0f}});
+    vertices_.push_back({p, uv, colors[i] * modulate_, {kKindTriangle, glm::dot(p - a, n_ab), 0.0f, 0.0f}});
   }
 }
 
@@ -220,50 +242,133 @@ void Canvas::Arc(glm::vec2 center, float radius, float thickness, float start, f
   AddQuad(nullptr, corners, local, color, {kKindArc, radius, thickness * 0.5f, half_sweep});
 }
 
-void Canvas::AddText(const Font& font, std::string_view text, glm::vec2 pen, float size, const Color& color, float edge,
-                     glm::vec2 pivot, glm::vec2 turn, glm::vec2 offset) {
-  glyph_scratch_.clear();
-  font.Layout(text, size, pen, glyph_scratch_);
-  const glm::vec4 params{kKindText, edge, font.DistanceRange(), 0.0f};
-  const bool turned = turn != glm::vec2(1.0f, 0.0f);
-  for (const GlyphQuad& q : glyph_scratch_) {
-    if (!turned) {
-      AddQuad(&font, q.min + offset, q.max + offset, q.uv_min, q.uv_max, color, params);
+namespace {
+
+// Clockwise on screen (y down) by `turn` = (cos, sin): x' = x cos - y sin, y' = x sin + y cos.
+glm::vec2 Turned(glm::vec2 d, glm::vec2 turn) { return {d.x * turn.x - d.y * turn.y, d.x * turn.y + d.y * turn.x}; }
+
+}  // namespace
+
+void Canvas::AddTextLayer(const Font& font, const TextFrame& frame, const TextLayer& layer) {
+  const glm::vec4 params{kKindText, layer.edge, font.DistanceRange(), layer.softness};
+  const bool vertical = layer.fill && layer.fill->direction == LinearGradient::Direction::Vertical;
+  const int axis = vertical ? 1 : 0;  // the one a gradient runs along
+  const float box_min = frame.box.min[axis];
+  const float box_size = std::max(frame.box.Size()[axis], 1e-6f);
+  // A glyph quad carries the font's whole field margin (Font::Padding), which only a glow reaches into: each layer's
+  // quads are trimmed to what its cut reaches, plus room for the edge's anti-aliasing (more atlas pixels when the text
+  // is drawn smaller than it was baked). A title font with a wide margin would otherwise shade mostly nothing, once
+  // per layer (TextMeshPro sizes its quads' padding by the material the same way).
+  const float units_per_texel = frame.size / std::max(font.BakeSize(), 1e-6f);
+  const float reach = font.Reach(layer.edge - layer.softness);
+  for (size_t g = 0; g < glyph_scratch_.size(); ++g) {
+    const GlyphFx& fx = fx_scratch_[g];
+    GlyphQuad q = glyph_scratch_[g];
+    const float texels_per_pixel = 1.0f / std::max(units_per_texel * pixels_per_unit_ * fx.scale, 1e-6f);
+    const float trim = std::max(font.Padding() - reach - (1.0f + 1.5f * std::max(texels_per_pixel, 1.0f)), 0.0f);
+    if (trim > 0.0f) {
+      const glm::vec2 extent = q.max - q.min;
+      const glm::vec2 cut = glm::min(glm::vec2(trim * units_per_texel), extent * 0.45f);
+      const glm::vec2 uv_cut = (q.uv_max - q.uv_min) * cut / glm::max(extent, glm::vec2(1e-6f));
+      q.min += cut;
+      q.max -= cut;
+      q.uv_min += uv_cut;
+      q.uv_max -= uv_cut;
+    }
+    const glm::vec2 spin(std::cos(fx.rotation), std::sin(fx.rotation));
+    // Glyph space -> screen: scaled and turned about the glyph's centre, the line turned about its pivot, then the
+    // effect's and the layer's offsets. Only the corners move: the atlas uvs ride along, and the shader's SDF
+    // anti-aliasing works from the uv's screen derivatives, so it holds at any angle and scale.
+    const auto place = [&](glm::vec2 p) {
+      p = fx.center + Turned((p - fx.center) * fx.scale, spin);
+      return frame.pivot + Turned(p - frame.pivot, frame.turn) + fx.offset + layer.offset;
+    };
+    // One quad, or with a gradient one strip per span between stops inside the glyph (each strip's colour varies
+    // along one axis only, so the two triangles agree), cut across the gradient's axis.
+    const auto strip = [&](float from, float to, const Color& c0, const Color& c1) {
+      if (to <= from) return;
+      glm::vec2 min = q.min, max = q.max, uv_min = q.uv_min, uv_max = q.uv_max;
+      const float extent = q.max[axis] - q.min[axis];
+      const float u0 = (from - q.min[axis]) / extent, u1 = (to - q.min[axis]) / extent;
+      min[axis] = from;
+      max[axis] = to;
+      uv_min[axis] = q.uv_min[axis] + (q.uv_max[axis] - q.uv_min[axis]) * u0;
+      uv_max[axis] = q.uv_min[axis] + (q.uv_max[axis] - q.uv_min[axis]) * u1;
+      const glm::vec2 corners[4] = {place(min), place({max.x, min.y}), place(max), place({min.x, max.y})};
+      const glm::vec2 uvs[4] = {uv_min, {uv_max.x, uv_min.y}, uv_max, {uv_min.x, uv_max.y}};
+      // Corner order: top left, top right, bottom right, bottom left.
+      const Color a = c0 * fx.tint, b = c1 * fx.tint;
+      const Color colors[4] = {a, vertical ? a : b, b, vertical ? b : a};
+      AddQuad(&font, corners, uvs, colors, params, layer.blend);
+    };
+    if (!layer.fill) {
+      strip(q.min[axis], q.max[axis], layer.color, layer.color);
       continue;
     }
-    // Only the corners turn: the atlas uvs ride along, and the shader's SDF anti-aliasing works from the uv's
-    // screen derivatives, so it holds at any angle.
-    const glm::vec2 local[4] = {q.min, {q.max.x, q.min.y}, q.max, {q.min.x, q.max.y}};
-    const glm::vec2 uvs[4] = {q.uv_min, {q.uv_max.x, q.uv_min.y}, q.uv_max, {q.uv_min.x, q.uv_max.y}};
-    glm::vec2 corners[4];
-    for (int i = 0; i < 4; ++i) {
-      const glm::vec2 d = local[i] - pivot;
-      corners[i] = pivot + glm::vec2(d.x * turn.x - d.y * turn.y, d.x * turn.y + d.y * turn.x) + offset;
+    const auto color_at = [&](float at) { return layer.fill->At((at - box_min) / box_size); };
+    float from = q.min[axis];
+    const size_t stops = std::min(layer.fill->count, LinearGradient::kMaxStops);
+    for (size_t s = 0; s < stops; ++s) {
+      const float cut = box_min + layer.fill->stops[s].at * box_size;
+      if (cut <= from || cut >= q.max[axis]) continue;
+      strip(from, cut, color_at(from), color_at(cut));
+      from = cut;
     }
-    AddQuad(&font, corners, uvs, color, params);
+    strip(from, q.max[axis], color_at(from), color_at(q.max[axis]));
   }
 }
 
 void Canvas::Text(const Font& font, std::string_view text, glm::vec2 position, float size, Align align,
-                  const TextStyle& style) {
+                  const TextStyle& style, const GlyphEffect& effect) {
   const float width = font.Measure(text, size);
   glm::vec2 pen = position;
   if (align == Align::Center) pen.x -= width * 0.5f;
   if (align == Align::Right) pen.x -= width;
   // From the middle of the line box (ascent..descent) down to the baseline.
   pen.y += (font.Ascent(size) - font.Descent(size)) * 0.5f;
-  // Clockwise on screen (y down): x' = x cos - y sin, y' = x sin + y cos.
-  const glm::vec2 turn =
-      style.rotation == 0.0f ? glm::vec2(1.0f, 0.0f) : glm::vec2(std::cos(style.rotation), std::sin(style.rotation));
 
-  // Back to front: shadow, outline, then the fill on top.
+  TextFrame frame;
+  frame.pivot = position;
+  if (style.rotation != 0.0f) frame.turn = {std::cos(style.rotation), std::sin(style.rotation)};
+  frame.box = {{pen.x, pen.y - font.Ascent(size)}, {pen.x + width, pen.y + font.Descent(size)}};
+  frame.size = size;
+
+  // Lay the glyphs out once; the effect (if any) runs once per glyph, and every layer follows it.
+  glyph_scratch_.clear();
+  font.Layout(text, size, pen, glyph_scratch_);
+  fx_scratch_.clear();
+  const int count = static_cast<int>(glyph_scratch_.size());
+  for (int i = 0; i < count; ++i) {
+    const GlyphQuad& q = glyph_scratch_[i];
+    GlyphFx fx;
+    fx.index = q.index;
+    fx.order = i;
+    fx.count = count;
+    fx.center = {(q.min.x + q.max.x) * 0.5f, frame.box.Center().y};
+    if (effect) effect(fx);
+    fx_scratch_.push_back(fx);
+  }
+
+  // Back to front: glow, shadow, outline, then the fill on top.
+  if (style.glow.color.a > 0.0f && style.glow.width > 0.0f) {
+    // Full at the glyph's edge (0.5), gone where the field says `width` out: cut halfway, softened half the span
+    // each way.
+    const float far = font.EdgeForOutline(style.glow.width);
+    AddTextLayer(font, frame,
+                 {.color = style.glow.color,
+                  .edge = (0.5f + far) * 0.5f,
+                  .softness = (0.5f - far) * 0.5f,
+                  .blend = style.glow.additive ? rendering::BlendMode::Additive : rendering::BlendMode::Alpha});
+  }
   const float outline_edge = font.EdgeForOutline(style.outline);
   if (style.shadow_offset != glm::vec2(0.0f)) {
-    AddText(font, text, pen, size, style.shadow_color, style.outline > 0.0f ? outline_edge : 0.5f, position, turn,
-            style.shadow_offset);
+    AddTextLayer(font, frame,
+                 {.color = style.shadow_color,
+                  .edge = style.outline > 0.0f ? outline_edge : 0.5f,
+                  .offset = style.shadow_offset});
   }
-  if (style.outline > 0.0f) AddText(font, text, pen, size, style.outline_color, outline_edge, position, turn);
-  AddText(font, text, pen, size, style.color, 0.5f, position, turn);
+  if (style.outline > 0.0f) AddTextLayer(font, frame, {.color = style.outline_color, .edge = outline_edge});
+  AddTextLayer(font, frame, {.color = style.color, .fill = style.fill.Empty() ? nullptr : &style.fill, .edge = 0.5f});
 }
 
 }  // namespace wlw::ui

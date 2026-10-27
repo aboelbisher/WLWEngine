@@ -11,6 +11,22 @@ listed under **Breaking** with its **Migration**. Shims added before that (`WLW_
 
 ## Unreleased
 
+- Text styles and per-glyph effects (ROADMAP 15.4; TextMeshPro's face/glow and per-character vertex animation,
+  Godot's RichTextEffect / CharFXTransform): `Canvas::Text(..., style, effect)` takes an optional `GlyphEffect`
+  (`std::function<void(GlyphFx&)>`), called once per glyph with its index, order, count and centre, returning an
+  offset, scale, rotation and tint that its glow, shadow, outline and fill all follow. `TextStyle::fill` (a
+  `LinearGradient`: Vertical over the line's height, Horizontal over its width; glyphs are cut into strips at the
+  stops) and `TextStyle::glow` (`TextGlow` {color, width, additive}: a soft layer from the same SDF, drawn first;
+  `UIVertex::params.w` = its softness in ui.frag, squared fall-off; an Additive glow is its own draw call).
+  `LinearGradient::At` / `Empty`. `Canvas::Triangle` with a colour per corner. `GlyphQuad::index`. Each text layer's
+  quads are trimmed to what its cut reaches (plus room for anti-aliasing), not the font's whole field margin: a glow
+  keeps it, a fill sheds it (four untrimmed layers of a title font baked with a wide margin cost ~0.4 ms on a Pixel 4).
+  `Font::Padding`, `Reach`, `BakeSize`. **Breaking:**
+  `TextStyle` gained `fill` (after `color`) and `glow` (after `shadow_color`). **Migration:** designated initializers
+  keep the declaration order (`.color, .outline, .shadow_offset` still compile). Tests: glyph effects (once per glyph,
+  offset / scale / turn about the centre, tint), gradient strips, glow layer and batches, layer trimming, corner colours;
+  golden
+  "text_styles" (reference from CI).
 - Distortion buffer (ROADMAP 13.7; Unreal's distortion pass, HDRP's distortion buffer), the general form of the
   ripples: `PostSettings::distortion` {enabled, scale = 0.5, strength, chroma}. Draws with `Material::distortion`
   don't colour the picture: they add screen offsets (how far the picture moves, viewport fractions, +y up) into an

@@ -848,6 +848,45 @@ TEST_CASE("canvas") {
   CheckGolden("canvas", viewport);
 }
 
+TEST_CASE("canvas text styles") {
+  // Text from one SDF atlas: a vertical gradient fill, an additive glow, glyphs moved one by one (a wave, a turned
+  // and scaled letter, a faded one), and rays fading towards their tips (per-corner triangle colours).
+  auto viewport = MakeViewport();
+  viewport->SetScene(nullptr);
+  const float size = gpu_tests::kSize;
+  viewport->Internal().BeginCanvases({size, size}, {size, size});
+  ui::Canvas& canvas = viewport->GetCanvas();
+  canvas.FillRect({{0, 0}, {size, size}}, Color{0.05f, 0.06f, 0.12f, 1.0f});
+  for (int i = 0; i < 8; ++i) {
+    const float a = static_cast<float>(i) * 0.785398f;
+    const glm::vec2 c(128, 190), tip = c + 120.0f * glm::vec2(std::cos(a), std::sin(a));
+    const glm::vec2 side = 14.0f * glm::vec2(-std::sin(a), std::cos(a));
+    canvas.Triangle(c, tip + side, tip - side, Color{1.0f, 0.8f, 0.3f, 0.5f}, Color{1.0f, 0.8f, 0.3f, 0.0f},
+                    Color{1.0f, 0.8f, 0.3f, 0.0f});
+  }
+  // A font with a wide distance field, so the glow has room.
+  const auto font = ui::Font::Load(WLW_TEST_FONT, {.bake_size = 48.0f, .padding = 12});
+  REQUIRE(font != nullptr);
+  ui::TextStyle gold = ui::TextStyle::Outlined({1, 1, 1, 1});
+  gold.fill =
+      ui::LinearGradient::Vertical({{0.25f, Color{1.0f, 0.95f, 0.6f, 1.0f}}, {0.75f, Color{1.0f, 0.55f, 0.1f, 1.0f}}});
+  gold.glow = {.color = {1.0f, 0.6f, 0.2f, 0.9f}, .width = 0.18f};
+  canvas.Text(*font, "MEGA!", {128, 70}, 56, ui::Align::Center, gold, [](ui::GlyphFx& fx) {
+    fx.offset.y = 8.0f * std::sin(static_cast<float>(fx.order) * 1.3f);  // a wave
+    if (fx.order == 2) {
+      fx.rotation = 0.35f;
+      fx.scale = 1.25f;
+    }
+    if (fx.order == 4) fx.tint.a = 0.4f;
+  });
+  ui::TextStyle cool;
+  cool.fill =
+      ui::LinearGradient::Horizontal({{0.0f, Color{0.4f, 0.8f, 1.0f, 1.0f}}, {1.0f, Color{0.9f, 0.4f, 1.0f, 1.0f}}});
+  cool.glow = {.color = {0.3f, 0.5f, 1.0f, 0.6f}, .width = 0.12f, .additive = false};
+  canvas.Text(*font, "COMBO x8", {128, 190}, 34, ui::Align::Center, cool);
+  CheckGolden("text_styles", viewport);
+}
+
 TEST_CASE("canvas gradient fades without darkening") {
   // Red to transparent black: halfway is red at half alpha (premultiplied blending), the same as a flat rect of it,
   // not the darker colour straight-alpha blending gives (half the red at half alpha).

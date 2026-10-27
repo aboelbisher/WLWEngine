@@ -615,7 +615,8 @@ is ~850 lines of C++ + ~225 of Kotlin).
   borders and strokes, soft shadows, a UI atlas, backdrop blur. New quad kinds keep 1.3b's shape:
   derivatives taken once in uniform control flow, each pixel computes only its own kind, textures
   read only by the kinds that need them, per-quad constants in flat varyings, precision named per
-  input (canvas coordinates highp, colour and coverage mediump).
+  input (canvas coordinates highp, colour and coverage mediump). In so far (2026-10-27, for Bluzzle's banners):
+  text gradient fills, SDF glows (a soft layer, params.w), per-glyph effects (GlyphFx), per-corner triangle colours.
 - [ ] **15.5 Widgets and layout.** An ID stack, scroll views (inertia, overscroll), virtualized lists,
   a text field (IME), slider, progress bar, checkbox and radio, dropdown, a modal stack,
   keyboard/gamepad focus navigation, flexbox-style immediate-mode layout, accessibility hooks

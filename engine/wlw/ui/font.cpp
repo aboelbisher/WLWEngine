@@ -44,6 +44,7 @@ Font::~Font() = default;
 
 bool Font::Bake(const FontOptions& options) {
   bake_size_ = options.bake_size;
+  padding_ = static_cast<float>(options.padding);
   const stbtt_fontinfo& info = impl_->info;
   impl_->scale = stbtt_ScaleForPixelHeight(&info, bake_size_);
   int ascent = 0, descent = 0, line_gap = 0;
@@ -146,6 +147,7 @@ void Font::Layout(std::string_view text, float size, glm::vec2 pen, std::vector<
       quad.max = quad.min + glyph.size * s;
       quad.uv_min = glyph.uv_min;
       quad.uv_max = glyph.uv_max;
+      quad.index = static_cast<int>(i);
       out.push_back(quad);
     }
     pen.x += glyph.advance * s;

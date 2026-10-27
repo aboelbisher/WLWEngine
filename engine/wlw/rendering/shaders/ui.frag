@@ -36,7 +36,8 @@ float ShapeCoverage(highp float d, highp vec2 g, highp vec2 dx, highp vec2 dy) {
 highp vec2 SignOf(highp vec2 v) { return mix(vec2(-1.0), vec2(1.0), step(0.0, v)); }
 
 // SDF text: the atlas stores the distance to the glyph's edge (0.5 = the edge); vParams.y is where
-// to cut (lower = thicker, for outlines), vParams.z = the field's range in atlas pixels (0 -> 1).
+// to cut (lower = thicker, for outlines), vParams.z = the field's range in atlas pixels (0 -> 1),
+// vParams.w = a softness for glows (0 = a crisp edge).
 // The range in screen pixels (the formula MSDF uses) sets the width, so the edge is anti-aliased
 // over ~1 pixel at any size.
 float TextCoverage(highp vec2 dx, highp vec2 dy) {
@@ -46,7 +47,11 @@ float TextCoverage(highp vec2 dx, highp vec2 dy) {
   highp float screen_px_range = max(0.5 * dot(unit_range, screen_tex_size), 1.0);
   // +-0.9 px: what the earlier fwidth(d) x 0.7 gave on average over edge directions.
   float w = 0.9 / screen_px_range;
-  return smoothstep(vParams.y - w, vParams.y + w, d);
+  if (vParams.w <= 0.0) return smoothstep(vParams.y - w, vParams.y + w, d);
+  // A soft layer (a glow): faded over +-vParams.w of the field instead, squared so it falls off like light
+  // (bright near the glyph, a long faint tail) rather than as an even ramp.
+  float soft = smoothstep(vParams.y - max(vParams.w, w), vParams.y + max(vParams.w, w), d);
+  return soft * soft;
 }
 
 // A rectangle with rounded corners: vUV = the position from its centre, vParams.yz = its half

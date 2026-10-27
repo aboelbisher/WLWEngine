@@ -168,6 +168,159 @@ TEST_CASE("canvas turned text") {
   }
 }
 
+// A glyph's box from its 4 corners (min, max), for the per-glyph tests.
+static std::pair<glm::vec2, glm::vec2> QuadBounds(const std::vector<UIVertex>& v, size_t quad) {
+  glm::vec2 min(1e9f), max(-1e9f);
+  for (size_t i = quad * 4; i < quad * 4 + 4; ++i) {
+    min = glm::min(min, v[i].position);
+    max = glm::max(max, v[i].position);
+  }
+  return {min, max};
+}
+
+TEST_CASE("canvas glyph effects") {
+  const Font& font = TestFont();
+  Canvas canvas;
+  canvas.Internal().BeginFrame({400.0f, 800.0f}, {400.0f, 800.0f});
+  const glm::vec2 at(200.0f, 100.0f);
+  canvas.Text(font, "H H", at, 40.0f, Align::Center);
+  const std::vector<UIVertex> flat = canvas.Vertices();
+  REQUIRE(flat.size() == 8);
+
+  // What the effect is told: the character index (the space has no glyph), the order among glyphs, the count, and
+  // a centre at the line's vertical middle. It runs once per glyph, however many layers the style draws.
+  canvas.Internal().BeginFrame({400.0f, 800.0f}, {400.0f, 800.0f});
+  std::vector<GlyphFx> seen;
+  canvas.Text(font, "H H", at, 40.0f, Align::Center, TextStyle::Outlined({1, 1, 1, 1}),
+              [&](GlyphFx& fx) { seen.push_back(fx); });
+  REQUIRE(seen.size() == 2);
+  CHECK((seen[0].index == 0 && seen[1].index == 2 && seen[0].order == 0 && seen[1].order == 1));
+  CHECK((seen[0].count == 2 && Near(seen[0].center.y, at.y) && seen[0].center.x < at.x && seen[1].center.x > at.x));
+  const auto [h_min, h_max] = QuadBounds(flat, 0);
+  CHECK(Near(seen[0].center.x, (h_min.x + h_max.x) * 0.5f, 1e-3f));
+
+  // Offset moves only its glyph; scale grows it about its centre; the tint multiplies its colour.
+  canvas.Internal().BeginFrame({400.0f, 800.0f}, {400.0f, 800.0f});
+  canvas.Text(font, "H H", at, 40.0f, Align::Center, {}, [](GlyphFx& fx) {
+    if (fx.order == 1) {
+      fx.offset = {0.0f, -10.0f};
+      fx.scale = 2.0f;
+      fx.tint = {1.0f, 1.0f, 1.0f, 0.5f};
+    }
+  });
+  const auto& moved = canvas.Vertices();
+  for (size_t i = 0; i < 4; ++i) CHECK((moved[i].position == flat[i].position && moved[i].color == flat[i].color));
+  const auto [a_min, a_max] = QuadBounds(flat, 1);
+  const auto [b_min, b_max] = QuadBounds(moved, 1);
+  // (Twice the size, give or take the trim: the margin kept for anti-aliasing is in screen pixels.)
+  CHECK(Near(b_max.x - b_min.x, (a_max.x - a_min.x) * 2.0f, 1.5f));
+  CHECK(Near((b_min.x + b_max.x) * 0.5f, seen[1].center.x, 1e-3f));
+  CHECK(Near(b_min.y + 10.0f, at.y - (at.y - a_min.y) * 2.0f, 1.5f));  // about the line middle, then up 10
+  CHECK(Near(moved[4].color.a, 0.5f));
+
+  // A quarter turn of one glyph about its centre: its corners go round, its uvs stay.
+  canvas.Internal().BeginFrame({400.0f, 800.0f}, {400.0f, 800.0f});
+  canvas.Text(font, "H H", at, 40.0f, Align::Center, {}, [](GlyphFx& fx) { fx.rotation = 1.5707963f; });
+  const auto& spun = canvas.Vertices();
+  for (size_t i = 0; i < 8; ++i) {
+    const glm::vec2 c = seen[i / 4].center, d = flat[i].position - c;
+    CHECK((Near(spun[i].position.x, c.x - d.y, 1e-3f) && Near(spun[i].position.y, c.y + d.x, 1e-3f)));
+    CHECK(spun[i].uv == flat[i].uv);
+  }
+}
+
+TEST_CASE("text gradient fill") {
+  const wlw::Color red{1, 0, 0, 1}, clear{0, 0, 0, 0}, blue{0, 0, 1, 1};
+  // Mixed premultiplied: halfway from red to transparent is still red, at half alpha (no dark middle).
+  const LinearGradient fade = LinearGradient::Vertical({{0.0f, red}, {1.0f, clear}});
+  CHECK(fade.At(0.5f) == wlw::Color(1.0f, 0.0f, 0.0f, 0.5f));
+  CHECK((fade.At(-1.0f) == red && fade.At(2.0f) == clear && LinearGradient{}.At(0.3f).a == 0.0f));
+
+  const Font& font = TestFont();
+  Canvas canvas;
+  canvas.Internal().BeginFrame({400.0f, 800.0f}, {400.0f, 800.0f});
+  TextStyle style;
+  style.fill = LinearGradient::Vertical({{0.5f, red}, {1.0f, blue}});
+  canvas.Text(font, "H", {200.0f, 100.0f}, 40.0f, Align::Center, style);
+  // The 'H' spans the line's middle (y = 100), where the gradient has a stop: strips meet there. Above it the fill
+  // is red, below it turns blue; strips run across, so each strip's top corners agree, and so do its bottom ones.
+  const auto& v = canvas.Vertices();
+  REQUIRE(canvas.QuadCount() >= 2);
+  bool cut_at_middle = false;
+  for (size_t i = 0; i < v.size(); ++i) {
+    cut_at_middle = cut_at_middle || Near(v[i].position.y, 100.0f, 1e-3f);
+    if (v[i].position.y <= 100.0f + 1e-3f) CHECK(v[i].color == red);
+    if (v[i].position.y > 101.0f) CHECK(v[i].color.b > 0.0f);
+    if (i % 4 == 0) CHECK((v[i].color == v[i + 1].color && v[i + 2].color == v[i + 3].color));
+    if (i % 4 == 0 && i > 0) CHECK(v[i].uv.y == v[i - 1].uv.y);  // the atlas is cut where the strips meet
+  }
+  CHECK(cut_at_middle);
+  CHECK(canvas.Batches().size() == 1);
+
+  // Horizontal: left to right across the whole line, so each glyph gets its part of the ramp.
+  canvas.Internal().BeginFrame({400.0f, 800.0f}, {400.0f, 800.0f});
+  style.fill = LinearGradient::Horizontal({{0.0f, red}, {1.0f, blue}});
+  canvas.Text(font, "HH", {200.0f, 100.0f}, 40.0f, Align::Center, style);
+  for (const UIVertex& a : v) {
+    for (const UIVertex& b : v) {
+      if (a.position.x < b.position.x - 1e-3f) CHECK(a.color.b <= b.color.b + 1e-5f);  // bluer to the right
+    }
+  }
+  CHECK(v.front().color.r > 0.5f);
+}
+
+TEST_CASE("text glow") {
+  const Font& font = TestFont();
+  Canvas canvas;
+  canvas.Internal().BeginFrame({400.0f, 800.0f}, {400.0f, 800.0f});
+  TextStyle style = TextStyle::Outlined({1, 1, 1, 1});
+  style.glow = {.color = {1.0f, 0.8f, 0.2f, 1.0f}, .width = 0.08f};
+  canvas.Text(font, "H", {200.0f, 100.0f}, 40.0f, Align::Center, style);
+  // Glow, shadow, outline, fill: the glow first, its own additive run, cut further out than the outline and soft.
+  REQUIRE(canvas.QuadCount() == 4);
+  const auto& v = canvas.Vertices();
+  const float far = font.EdgeForOutline(0.08f);
+  CHECK((Near(v[0].params.y, (0.5f + far) * 0.5f) && Near(v[0].params.w, (0.5f - far) * 0.5f)));
+  CHECK((v[4].params.w == 0.0f && v[12].params.w == 0.0f));  // the rest stay crisp
+  REQUIRE(canvas.Batches().size() == 2);
+  CHECK((canvas.Batches()[0].blend == wlw::rendering::BlendMode::Additive && canvas.Batches()[0].quad_count == 1));
+  CHECK(canvas.Batches()[1].blend == wlw::rendering::BlendMode::Alpha);
+
+  // Blended like a soft shadow: no extra run. No colour (alpha 0) or no width: no glow.
+  canvas.Internal().BeginFrame({400.0f, 800.0f}, {400.0f, 800.0f});
+  style.glow.additive = false;
+  canvas.Text(font, "H", {200.0f, 100.0f}, 40.0f, Align::Center, style);
+  CHECK((canvas.QuadCount() == 4 && canvas.Batches().size() == 1));
+  style.glow.width = 0.0f;
+  canvas.Text(font, "H", {200.0f, 100.0f}, 40.0f, Align::Center, style);
+  CHECK(canvas.QuadCount() == 7);
+}
+
+TEST_CASE("text layers trimmed to their reach") {
+  // A font with a wide field margin (12 atlas pixels): the glow uses all of it, the outline a few pixels, the fill
+  // only room for anti-aliasing. Each layer's quad is cut down to that, its atlas window with it.
+  const auto font = Font::Load(WLW_TEST_FONT, {.bake_size = 48.0f, .padding = 12});
+  REQUIRE(font != nullptr);
+  CHECK((font->Padding() == 12.0f && font->BakeSize() == 48.0f && font->Reach(0.5f) == 0.0f));
+  CHECK(Near(font->Reach(font->EdgeForOutline(0.1f)), 0.1f * 48.0f, 1e-3f));  // the outline's width, in texels
+  Canvas canvas;
+  canvas.Internal().BeginFrame({400.0f, 800.0f}, {400.0f, 800.0f});
+  TextStyle style = TextStyle::Outlined({1, 1, 1, 1});
+  style.shadow_offset = {};
+  style.glow = {.color = {1, 1, 1, 1}, .width = 0.3f};
+  canvas.Text(*font, "H", {200.0f, 100.0f}, 48.0f, Align::Center, style);
+  REQUIRE(canvas.QuadCount() == 3);  // glow, outline, fill
+  const auto& v = canvas.Vertices();
+  const auto width = [&](size_t quad) { return QuadBounds(v, quad).second.x - QuadBounds(v, quad).first.x; };
+  CHECK((width(0) > width(1) && width(1) > width(2)));
+  // At 1 unit per texel and 1 pixel per unit: the glow keeps the whole margin, the fill 2.5 of its 12 texels a side.
+  CHECK(Near(width(0) - width(2), 2.0f * (12.0f - 2.5f), 1e-3f));
+  // The uvs shrink in step: the same atlas texel stays under the same point.
+  const float uv_per_unit = (v[1].uv.x - v[0].uv.x) / (v[1].position.x - v[0].position.x);
+  CHECK(Near((v[9].uv.x - v[8].uv.x) / (v[9].position.x - v[8].position.x), uv_per_unit, 1e-5f));
+  CHECK(Near(v[8].uv.x - v[0].uv.x, uv_per_unit * (v[8].position.x - v[0].position.x), 1e-5f));
+}
+
 TEST_CASE("canvas keeps its fonts alive") {
   // Text from a font the caller lets go of before the frame is drawn still has its atlas.
   Canvas canvas;
@@ -480,6 +633,18 @@ TEST_CASE("canvas gradient") {
 }
 
 // Modulate scopes multiply every colour drawn inside them, nest, and end with their scope.
+TEST_CASE("canvas triangle corner colours") {
+  Canvas canvas;
+  canvas.Internal().BeginFrame({400.0f, 800.0f}, {400.0f, 800.0f});
+  const wlw::Color red{1, 0, 0, 1}, green{0, 1, 0, 1}, clear{1, 1, 1, 0};
+  canvas.Triangle({0, 0}, {100, 0}, {0, 100}, red, green, clear);  // a ray fading towards its tip
+  const auto& v = canvas.Vertices();
+  REQUIRE(v.size() == 4);
+  CHECK((v[0].color == red && v[1].color == green && v[2].color == clear && v[3].color == clear));
+  canvas.Triangle({0, 0}, {100, 0}, {0, 100}, red);  // one colour: all corners
+  CHECK((v[4].color == red && v[7].color == red));
+}
+
 TEST_CASE("canvas modulate") {
   Canvas canvas;
   canvas.Internal().BeginFrame({400.0f, 800.0f}, {400.0f, 800.0f});

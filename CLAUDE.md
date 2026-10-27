@@ -283,11 +283,14 @@ engine/wlw/
               shadow_map.h fits the light's box to the casters (texel-snapped)
   ui/         Two layers, like the big engines (Godot RenderingServer canvas vs Control nodes, Slate draw elements vs UMG):
               A. Canvas = the 2D DRAW LIST only: virtual units (reference size fits the screen), FillRect (rounded), Line,
-                 Text (Font: TTF -> SDF atlas; batches hold the Font's shared_ptr until drawn), Image(rect, texture, ImageStyle{tint, uv, blend}) = sprites, ShaderRect (a
+                 Text (Font: TTF -> SDF atlas; batches hold the Font's shared_ptr until drawn; TextStyle: fill colour or
+                 LinearGradient, outline, shadow, glow = a soft SDF layer (params.w softness, Additive by default), all one
+                 atlas; an optional GlyphEffect moves / scales / turns / tints each glyph, Godot's CharFXTransform), Image(rect,
+                 texture, ImageStyle{tint, uv, blend}) = sprites, ShaderRect (a
                  rect drawn by a material's shader). Batched by texture + blend (1000s of sprites = 1 draw call); UIRenderer
                  (GL) draws it. Blending belongs to what you draw with: Image's style, ShaderRect's material (canvas shaders
                  default Alpha, mesh shaders Opaque), UI shapes Alpha. No widgets, input or screen geometry in it.
-                 Shapes: Circle, Triangle (edge distances interpolated, AA), Arc/Ring (sdArc), all in the one UI shader
+                 Shapes: Circle, Triangle (edge distances interpolated, AA; optionally a colour per corner), Arc/Ring (sdArc), all in the one UI shader
                  (ui.frag: each pixel computes only its quad's kind, a flat varying; AA widths from the uv's derivatives by
                  the chain rule, text from the SDF's screen-pixel range = Font::DistanceRange in params.z; a new kind adds a
                  branch, never per-pixel work for the others).

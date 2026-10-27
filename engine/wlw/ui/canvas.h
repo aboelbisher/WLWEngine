@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cstdint>
+#include <functional>
 #include <initializer_list>
 #include <memory>
 #include <string_view>
@@ -33,31 +34,8 @@ struct ImageStyle {
   bool premultiplied = false;
 };
 
-// How text looks. Outline and shadow come from the same SDF atlas (see Font).
-struct TextStyle {
-  Color color{1.0f, 1.0f, 1.0f, 1.0f};
-  float outline = 0.0f;  // thickness as a fraction of the text size (~0.05 is bold); 0 = none
-  Color outline_color{0.0f, 0.0f, 0.0f, 1.0f};
-  glm::vec2 shadow_offset{0.0f};  // in Canvas units; zero = no shadow
-  Color shadow_color{0.0f, 0.0f, 0.0f, 0.5f};
-  // Turns the line about Text()'s `position` (its alignment point), in radians, clockwise on screen like Arc's
-  // angles (a slip pinned askew). The shadow still falls by shadow_offset on screen: the light doesn't turn.
-  float rotation = 0.0f;
-
-  // Chunky outlined text with a drop shadow: readable over anything (game HUDs).
-  static TextStyle Outlined(const Color& color, const Color& ink = {0.06f, 0.07f, 0.12f, 1.0f}, float alpha = 1.0f) {
-    TextStyle style;
-    style.color = color.Faded(alpha);
-    style.outline = 0.07f;
-    style.outline_color = ink.Faded(alpha);
-    style.shadow_offset = {0.0f, 3.0f};
-    style.shadow_color = {0.0f, 0.0f, 0.0f, 0.45f * alpha};
-    return style;
-  }
-};
-
-// A colour ramp for Canvas::FillRect: colours at positions 0..1 across the rect (0 = top or left), straight
-// alpha, blended linearly between stops (in premultiplied space, so a fade to transparent doesn't darken).
+// A colour ramp for Canvas::FillRect and text fills: colours at positions 0..1 across the rect (0 = top or left),
+// straight alpha, blended linearly between stops (in premultiplied space, so a fade to transparent doesn't darken).
 // Before the first stop and after the last, their colours hold. Up to kMaxStops; more are ignored.
 struct LinearGradient {
   enum class Direction { Vertical, Horizontal };  // top -> bottom, left -> right
@@ -78,6 +56,11 @@ struct LinearGradient {
   static LinearGradient Vertical(std::initializer_list<Stop> list) { return Of(Direction::Vertical, list); }
   static LinearGradient Horizontal(std::initializer_list<Stop> list) { return Of(Direction::Horizontal, list); }
 
+  bool Empty() const { return count == 0; }
+  // The colour at `t` (straight alpha), mixed in premultiplied space like the drawing does. Transparent white when
+  // empty.
+  Color At(float t) const;
+
  private:
   static LinearGradient Of(Direction direction, std::initializer_list<Stop> list) {
     LinearGradient gradient;
@@ -86,6 +69,61 @@ struct LinearGradient {
     return gradient;
   }
 };
+
+// A soft light around text, from the same distance field as the outline: full at the glyph's edge, gone `width`
+// out. Drawn first, behind the shadow and outline. How far it can reach is limited by the font's
+// FontOptions::padding (a font loaded for big glowing titles wants more padding than the HUD's).
+struct TextGlow {
+  Color color{1.0f, 1.0f, 1.0f, 0.0f};  // alpha 0 = no glow
+  float width = 0.15f;                  // as a fraction of the text size
+  // Adds light (reads as a glow on dark backgrounds, and colours above 1 feed bloom on an HDR picture layer);
+  // false blends it like a soft shadow. Additive glows are their own draw call.
+  bool additive = true;
+};
+
+// How text looks. Glow, outline and shadow come from the same SDF atlas (see Font).
+struct TextStyle {
+  Color color{1.0f, 1.0f, 1.0f, 1.0f};
+  // When it has stops, fills the glyphs instead of `color`: Vertical runs over the line's height (ascent to
+  // descent), Horizontal over its width, so the ramp sticks to the glyphs however they're moved (GlyphFx).
+  LinearGradient fill;
+  float outline = 0.0f;  // thickness as a fraction of the text size (~0.05 is bold); 0 = none
+  Color outline_color{0.0f, 0.0f, 0.0f, 1.0f};
+  glm::vec2 shadow_offset{0.0f};  // in Canvas units; zero = no shadow
+  Color shadow_color{0.0f, 0.0f, 0.0f, 0.5f};
+  TextGlow glow;
+  // Turns the line about Text()'s `position` (its alignment point), in radians, clockwise on screen like Arc's
+  // angles (a slip pinned askew). The shadow still falls by shadow_offset on screen: the light doesn't turn.
+  float rotation = 0.0f;
+
+  // Chunky outlined text with a drop shadow: readable over anything (game HUDs).
+  static TextStyle Outlined(const Color& color, const Color& ink = {0.06f, 0.07f, 0.12f, 1.0f}, float alpha = 1.0f) {
+    TextStyle style;
+    style.color = color.Faded(alpha);
+    style.outline = 0.07f;
+    style.outline_color = ink.Faded(alpha);
+    style.shadow_offset = {0.0f, 3.0f};
+    style.shadow_color = {0.0f, 0.0f, 0.0f, 0.45f * alpha};
+    return style;
+  }
+};
+
+// One glyph of a Text() call, handed to a per-glyph effect: it reads where the glyph is and writes how to move and
+// tint it (Godot's CharFXTransform, TextMeshPro's per-character vertex animation). The effect runs once per glyph
+// per call; the glyph's glow, shadow, outline and fill all follow it.
+struct GlyphFx {
+  // In:
+  int index = 0;           // its character's position in the string
+  int order = 0;           // 0..count-1 among the glyphs drawn (spaces have none): for staggers and sweeps
+  int count = 0;           // glyphs drawn
+  glm::vec2 center{0.0f};  // the middle of the glyph at the line's vertical middle, Canvas units (unturned line)
+  // Out (they start at "no change"):
+  glm::vec2 offset{0.0f};              // Canvas units, on screen (after the line's rotation)
+  float scale = 1.0f;                  // about `center`
+  float rotation = 0.0f;               // radians, clockwise on screen, about `center`
+  Color tint{1.0f, 1.0f, 1.0f, 1.0f};  // multiplies every layer's colour (alpha fades the glyph)
+};
+using GlyphEffect = std::function<void(GlyphFx&)>;
 
 // What the UI shader (shaders/ui.frag) draws for a quad: UIVertex::params.x. The values are ui.frag's
 // KIND_* defines (a test checks they agree); Shader quads are drawn by their material instead.
@@ -96,9 +134,10 @@ struct UIVertex {
   glm::vec2 position{0.0f};  // Canvas units
   glm::vec2 uv{0.0f};        // text: atlas coordinate; rect: position relative to the rect centre
   Color color{1.0f, 1.0f, 1.0f, 1.0f};
-  glm::vec4 params{0.0f};  // x = kind (QuadKind); text: y = SDF edge, z = Font::DistanceRange; rect: y,z = half size, w
-                           // = radius; triangle: uv.x, uv.y, y = distances to its 3 edges; arc: y = radius, z = half
-                           // thickness, w = half sweep; image: y = 1 if the texture is premultiplied
+  glm::vec4 params{0.0f};  // x = kind (QuadKind); text: y = SDF edge, z = Font::DistanceRange, w = softness (half the
+                           // fade in SDF values, 0 = anti-aliasing only: glows); rect: y,z = half size, w = radius;
+                           // triangle: uv.x, uv.y, y = distances to its 3 edges; arc: y = radius, z = half thickness,
+                           // w = half sweep; image: y = 1 if the texture is premultiplied
 };
 
 // A run of consecutive quads that can be drawn in one call: same blend mode, and at most one
@@ -139,7 +178,10 @@ class Canvas {
   // A filled circle.
   void Circle(glm::vec2 center, float radius, const Color& color);
   // A filled triangle (any winding), anti-aliased like the rest.
-  void Triangle(glm::vec2 a, glm::vec2 b, glm::vec2 c, const Color& color);
+  void Triangle(glm::vec2 a, glm::vec2 b, glm::vec2 c, const Color& color) { Triangle(a, b, c, color, color, color); }
+  // One colour per corner, blended across it (e.g. a light ray fading towards its tip).
+  void Triangle(glm::vec2 a, glm::vec2 b, glm::vec2 c, const Color& color_a, const Color& color_b,
+                const Color& color_c);
   // Part of a ring with round ends: `radius` to the middle of the stroke; angles in radians,
   // 0 = up (12 o'clock), growing clockwise; `sweep` 2*pi (or more) = a whole ring.
   void Arc(glm::vec2 center, float radius, float thickness, float start, float sweep, const Color& color);
@@ -148,8 +190,10 @@ class Canvas {
   }
   // A single line of text. `position` is where the alignment edge (left / centre / right)
   // meets the vertical middle of the line, so centring text on a point is just Align::Center.
+  // `effect` (optional) moves and tints each glyph (see GlyphFx): letters dropping in one by one, a wave, a shine
+  // sweeping across.
   void Text(const Font& font, std::string_view text, glm::vec2 position, float size, Align align = Align::Left,
-            const TextStyle& style = {});
+            const TextStyle& style = {}, const GlyphEffect& effect = {});
 
   // A rectangle drawn by a custom shader: the ShaderMaterial's Target::Canvas shader (see
   // rendering/shader.h) with its params; vUV goes 0..1 across the rect, vColor is `tint`. It blends
@@ -211,11 +255,26 @@ class Canvas {
                const glm::vec4& params);
   // One colour per corner (in the corners' order), before the modulate.
   void AddQuad(const Font* font, const glm::vec2 (&corners)[4], const glm::vec2 (&uvs)[4], const Color (&colors)[4],
-               const glm::vec4& params);
-  // `pen` = the unturned baseline start; the glyphs are turned by `turn` (cos, sin) about `pivot`, then moved by
-  // `offset`.
-  void AddText(const Font& font, std::string_view text, glm::vec2 pen, float size, const Color& color, float edge,
-               glm::vec2 pivot = {}, glm::vec2 turn = {1.0f, 0.0f}, glm::vec2 offset = {});
+               const glm::vec4& params, rendering::BlendMode blend = rendering::BlendMode::Alpha);
+
+  // One layer of a Text() call (glow, shadow, outline or fill): a colour or a gradient, where to cut the distance
+  // field, how softly, and a screen offset.
+  struct TextLayer {
+    Color color;
+    const LinearGradient* fill = nullptr;
+    float edge = 0.5f;
+    float softness = 0.0f;
+    glm::vec2 offset{0.0f};
+    rendering::BlendMode blend = rendering::BlendMode::Alpha;
+  };
+  // Where Text() put the line: its glyphs (glyph_scratch_) and their effects (fx_scratch_) are laid out already.
+  struct TextFrame {
+    glm::vec2 pivot{0.0f};       // Text()'s position: the line turns about it
+    glm::vec2 turn{1.0f, 0.0f};  // the line's rotation: cos, sin
+    Rect box;                    // the unturned line: pen x .. + width, ascent .. descent (for gradients)
+    float size = 0.0f;           // Text()'s size: atlas pixels -> units (trimming each layer's quads)
+  };
+  void AddTextLayer(const Font& font, const TextFrame& frame, const TextLayer& layer);
 
   glm::vec2 size_{1.0f};
   float pixels_per_unit_ = 1.0f;
@@ -223,6 +282,7 @@ class Canvas {
   std::vector<UIVertex> vertices_;
   std::vector<UIBatch> batches_;
   std::vector<GlyphQuad> glyph_scratch_;  // reused: no allocation per Text() call
+  std::vector<GlyphFx> fx_scratch_;       // one per glyph, when Text() has an effect
 };
 
 // For the engine (the Application begins every canvas's frame), not games.
