@@ -154,4 +154,18 @@ TEST_CASE("star and ring textures") {
   CHECK((utils::StarTexture(8) != nullptr && utils::RingTexture(8) != nullptr));
 }
 
+TEST_CASE("ring distortion texture") {
+  constexpr int size = 64;
+  const std::vector<uint8_t> ring = utils::RingDistortionPixels(size, 0.7f, 0.2f);
+  auto texel = [&](int x, int y, int channel) { return static_cast<int>(ring[(y * size + x) * 4 + channel]); };
+  // On the ring (22 texels out) the push is at full size and points outwards: red = x right, green = y UP.
+  CHECK((texel(32 + 22, 32, 3) > 240 && texel(32 + 22, 32, 0) > 250 && std::abs(texel(32 + 22, 32, 1) - 128) <= 8));
+  CHECK((texel(32 - 22, 32, 3) > 240 && texel(32 - 22, 32, 0) < 5));
+  CHECK((texel(32, 32 - 22, 3) > 240 && texel(32, 32 - 22, 1) > 250));  // the image's top row is up
+  CHECK((texel(32, 32 + 22, 3) > 240 && texel(32, 32 + 22, 1) < 5));
+  // No push at the centre or past the ring's width.
+  CHECK((texel(32, 32, 3) == 0 && texel(32 + 31, 32, 3) == 0 && texel(0, 0, 3) == 0));
+  CHECK(utils::RingDistortionTexture(8) != nullptr);
+}
+
 TEST_SUITE_END();

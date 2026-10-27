@@ -30,6 +30,7 @@ GLFormat ToGL(TextureFormat format) {
     case TextureFormat::RGBA8: return {GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE};
     case TextureFormat::R16F: return {GL_R16F, GL_RED, GL_FLOAT};
     case TextureFormat::RGBA16F: return {GL_RGBA16F, GL_RGBA, GL_FLOAT};
+    case TextureFormat::RG16F: return {GL_RG16F, GL_RG, GL_FLOAT};
   }
   return {GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE};
 }
@@ -230,7 +231,7 @@ bool HasGLExtension(const char* extension) {
 }
 
 bool CanRenderTo(TextureFormat format) {
-  if (format != TextureFormat::R16F && format != TextureFormat::RGBA16F) return true;
+  if (format != TextureFormat::R16F && format != TextureFormat::RGBA16F && format != TextureFormat::RG16F) return true;
 #if defined(WLW_GLES)
   // Asked once: the answer doesn't change.
   static const bool half_float_renderable =

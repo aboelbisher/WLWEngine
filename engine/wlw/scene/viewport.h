@@ -40,8 +40,12 @@ struct RenderStats {
   // Post passes (the 3D went into the scene picture first; see post_pass.h). A scaled viewport
   // without passes has one: the copy that stretches its picture (kUpscalePass).
   int post_passes = 0;
-  int post_targets = 0;   // textures the passes before the last write into
-  int bloom_levels = 0;   // of those steps, bloom levels (post_settings.h; 0 = no bloom)
+  int post_targets = 0;  // textures the passes before the last write into
+  int bloom_levels = 0;  // of those steps, bloom levels (post_settings.h; 0 = no bloom)
+  // Draws into the distortion buffer (DistortionSettings; counted in draw_calls too) and its size (0 = not drawn).
+  int distortion_draws = 0;
+  int distortion_width = 0;
+  int distortion_height = 0;
   float post_us = 0.0f;   // their GL calls
   int invalidations = 0;  // glInvalidateFramebuffer calls (phones: pictures not loaded / stored)
   // The format its 3D was drawn in: EffectiveFormat(), or RGBA8 where the GPU fell back.

@@ -266,6 +266,9 @@ TEST_CASE("settings re-plan the chain") {
   CHECK(rendering::PostSettings{.tone_map = {.dither = true}}.NeedsOutputPass());
   CHECK(rendering::PostSettings{.vignette = {.intensity = 0.2f}}.NeedsOutputPass());
   CHECK(rendering::PostSettings{.chromatic_aberration = {.intensity = 0.01f}}.Distorts());
+  // The distortion buffer: the output pass runs while it's on (to read it), whether or not anything draws into it.
+  CHECK((rendering::PostSettings{.distortion = {.enabled = true}}.NeedsOutputPass() &&
+         !rendering::PostSettings{.distortion = {.enabled = true}}.Distorts()));
   // A ripple only while it pushes: the output pass comes and goes with a shockwave.
   rendering::PostSettings rippled;
   rippled.ripples[2] = {.radius = 0.3f, .strength = 0.0f};

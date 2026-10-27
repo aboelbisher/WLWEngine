@@ -173,6 +173,13 @@ class PostChain {
     return index == kSceneTarget ? scene_target_->GetTexture() : targets_[static_cast<size_t>(index)]->GetTexture();
   }
   int TargetCount() const { return static_cast<int>(targets_.size()); }
+  // The distortion buffer (DistortionSettings) at `size`: made the first time a frame draws into it, then kept.
+  RenderTarget& DistortionTarget(glm::ivec2 size) {
+    if (!distortion_target_) distortion_target_ = RenderTarget::Create({TextureFormat::RG16F, /*smooth=*/true});
+    distortion_target_->SetSize(size.x, size.y);
+    return *distortion_target_;
+  }
+  bool HasDistortionTarget() const { return distortion_target_ != nullptr; }
 
   std::vector<PostPass> passes_;
   PostSettings settings_;
@@ -185,7 +192,8 @@ class PostChain {
   std::shared_ptr<RenderTarget> scene_target_;
   RenderTargetSettings scene_settings_;  // as asked for (the GPU may fall back)
   std::vector<std::shared_ptr<RenderTarget>> targets_;
-  std::vector<TextureFormat> target_formats_;  // as asked for
+  std::vector<TextureFormat> target_formats_;        // as asked for
+  std::shared_ptr<RenderTarget> distortion_target_;  // null until something distorts
 };
 
 // For the renderer, not games (see the private members of the same names for what they do).
@@ -201,6 +209,8 @@ class PostChain::InternalAccess {
   RenderTarget& Target(int index) const { return chain_.Target(index); }
   const std::shared_ptr<WTexture2D>& TextureOf(int index) const { return chain_.TextureOf(index); }
   int TargetCount() const { return chain_.TargetCount(); }
+  RenderTarget& DistortionTarget(glm::ivec2 size) const { return chain_.DistortionTarget(size); }
+  bool HasDistortionTarget() const { return chain_.HasDistortionTarget(); }
 
  private:
   PostChain& chain_;

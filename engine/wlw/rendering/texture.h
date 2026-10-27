@@ -14,7 +14,8 @@ namespace wlw::rendering {
 // How a texture stores its texels. The 8-bit formats take bytes, the 16F ones floats (kept on the
 // GPU as half floats: ~3 significant digits, enough for data like a height field, and filterable
 // on every GLES 3.0 device, unlike 32-bit floats).
-enum class TextureFormat { R8, RGB8, RGBA8, R16F, RGBA16F };
+// RG16F: two signed values per texel (screen offsets: the distortion buffer, post_settings.h).
+enum class TextureFormat { R8, RGB8, RGBA8, R16F, RGBA16F, RG16F };
 
 // Bytes per texel of the data a game passes in (floats for the 16F formats).
 size_t TexelBytes(TextureFormat format);

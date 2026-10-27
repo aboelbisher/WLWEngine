@@ -11,7 +11,8 @@
 // (Viewport::Post().Settings()), like Godot's Environment, Unity's Volume profile or Unreal's post
 // process settings. The effects run in a fixed order, whatever order the game sets them in:
 //
-//   3D -> Picture canvas layers -> the game's post passes -> bloom -> output pass -> Overlay canvas layers
+//   3D -> Picture canvas layers -> distortion pass -> the game's post passes -> bloom -> output pass
+//      -> Overlay canvas layers
 //
 // The OUTPUT PASS is the frame's last full-screen pass (Unity URP's UberPost, Unreal's Tonemapper,
 // Godot's tonemap pass): it reads the HDR scene picture once and writes the destination, doing
@@ -97,14 +98,35 @@ struct VignetteSettings {
   Color color{0.0f, 0.0f, 0.0f, 1.0f};
 };
 
+// The distortion buffer: the general form of the ripples (Unreal's distortion pass, HDRP's distortion buffer).
+// Draws with a distortion material (Material::distortion: billboards, particles, a game's shader) don't colour the
+// picture; they add screen offsets into a small two-channel float target (RG16F), after the 3D and Picture layers,
+// and the output pass reads the picture from moved places there. So distortion has any shape and count and sits in
+// the world (a ring around an explosion, heat over a fire, a lens), unlike the ripples' screen-space rings.
+//
+// An offset is how far the picture under it moves, as fractions of the viewport (x of its width, y of its height;
+// +y up). Offsets add up (overlapping rings bend more). The buffer is smaller than the picture (distortion is
+// smooth: half size looks the same) and isn't depth-tested: a ring in front of or behind a cube bends it the same
+// (what top-down and 2D games want; a full-size buffer with the scene's depth is a later option). It costs nothing
+// on frames where nothing draws into it (no target cleared, no read). Needs a GPU that draws into half floats
+// (EXT_color_buffer_half_float on GLES 3.0, nearly every phone): without it the draws are skipped (logged once).
+struct DistortionSettings {
+  bool enabled = false;
+  float scale = 0.5f;     // the buffer's size as a fraction of the viewport's (0.5 = a quarter of the pixels)
+  float strength = 1.0f;  // multiplies every offset (0 = none, as if off)
+  float chroma = 0.0f;    // colour split: red moves (1 + chroma) as far, blue (1 - chroma), as Ripple::chroma
+};
+
 struct PostSettings {
   ToneMapSettings tone_map;
   BloomSettings bloom;
   std::array<Ripple, kMaxRipples> ripples{};  // inactive ones cost nothing
   ChromaticAberrationSettings chromatic_aberration;
   VignetteSettings vignette;
+  DistortionSettings distortion;
 
-  // Whether the picture is read from moved places (ripples or chromatic aberration).
+  // Whether the picture is read from moved places by the ripples or chromatic aberration (the distortion buffer
+  // decides per frame: whether anything drew into it).
   bool Distorts() const {
     return chromatic_aberration.intensity != 0.0f ||
            std::any_of(ripples.begin(), ripples.end(), [](const Ripple& ripple) { return ripple.Active(); });
@@ -112,7 +134,7 @@ struct PostSettings {
   // Whether the output pass runs: off when every setting is at its "do nothing" value.
   bool NeedsOutputPass() const {
     return tone_map.mapper != ToneMapper::Clamp || tone_map.exposure != 1.0f || tone_map.dither || bloom.enabled ||
-           vignette.intensity > 0.0f || Distorts();
+           vignette.intensity > 0.0f || distortion.enabled || Distorts();
   }
 };
 

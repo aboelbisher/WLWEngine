@@ -133,7 +133,7 @@ class GLRenderingDriver : public RenderingDriver {
     glBindFramebuffer(GL_FRAMEBUFFER, GLFramebuffer(target));
     glPixelStorei(GL_PACK_ALIGNMENT, 1);
     const TextureFormat format = target.Settings().format;
-    if (format == TextureFormat::R16F || format == TextureFormat::RGBA16F) {
+    if (format == TextureFormat::R16F || format == TextureFormat::RG16F || format == TextureFormat::RGBA16F) {
       // Float targets read back as floats (the pair GLES guarantees for them).
       std::vector<float> values(texels * 4);
       glReadPixels(0, 0, width, height, GL_RGBA, GL_FLOAT, values.data());
@@ -238,10 +238,11 @@ class GLRenderingDriver : public RenderingDriver {
             QuadProgramFor(QuadShader::Sprite,
                            MaterialTexture(static_cast<const scene::SpriteBatch&>(node).GetMaterial()) != nullptr);
             break;
-          case scene::NodeKind::BillboardBatch:
-            QuadProgramFor(QuadShader::Billboard,
-                           MaterialTexture(static_cast<const scene::BillboardBatch&>(node).GetMaterial()) != nullptr);
+          case scene::NodeKind::BillboardBatch: {
+            const auto& material = static_cast<const scene::BillboardBatch&>(node).GetMaterial();
+            QuadProgramFor(BillboardShader(material.get()), MaterialTexture(material) != nullptr);
             break;
+          }
           case scene::NodeKind::Light: {
             const auto* light = static_cast<const scene::Light3D*>(&node);
             frame.lights.push_back(light);
@@ -275,8 +276,8 @@ class GLRenderingDriver : public RenderingDriver {
     };
     for (const auto& viewport : window.Viewports()) warm(*viewport);
     warm(window.MainViewport());
-    OutputMaterial();   // made now so the warm-up compiles it (any viewport may turn tone mapping on later)
-    MakeBloomPasses();  // the same for bloom
+    MakeOutputPasses();  // made now so the warm-up compiles them (any viewport may turn tone mapping on later)
+    MakeBloomPasses();   // the same for bloom
     // Every game shader and texture alive now (canvas shaders too: no scene says they're needed).
     const int custom = PrepareAliveResources();
     warmed_up_ = true;
@@ -333,7 +334,12 @@ class GLRenderingDriver : public RenderingDriver {
     frame_.Clear();
     draw_items_.clear();
     draw_order_.clear();
+    distortion_order_.clear();
     node_slots_.clear();
+    frame_distortion_ = nullptr;
+    // Distortion draws go to their own list only when their buffer can be read (the output pass runs); otherwise
+    // they're skipped, never drawn into the picture as colour.
+    distortion_on_ = post != nullptr && viewport.Post().EffectiveSettings().distortion.enabled && CanDrawDistortion();
     const auto start = Clock::now();
     if (draw_scene) {
       WLW_PROFILE_SCOPE("Gather");
@@ -409,6 +415,8 @@ class GLRenderingDriver : public RenderingDriver {
     if (post) {
       // Nothing reads the scene picture's depth after its 3D: not written back to memory.
       if (has_depth) stats.invalidations += Invalidate(scene_framebuffer, /*color=*/false, /*depth=*/true);
+      // After the Picture layers (so the picture is finished and stored once), before the output pass reads it.
+      if (!distortion_order_.empty()) stats.invalidations += DrawDistortionPass(viewport, render, stats);
       const auto post_start = Clock::now();
       stats.invalidations += DrawPostPasses(viewport.Post(), *post, destination, viewport.Internal().Id());
       stats.post_passes = static_cast<int>(post->steps.size());
@@ -563,6 +571,11 @@ class GLRenderingDriver : public RenderingDriver {
         glUniform1i(shader->Location(uniform), unit);
         ++unit;
       }
+      if (step.pass == kOutputPass && frame_distortion_) {  // its DISTORTION_BUFFER variant (OutputPass)
+        BindGLTexture(*frame_distortion_, static_cast<unsigned int>(unit));
+        glUniform1i(shader->Location("uDistortion"), unit);
+        ++unit;
+      }
       if (material) shader->ApplyParams(*material, unit);
       glDrawArrays(GL_TRIANGLES, 0, 3);
     }
@@ -574,38 +587,48 @@ class GLRenderingDriver : public RenderingDriver {
     return invalidations;
   }
 
-  // The output pass (post_settings.h): one engine shader, shared by every viewport; its params are
-  // set from the viewport's settings just before it draws.
-  const std::shared_ptr<ShaderMaterial>& OutputMaterial() {
-    if (!output_pass_.material) {
-      const std::string* text = FindShaderFile("post/output.glsl");
-      output_pass_.material = ShaderMaterial::Create(Shader::Create(text ? *text : std::string(), "post/output.glsl"));
+  // The output pass (post_settings.h): one engine shader in variants (post/output.glsl's defines), each
+  // shared by every viewport; the variant is picked and its params set from the viewport's settings just
+  // before it draws. All are made at start, so the warm-up compiles them: the first big effect of a game
+  // (a shockwave) doesn't wait for a shader to compile.
+  void MakeOutputPasses() {
+    if (output_passes_[0].material) return;
+    const std::string* text = FindShaderFile("post/output.glsl");
+    for (uint32_t key = 0; key < kOutputVariants; ++key) {
+      std::vector<std::string> defines;
+      if (key & kOutputDistort) defines.emplace_back("DISTORT");
+      if (key & kOutputBloom) defines.emplace_back("BLOOM");
+      if (key & kOutputBuffer) defines.emplace_back("DISTORTION_BUFFER");
+      output_passes_[key] = {
+          .material = ShaderMaterial::Create(Shader::Create(text ? *text : std::string(), "post/output.glsl", defines)),
+          .name = "Output"};
     }
-    return output_pass_.material;
   }
   const PostPass& OutputPass(const PostSettings& settings, bool bloom) {
-    ShaderMaterial& material = *OutputMaterial();
+    MakeOutputPasses();
+    const bool distorts = settings.Distorts();
+    const uint32_t key =
+        (distorts ? kOutputDistort : 0u) | (bloom ? kOutputBloom : 0u) | (frame_distortion_ ? kOutputBuffer : 0u);
+    ShaderMaterial& material = *output_passes_[key].material;
+    if (frame_distortion_) {
+      material.SetParam("uDistortionPush", glm::vec2(settings.distortion.strength, settings.distortion.chroma));
+    }
     const ToneMapSettings& tone_map = settings.tone_map;
     material.SetParam("uExposure", tone_map.exposure);
     material.SetParam("uShoulder", tone_map.mapper == ToneMapper::Shoulder ? 1.0f : 0.0f);
     material.SetParam("uDither", tone_map.dither ? 1.0f : 0.0f);
-    material.SetParam("uBloomIntensity", bloom ? std::max(settings.bloom.intensity, 0.0f) : 0.0f);
+    if (bloom) material.SetParam("uBloomIntensity", std::max(settings.bloom.intensity, 0.0f));
     // Ripples and the vignette: centres from top-left (the settings') to the texture's bottom-left.
-    const bool distorts = settings.Distorts();
-    material.SetParam("uDistort", distorts ? 1.0f : 0.0f);
     if (distorts) {
-      glm::mat4 rings(0.0f);
-      glm::vec4 strength(0.0f), chroma(0.0f);
-      for (int i = 0; i < kMaxRipples; ++i) {
-        const Ripple& ripple = settings.ripples[static_cast<size_t>(i)];
+      std::vector<glm::vec4> rings(kMaxRipples, glm::vec4(0.0f)), push(kMaxRipples, glm::vec4(0.0f));
+      for (size_t i = 0; i < kMaxRipples; ++i) {
+        const Ripple& ripple = settings.ripples[i];
         if (!ripple.Active()) continue;
         rings[i] = {ripple.center.x, 1.0f - ripple.center.y, ripple.radius, ripple.width};
-        strength[i] = ripple.strength;
-        chroma[i] = ripple.chroma;
+        push[i] = {ripple.strength, ripple.chroma, 0.0f, 0.0f};
       }
-      material.SetParam("uRipples", rings);
-      material.SetParam("uRippleStrength", strength);
-      material.SetParam("uRippleChroma", chroma);
+      material.SetParam("uRings", std::move(rings));
+      material.SetParam("uRingPush", std::move(push));
       material.SetParam("uChroma", settings.chromatic_aberration.intensity);
     }
     const VignetteSettings& vignette = settings.vignette;
@@ -613,7 +636,7 @@ class GLRenderingDriver : public RenderingDriver {
                       glm::vec4(vignette.center.x, 1.0f - vignette.center.y, std::clamp(vignette.intensity, 0.0f, 1.0f),
                                 std::clamp(vignette.smoothness, 0.01f, 1.0f)));
     material.SetParam("uVignetteColor", vignette.color);
-    return output_pass_;
+    return output_passes_[key];
   }
 
   // The bloom's steps (post_settings.h): two engine shaders, one material each, shared by every
@@ -740,6 +763,13 @@ class GLRenderingDriver : public RenderingDriver {
         // engine's shader.
         if (item.custom) item.custom_program = GLShaderFor(*item.custom->GetShader());
         if (!item.custom_program) item.custom = nullptr;
+        if (item.material && item.material->distortion) {  // into the distortion buffer: a game shader only
+          if (distortion_on_ && item.custom) {
+            distortion_order_.push_back(static_cast<uint32_t>(draw_items_.size()));
+            draw_items_.push_back(item);
+          }
+          continue;
+        }
         GLuint program = 0;
         if (item.custom) {
           program = item.custom_program->Program();
@@ -764,17 +794,26 @@ class GLRenderingDriver : public RenderingDriver {
     for (const VisibleSet::Sprites& sprites : visible_.sprites)
       AddQuadItem(QuadShader::Sprite, sprites.batch, sprites.batch->GetMaterial(), sprites.model, sprites.depth);
     for (const VisibleSet::Billboards& billboards : visible_.billboards) {
-      AddQuadItem(QuadShader::Billboard, billboards.batch, billboards.batch->GetMaterial(), billboards.model,
-                  billboards.depth);
+      const std::shared_ptr<Material>& material = billboards.batch->GetMaterial();
+      AddQuadItem(BillboardShader(material.get()), billboards.batch, material, billboards.model, billboards.depth);
     }
   }
 
-  // The engine programs that draw instanced quads (one per batch type).
-  enum class QuadShader : uint8_t { Sprite, Billboard };
+  // The engine programs that draw instanced quads (one per batch type; billboards with a distortion material
+  // have their own: they write offsets, not colour).
+  enum class QuadShader : uint8_t { Sprite, Billboard, BillboardDistortion };
+  static constexpr int kQuadShaders = 3;
+  static QuadShader BillboardShader(const Material* material) {
+    return material && material->distortion ? QuadShader::BillboardDistortion : QuadShader::Billboard;
+  }
 
-  // A sprite or billboard batch's draw item: its program (plain or TEXTURED), blend and sort key.
+  // A sprite or billboard batch's draw item: its program (plain or TEXTURED), blend and sort key. A distortion
+  // billboard batch goes to the distortion list instead (only while the viewport's distortion is on); a distortion
+  // sprite batch isn't drawn (sprites can't distort).
   void AddQuadItem(QuadShader shader, scene::Node3D* batch, const std::shared_ptr<Material>& material,
                    const glm::mat4& model, float depth) {
+    const bool distortion = material && material->distortion;
+    if (distortion && (shader != QuadShader::BillboardDistortion || !distortion_on_)) return;
     const WTexture* texture = MaterialTexture(material);
     const QuadProgram& program = QuadProgramFor(shader, texture != nullptr);
     if (program.id == 0) return;  // didn't compile (logged)
@@ -791,6 +830,10 @@ class GLRenderingDriver : public RenderingDriver {
     if (texture) item.texture = GLTexture(*texture);
     const auto index = static_cast<uint32_t>(draw_items_.size());
     draw_items_.push_back(item);
+    if (distortion) {
+      distortion_order_.push_back(index);
+      return;
+    }
     const uint64_t key = item.blend == BlendMode::Opaque ? OpaqueSortKey(program.id, item.texture, depth)
                                                          : TransparentSortKey(depth, program.id);
     draw_order_.push_back({key, index});
@@ -858,32 +901,81 @@ class GLRenderingDriver : public RenderingDriver {
       if (i == sky_position) DrawSky(*skybox);
       const DrawOrder& order = draw_order_[i];
       const DrawItem& item = draw_items_[order.item];
-      const NodeSlot& slot = node_slots_[item.node_slot];
       state_.SetBlendMode(item.blend);
       state_.SetDepthWrite(item.depth_write);
       if (IsTransparentKey(order.key)) ++stats.transparent_draw_calls;
-      const glm::mat4& model = slot.model;
-      if (item.quads) {
-        DrawQuads(item, model, stats);
-        continue;
-      }
-      if (item.custom) {
-        UseShaderMaterial(*item.custom, *item.custom_program, slot, *item.node, IsMultiMesh(*item.node),
-                          frame.shadow_active && item.node->ReceivesShadow());
-      } else {
-        const MeshProgram& program = *item.program;
-        state_.UseProgram(program.id);
-        glUniformMatrix4fv(program.model, 1, GL_FALSE, glm::value_ptr(model));
-        glUniformMatrix3fv(program.normal_matrix, 1, GL_FALSE, glm::value_ptr(slot.normal_matrix));
-        glUniform1f(program.shininess, item.material ? item.material->shininess : 32.0f);
-        if (item.texture) state_.BindTexture0(item.texture);
-      }
-      DrawMesh(*item.node, *item.mesh, slot.instances, &stats);
+      DrawListItem(item, frame, stats);
     }
     if (sky_position == draw_order_.size()) DrawSky(*skybox);  // nothing transparent
 
     state_.SetBlendMode(BlendMode::Opaque);  // back to the defaults for whatever draws next
     state_.SetDepthWrite(true);
+  }
+
+  // One draw-list item with the blend and depth state already set: a batch's quads, or a mesh with its game
+  // shader or engine variant.
+  struct DrawItem;  // (below)
+  void DrawListItem(const DrawItem& item, const Frame& frame, scene::RenderStats& stats) {
+    const NodeSlot& slot = node_slots_[item.node_slot];
+    const glm::mat4& model = slot.model;
+    if (item.quads) {
+      DrawQuads(item, model, stats);
+      return;
+    }
+    if (item.custom) {
+      UseShaderMaterial(*item.custom, *item.custom_program, slot, *item.node, IsMultiMesh(*item.node),
+                        frame.shadow_active && item.node->ReceivesShadow());
+    } else {
+      const MeshProgram& program = *item.program;
+      state_.UseProgram(program.id);
+      glUniformMatrix4fv(program.model, 1, GL_FALSE, glm::value_ptr(model));
+      glUniformMatrix3fv(program.normal_matrix, 1, GL_FALSE, glm::value_ptr(slot.normal_matrix));
+      glUniform1f(program.shininess, item.material ? item.material->shininess : 32.0f);
+      if (item.texture) state_.BindTexture0(item.texture);
+    }
+    DrawMesh(*item.node, *item.mesh, slot.instances, &stats);
+  }
+
+  // --- 6. DISTORTION PASS: the distortion draws' offsets into the viewport's buffer (post_settings.h) ---
+  // Its own small target, cleared to "no offset"; the draws add up (Additive) with no depth test. The output pass
+  // reads it after (frame_distortion_). Returns the framebuffer invalidations it made.
+  int DrawDistortionPass(scene::Viewport& viewport, glm::ivec2 render, scene::RenderStats& stats) {
+    WLW_PROFILE_SCOPE("Distortion pass");
+    WLW_PROFILE_GPU_ZONE("Distortion pass");
+    const float scale = std::clamp(viewport.Post().Settings().distortion.scale, 0.05f, 1.0f);
+    const glm::ivec2 size{std::max(1, static_cast<int>(std::lround(static_cast<float>(render.x) * scale))),
+                          std::max(1, static_cast<int>(std::lround(static_cast<float>(render.y) * scale)))};
+    RenderTarget& target = viewport.Post().Internal().DistortionTarget(size);
+    const GLuint framebuffer = GLFramebuffer(target);
+    glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+    glViewport(0, 0, size.x, size.y);
+    const int invalidations = Invalidate(framebuffer, /*color=*/true, /*depth=*/false);  // cleared next: not loaded
+    glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
+    glDisable(GL_DEPTH_TEST);
+    state_.SetDepthWrite(false);
+    state_.SetBlendMode(BlendMode::Additive);
+    const int calls_before = stats.draw_calls;
+    for (const uint32_t index : distortion_order_) DrawListItem(draw_items_[index], frame_, stats);
+    glEnable(GL_DEPTH_TEST);
+    state_.SetBlendMode(BlendMode::Opaque);
+    state_.SetDepthWrite(true);
+    stats.distortion_draws = stats.draw_calls - calls_before;
+    stats.distortion_width = size.x;
+    stats.distortion_height = size.y;
+    frame_distortion_ = target.GetTexture().get();
+    return invalidations;
+  }
+
+  // Whether this GPU draws into the distortion buffer's format (RG16F); asked once, logged once if not.
+  bool CanDrawDistortion() {
+    if (distortion_supported_ == 0) {
+      distortion_supported_ = CanRenderTo(TextureFormat::RG16F) ? 1 : -1;
+      if (distortion_supported_ < 0) {
+        WLW_LOG(LogRender, Warning, "Distortion off: this GPU can't draw into half floats (RG16F)");
+      }
+    }
+    return distortion_supported_ > 0;
   }
 
   // The draw's features, which pick its shader variant.
@@ -940,7 +1032,6 @@ class GLRenderingDriver : public RenderingDriver {
     return buffer;
   }
 
-  struct DrawItem;  // (below)
   // A sprite or billboard batch: its quads to the GPU if they changed (16 / 40 bytes each), then one instanced call.
   void DrawQuads(const DrawItem& item, const glm::mat4& model, scene::RenderStats& stats) {
     const GLQuadBuffer* buffer = nullptr;
@@ -1097,14 +1188,17 @@ class GLRenderingDriver : public RenderingDriver {
 
   // A sprite / billboard batches' program: plain (the dot computed) or TEXTURED (the shape from its texture).
   const QuadProgram& QuadProgramFor(QuadShader shader, bool textured) {
-    const int kind = shader == QuadShader::Sprite ? 0 : 1;
+    const auto kind = static_cast<int>(shader);
     QuadProgram& program = quad_programs_[kind][textured ? 1 : 0];
     if (program.id != 0 || quad_failed_[kind][textured ? 1 : 0]) return program;
     const auto start = std::chrono::steady_clock::now();
-    const char* name = kind == 0 ? "sprite" : "billboard";
-    program.id =
-        BuildEngineProgram(kind == 0 ? "sprite.vert" : "billboard.vert", kind == 0 ? "sprite.frag" : "billboard.frag",
-                           textured ? std::vector<std::string>{"TEXTURED"} : std::vector<std::string>{});
+    static constexpr const char* kNames[kQuadShaders] = {"sprite", "billboard", "billboard DISTORTION"};
+    const char* name = kNames[kind];
+    std::vector<std::string> defines;
+    if (textured) defines.emplace_back("TEXTURED");
+    if (shader == QuadShader::BillboardDistortion) defines.emplace_back("DISTORTION");
+    program.id = BuildEngineProgram(kind == 0 ? "sprite.vert" : "billboard.vert",
+                                    kind == 0 ? "sprite.frag" : "billboard.frag", defines);
     if (program.id == 0) {
       quad_failed_[kind][textured ? 1 : 0] = true;  // logged once, not retried every frame
       return program;
@@ -1202,7 +1296,7 @@ class GLRenderingDriver : public RenderingDriver {
       DeleteShadowMap();
       glDeleteVertexArrays(1, &post_vao_);
       copy_shader_.reset();
-      output_pass_.material.reset();
+      for (PostPass& pass : output_passes_) pass.material.reset();
       for (PostPass& pass : bloom_down_) pass.material.reset();
       for (PostPass& pass : bloom_up_) pass.material.reset();
       gpu_timer_.reset();
@@ -1221,17 +1315,20 @@ class GLRenderingDriver : public RenderingDriver {
 
   std::unordered_map<uint32_t, MeshProgram> mesh_programs_;  // by variant key
   ShadowProgram shadow_programs_[2];                         // plain, instanced
-  QuadProgram quad_programs_[2][2];                          // [sprite, billboard][computed dot, textured]
-  bool quad_failed_[2][2] = {};
+  QuadProgram quad_programs_[kQuadShaders][2];               // [QuadShader][computed dot, textured]
+  bool quad_failed_[kQuadShaders][2] = {};
   GLuint skybox_program_ = 0;
   GLint skybox_ray_ = -1;                     // its uSkyRay
   GLuint post_vao_ = 0;                       // empty: post passes draw a triangle made in the shader
   std::shared_ptr<Shader> copy_shader_;       // a post pass without a usable shader
   PostPass upscale_pass_{.name = "Upscale"};  // kUpscalePass: no material, so a copy
-  PostPass output_pass_{.name = "Output"};    // kOutputPass: OutputMaterial()
-  PostPass bloom_down_[kMaxBloomLevels];      // kBloomDownPass, per level: MakeBloomPasses()
-  PostPass bloom_up_[kMaxBloomLevels];        // kBloomUpPass, per level
-  int max_target_size_ = 0;                   // the largest side the GPU draws into (0: not known)
+  // kOutputPass, per variant (MakeOutputPasses): DISTORT, BLOOM, DISTORTION_BUFFER.
+  static constexpr uint32_t kOutputDistort = 1u << 0, kOutputBloom = 1u << 1, kOutputBuffer = 1u << 2,
+                            kOutputVariants = 8;
+  PostPass output_passes_[kOutputVariants];
+  PostPass bloom_down_[kMaxBloomLevels];  // kBloomDownPass, per level: MakeBloomPasses()
+  PostPass bloom_up_[kMaxBloomLevels];    // kBloomUpPass, per level
+  int max_target_size_ = 0;               // the largest side the GPU draws into (0: not known)
   bool warned_render_size_ = false;
   std::unique_ptr<GpuTimer> gpu_timer_;  // null: this GPU can't time
   bool invalidate_ = true;               // Window::InvalidateFramebuffers, for this frame
@@ -1246,6 +1343,10 @@ class GLRenderingDriver : public RenderingDriver {
   std::vector<NodeSlot> node_slots_;
   VisibleSet visible_;  // CullScene's output, reused every viewport
   std::vector<DrawOrder> draw_order_;
+  std::vector<uint32_t> distortion_order_;  // draw_items_ indices for the distortion pass (any order: they add)
+  bool distortion_on_ = false;              // this viewport draws distortion (its settings, the output pass, the GPU)
+  const WTexture2D* frame_distortion_ = nullptr;  // its buffer, drawn this frame: the output pass reads it
+  int distortion_supported_ = 0;                  // CanDrawDistortion: 0 = not asked yet, 1 = yes, -1 = no
   bool warmed_up_ = false;
 
   // This viewport's camera (set by SetCameraMatrices), for culling, sorting, the frame block and the sky.

@@ -699,6 +699,131 @@ TEST_CASE("post ripple") {
   CheckGolden("post_ripple", viewport);
 }
 
+TEST_CASE("shader variant and array params") {
+  // One text, two variants (Shader::Create's defines): the #ifdef part is compiled in only where defined, and a
+  // uniform array is filled from a vector param.
+  const std::string code =
+      "shader_type post;\n"
+      "uniform vec4 uLevels[3];\n"
+      "void fragment() {\n"
+      "#ifdef PICK_LAST\n"
+      "  FragColor = uLevels[2];\n"
+      "#else\n"
+      "  FragColor = uLevels[0];\n"
+      "#endif\n"
+      "}\n";
+  auto pass_color = [&](std::vector<std::string> defines) {
+    auto material =
+        rendering::ShaderMaterial::Create(rendering::Shader::Create(code, "variant test", std::move(defines)));
+    material->SetParam("uLevels", std::vector<glm::vec4>{{0.2f, 0.4f, 0.6f, 1.0f}, {}, {1.0f, 0.0f, 0.4f, 1.0f}});
+    auto viewport = MakeViewport();
+    viewport->SetScene(nullptr);
+    viewport->SetClearColor(Color{0.0f, 0.0f, 0.0f, 1.0f});
+    viewport->AddPostPass({.material = std::move(material)});
+    const testing::Image image = gpu_tests::Render(viewport);
+    const uint8_t* pixel = image.Pixel(128, 128);
+    return glm::ivec3(pixel[0], pixel[1], pixel[2]);
+  };
+  const glm::ivec3 first = pass_color({});
+  CHECK_MESSAGE((std::abs(first.x - 51) <= 1 && std::abs(first.y - 102) <= 1 && std::abs(first.z - 153) <= 1),
+                first.x << " " << first.y << " " << first.z);
+  const glm::ivec3 last = pass_color({"PICK_LAST"});
+  CHECK_MESSAGE((last.x == 255 && last.y == 0 && std::abs(last.z - 102) <= 1),
+                last.x << " " << last.y << " " << last.z);
+}
+
+namespace {
+
+// The radial picture of RadialPicture (each pixel = its distance from the middle), with a distortion lens over the
+// middle: a billboard without a texture, 4 units wide under an orthographic camera 10 units across (so its half size
+// is 0.2 of the viewport), pushing with `intensity`. Distortion on or off, at the buffer scale given.
+testing::Image LensPicture(float intensity, bool enabled, float scale, scene::RenderStats* stats = nullptr,
+                           bool* has_target = nullptr) {
+  static const char* kRadial = R"(shader_type post;
+void fragment() { FragColor = vec4(vec3(length(vUV - 0.5)), 1.0); })";
+  auto viewport = MakeViewport();
+  viewport->SetCamera(OrthoCamera({0, -10, 0}, {0, 0, 0}, 10.0f));  // screen x = world X, screen y = world Z
+  viewport->SetFormat(rendering::TextureFormat::RGBA16F);
+  viewport->AddPostPass(
+      {.material = rendering::ShaderMaterial::Create(rendering::Shader::Create(kRadial, "test_radial"))});
+  viewport->Post().Settings().distortion = {.enabled = enabled, .scale = scale};
+  auto lens = std::make_shared<scene::BillboardBatch>(1);
+  auto material = rendering::Material::Create();
+  material->distortion = true;
+  lens->SetMaterial(std::move(material));
+  lens->Write(1)[0] = {.position = {0.0f, 0.0f, 0.0f}, .size = 4.0f, .intensity = intensity};
+  lens->FitBounds();
+  viewport->GetScene()->Root().AddChild(lens);
+  testing::Image image = gpu_tests::Render(viewport);
+  if (stats) *stats = viewport->GetRenderStats();
+  if (has_target) *has_target = viewport->Post().Internal().HasDistortionTarget();
+  return image;
+}
+
+// What LensPicture shows at pixel (x, 128) (the middle row): the picture read from where the lens moved it from.
+int LensLevel(int x, float intensity) {
+  const float size = gpu_tests::kSize;
+  const glm::vec2 uv{(static_cast<float>(x) + 0.5f) / size, 128.5f / size};
+  const glm::vec2 corner = (uv - 0.5f) / 0.2f;  // -1..1 across the lens
+  const float falloff = std::max(1.0f - glm::dot(corner, corner), 0.0f);
+  const glm::vec2 push = corner * 0.2f * (falloff * falloff * intensity);
+  return Level(glm::length(uv - push - 0.5f));
+}
+
+}  // namespace
+
+TEST_CASE("distortion buffer moves the picture") {
+  scene::RenderStats stats;
+  bool has_target = true;
+  const testing::Image plain = LensPicture(1.0f, /*enabled=*/false, 0.5f, &stats, &has_target);
+  // Off: the distortion billboard isn't drawn at all (no colour either), no buffer is made.
+  CHECK(stats.distortion_draws == 0);
+  CHECK_FALSE(has_target);
+  for (const int x : {128, 150, 160}) CHECK(std::abs(plain.Pixel(x, 128)[0] - Level(DistanceFromMiddle(x, 128))) <= 1);
+
+  // On: pushed outwards (the picture is read from nearer the middle), most around halfway out, nothing beyond it.
+  const testing::Image pushed = LensPicture(1.0f, /*enabled=*/true, 1.0f, &stats, &has_target);
+  CHECK(stats.distortion_draws == 1);
+  CHECK((stats.distortion_width == gpu_tests::kSize && stats.distortion_height == gpu_tests::kSize));
+  CHECK(has_target);
+  for (const int x : {140, 150, 160, 170, 100}) {
+    CHECK_MESSAGE(std::abs(pushed.Pixel(x, 128)[0] - LensLevel(x, 1.0f)) <= 2,
+                  x << ": " << +pushed.Pixel(x, 128)[0] << " vs " << LensLevel(x, 1.0f));
+  }
+  CHECK(LensLevel(150, 1.0f) < Level(DistanceFromMiddle(150, 128)) - 8);  // (the test means something)
+  CHECK(std::abs(pushed.Pixel(200, 128)[0] - plain.Pixel(200, 128)[0]) <= 1);
+
+  // Signed: a negative intensity pulls inwards. A half-size buffer gives the same picture (distortion is smooth).
+  const testing::Image pulled = LensPicture(-1.0f, true, 1.0f);
+  CHECK(std::abs(pulled.Pixel(150, 128)[0] - LensLevel(150, -1.0f)) <= 2);
+  const testing::Image half = LensPicture(1.0f, true, 0.5f, &stats);
+  CHECK((stats.distortion_width == gpu_tests::kSize / 2 && stats.distortion_height == gpu_tests::kSize / 2));
+  CHECK(std::abs(half.Pixel(150, 128)[0] - LensLevel(150, 1.0f)) <= 3);
+}
+
+TEST_CASE("post distortion") {
+  // Distortion rings in the world over lit cubes, through a perspective camera: two rings pushing out (one splitting
+  // colour through the buffer's chroma), a smaller one pulling in, stretched by its distance like everything else.
+  auto viewport = MakeViewport();
+  viewport->SetCamera(FixedCamera(Vec3{0, -6, 2}, Vec3{0, 0, 0}));
+  AddSun(*viewport, 0.9f);
+  AddMesh(*viewport, utils::CubeMesh(1.0f, Color{0.95f, 0.6f, 0.2f, 1.0f}), Opaque(), {-1.2f, 0, 0});
+  AddMesh(*viewport, utils::CubeMesh(1.0f, Color{0.2f, 0.45f, 0.9f, 1.0f}), Opaque(), {1.2f, 0, 0});
+  auto rings = std::make_shared<scene::BillboardBatch>(4);
+  auto material = rendering::Material::Create();
+  material->distortion = true;
+  material->SetTexture(utils::RingDistortionTexture());
+  rings->SetMaterial(std::move(material));
+  std::span<rendering::BillboardInstance> out = rings->Write(3);
+  out[0] = {.position = {0.0f, 0.0f, 0.0f}, .size = 4.0f, .intensity = 0.12f};
+  out[1] = {.position = {-1.2f, -1.0f, 0.6f}, .size = 1.6f, .intensity = -0.15f};
+  out[2] = {.position = {1.2f, 1.0f, -0.4f}, .size = 2.4f, .intensity = 0.1f};
+  rings->FitBounds();
+  viewport->GetScene()->Root().AddChild(rings);
+  viewport->Post().Settings().distortion = {.enabled = true, .chroma = 0.4f};
+  CheckGolden("post_distortion", viewport);
+}
+
 TEST_CASE("canvas") {
   // The 2D layer alone: shapes, text from the SDF atlas, images (straight alpha, additive).
   auto viewport = MakeViewport();

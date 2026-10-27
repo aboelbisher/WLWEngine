@@ -39,6 +39,12 @@ class Material {
   // Depth writing: nullopt = the default for the blend mode (see DepthWrite). Turn it on for a
   // see-through object that must still hide what's drawn after it (rare).
   std::optional<bool> depth_write;
+  // Draws screen offsets into the viewport's distortion buffer instead of colour into the picture (post_settings.h,
+  // DistortionSettings; Unreal's distortion / refraction materials, HDRP's distortion pass): the output pass then
+  // reads the picture from moved places there. Billboards (BillboardBatch: the texture's red and green are the push's
+  // direction, alpha its size) and ShaderMaterials (FragColor.rg = the push) can; other draws with it are skipped.
+  // Drawn only while the viewport's distortion is enabled; always Additive (pushes add up), no depth test or write.
+  bool distortion = false;
 
   float metallic = 0.0f;
   float shininess = 32.0f;  // specular highlight sharpness under scene lights (Light3D)

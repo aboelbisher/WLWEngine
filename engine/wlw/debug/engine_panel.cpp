@@ -168,8 +168,10 @@ void EnginePanel::OnDebugUI() {
     if (target == nullptr) continue;
     static constexpr const char* kModes[] = {"always", "once", "disabled"};
     const rendering::TextureFormat format = target->Settings().format;
-    const bool half_float = format == rendering::TextureFormat::RGBA16F || format == rendering::TextureFormat::R16F;
+    const bool half_float = format == rendering::TextureFormat::RGBA16F || format == rendering::TextureFormat::RG16F ||
+                            format == rendering::TextureFormat::R16F;
     const int texel_bytes = format == rendering::TextureFormat::RGBA16F ? 8
+                            : format == rendering::TextureFormat::RG16F ? 4
                             : format == rendering::TextureFormat::R16F  ? 2
                             : format == rendering::TextureFormat::R8    ? 1
                                                                         : 4;

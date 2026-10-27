@@ -109,4 +109,38 @@ inline std::unique_ptr<rendering::WTexture2D> RingTexture(int size = 64, float r
   return ShapeTexture(size, RingPixels(size, radius, width));
 }
 
+// A shockwave ring for a distortion material (rendering::Material::distortion, post_settings.h' DistortionSettings):
+// a direction map like a normal map's. Red and green hold the push's direction, outwards from the centre (x right, y
+// UP in the image, -1..1 stored as 0..1); alpha its size, peaking at `radius` and falling to 0 at `width` either side
+// as (1 - x²)², the profile of rendering::Ripple. On a BillboardBatch the push is alpha x the quad's half size x
+// its colour's alpha x intensity: grow the quad and the ring grows, with a push in proportion (a negative intensity
+// pulls inwards).
+inline std::vector<uint8_t> RingDistortionPixels(int size, float radius = 0.7f, float width = 0.2f) {
+  size = std::max(size, 1);
+  width = std::max(width, 1e-3f);
+  std::vector<uint8_t> pixels(static_cast<size_t>(size) * size * 4);
+  auto unit = [](float value) {
+    return static_cast<uint8_t>(std::lround(std::clamp(value * 0.5f + 0.5f, 0.0f, 1.0f) * 255.0f));
+  };
+  for (int y = 0; y < size; ++y) {
+    for (int x = 0; x < size; ++x) {
+      const float u = (static_cast<float>(x) + 0.5f) / static_cast<float>(size) * 2.0f - 1.0f;
+      const float v = (static_cast<float>(y) + 0.5f) / static_cast<float>(size) * 2.0f - 1.0f;  // down
+      const float r = std::sqrt(u * u + v * v);
+      const float across = (r - radius) / width;
+      const float f = std::max(1.0f - across * across, 0.0f);
+      uint8_t* texel = &pixels[(static_cast<size_t>(y) * size + x) * 4];
+      texel[0] = unit(r > 0.0f ? u / r : 0.0f);
+      texel[1] = unit(r > 0.0f ? -v / r : 0.0f);
+      texel[2] = 128;
+      texel[3] = static_cast<uint8_t>(std::lround(f * f * 255.0f));
+    }
+  }
+  return pixels;
+}
+inline std::unique_ptr<rendering::WTexture2D> RingDistortionTexture(int size = 128, float radius = 0.7f,
+                                                                    float width = 0.2f) {
+  return ShapeTexture(size, RingDistortionPixels(size, radius, width));
+}
+
 }  // namespace wlw::utils
