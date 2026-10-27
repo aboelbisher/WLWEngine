@@ -156,6 +156,13 @@ void DrawIcon(Canvas& canvas, Icon icon, const Rect& box, const Color& color) {
         for (float x : {-0.4f, 0.4f}) canvas.FillRect(R(x - 0.33f, y - 0.33f, x + 0.33f, y + 0.33f), color, 0.1f * s);
       }
       break;
+    case Icon::Motion:
+      // A block on the right, three speed lines trailing to its left, the middle one longest.
+      canvas.FillRect(R(0.12f, -0.4f, 0.8f, 0.4f), color, 0.1f * s);
+      line(P(-0.3f, -0.36f), P(-0.05f, -0.36f), 0.13f);
+      line(P(-0.8f, 0.0f), P(-0.05f, 0.0f), 0.13f);
+      line(P(-0.5f, 0.36f), P(-0.05f, 0.36f), 0.13f);
+      break;
     case Icon::Rotate: {
       // Unlike Restart's open circle, a block sits in the middle: "turn this".
       canvas.FillRect(R(-0.28f, -0.28f, 0.28f, 0.28f), color, 0.08f * s);

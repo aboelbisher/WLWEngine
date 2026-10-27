@@ -22,7 +22,7 @@ struct TrailSettings {
                               // the head (Unity's Min Vertex Distance): fewer, longer segments
   float width = 0.2f;         // across, at the head (node units)
   Color color{1.0f, 1.0f, 1.0f, 1.0f};
-  float intensity = 1.0f;     // multiplies rgb on the GPU (HDR: past 1 feeds bloom)
+  float intensity = 1.0f;  // multiplies rgb on the GPU (HDR: past 1 feeds bloom)
   anim::Curve width_over_trail = anim::Curve::Linear({{0.0f, 1.0f}, {1.0f, 0.0f}});
   anim::Curve intensity_over_trail = anim::Curve::Linear({{0.0f, 1.0f}, {1.0f, 0.0f}});
   std::optional<anim::Gradient> color_over_trail;  // unset = `color` all along

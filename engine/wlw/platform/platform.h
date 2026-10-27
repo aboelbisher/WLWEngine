@@ -83,6 +83,14 @@ void Vibrate(int milliseconds, float strength = 1.0f);
 // FLAG_KEEP_SCREEN_ON, no permission. No-op on desktop.
 void KeepScreenOn(bool on);
 
+// Whether the player asked the OS for less motion (an accessibility setting: motion sickness, vestibular disorders,
+// or just a preference). Games use it as the default for their own "reduce motion" option: no screen shake, no
+// zooms, no full-screen distortion, softer flashes (the information stays; the movement goes). Android: Developer
+// options / Accessibility "Remove animations" (Settings.Global ANIMATOR_DURATION_SCALE = 0), read again when the app
+// resumes; Windows: "Animation effects" off (SPI_GETCLIENTAREAANIMATION); false elsewhere for now (iOS will map
+// UIAccessibilityIsReduceMotionEnabled, macOS accessibilityDisplayShouldReduceMotion). Cheap enough per frame.
+bool ReduceMotion();
+
 // Waits `seconds` to within ~0.1 ms (the frame limiter, core/frame_pacing.h): the OS sleeps until about
 // 1 ms before the end (Windows: a high-resolution waitable timer), then a short spin.
 void PreciseSleep(double seconds);

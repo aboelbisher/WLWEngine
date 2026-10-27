@@ -60,6 +60,7 @@ EGLDisplay g_display = EGL_NO_DISPLAY;
 SafeAreaInsets g_insets;  // cached; refreshed when the window changes
 bool g_insets_valid = false;
 bool g_keep_screen_on = false;  // what the game asked for (KeepScreenOn)
+int g_reduce_motion = -1;       // ReduceMotion's cached answer (-1 = ask the OS); dropped on resume
 
 // Processes pending OS events. timeout_ms = -1 blocks until at least one event arrives.
 void PollEvents(int timeout_ms) {
@@ -448,6 +449,7 @@ class AndroidWindow : public scene::Window {
 };
 
 void OnAppCmd(android_app* /*app*/, int32_t cmd) {
+  if (cmd == APP_CMD_RESUME) g_reduce_motion = -1;  // the player may have changed it while away
   if (g_window) g_window->HandleCommand(cmd);
 }
 
@@ -652,6 +654,33 @@ void KeepScreenOn(bool on) {
                                  on ? 0 : AWINDOW_FLAG_KEEP_SCREEN_ON);
 }
 
+bool ReduceMotion() {
+  if (g_reduce_motion >= 0) return g_reduce_motion == 1;
+  if (!g_app) return false;
+  JNIEnv* env = nullptr;
+  if (g_app->activity->vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) != JNI_OK) return false;
+  env->PushLocalFrame(8);
+  // Settings.Global.getFloat(activity.getContentResolver(), "animator_duration_scale", 1): 0 = "Remove animations"
+  jobject activity = g_app->activity->clazz;
+  jobject resolver = env->CallObjectMethod(
+      activity,
+      env->GetMethodID(env->GetObjectClass(activity), "getContentResolver", "()Landroid/content/ContentResolver;"));
+  float scale = 1.0f;
+  if (resolver && !env->ExceptionCheck()) {
+    jclass global = env->FindClass("android/provider/Settings$Global");
+    jmethodID get_float =
+        env->GetStaticMethodID(global, "getFloat", "(Landroid/content/ContentResolver;Ljava/lang/String;F)F");
+    scale = env->CallStaticFloatMethod(global, get_float, resolver, env->NewStringUTF("animator_duration_scale"), 1.0f);
+  }
+  if (env->ExceptionCheck()) {
+    env->ExceptionClear();
+    scale = 1.0f;
+  }
+  env->PopLocalFrame(nullptr);
+  g_reduce_motion = scale == 0.0f ? 1 : 0;
+  return g_reduce_motion == 1;
+}
+
 std::string GetSaveDirectory(const std::string& app_name) {
   // NativeActivity gives us the app's private internal storage (/data/data/<package>/files).
   if (!g_app || !g_app->activity->internalDataPath) return {};
@@ -810,6 +839,7 @@ std::vector<std::string> IntentCVarArguments(JNIEnv* env, jobject activity) {
 void RunAndroidApp(android_app* app, std::unique_ptr<::wlw::app::Application> (*create_app)()) {
   g_app = app;
   g_keep_screen_on = false;  // a new activity's window starts without the flag (the process may be reused)
+  g_reduce_motion = -1;
   // Attach this thread (android_main's) to the Java VM once, for all JNI calls (insets, Back,
   // vibration...). Detached again before the thread ends, as the JVM requires.
   JNIEnv* env = nullptr;

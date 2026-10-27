@@ -1,4 +1,4 @@
-// Tests for small engine building blocks: core::Random, the platform's save-file functions and the
+// Tests for small engine building blocks: core::Random, the platform's save-file functions, ReduceMotion and the
 // native bridge's message queue.
 #include <filesystem>
 #include <string>
@@ -58,6 +58,12 @@ TEST_CASE("atomic write and read") {
   CHECK(!wlw::platform::ReadLocalFile((folder / "missing.json").string()).has_value());
   CHECK(!wlw::platform::WriteFileAtomic((folder / "no" / "such" / "dir.json").string(), first));
   fs::remove_all(folder);
+}
+
+TEST_CASE("reduce motion is a stable OS answer") {
+  // It reads the player's OS setting, which a test can't set: check it needs no Init() and doesn't flicker.
+  const bool first = wlw::platform::ReduceMotion();
+  for (int i = 0; i < 10; ++i) CHECK(wlw::platform::ReduceMotion() == first);
 }
 
 TEST_CASE("bridge queue") {

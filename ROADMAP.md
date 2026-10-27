@@ -399,7 +399,8 @@ is ~850 lines of C++ + ~225 of Kotlin).
 - [ ] **7.4 Context loss.** Recovery from `EGL_CONTEXT_LOST` by rebuilding GPU state from resource sources (4.6);
   a debug command that simulates it; tests. (`VK_ERROR_DEVICE_LOST` in 10.5.)
 - [ ] **7.5 Display and lifecycle.** Orientation lock and changes, foldable and multi-window resizes,
-  immersive mode, density (dp) for UI scale. (Keep-screen-on is done: `platform::KeepScreenOn`.)
+  immersive mode, density (dp) for UI scale. (Done: keep-screen-on `platform::KeepScreenOn`, the "Remove animations"
+  setting `platform::ReduceMotion`.)
 - [ ] **7.6 Device lab.** Firebase Test Lab game-loop tests with screenshots on a device matrix
   (Mali, Adreno, PowerVR, low end); native symbols for Play Console crash reports
   (`debugSymbolLevel`); a vitals checklist. This is the only place precision artifacts show (no

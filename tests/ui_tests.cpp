@@ -519,7 +519,7 @@ TEST_CASE("themed widgets") {
 
   // Everything drew something; icons are only shapes (no text), every one of them.
   const size_t before = canvas.QuadCount();
-  for (int i = 1; i <= static_cast<int>(Icon::Rotate); ++i) {
+  for (int i = 1; i <= static_cast<int>(Icon::Motion); ++i) {
     const size_t at = canvas.QuadCount();
     DrawIcon(canvas, static_cast<Icon>(i), {{0.0f, 0.0f}, {48.0f, 48.0f}}, {1, 1, 1, 1});
     CHECK(canvas.QuadCount() > at);

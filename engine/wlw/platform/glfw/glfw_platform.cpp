@@ -192,6 +192,16 @@ void Vibrate(int, float) {}  // desktops don't vibrate
 
 void KeepScreenOn(bool) {}  // a desktop's screensaver is the user's business
 
+bool ReduceMotion() {
+#if defined(_WIN32)
+  // Settings > Accessibility > Visual effects > "Animation effects" (read each call: a cheap user-mode query).
+  BOOL animations = TRUE;
+  return SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION, 0, &animations, 0) && !animations;
+#else
+  return false;
+#endif
+}
+
 // No platform-language side on desktop: games use C++ fakes for SDK features (see bridge.h).
 bool HasBridge() { return false; }
 bool BridgeCall(const std::string&, const std::string&, const std::string&) { return false; }

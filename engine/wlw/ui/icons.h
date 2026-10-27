@@ -34,6 +34,7 @@ enum class Icon {
   Home,
   Grid,
   Rotate,  // a block with a quarter-turn arrow around it (turn a piece)
+  Motion,  // a block rushing right, speed lines behind it (animations and effects: "reduce motion")
 };
 
 // `icon` fitted into the square centred in `box`.

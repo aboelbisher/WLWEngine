@@ -11,6 +11,12 @@ listed under **Breaking** with its **Migration**. Shims added before that (`WLW_
 
 ## Unreleased
 
+- `platform::ReduceMotion()` (for Bluzzle's "Reduce motion" setting; Unity/Unreal leave it to plugins, iOS has
+  UIAccessibilityIsReduceMotionEnabled): whether the player asked the OS for less motion, the default for a game's own
+  option (no shake, zooms or full-screen distortion; softer flashes). Android: "Remove animations" (Settings.Global
+  `animator_duration_scale` = 0, one JNI read, cached, read again on resume); Windows: "Animation effects" off
+  (SPI_GETCLIENTAREAANIMATION); false on other desktops. Test: callable without Init, stable. With it, `ui::Icon::Motion`
+  (a block with speed lines trailing it) for the setting's row.
 - `anim::CubicBezier<T>` and `anim::ArcLength<T, N>` (anim/bezier.h, for Bluzzle's rewards flying to the score):
   a cubic Bezier path (float, glm::vec2/3) with `Point(t)`, `Tangent(t)` and `Through(from, to, bend)` (control
   points at the thirds of the line, pushed by `bend`: no bend = the line at an even pace); `ArcLength` samples a curve
