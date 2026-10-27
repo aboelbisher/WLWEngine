@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <string>
 #include <variant>
+#include <vector>
 
 #include "test_helpers.h"
 #include "wlw/rendering/shader.h"
@@ -166,6 +167,36 @@ TEST_CASE("material versions") {
   const wlw::rendering::ShaderMaterial copy = *material;
   CHECK(copy.Internal().Id() != material->Internal().Id());
   CHECK(wlw::rendering::ShaderMaterial::Create(nullptr)->Internal().Id() != material->Internal().Id());
+}
+
+TEST_CASE("array params") {
+  // A uniform array's values: a new upload only when one of them changes.
+  auto material = wlw::rendering::ShaderMaterial::Create(nullptr);
+  const std::vector<glm::vec4> rings{{0.5f, 0.5f, 0.2f, 0.1f}, {0.0f, 0.0f, 0.0f, 0.0f}};
+  material->SetParam("uRings", rings);
+  const uint64_t added = material->Internal().Version();
+  material->SetParam("uRings", rings);
+  CHECK(material->Internal().Version() == added);
+  std::vector<glm::vec4> moved = rings;
+  moved[1].z = 0.3f;
+  material->SetParam("uRings", moved);
+  CHECK(material->Internal().Version() == added + 1);
+  const auto* param = material->GetParam("uRings");
+  REQUIRE(param != nullptr);
+  CHECK(std::get<std::vector<glm::vec4>>(*param)[1].z == doctest::Approx(0.3f));
+  material->SetParam("uWeights", std::vector<float>{0.25f, 0.5f, 0.25f});
+  CHECK(std::get<std::vector<float>>(*material->GetParam("uWeights")).size() == 3);
+}
+
+TEST_CASE("variants") {
+  // The defines are kept with the text; the renderer compiles them in front of it (gpu: "shader variant").
+  const std::string code = "shader_type post;\nvoid fragment() {\n#ifdef GLOW\n  FragColor = vec4(1.0);\n#endif\n}\n";
+  const auto plain = wlw::rendering::Shader::Create(code, "plain");
+  const auto glow = wlw::rendering::Shader::Create(code, "glow", {"GLOW", "STRENGTH 2.0"});
+  CHECK(plain->IsValid());
+  CHECK(glow->IsValid());
+  CHECK(plain->Internal().Source().defines.empty());
+  CHECK(glow->Internal().Source().defines == std::vector<std::string>{"GLOW", "STRENGTH 2.0"});
 }
 
 TEST_SUITE_END();

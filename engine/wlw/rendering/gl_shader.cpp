@@ -63,20 +63,20 @@ GLShader::GLShader(const Shader& shader) {
     stage_file = FindShaderFile("custom/canvas.vert");
     if (!stage_file) return;
     program_ = BuildProgram(label, {"custom/canvas.vert", *stage_file, {}},
-                            {label, source.fragment, {"custom/canvas_fragment.glsl"}});
+                            {label, source.fragment, {"custom/canvas_fragment.glsl"}}, source.defines);
   } else if (source.target == ShaderTarget::Post) {
     stage_file = FindShaderFile("custom/post.vert");
     if (!stage_file) return;
     program_ = BuildProgram(label, {"custom/post.vert", *stage_file, {}},
-                            {label, source.fragment, {"custom/post_fragment.glsl"}});
+                            {label, source.fragment, {"custom/post_fragment.glsl"}}, source.defines);
   } else if (source.vertex.empty()) {
     stage_file = FindShaderFile("custom/mesh_default.vert");
     if (!stage_file) return;
     program_ = BuildProgram(label, {"custom/mesh_default.vert", *stage_file, {"custom/mesh_vertex.glsl"}},
-                            {label, source.fragment, {"custom/mesh_fragment.glsl"}});
+                            {label, source.fragment, {"custom/mesh_fragment.glsl"}}, source.defines);
   } else {
     program_ = BuildProgram(label, {label, source.vertex, {"custom/mesh_vertex.glsl"}},
-                            {label, source.fragment, {"custom/mesh_fragment.glsl"}});
+                            {label, source.fragment, {"custom/mesh_fragment.glsl"}}, source.defines);
   }
   if (program_ == 0) return;
 
@@ -140,6 +140,11 @@ int GLShader::ApplyParams(const ShaderMaterial& material, int first_unit) const 
             glUniform4fv(location, 1, glm::value_ptr(value));
           } else if constexpr (std::is_same_v<T, glm::mat4>) {
             glUniformMatrix4fv(location, 1, GL_FALSE, glm::value_ptr(value));
+          } else if constexpr (std::is_same_v<T, std::vector<float>>) {
+            if (!value.empty()) glUniform1fv(location, static_cast<GLsizei>(value.size()), value.data());
+          } else if constexpr (std::is_same_v<T, std::vector<glm::vec4>>) {
+            if (!value.empty())
+              glUniform4fv(location, static_cast<GLsizei>(value.size()), glm::value_ptr(value.front()));
           } else if (value) {  // a texture
             BindGLTexture(*value, static_cast<unsigned int>(unit));
             glUniform1i(location, unit);

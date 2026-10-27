@@ -139,6 +139,7 @@ struct ShaderSource {
   std::string fragment;  // the text without vertex(), + a main() that calls fragment()
   std::string vertex;    // the text without fragment(), + a main() that calls vertex(); empty = no vertex()
   std::vector<InstanceUniform> instance_uniforms;  // in the text's order (`instance` removed: plain uniforms)
+  std::vector<std::string> defines;                // a variant's #defines (Shader::Create), before the text
 };
 // Removed parts become blank lines, so line numbers stay the game's.
 ShaderSource SplitShaderSource(const std::string& code);
@@ -149,7 +150,11 @@ class Shader : public Resource {
 
   // From its text. Checked now (shader_type, fragment(), braces: errors are logged and IsValid()
   // is false); compiled by the renderer before the first frame (warm-up) or when first drawn.
-  static std::unique_ptr<Shader> Create(const std::string& code, const std::string& name = "custom shader");
+  // `defines` ("NAME" or "NAME VALUE") come before the text: a VARIANT of it, its #ifdef parts
+  // compiled in or out (one Shader per combination used; Unity's shader keywords, Godot's
+  // per-feature variants), so a feature that is off costs nothing instead of a runtime if.
+  static std::unique_ptr<Shader> Create(const std::string& code, const std::string& name = "custom shader",
+                                        std::vector<std::string> defines = {});
   // From a file (read with platform::ReadFile, so it works inside the APK too). A missing file is
   // logged and gives an invalid shader.
   static std::unique_ptr<Shader> FromFile(const std::string& path);

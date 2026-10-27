@@ -27,7 +27,10 @@ namespace wlw::rendering {
 // the shader decides everything; pass textures as params.
 class ShaderMaterial : public Material {
  public:
-  using Param = std::variant<float, glm::vec2, glm::vec3, glm::vec4, glm::mat4, std::shared_ptr<WTexture>>;
+  // A value for a uniform of the same type; the vectors fill a uniform array (`uniform vec4 uRings[4];`) from its
+  // first element (fewer values leave the rest as they were, more are cut at the array's size).
+  using Param = std::variant<float, glm::vec2, glm::vec3, glm::vec4, glm::mat4, std::shared_ptr<WTexture>,
+                             std::vector<float>, std::vector<glm::vec4>>;
 
   // Blending starts as the shader's kind expects (like Godot): canvas shaders Alpha (they draw
   // over the UI), mesh shaders Opaque. Change `blend` as needed (see blend_mode.h).

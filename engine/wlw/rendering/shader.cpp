@@ -165,8 +165,10 @@ ShaderSource SplitShaderSource(const std::string& code) {
 
 Shader::Shader(ShaderSource source, std::string name) : source_(std::move(source)), name_(std::move(name)) {}
 
-std::unique_ptr<Shader> Shader::Create(const std::string& code, const std::string& name) {
+std::unique_ptr<Shader> Shader::Create(const std::string& code, const std::string& name,
+                                       std::vector<std::string> defines) {
   ShaderSource source = SplitShaderSource(code);
+  source.defines = std::move(defines);
   if (!source.ok) WLW_LOG(LogShader, Error, "%s: %s", name.c_str(), source.error.c_str());
   return std::unique_ptr<Shader>(new Shader(std::move(source), name));
 }
