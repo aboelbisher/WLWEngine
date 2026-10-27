@@ -40,7 +40,10 @@ engine/wlw/
               T*Rx*Ry*Rz*S in closed form with core::SinCos (5k: ~120 us MSVC Release). WriteTo(BillboardBatch&) = 40 B quads
               (stretch = velocity x stretch.velocity_scale, capped at max_length; rotation = angles.z; bounds fitted). System-wide
               size_over_life / intensity_over_life (anim::Curve) + color_over_life (anim::Gradient), sampled at LifeFraction;
-              Particle::intensity / BurstSettings::intensity (HDR, billboards only). FlowParticles (flow_particles.h):
+              Particle::intensity / BurstSettings::intensity (HDR, billboards only). Shockwaves (shockwaves.h): up to
+              kMaxRipples rings, Add(center, ShockwaveSettings) (a full set replaces the wave nearest its end), Update(dt),
+              WriteTo(PostSettings&) = every ripple slot; ShockwaveAt(center, settings, age) = the shape (radius OutCubic,
+              width linear, push fades in over 10% of the life and out as (1 - t)^2). FlowParticles (flow_particles.h):
               10-20k dots along paths (liquid in pipes; not a fluid sim), SoA arrays, paths resampled evenly (O(1)
               lookup), SetNext routing (round robin; none = fade out), SetStop = a gate dots queue behind (the line
               grows back up the path), emitters; WriteTo(SpriteBatch) packs 16 B/dot + bounds. SetDensity(0..1) scales emitters + queue packing (count only;
@@ -156,6 +159,12 @@ engine/wlw/
               Environment / Unity Volume shape): tone_map {Clamp | Shoulder (PBR Neutral's shoulder, no toe: we shade gamma-
               encoded), exposure, dither} -> the OUTPUT PASS (shaders/post/output.glsl, kOutputPass in the plan): after the
               game's passes, writes the destination, only when NeedsOutputPass(); renderer-owned material, params set per draw.
+              Also in the output pass (cost: ALU, no extra pass): ripples[kMaxRipples = 4] (Ripple {center 0..1 top-left,
+              radius, width, strength, chroma}, viewport heights: the picture under a ring is read from further in, push x
+              (1 - x^2)^2 across it; chroma = red / blue pushed 1 +- chroma as far), chromatic_aberration {intensity at the
+              corners, growing with distance^2}, vignette {intensity, smoothness, center, color; after exposure, before the
+              tone map}. Distorts() (a uniform branch: idle = one read) also moves the bloom read; inactive ripples
+              (strength 0) don't count for NeedsOutputPass. fx::Shockwaves animates ripples (fx/ above).
               bloom {enabled, threshold, knee, intensity, scatter, scale, max_levels} (cvar r.bloom = SetBloomOverride):
               steps kBloomDownPass levels 0..n-1 (shaders/post/bloom_down.glsl: Jimenez 13-tap; level 0 also soft-knee
               threshold per tap + Karis average per box) then kBloomUpPass n-2..0 (bloom_up.glsl: 3x3 tent of the level

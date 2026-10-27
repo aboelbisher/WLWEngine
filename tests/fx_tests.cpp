@@ -1,5 +1,5 @@
 // Tests for wlw::fx: ParticleSystem (spawning, lifetime, motion, capacity, instances), FlowParticles
-// (paths, routing, queues, emitters, sprites), scene::SpriteBatch and scene::BillboardBatch.
+// (paths, routing, queues, emitters, sprites), scene::SpriteBatch, scene::BillboardBatch and Shockwaves.
 #include <algorithm>
 #include <cmath>
 #include <memory>
@@ -11,6 +11,7 @@
 #include "test_helpers.h"
 #include "wlw/fx/flow_particles.h"
 #include "wlw/fx/particle_system.h"
+#include "wlw/fx/shockwaves.h"
 #include "wlw/scene/billboard_batch.h"
 #include "wlw/scene/geometry_instance.h"
 #include "wlw/scene/node.h"
@@ -495,6 +496,76 @@ TEST_CASE("flow density") {
     back = std::min(back, queue.GetDot(i).distance);
   }
   CHECK((queue.Queued(path) == 4 && Near(front, 9.0f) && Near(back, 8.4f)));  // 4 dots at 0.2 apart
+}
+
+TEST_CASE("shockwave life") {
+  const wlw::fx::ShockwaveSettings wave{.duration = 1.0f,
+                                        .delay = 0.5f,
+                                        .start_radius = 0.1f,
+                                        .end_radius = 0.5f,
+                                        .width = 0.1f,
+                                        .end_width = 0.3f,
+                                        .strength = 0.02f,
+                                        .chroma = 0.3f};
+  const glm::vec2 center{0.25f, 0.75f};
+  // Off while delayed and from its end on.
+  CHECK(!wlw::fx::ShockwaveAt(center, wave, 0.4f).Active());
+  CHECK(!wlw::fx::ShockwaveAt(center, wave, 1.5f).Active());
+  // Halfway: the radius is OutCubic's 7/8 of the way, the width half way, the push faded by (1 - 0.5)^2.
+  const wlw::rendering::Ripple half = wlw::fx::ShockwaveAt(center, wave, 1.0f);
+  CHECK((half.center == center && Near(half.radius, 0.1f + 0.4f * 0.875f) && Near(half.width, 0.2f)));
+  CHECK((Near(half.strength, 0.02f * 0.25f) && half.chroma == 0.3f));
+  // It fades in (no pop on the first frame), peaks early, then only weakens.
+  const float first = wlw::fx::ShockwaveAt(center, wave, 0.51f).strength;
+  const float peak = wlw::fx::ShockwaveAt(center, wave, 0.6f).strength;
+  CHECK((first > 0.0f && first < 0.5f * peak && peak > half.strength));
+  float previous = peak;
+  for (float age = 0.65f; age < 1.5f; age += 0.05f) {
+    const float strength = wlw::fx::ShockwaveAt(center, wave, age).strength;
+    CHECK(strength <= previous);
+    previous = strength;
+  }
+}
+
+TEST_CASE("shockwaves into the post settings") {
+  wlw::fx::Shockwaves waves;
+  wlw::rendering::PostSettings post;
+  post.vignette.intensity = 0.3f;
+  waves.WriteTo(post);
+  CHECK((!waves.Active() && !post.Distorts()));
+
+  // A wave is a ripple until its end; WriteTo leaves the other settings alone.
+  waves.Add({0.5f, 0.5f}, {.duration = 0.5f});
+  waves.Update(0.1f);
+  waves.WriteTo(post);
+  CHECK((waves.Count() == 1 && post.ripples[0].Active() && post.Distorts() && post.vignette.intensity == 0.3f));
+  waves.Update(0.4f);
+  waves.WriteTo(post);
+  CHECK((!waves.Active() && !post.ripples[0].Active() && !post.Distorts()));
+
+  // Ages in steps of any size land on the same ring.
+  wlw::fx::Shockwaves fine, coarse;
+  fine.Add({0.5f, 0.5f});
+  coarse.Add({0.5f, 0.5f});
+  for (int i = 0; i < 30; ++i) fine.Update(0.01f);
+  coarse.Update(0.3f);
+  wlw::rendering::PostSettings a, b;
+  fine.WriteTo(a);
+  coarse.WriteTo(b);
+  CHECK((Near(a.ripples[0].radius, b.ripples[0].radius) && Near(a.ripples[0].strength, b.ripples[0].strength)));
+
+  // All slots busy: a new wave takes the place of the one nearest its end (the first, the oldest here).
+  for (int i = 0; i < wlw::rendering::kMaxRipples; ++i) {
+    waves.Add({0.1f * static_cast<float>(i), 0.5f});
+    waves.Update(0.05f);
+  }
+  waves.Add({0.9f, 0.9f});
+  waves.Update(0.01f);
+  waves.WriteTo(post);
+  CHECK(waves.Count() == wlw::rendering::kMaxRipples);
+  CHECK((post.ripples[0].center == glm::vec2(0.9f, 0.9f) && post.ripples[1].center == glm::vec2(0.1f, 0.5f)));
+  waves.Clear();
+  CHECK(!waves.Active());
 }
 
 TEST_SUITE_END();

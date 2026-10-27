@@ -564,8 +564,17 @@ is ~850 lines of C++ + ~225 of Kotlin).
   high tier); global and per-viewport settings with blending.
   Early slice done (2026-10-25, for Bluzzle's glow): progressive bloom as a post setting (`PostSettings::bloom`,
   cvar `r.bloom`): 13-tap downsample with soft-knee threshold and Karis average on the first level, tent upsample
-  with scatter, added in the output pass before tone mapping; it replaced `scene::AddBloom`. Still to do here:
-  lens dirt, the other effects, settings blending.
+  with scatter, added in the output pass before tone mapping; it replaced `scene::AddBloom`. Second slice
+  (2026-10-27, for Bluzzle's big clears): vignette, chromatic aberration and screen-space ripples (shockwaves,
+  `fx::Shockwaves`) in the output pass. Still to do here: lens dirt, the other effects, settings blending.
+  Next slice (asked 2026-10-27): a distortion buffer, the general form of those ripples (Unreal's distortion pass,
+  HDRP's distortion buffer). Effects (billboards, particles, meshes with a distortion material, e.g. a normal-map
+  ring) draw screen offsets into a small RG16F target after the main pass, depth-tested against the scene; the output
+  pass shifts its reads by it. Distortion then has any shape and count, sits in the world, and costs nothing while
+  nothing draws into it (no target, no read). With it: array parameters in `ShaderMaterial` (the ripples are packed
+  into a mat4 + vec4s today) and output-pass shader variants instead of the `uDistort` branch (the mesh shader has
+  variants already). Whether the analytic ripples stay as the cheap path is decided in its plan. First user: Bluzzle's
+  shockwaves.
 - [ ] **13.8 Dynamic resolution.** Render scale driven by GPU time, FSR 1 (EASU + RCAS) upscaling with
   a bilinear fallback, tied into Quality.
 - [ ] **13.9 LOD and culling.** Screen-size LOD selection with hysteresis and dithered crossfade, LOD

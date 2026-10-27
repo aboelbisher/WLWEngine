@@ -590,6 +590,29 @@ class GLRenderingDriver : public RenderingDriver {
     material.SetParam("uShoulder", tone_map.mapper == ToneMapper::Shoulder ? 1.0f : 0.0f);
     material.SetParam("uDither", tone_map.dither ? 1.0f : 0.0f);
     material.SetParam("uBloomIntensity", bloom ? std::max(settings.bloom.intensity, 0.0f) : 0.0f);
+    // Ripples and the vignette: centres from top-left (the settings') to the texture's bottom-left.
+    const bool distorts = settings.Distorts();
+    material.SetParam("uDistort", distorts ? 1.0f : 0.0f);
+    if (distorts) {
+      glm::mat4 rings(0.0f);
+      glm::vec4 strength(0.0f), chroma(0.0f);
+      for (int i = 0; i < kMaxRipples; ++i) {
+        const Ripple& ripple = settings.ripples[static_cast<size_t>(i)];
+        if (!ripple.Active()) continue;
+        rings[i] = {ripple.center.x, 1.0f - ripple.center.y, ripple.radius, ripple.width};
+        strength[i] = ripple.strength;
+        chroma[i] = ripple.chroma;
+      }
+      material.SetParam("uRipples", rings);
+      material.SetParam("uRippleStrength", strength);
+      material.SetParam("uRippleChroma", chroma);
+      material.SetParam("uChroma", settings.chromatic_aberration.intensity);
+    }
+    const VignetteSettings& vignette = settings.vignette;
+    material.SetParam("uVignette",
+                      glm::vec4(vignette.center.x, 1.0f - vignette.center.y, std::clamp(vignette.intensity, 0.0f, 1.0f),
+                                std::clamp(vignette.smoothness, 0.01f, 1.0f)));
+    material.SetParam("uVignetteColor", vignette.color);
     return output_pass_;
   }
 

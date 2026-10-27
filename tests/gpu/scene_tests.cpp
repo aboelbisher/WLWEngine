@@ -595,6 +595,110 @@ TEST_CASE("bloom probes") {
   CHECK(image.Pixel(250, 5)[0] == 0);  // a corner far away: nothing
 }
 
+namespace {
+
+// An HDR picture whose every channel is the pixel's distance from the middle (in viewport heights: it is
+// square), drawn by a post pass, then through the output pass with `post`.
+testing::Image RadialPicture(const rendering::PostSettings& post) {
+  static const char* kRadial = R"(shader_type post;
+void fragment() { FragColor = vec4(vec3(length(vUV - 0.5)), 1.0); })";
+  auto viewport = MakeViewport();
+  viewport->SetScene(nullptr);
+  viewport->SetFormat(rendering::TextureFormat::RGBA16F);
+  viewport->AddPostPass(
+      {.material = rendering::ShaderMaterial::Create(rendering::Shader::Create(kRadial, "test_radial"))});
+  viewport->Post().Settings() = post;
+  return gpu_tests::Render(viewport);
+}
+
+// The distance of pixel (x, y)'s centre from the middle of the picture, in viewport heights.
+float DistanceFromMiddle(int x, int y) {
+  const float size = gpu_tests::kSize;
+  return glm::length(
+      glm::vec2((static_cast<float>(x) + 0.5f) / size - 0.5f, (static_cast<float>(y) + 0.5f) / size - 0.5f));
+}
+
+int Level(float value) { return static_cast<int>(std::lround(value * 255.0f)); }
+
+}  // namespace
+
+TEST_CASE("ripples push the picture outwards") {
+  const testing::Image plain = RadialPicture({});
+  // A ring around the middle, radius 0.3 and width 0.1 (77 +- 13 pixels), pushing 0.05 outwards.
+  rendering::PostSettings post;
+  post.ripples[1] = {.center = {0.5f, 0.5f}, .radius = 0.3f, .width = 0.1f, .strength = 0.05f};
+  const testing::Image rippled = RadialPicture(post);
+  // On the ring the picture is read from further in: the push eases off as 1 - x^2 squared across it.
+  const int x = 205, y = 128;
+  const float d = DistanceFromMiddle(x, y);
+  const float across = (d - 0.3f) / 0.05f, k = 1.0f - across * across;
+  CHECK(std::abs(plain.Pixel(x, y)[0] - Level(d)) <= 1);
+  CHECK_MESSAGE(std::abs(rippled.Pixel(x, y)[1] - Level(d - 0.05f * k * k)) <= 2,
+                rippled.Pixel(x, y)[1] << " vs " << Level(d - 0.05f * k * k));
+  // Inside and outside the ring nothing moves.
+  for (const glm::ivec2 p : {glm::ivec2(128, 128), glm::ivec2(168, 128), glm::ivec2(228, 128), glm::ivec2(30, 30)}) {
+    CHECK(std::abs(rippled.Pixel(p.x, p.y)[0] - plain.Pixel(p.x, p.y)[0]) <= 1);
+  }
+
+  // Colour split: red pushed 1.5 x as far, blue 0.5 x.
+  post.ripples[1].chroma = 0.5f;
+  const testing::Image split = RadialPicture(post);
+  const uint8_t* pixel = split.Pixel(x, y);
+  CHECK(std::abs(pixel[0] - Level(d - 0.075f * k * k)) <= 2);
+  CHECK(std::abs(pixel[2] - Level(d - 0.025f * k * k)) <= 2);
+
+  // Centres count from the top-left corner: a ring in the top half moves the top half only.
+  rendering::PostSettings top;
+  top.ripples[0] = {.center = {0.5f, 0.25f}, .radius = 0.1f, .width = 0.05f, .strength = 0.03f};
+  const testing::Image high = RadialPicture(top);
+  CHECK(plain.Pixel(128, 38)[0] - high.Pixel(128, 38)[0] > 4);               // 0.1 above the ring's centre (row 64)
+  CHECK(std::abs(plain.Pixel(128, 217)[0] - high.Pixel(128, 217)[0]) <= 1);  // the same row, mirrored
+}
+
+TEST_CASE("chromatic aberration and vignette") {
+  // Chromatic aberration: red read further out, blue further in, growing towards the corners; the middle stays.
+  rendering::PostSettings fringe;
+  fringe.chromatic_aberration.intensity = 0.05f;
+  const testing::Image aberrated = RadialPicture(fringe);
+  const uint8_t* corner = aberrated.Pixel(30, 30);
+  CHECK_MESSAGE((corner[0] > corner[1] + 4 && corner[2] < corner[1] - 4),
+                +corner[0] << " " << +corner[1] << " " << +corner[2]);
+  const uint8_t* middle = aberrated.Pixel(128, 128);
+  CHECK((std::abs(middle[0] - middle[1]) <= 1 && std::abs(middle[2] - middle[1]) <= 1));
+
+  // Vignette on a flat grey: the centre is untouched, the edges darken from halfway, the corners go black.
+  auto vignetted = [](const rendering::VignetteSettings& vignette) {
+    auto viewport = MakeViewport();
+    viewport->SetScene(nullptr);
+    viewport->SetClearColor(Color{0.8f, 0.8f, 0.8f, 1.0f});
+    viewport->Post().Settings().vignette = vignette;
+    return gpu_tests::Render(viewport);
+  };
+  const testing::Image framed = vignetted({.intensity = 1.0f, .smoothness = 0.5f});
+  CHECK(std::abs(framed.Pixel(128, 128)[0] - 204) <= 1);
+  const int edge = framed.Pixel(128, 0)[0];  // 0.707 of the way to a corner: smoothstep(0.5, 1, 0.707) = 0.37
+  CHECK_MESSAGE((edge > 120 && edge < 140), edge);
+  CHECK(framed.Pixel(0, 0)[0] <= 3);
+  // Its centre counts from the top-left corner too.
+  const testing::Image moved = vignetted({.intensity = 1.0f, .center = {0.25f, 0.25f}});
+  CHECK((std::abs(moved.Pixel(64, 64)[0] - 204) <= 1 && moved.Pixel(192, 192)[0] < 100));
+}
+
+TEST_CASE("post ripple") {
+  // A shockwave over lit cubes: two rings (one splitting colour), a little chromatic aberration, a vignette.
+  auto viewport = MakeViewport();
+  viewport->SetCamera(FixedCamera(Vec3{0, -6, 2}, Vec3{0, 0, 0}));
+  AddSun(*viewport, 0.9f);
+  AddMesh(*viewport, utils::CubeMesh(1.0f, Color{0.95f, 0.6f, 0.2f, 1.0f}), Opaque(), {-1.2f, 0, 0});
+  AddMesh(*viewport, utils::CubeMesh(1.0f, Color{0.2f, 0.45f, 0.9f, 1.0f}), Opaque(), {1.2f, 0, 0});
+  rendering::PostSettings& post = viewport->Post().Settings();
+  post.ripples[0] = {.center = {0.5f, 0.5f}, .radius = 0.3f, .width = 0.12f, .strength = 0.04f, .chroma = 0.5f};
+  post.ripples[3] = {.center = {0.3f, 0.7f}, .radius = 0.12f, .width = 0.08f, .strength = -0.03f};
+  post.chromatic_aberration.intensity = 0.01f;
+  post.vignette = {.intensity = 0.5f};
+  CheckGolden("post_ripple", viewport);
+}
+
 TEST_CASE("canvas") {
   // The 2D layer alone: shapes, text from the SDF atlas, images (straight alpha, additive).
   auto viewport = MakeViewport();

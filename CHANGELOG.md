@@ -11,6 +11,22 @@ listed under **Breaking** with its **Migration**. Shims added before that (`WLW_
 
 ## Unreleased
 
+- Shockwaves, chromatic aberration and vignette (for Bluzzle's big clears), all in the output pass (no extra
+  full-screen pass: on mobile a pass costs mostly its read and write of every pixel). `PostSettings::ripples`
+  (`kMaxRipples` = 4 `rendering::Ripple` {center 0..1 from the top-left, radius, width, strength, chroma}, in viewport
+  heights so rings stay round): the picture under a ring is read from further in (pushed outwards), easing as
+  (1 - x^2)^2 across it; `chroma` pushes red and blue 1 +- chroma as far (colour fringes on the ring).
+  `chromatic_aberration` {intensity at the corners, growing with the squared distance from the middle} and `vignette`
+  {intensity, smoothness, center, color} (Unity's / Unreal's shapes). `PostSettings::Distorts()`; `NeedsOutputPass()`
+  counts them only while active, so a game without bloom pays for the pass only during a shockwave. The bloom is read
+  at the moved place too. `fx::Shockwaves` (fx/shockwaves.h): `Add(center, ShockwaveSettings)`, `Update(dt)`,
+  `WriteTo(PostSettings&)`, `Count()`; four slots, a new wave replaces the one nearest its end; `fx::ShockwaveAt` = the
+  shape over a life (radius OutCubic, width linear, push faded in over the first 10% and out as (1 - t)^2). Tests:
+  shockwave life, slots, frame-rate independence, NeedsOutputPass; GPU: probes (push = strength x k^2 on a radial
+  gradient, colour split, top-left centres, aberration at the corners only, vignette falloff) + golden "post_ripple"
+  (reference from CI). Measured on a Pixel 4 (quality 1): the output pass goes from 1.1 to 1.6 ms with a ring and
+  full-screen fringes, nothing when idle.
+
 - Light particles (for Bluzzle's line clears): `scene::BillboardBatch` (billboard_batch.h, `NodeKind::BillboardBatch`):
   camera-facing quads anywhere in 3D in one instanced draw call, 40-byte `rendering::BillboardInstance` {position,
   size, stretch, rotation, RGBA8 colour, intensity}. The vertex shader (shaders/billboard.vert) builds each quad in

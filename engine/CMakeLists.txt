@@ -78,6 +78,8 @@ add_library(wlw STATIC
   wlw/fx/flow_particles.h
   wlw/fx/particle_system.cpp
   wlw/fx/particle_system.h
+  wlw/fx/shockwaves.cpp
+  wlw/fx/shockwaves.h
 
   wlw/math/exact_cover.cpp
   wlw/math/bit_grid.h
