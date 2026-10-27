@@ -31,10 +31,16 @@ engine/wlw/
               shake.h (trauma-based screen shake: trauma decays, offset = trauma^2 x smooth noise),
               timeline.h (Timeline: beats placed Then / With / At on one clock; cues polled with Crossed; Skip),
               spring.h (Spring<T>: damped spring by frequency + damping ratio, exact step: Kick, SnapTo, AtRest)
+              curve.h (Curve: Hermite keys, Smooth (Catmull-Rom) / Linear / Constant, Evaluate exact, Sample from a 64-point
+              baked table), gradient.h (Gradient: colour stops, Linear / Constant, baked the same way); Unity AnimationCurve /
+              Gradient, Godot Curve / Gradient
   fx/         ParticleSystem: CPU simulation (fixed capacity, swap-remove, bursts, Emit = one exact particle,
               optional Floor rectangle in XY at a height in z they bounce on and fall past; gravity -Z; BurstSettings::spread /
               max_spin and Particle::angles / angular_velocity in radians); WriteTo(MultiMeshInstance3D&) = WriteInstances, rows of
-              T*Rx*Ry*Rz*S in closed form with core::SinCos (5k: ~120 us MSVC Release). FlowParticles (flow_particles.h):
+              T*Rx*Ry*Rz*S in closed form with core::SinCos (5k: ~120 us MSVC Release). WriteTo(BillboardBatch&) = 40 B quads
+              (stretch = velocity x stretch.velocity_scale, capped at max_length; rotation = angles.z; bounds fitted). System-wide
+              size_over_life / intensity_over_life (anim::Curve) + color_over_life (anim::Gradient), sampled at LifeFraction;
+              Particle::intensity / BurstSettings::intensity (HDR, billboards only). FlowParticles (flow_particles.h):
               10-20k dots along paths (liquid in pipes; not a fluid sim), SoA arrays, paths resampled evenly (O(1)
               lookup), SetNext routing (round robin; none = fade out), SetStop = a gate dots queue behind (the line
               grows back up the path), emitters; WriteTo(SpriteBatch) packs 16 B/dot + bounds. SetDensity(0..1) scales emitters + queue packing (count only;
@@ -204,7 +210,7 @@ engine/wlw/
               (FindChild, GetNode("A/B/..")), random 64-bit ids (SetId, Scene::FindById), layers mask vs
               Camera3D::SetCullMask (CullScene). Scene::Root() holds the top-level nodes; ForEachNode = every node,
               depth first. Node3D draws nothing (280 B); node TYPES (Godot's tree) each set a 1-byte NodeKind in their
-              constructor and the gather switches on Kind() (no virtual call per node): Node / MeshInstance / MultiMeshInstance /
+              constructor and the gather switches on Kind() (no virtual call per node): Node / MeshInstance / MultiMeshInstance / BillboardBatch /
               SpriteBatch / Light / Camera. geometry_instance.h: GeometryInstance3D = model + material (GetModel/GetMaterial
               const refs; the mesh's material wins) + SetCastsShadow / SetReceivesShadow (default off) + LocalBounds /
               WorldBounds (Arvo TransformBox per mesh / of the instance bounds; nothing to draw = 0.1 box at the node) +
@@ -220,6 +226,12 @@ engine/wlw/
               place, SetBounds/FitBounds = culling box (no per-dot bounds), Additive by default (never sorted). GL:
               GLSpriteBuffer (own VAO, no vertex buffer: corners from gl_VertexID, strip of 4 x instances),
               shaders/sprite.vert/.frag (TEXTURED = the material's texture, else a computed (1-d²)² dot). No shadows/lights.
+              BillboardBatch (billboard_batch.h): camera-facing quads anywhere in 3D in one draw call, 40-byte
+              BillboardInstance {vec3 position, size, vec3 stretch, rotation, RGBA8, float intensity (HDR)}; billboard.vert builds
+              the quad in view space (round: turned by rotation; stretched: along the stretch's on-screen direction, longer by its
+              on-screen length); 3D AABB bounds (SetBounds / FitBounds = rendering::BillboardBounds); material = blend (Additive
+              default, never sorted) + shape texture (TEXTURED) or the computed dot. GL: GLQuadBuffer = the shared no-vertex-buffer
+              instanced quad (GLSpriteBuffer, GLBillboardBuffer); driver: QuadProgramFor(Sprite|Billboard, textured), AddQuadItem.
               RenderStats::instance_bytes = per-copy data uploaded this frame.
               Scene (scene.h) = the world: nodes, lights, skybox; owned by nobody who looks at it. Viewport (viewport.h) =
               "draw this Scene from this camera into this picture" + a 2D Canvas over it (like Godot's SubViewport):
@@ -268,7 +280,8 @@ engine/wlw/
               = part of the picture (after 3D, before post passes), Overlay = on top after them; GetCanvas() = Overlay 0.
   utils/      image/glTF loaders (glTF turned from Y up: models face -Y), texture cache, primitives.h (CubeMesh, BeveledCubeMesh, SphereMesh, CylinderMesh, GemMesh, PyramidFrustumMesh, PlaneMesh: procedural cube,
               bevelled cube, sphere, cylinder, gem, pyramid frustum, plane = XY ground; Z up, CCW outward faces),
-              textures.h (procedural textures: RadialFalloffTexture = a soft (1-d²)² dot for glows, particles, metaballs)
+              textures.h (procedural textures: RadialFalloffTexture = a soft (1-d²)² dot for glows, particles, metaballs;
+              StarTexture (N tapered rays + a soft core), RingTexture (soft ring at a radius); AlphaShapePixels = the helper)
 kit/wlw/kit/  wlw::kit: game-level building blocks shared by games (separate target on top of the engine; the
               engine never includes it). SaveStore (JSON file, atomic write, .bak fallback, versions + migrations),
               progress.h (DeviceId, Counters, Scores, LevelProgress: all mergeable, for cloud sync), daily.h (Date,
@@ -305,7 +318,7 @@ tests/        engine unit tests (no window/GPU: frame clock, conventions (axes, 
               mali_offline_compiler/malioc --core Mali-G78 x.frag; from Git Bash with MSYS_NO_PATHCONV=1).
 benchmarks/   wlw_benchmarks (nanobench; top-level only, desktop + Android executable): no window/GPU, fixed seeds, one op =
               one frame's work. Groups: render (gather/cull/sort 1k, 10k, instance bounds 5k), transform (move flat/nested, read nested; 1k, 10k), fx (flow 20k,
-              particles 5k), ui (text 1k glyphs), audio (mix 24 voices, music sweep + duck). Add: WLW_BENCHMARK("group") { ctx.Run("group/name",
+              particles 5k: update, instances, billboards), ui (text 1k glyphs), audio (mix 24 voices, music sweep + duck). Add: WLW_BENCHMARK("group") { ctx.Run("group/name",
               [&] { ... }); } (names are stable: baselines match by name). --out JSON, --baseline compare (warning past
               --threshold %, never a failure), --smoke = CTest "bench: smoke" (label bench). Baselines in
               benchmarks/baselines/: windows-local (owner's Ryzen 7 9800X3D, MSVC Release), linux-ci (bench.yml

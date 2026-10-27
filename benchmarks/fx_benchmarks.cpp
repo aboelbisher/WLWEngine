@@ -6,6 +6,7 @@
 #include "bench.h"
 #include "wlw/fx/flow_particles.h"
 #include "wlw/fx/particle_system.h"
+#include "wlw/scene/billboard_batch.h"
 #include "wlw/scene/geometry_instance.h"
 #include "wlw/scene/sprite_batch.h"
 
@@ -67,6 +68,15 @@ void ParticleBenchmarks(bench::Context& ctx) {
   ctx.Run("fx/particles instances 5k", [&] {
     system.WriteTo(node);
     bench::Context::Keep(node.InstanceCount());
+  });
+  // The same particles as stretched, coloured billboards (over-life settings on: what an effect really pays).
+  system.size_over_life = anim::Curve::Smooth({{0.0f, 1.0f}, {1.0f, 0.0f}});  // (they never age: kept at 1)
+  system.color_over_life = anim::Gradient({{0.0f, Color{1, 1, 1, 1}}, {1.0f, Color{1, 0.3f, 0.1f, 0}}});
+  system.stretch = {.velocity_scale = 0.05f, .max_length = 1.0f};
+  scene::BillboardBatch billboards(kParticles);
+  ctx.Run("fx/particles billboards 5k", [&] {
+    system.WriteTo(billboards);
+    bench::Context::Keep(billboards.Count());
   });
 }
 

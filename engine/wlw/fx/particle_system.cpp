@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <span>
 
 #include "wlw/core/math.h"
@@ -9,9 +10,23 @@
 
 namespace wlw::fx {
 
-float ParticleSystem::Particle::Size() const {
-  const float t = lifetime > 0.0f ? std::clamp(age / lifetime, 0.0f, 1.0f) : 1.0f;
-  return size_start + (size_end - size_start) * t;
+float ParticleSystem::Particle::LifeFraction() const {
+  return lifetime > 0.0f ? std::clamp(age / lifetime, 0.0f, 1.0f) : 1.0f;
+}
+
+float ParticleSystem::Particle::Size() const { return size_start + (size_end - size_start) * LifeFraction(); }
+
+float ParticleSystem::SizeOf(const Particle& p) const {
+  const float size = p.Size();
+  return size_over_life ? size * size_over_life->Sample(p.LifeFraction()) : size;
+}
+
+Color ParticleSystem::ColorOf(const Particle& p) const {
+  return color_over_life ? p.color * color_over_life->Sample(p.LifeFraction()) : p.color;
+}
+
+float ParticleSystem::IntensityOf(const Particle& p) const {
+  return intensity_over_life ? p.intensity * intensity_over_life->Sample(p.LifeFraction()) : p.intensity;
 }
 
 ParticleSystem::ParticleSystem(size_t capacity, uint32_t seed) : capacity_(capacity), rng_(seed) {
@@ -63,6 +78,7 @@ int ParticleSystem::Burst(const BurstSettings& settings, const glm::vec3& origin
     p.color = {std::min(settings.color.r * b, 1.0f), std::min(settings.color.g * b, 1.0f),
                std::min(settings.color.b * b, 1.0f), settings.color.a};
     p.lifetime = rng_.Range(settings.lifetime_min, settings.lifetime_max);
+    p.intensity = settings.intensity;
     p.age = -settings.delay;
     particles_.push_back(p);
   }
@@ -115,7 +131,7 @@ namespace {
 // (glm's order, the one the particles always had), written out instead of 4 matrix products. With
 // Rz = [cz -sz 0; sz cz 0; 0 0 1], Ry = [cy 0 sy; 0 1 0; -sy 0 cy], Rx = [1 0 0; 0 cx -sx; 0 sx cx]:
 // Ry * Rz = [cy*cz -cy*sz sy; sz cz 0; -sy*cz sy*sz cy], and Rx mixes its rows 1 and 2.
-void WriteInstance(const ParticleSystem::Particle& p, float size, rendering::Instance& out) {
+void WriteInstance(const ParticleSystem::Particle& p, float size, const Color& color, rendering::Instance& out) {
   const auto [sx, cx] = core::SinCos(p.angles.x);
   const auto [sy, cy] = core::SinCos(p.angles.y);
   const auto [sz, cz] = core::SinCos(p.angles.z);
@@ -123,7 +139,7 @@ void WriteInstance(const ParticleSystem::Particle& p, float size, rendering::Ins
   out.rows[0] = {size * (cy * cz), size * (-cy * sz), size * sy, p.position.x};
   out.rows[1] = {size * (sxsy * cz + cx * sz), size * (cx * cz - sxsy * sz), size * (-sx * cy), p.position.y};
   out.rows[2] = {size * (sx * sz - cxsy * cz), size * (cxsy * sz + sx * cz), size * (cx * cy), p.position.z};
-  out.color = Color32(p.color).Packed();
+  out.color = Color32(color).Packed();
 }
 
 }  // namespace
@@ -135,11 +151,40 @@ void ParticleSystem::WriteTo(scene::MultiMeshInstance3D& node) const {
   size_t count = 0;
   for (const Particle& p : particles_) {
     if (p.age < 0.0f) continue;  // still delayed
-    const float size = p.Size();
+    const float size = SizeOf(p);
     if (size <= 0.0f) continue;
-    WriteInstance(p, size, out[count++]);
+    WriteInstance(p, size, ColorOf(p), out[count++]);
   }
   if (count < out.size()) node.WriteInstances(count);  // drop the slots of the skipped ones
+}
+
+void ParticleSystem::WriteTo(scene::BillboardBatch& batch) const {
+  WLW_PROFILE_SCOPE("ParticleSystem::WriteTo billboards");
+  const std::span<rendering::BillboardInstance> out = batch.Write(particles_.size());
+  const float max_length2 = stretch.max_length * stretch.max_length;
+  glm::vec3 low(std::numeric_limits<float>::max()), high(std::numeric_limits<float>::lowest());
+  size_t count = 0;
+  for (const Particle& p : particles_) {
+    if (count == out.size()) break;  // the batch holds fewer than the system
+    if (p.age < 0.0f) continue;      // still delayed
+    const float size = SizeOf(p);
+    if (size <= 0.0f) continue;
+    rendering::BillboardInstance& b = out[count++];
+    b.position = p.position;
+    b.size = size;
+    b.stretch = p.velocity * stretch.velocity_scale;
+    const float length2 = glm::dot(b.stretch, b.stretch);
+    if (length2 > max_length2) b.stretch *= stretch.max_length / std::sqrt(length2);
+    b.rotation = p.angles.z;
+    b.color = Color32(ColorOf(p)).Packed();
+    b.intensity = IntensityOf(p);
+    // The bounds as we go (rendering::BillboardBounds, without a second pass).
+    const glm::vec3 reach = glm::abs(b.stretch) * 0.5f + glm::vec3(size * 0.5f);
+    low = glm::min(low, b.position - reach);
+    high = glm::max(high, b.position + reach);
+  }
+  if (count < out.size()) batch.Write(count);  // drop the slots of the skipped ones
+  batch.SetBounds(count > 0 ? AABB{low, high} : AABB{});
 }
 
 }  // namespace wlw::fx

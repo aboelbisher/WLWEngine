@@ -11,6 +11,28 @@ listed under **Breaking** with its **Migration**. Shims added before that (`WLW_
 
 ## Unreleased
 
+- Light particles (for Bluzzle's line clears): `scene::BillboardBatch` (billboard_batch.h, `NodeKind::BillboardBatch`):
+  camera-facing quads anywhere in 3D in one instanced draw call, 40-byte `rendering::BillboardInstance` {position,
+  size, stretch, rotation, RGBA8 colour, intensity}. The vertex shader (shaders/billboard.vert) builds each quad in
+  view space: round ones turn by `rotation`, stretched ones lie along the stretch's on-screen direction and grow by
+  its on-screen length (velocity-aligned sparks, like Unity's Stretched Billboard). `intensity` multiplies the colour
+  past 1 for HDR + bloom. Material = blend (Additive by default, never sorted) + shape texture (TEXTURED) or the
+  computed soft dot. 3D bounds: `SetBounds` / `FitBounds` (`rendering::BillboardBounds`). The GL side shares one
+  no-vertex-buffer instanced-quad class with sprites (`GLQuadBuffer`; `GLSpriteBuffer` is now built on it) and one
+  program cache (`QuadProgramFor`). Tests: layout, bounds, gather; GPU: "billboards face the camera and stretch on
+  screen" (pixel probes through a tilted camera) + golden "billboards" (reference from CI); both programs compile as
+  GLSL 3.30 and ES 3.00.
+- `anim::Curve` (anim/curve.h: Hermite keys with in/out tangents; `Smooth` = Catmull-Rom, `Linear`, `Constant`;
+  `Evaluate` exact, `Sample` from a 64-point table baked on change) and `anim::Gradient` (anim/gradient.h: colour stops
+  with alpha, Linear / Constant, baked the same way): Unity's AnimationCurve / Gradient, Godot's Curve / Gradient.
+- `fx::ParticleSystem`: `WriteTo(scene::BillboardBatch&)` (bounds fitted on the way); system-wide `size_over_life`,
+  `intensity_over_life` (Curve) and `color_over_life` (Gradient) at `Particle::LifeFraction()`, also applied by the
+  mesh `WriteTo`; `stretch` {velocity_scale, max_length}; `Particle::intensity` + `BurstSettings::intensity`;
+  `SizeOf` / `ColorOf` / `IntensityOf` = what WriteTo draws. Unset settings change nothing. Benchmark
+  "fx/particles billboards 5k".
+- `utils::StarTexture` / `StarPixels` (N tapered rays + a soft core) and `utils::RingTexture` / `RingPixels` (a soft
+  ring), on a shared `AlphaShapePixels` helper; `ShapeTexture(size, pixels)`.
+
 - `anim::Spring<T>` (anim/spring.h, for Bluzzle's line-clear knocks): a damped spring pulling a value (float,
   glm::vec2/3) towards `target`, set by `frequency` (Hz) and `damping` (zeta: < 1 bouncy, 1 critical, > 1 sluggish);
   `Kick(velocity)`, `SnapTo(value)`, `Update(dt)`, `Value()`, `Velocity()`, `AtRest(epsilon)`. Each Update steps the

@@ -286,6 +286,62 @@ TEST_CASE("billboard batch") {
   CHECK((batch.Empty() && batch.Internal().Version() == before + 2));
 }
 
+TEST_CASE("particles to billboards: over-life settings, stretch, bounds") {
+  ParticleSystem system(8);
+  system.gravity = glm::vec3(0.0f);
+  system.drag = 0.0f;
+  ParticleSystem::Particle p;
+  p.velocity = {10.0f, 0.0f, 0.0f};
+  p.size_start = p.size_end = 2.0f;
+  p.color = {1.0f, 0.5f, 0.0f, 1.0f};
+  p.intensity = 3.0f;
+  p.angles = {0.0f, 0.0f, 0.7f};
+  p.lifetime = 1.0f;
+  p.age = 0.5f;
+  system.Emit(p);
+  ParticleSystem::Particle delayed = p;
+  delayed.age = -0.1f;
+  system.Emit(delayed);
+  ParticleSystem::Particle gone = p;
+  gone.size_start = gone.size_end = 0.0f;
+  system.Emit(gone);
+
+  wlw::scene::BillboardBatch batch(8);
+  system.WriteTo(batch);
+  REQUIRE(batch.Count() == 1);  // the delayed and the zero-sized ones aren't drawn
+  const wlw::rendering::BillboardInstance& b = batch.Billboards()[0];
+  CHECK((Near(b.size, 2.0f) && b.stretch == glm::vec3(0.0f) && Near(b.rotation, 0.7f) && Near(b.intensity, 3.0f)));
+  CHECK(b.color == wlw::Color32(wlw::Color{1.0f, 0.5f, 0.0f, 1.0f}).Packed());
+
+  // Over life at t = 0.5: size x 0.5 (a line 1 -> 0), colour x a gradient's middle, intensity x 2.
+  system.size_over_life = wlw::anim::Curve::Linear({{0.0f, 1.0f}, {1.0f, 0.0f}});
+  system.color_over_life = wlw::anim::Gradient({{0.0f, {1, 1, 1, 1}}, {1.0f, {1, 1, 1, 0}}});
+  system.intensity_over_life = wlw::anim::Curve::Constant(2.0f);
+  system.stretch = {.velocity_scale = 0.05f, .max_length = 1e9f};
+  system.WriteTo(batch);
+  const wlw::rendering::BillboardInstance& c = batch.Billboards()[0];
+  CHECK((Near(c.size, 1.0f, 0.01f) && Near(c.intensity, 6.0f) && Near(c.stretch.x, 0.5f)));
+  CHECK(Near(wlw::Color32::FromPacked(c.color).ToColor().a, 0.5f, 0.01f));
+  CHECK((Near(batch.Bounds().min.x, -0.75f, 0.01f) && Near(batch.Bounds().max.x, 0.75f, 0.01f)));  // 0.25 + 0.5
+  system.stretch.max_length = 0.2f;                                                                // capped
+  system.WriteTo(batch);
+  CHECK(Near(glm::length(batch.Billboards()[0].stretch), 0.2f));
+
+  // The same settings shape the mesh copies (size, colour; meshes have no intensity).
+  wlw::scene::MultiMeshInstance3D node;
+  system.WriteTo(node);
+  REQUIRE(node.InstanceCount() == 1);
+  CHECK(Near(glm::length(glm::vec3(node.Instances()[0].rows[0])), 1.0f, 0.01f));
+  CHECK((Near(system.SizeOf(system.Particles()[0]), 1.0f, 0.01f) &&
+         Near(system.IntensityOf(system.Particles()[0]), 6.0f)));
+
+  // A batch smaller than the system takes what fits.
+  for (int i = 0; i < 4; ++i) system.Emit(p);
+  wlw::scene::BillboardBatch small(2);
+  system.WriteTo(small);
+  CHECK(small.Count() == 2);
+}
+
 // ---- FlowParticles: dots along paths ----
 
 static FlowParticles Exact(size_t capacity = 1000) {
