@@ -1,6 +1,7 @@
 #pragma once
 #include <algorithm>
 #include <memory>
+#include <optional>
 #include <string>
 #include <functional>
 #include <utility>
@@ -13,6 +14,23 @@
 #include "wlw/input/input.h"
 
 namespace wlw::scene {
+
+// The mouse cursor's shape over the window (desktop; phones ignore it). The same standard shapes on Windows,
+// macOS and Linux (GLFW 3.4's); a shape the system lacks falls back to the arrow. Hidden = no cursor drawn (it
+// still moves and clicks; for a locked cursor see Window::SetCursorLocked).
+enum class Cursor : uint8_t {
+  Arrow,
+  TextInput,
+  Hand,
+  Crosshair,
+  ResizeEW,    // left-right
+  ResizeNS,    // up-down
+  ResizeNWSE,  // top-left to bottom-right
+  ResizeNESW,  // top-right to bottom-left
+  ResizeAll,
+  NotAllowed,
+  Hidden,
+};
 
 struct WindowOptions {
   // false: never shown (desktop), just a GL context to draw offscreen viewports with, e.g. the
@@ -58,6 +76,24 @@ class Window {
 
   input::Input& GetInput() { return input_; }
   const input::Input& GetInput() const { return input_; }
+
+  // ---- Cursor and focus (desktop; phones ignore the cursor) ----
+  // The cursor's shape while it is over the window. The debug UI shows its own shapes while it has the mouse.
+  void SetCursor(Cursor cursor) {
+    cursor_ = cursor;
+    ApplyCursor();
+  }
+  Cursor GetCursor() const { return cursor_; }
+  // Locked: the cursor is hidden and held in the window, and Input::PointerDelta keeps growing past the window's
+  // edges (raw, unaccelerated motion where the OS has it): mouse look, a fly camera. Unlocked, it comes back where
+  // it was. Off while the window isn't focused.
+  void SetCursorLocked(bool locked) {
+    cursor_locked_ = locked;
+    ApplyCursor();
+  }
+  bool IsCursorLocked() const { return cursor_locked_; }
+  // Whether the window has the keyboard (desktop: the active window; phones: the app is in front, no dialog over it).
+  bool HasFocus() const { return focused_; }
 
   Vec2 GetSize() const {
     return size_;  // drawable size in pixels
@@ -134,8 +170,17 @@ class Window {
   InternalAccess Internal();
 
  protected:
+  // The shape to show now: the debug UI's while it overrides, else the game's (EffectiveCursor). The platform
+  // applies it and the lock (cursor_locked_); called on every change.
+  virtual void ApplyCursor() {}
+  Cursor EffectiveCursor() const { return cursor_override_.value_or(cursor_); }
+
   Vec2 size_;  // drawable size in pixels (updated by the platform on resize)
   input::Input input_;
+  Cursor cursor_ = Cursor::Arrow;
+  std::optional<Cursor> cursor_override_;
+  bool cursor_locked_ = false;
+  bool focused_ = true;
 
   std::unique_ptr<Viewport> screen_ = Viewport::CreateScreen();
   std::vector<std::shared_ptr<Viewport>> viewports_;
@@ -162,6 +207,13 @@ class Window::InternalAccess {
   void SetGpuTimingSupported(bool supported) const { window_.gpu_timing_supported_ = supported; }
   void SetGpuFrameMs(float ms) const { window_.gpu_frame_ms_ = ms; }
   void SetFragmentPrecision(std::string text) const { window_.fragment_precision_ = std::move(text); }
+
+  // The debug UI's cursor shape while it has the mouse (nullopt = the game's again).
+  void SetCursorOverride(std::optional<Cursor> cursor) const {
+    if (window_.cursor_override_ == cursor) return;
+    window_.cursor_override_ = cursor;
+    window_.ApplyCursor();
+  }
 
   // Drops the scenes and viewports (their GPU resources, if nothing else holds them): the renderer
   // calls it when it shuts down, while the GL context still exists.

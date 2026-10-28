@@ -191,10 +191,69 @@ void EnginePanel::OnDebugUI() {
   const Vec2 surface = window.GetInput().SurfaceSize();
   ImGui::Text("Framebuffer %.0f x %.0f px", framebuffer.x, framebuffer.y);
   ImGui::Text("Pointer area %.0f x %.0f%s", surface.x, surface.y, window.GetInput().IsTouchScreen() ? " (touch)" : "");
+  InputSection(window);
   ImGui::Text("Time scale x%.2f", App().Time().Scale());
   ImGui::Checkbox("ImGui demo window", &show_imgui_demo_);
   ImGui::End();
   if (show_imgui_demo_) ImGui::ShowDemoWindow(&show_imgui_demo_);  // every widget, with code
+}
+
+// What the window's input sees (the raw state: the debug UI has the mouse while this is read), and the cursor's
+// shapes and lock to try by hand.
+void EnginePanel::OnUpdate(float /*dt*/) {
+  if (lock_seconds_left_ <= 0.0f) return;
+  scene::Window& window = App().Window();
+  lock_seconds_left_ -= App().Time().RealDelta();  // real time: a paused game still unlocks
+  locked_motion_ += window.GetInput().RawPointerDelta();
+  if (lock_seconds_left_ <= 0.0f) window.SetCursorLocked(false);
+}
+
+void EnginePanel::InputSection(scene::Window& window) {
+  if (!ImGui::TreeNode("Input")) return;
+  const input::Input& input = window.GetInput();
+  std::string keys;
+  for (int i = 1; i < static_cast<int>(input::Key::Count); ++i) {
+    if (input.RawKeyDown(static_cast<input::Key>(i)))
+      keys.append(keys.empty() ? "" : " ").append(KeyName(static_cast<input::Key>(i)));
+  }
+  ImGui::Text("Keys: %s", keys.empty() ? "-" : keys.c_str());
+  std::string modifiers = input::ShortcutName(input::Key::Unknown, input.RawModifiers());  // "Ctrl+Shift+Unknown"
+  modifiers.resize(modifiers.size() - std::char_traits<char>::length(input::KeyName(input::Key::Unknown)));
+  ImGui::Text("Modifiers: %s", modifiers.empty() ? "-" : modifiers.c_str());
+  static constexpr const char* kButtons[] = {"left", "right", "middle", "back", "forward"};
+  std::string buttons;
+  for (int i = 0; i < static_cast<int>(input::MouseButton::Count); ++i) {
+    if (input.RawMouseButtonDown(static_cast<input::MouseButton>(i)))
+      buttons.append(buttons.empty() ? "" : " ").append(kButtons[i]);
+  }
+  ImGui::Text("Mouse buttons: %s", buttons.empty() ? "-" : buttons.c_str());
+  const Vec2 position = input.PointerPosition();
+  const Vec2 delta = input.RawPointerDelta();
+  const Vec2 scroll = input.RawScrollDelta();
+  if (scroll != Vec2(0.0f)) last_scroll_ = scroll;
+  ImGui::Text("Pointer %.0f, %.0f, moved %.1f, %.1f; last wheel %.2f, %.2f", position.x, position.y, delta.x, delta.y,
+              last_scroll_.x, last_scroll_.y);
+  ImGui::Text("Focus: %s", window.HasFocus() ? "yes" : "no");
+
+  static constexpr const char* kCursors[] = {"Arrow",     "TextInput",  "Hand",       "Crosshair",
+                                             "ResizeEW",  "ResizeNS",   "ResizeNWSE", "ResizeNESW",
+                                             "ResizeAll", "NotAllowed", "Hidden"};
+  int cursor = static_cast<int>(window.GetCursor());
+  if (ImGui::Combo("Game cursor", &cursor, kCursors, IM_ARRAYSIZE(kCursors))) {
+    window.SetCursor(static_cast<scene::Cursor>(cursor));  // shown outside the debug UI's windows
+  }
+  // Locked, the cursor can't click a checkbox off again: a timed lock.
+  if (lock_seconds_left_ > 0.0f) {
+    ImGui::Text("Locked: %.1f s left, moved %.0f, %.0f", lock_seconds_left_, locked_motion_.x, locked_motion_.y);
+  } else if (ImGui::Button("Lock the cursor for 5 s")) {
+    lock_seconds_left_ = 5.0f;
+    locked_motion_ = Vec2(0.0f);
+    window.SetCursorLocked(true);
+  } else if (locked_motion_ != Vec2(0.0f)) {
+    ImGui::SameLine();
+    ImGui::Text("last lock moved %.0f, %.0f", locked_motion_.x, locked_motion_.y);
+  }
+  ImGui::TreePop();
 }
 
 }  // namespace wlw::debug

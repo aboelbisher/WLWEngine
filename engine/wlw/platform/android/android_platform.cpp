@@ -73,25 +73,69 @@ void PollEvents(int timeout_ms) {
   }
 }
 
+// Android's key codes onto key positions (D18). Android maps a keyboard's scan codes to key codes by position
+// (its key layout files), so these are positions too; the layout key = the same key (no layout lookup yet: no
+// shortcuts on phones). Bluetooth keyboards, Chromebooks and the emulator send the full set.
 input::Key MapKey(int32_t keycode) {
+  using input::Key;
+  const auto offset = [](Key first, int32_t by) { return static_cast<Key>(static_cast<int32_t>(first) + by); };
+  if (keycode >= AKEYCODE_A && keycode <= AKEYCODE_Z) return offset(Key::A, keycode - AKEYCODE_A);
+  if (keycode >= AKEYCODE_0 && keycode <= AKEYCODE_9) return offset(Key::Digit0, keycode - AKEYCODE_0);
+  if (keycode >= AKEYCODE_F1 && keycode <= AKEYCODE_F12) return offset(Key::F1, keycode - AKEYCODE_F1);
+  if (keycode >= AKEYCODE_NUMPAD_0 && keycode <= AKEYCODE_NUMPAD_9) {
+    return offset(Key::Numpad0, keycode - AKEYCODE_NUMPAD_0);
+  }
   switch (keycode) {
-    case AKEYCODE_DPAD_UP: return input::Key::Up;  // the emulator's arrow keys arrive as D-pad
-    case AKEYCODE_DPAD_DOWN: return input::Key::Down;
-    case AKEYCODE_DPAD_LEFT: return input::Key::Left;
-    case AKEYCODE_DPAD_RIGHT: return input::Key::Right;
-    case AKEYCODE_SPACE: return input::Key::Space;
+    case AKEYCODE_GRAVE: return Key::Grave;
+    case AKEYCODE_MINUS: return Key::Minus;
+    case AKEYCODE_EQUALS: return Key::Equal;
+    case AKEYCODE_LEFT_BRACKET: return Key::LeftBracket;
+    case AKEYCODE_RIGHT_BRACKET: return Key::RightBracket;
+    case AKEYCODE_BACKSLASH: return Key::Backslash;
+    case AKEYCODE_SEMICOLON: return Key::Semicolon;
+    case AKEYCODE_APOSTROPHE: return Key::Apostrophe;
+    case AKEYCODE_COMMA: return Key::Comma;
+    case AKEYCODE_PERIOD: return Key::Period;
+    case AKEYCODE_SLASH: return Key::Slash;
+    case AKEYCODE_SPACE: return Key::Space;
     case AKEYCODE_ENTER:
-    case AKEYCODE_DPAD_CENTER: return input::Key::Enter;
-    case AKEYCODE_ESCAPE: return input::Key::Escape;
-    case AKEYCODE_W: return input::Key::W;
-    case AKEYCODE_A: return input::Key::A;
-    case AKEYCODE_S: return input::Key::S;
-    case AKEYCODE_D: return input::Key::D;
-    case AKEYCODE_I: return input::Key::I;
-    case AKEYCODE_P: return input::Key::P;
-    case AKEYCODE_F1: return input::Key::F1;
-    case AKEYCODE_BACK: return input::Key::Back;  // handled by the game (Application), not Android
-    default: return input::Key::Unknown;
+    case AKEYCODE_DPAD_CENTER: return Key::Enter;
+    case AKEYCODE_ESCAPE: return Key::Escape;
+    case AKEYCODE_TAB: return Key::Tab;
+    case AKEYCODE_DEL: return Key::Backspace;  // Android's DEL is the key left of it
+    case AKEYCODE_INSERT: return Key::Insert;
+    case AKEYCODE_FORWARD_DEL: return Key::Delete;
+    case AKEYCODE_MOVE_HOME: return Key::Home;
+    case AKEYCODE_MOVE_END: return Key::End;
+    case AKEYCODE_PAGE_UP: return Key::PageUp;
+    case AKEYCODE_PAGE_DOWN: return Key::PageDown;
+    case AKEYCODE_DPAD_UP: return Key::Up;  // the emulator's arrow keys arrive as D-pad
+    case AKEYCODE_DPAD_DOWN: return Key::Down;
+    case AKEYCODE_DPAD_LEFT: return Key::Left;
+    case AKEYCODE_DPAD_RIGHT: return Key::Right;
+    case AKEYCODE_CAPS_LOCK: return Key::CapsLock;
+    case AKEYCODE_SCROLL_LOCK: return Key::ScrollLock;
+    case AKEYCODE_NUM_LOCK: return Key::NumLock;
+    case AKEYCODE_SYSRQ: return Key::PrintScreen;
+    case AKEYCODE_BREAK: return Key::Pause;
+    case AKEYCODE_MENU: return Key::Menu;
+    case AKEYCODE_NUMPAD_DOT: return Key::NumpadDecimal;
+    case AKEYCODE_NUMPAD_DIVIDE: return Key::NumpadDivide;
+    case AKEYCODE_NUMPAD_MULTIPLY: return Key::NumpadMultiply;
+    case AKEYCODE_NUMPAD_SUBTRACT: return Key::NumpadSubtract;
+    case AKEYCODE_NUMPAD_ADD: return Key::NumpadAdd;
+    case AKEYCODE_NUMPAD_ENTER: return Key::NumpadEnter;
+    case AKEYCODE_NUMPAD_EQUALS: return Key::NumpadEqual;
+    case AKEYCODE_SHIFT_LEFT: return Key::LeftShift;
+    case AKEYCODE_SHIFT_RIGHT: return Key::RightShift;
+    case AKEYCODE_CTRL_LEFT: return Key::LeftControl;
+    case AKEYCODE_CTRL_RIGHT: return Key::RightControl;
+    case AKEYCODE_ALT_LEFT: return Key::LeftAlt;
+    case AKEYCODE_ALT_RIGHT: return Key::RightAlt;
+    case AKEYCODE_META_LEFT: return Key::LeftSuper;
+    case AKEYCODE_META_RIGHT: return Key::RightSuper;
+    case AKEYCODE_BACK: return Key::Back;  // handled by the game (Application), not Android
+    default: return Key::Unknown;
   }
 }
 
@@ -244,6 +288,11 @@ class AndroidWindow : public scene::Window {
         was_suspended_ = true;  // and must resume once we're back, even if it never had to sleep
         break;
       case APP_CMD_RESUME: resumed_ = true; break;
+      case APP_CMD_GAINED_FOCUS: focused_ = true; break;
+      case APP_CMD_LOST_FOCUS:  // a dialog, the notification shade: what was held is released there
+        focused_ = false;
+        input_.Internal().ReleaseAll();
+        break;
       case APP_CMD_WINDOW_RESIZED:
       case APP_CMD_CONFIG_CHANGED: UpdateSize(); break;
       default: break;
@@ -254,6 +303,11 @@ class AndroidWindow : public scene::Window {
     const int32_t type = AInputEvent_getType(event);
     if (type == AINPUT_EVENT_TYPE_MOTION) {
       const int32_t action = AMotionEvent_getAction(event) & AMOTION_EVENT_ACTION_MASK;
+      if (action == AMOTION_EVENT_ACTION_SCROLL) {  // a mouse wheel: Android's +y is up, +x right, like ours
+        input_.Internal().OnScroll(AMotionEvent_getAxisValue(event, AMOTION_EVENT_AXIS_HSCROLL, 0),
+                                   AMotionEvent_getAxisValue(event, AMOTION_EVENT_AXIS_VSCROLL, 0));
+        return 1;
+      }
       const float x = AMotionEvent_getX(event, 0);  // first finger only
       const float y = AMotionEvent_getY(event, 0);
       switch (action) {

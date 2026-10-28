@@ -58,8 +58,11 @@ engine/wlw/
               System the Application adds first) then debug::CVarPanel (every cvar by prefix, typed widgets, reset).
               F1 / "Debug" button. Console (console_window.h, owned by DebugUI): ` key / "Console" button: the log
               (level + text filters), an input line with history and Tab completion (ConsoleModel = the testable
-              logic); phones: no typing yet (GameTextInput, D9). ImGui gets keys + text from Input; while it wants
-              text input the game's keyboard is blocked. Off in release builds
+              logic); phones: no typing yet (GameTextInput, D9). ImGui gets everything from Input (imgui_input.h: every
+              key by the layout's key, in order, + modifiers; 5 buttons, both wheel axes, focus) and its cursor shapes go to
+              the window (Window::Internal().SetCursorOverride) while it has the mouse; while it wants text input the
+              game's keyboard is blocked. Engine panel's Input section: held keys / buttons / wheel, cursor shapes, a 5 s
+              cursor lock. Off in release builds
   app/        Application (final: owns the services, the RenderDevice + RenderingDriver (no separate engine object; the renderer keeps the window and does the GL shutdown order) and runs the frames; see the frame in application.h): Window(),
               Input(), Audio(), Screens(), Time(), Config(). engine_cvars.h: log.filter, r.gpu_timing,
               r.invalidate_framebuffers, r.target_fps, r.pacing.auto_interval, r.render_scale, quality.lock (Run applies the cvar sources first, wires these to the window /
@@ -98,8 +101,14 @@ engine/wlw/
               2% tolerance; FrameLimiter = fixed schedule, exact average, restarts after a stall), Random (SplitMix64: deterministic everywhere, state saveable), log.h (WLW_LOG(Category, Level, fmt...): levels Verbose..Fatal, categories LogCore/App/Render/Shader/Audio/Platform/UI/FX (+ kit LogKit, games WLW_LOG_CATEGORY), compile-time stripping, SetLogFilter("Render=Verbose,*=Warning") / env WLW_LOG, sinks: platform, RecentLogs ring (512), StartLogFile (debug builds: <save dir>/log.txt, previous run log.txt.prev), AddLogSink -> core::Connection; LogThreadId), assert.h (WLW_ASSERT debug-only fatal, WLW_VERIFY always evaluated: logs + returns false, WLW_UNREACHABLE; SetAssertHandler for tests), cvar.h (CVar<bool/int/float/std::string>{"r.name", default, help, flags Saved/ReadOnly/Cheat, range}: dotted lowercase names; sources in order code default < wlw.cfg (assets) < <save dir>/cvars.cfg (Saved, written when changed) < command line +name value / Android --es wlw "a=1;b=2" < console; unknown names wait for registration; OnChange -> core::Connection; game thread), connection.h (Connection: copyable handle, Disconnect/Connected, safe after the source died; ScopedConnection = RAII; CallbackList<Args...> = one-thread list, safe to change while calling), console.h (ConsoleCommand RAII, ExecuteConsoleLine, built-ins help/find/set/reset/exec (+quit from Application), CompleteConsoleName, ConsoleModel), profile.h (WLW_PROFILE_SCOPE/FUNCTION/SCOPE_DYNAMIC/TEXT/FRAME/PLOT/THREAD_NAME/MESSAGE -> Tracy + Android ATrace; only with the CMake option WLW_PROFILE, else empty with unevaluated arguments; one zone per scope; see "Profiling"), type_name.h (TypeName<T>() at compile time: "wlw::app::System"; System::Name() for zones), build_info.h (GetBuildInfo: version, git commit + dirty, build type; BuildInfoText logged at startup and in the engine panel; cmake/GitInfo.cmake), deprecated.h (WLW_DEPRECATED(0.4, "Use X") shims: none today, the tool for later; WLW_DISABLE_DEPRECATION_WARNINGS_BEGIN/END, option WLW_NO_DEPRECATED; see "Versioning"), normal_matrix.h (NormalMatrix(mat3/mat4) = cofactor normal matrix, sign-fixed for mirrors), rotation.h (EulerOrder,
               QuatFromEuler, EulerFromQuat (default kDefaultEulerOrder = ZXY: yaw, pitch, roll), LookRotation(forward, up) = +Y to
               forward, +Z towards up, with a fallback up), axes in math.h (kRight/kForward/kUp/..., kModelFront = -Y, FromYUp/ToYUp), mesh/model
-  input/      Input: keys (pressed vs held; text-editing keys + Grave), Text() (typed code points), pointer (mouse/first
-              finger), swipes, taps; pointer and keyboard can be blocked (debug UI), Raw* queries ignore that
+  input/      Input: keys (pressed vs held; OS repeat ignored) = the full keyboard BY POSITION (D18: US names, Digit0-9,
+              F1-F12, punctuation, numpad, left/right modifiers); HeldModifiers() mask, Modifiers::Primary = Ctrl / Cmd (macOS);
+              WasShortcutPressed(key, mods) = by the LAYOUT's key (the platform reports both: OnKey(key, down, layout_key);
+              KeyFromCharacter), exact mods; KeyName / KeyFromName / ShortcutName ("Ctrl+S" / "Cmd+S"); RawKeyEvents (in
+              order); Text() (typed code points); pointer (mouse left button / first finger), PointerDelta (finger: only
+              while touching), swipes, taps; MouseButton x5, ScrollDelta (notches, +x right, +y away); pointer and keyboard
+              can be blocked (debug UI; blocking hides buttons / wheel / delta too), Raw* queries ignore that. Android:
+              full key map + wheel, no mouse buttons yet (7.1)
   math/       ExactCover: Knuth's Algorithm X with Dancing Links (exact cover search, counting, hints);
               BitGrid<W,H> (bitboards: a grid as 64-bit words, fits = one AND); game_search.h (Minimax with
               alpha-beta, BestMove, Expectimax; a game = small class with Moves/Apply/Evaluate/MaxToMove);
@@ -269,6 +278,8 @@ engine/wlw/
               Window = surface + input + MainViewport() (the screen: scene, camera, the game UI canvas) +
               AddViewport / RemoveViewport(viewport) / Viewports() (offscreen, drawn before the screen in the order added) + overlays (debug UI).
               Window::Create(size, title, {.visible = false}) = a hidden window (desktop): just a GL context.
+              Window::SetCursor(Cursor: GLFW 3.4's standard shapes + Hidden), SetCursorLocked (GLFW_CURSOR_DISABLED + raw
+              motion; positions forgotten across a change so PointerDelta doesn't jump), HasFocus; phones ignore the cursor.
               The driver: DrawWindow -> DrawViewport(each) -> gather, shadow pass, main pass, post passes, canvas.
               RenderingDriver::ReadPixels(target) = a target's picture as RGBA8, top row first (stalls: tests,
               screenshots); GpuName() = GL_RENDERER.

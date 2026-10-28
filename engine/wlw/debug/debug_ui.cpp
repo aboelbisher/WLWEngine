@@ -2,14 +2,20 @@
 
 #include <algorithm>
 #include <cfloat>
+#include <optional>
 
 #include "imgui.h"
 #include "imgui_impl_opengl3.h"
+#include "wlw/debug/imgui_input.h"
 #include "wlw/platform/platform.h"
 
 namespace wlw::debug {
 
 namespace {
+
+constexpr input::Key kModifierSides[] = {input::Key::LeftShift,    input::Key::RightShift, input::Key::LeftControl,
+                                         input::Key::RightControl, input::Key::LeftAlt,    input::Key::RightAlt,
+                                         input::Key::LeftSuper,    input::Key::RightSuper};
 
 #if defined(WLW_GLES)
 constexpr const char* kImGuiGLSLVersion = "#version 300 es";
@@ -34,6 +40,7 @@ DebugUI::DebugUI(scene::Window& window) : window_(window) {
   ImGuiIO& io = ImGui::GetIO();
   io.IniFilename = nullptr;  // don't write imgui.ini (window layout) next to the game
   io.BackendPlatformName = "wlw_input";
+  io.BackendFlags |= ImGuiBackendFlags_HasMouseCursors;  // its cursor shapes go to the window (UpdateCursor)
   if (window.GetInput().IsTouchScreen()) io.ConfigFlags |= ImGuiConfigFlags_IsTouchScreen;
 
   ImGui::StyleColorsDark();
@@ -52,12 +59,14 @@ DebugUI::DebugUI(scene::Window& window) : window_(window) {
 DebugUI::~DebugUI() {
   overlay_.Disconnect();
   window_.GetInput().SetPointerBlocked(false);
+  window_.Internal().SetCursorOverride(std::nullopt);
   if (platform::HasCurrentGLContext()) ImGui_ImplOpenGL3_Shutdown();  // frees GL objects
   ImGui::DestroyContext();
 }
 
 void DebugUI::BeginFrame(float dt) {
   FeedInput(dt);
+  UpdateCursor();
   ImGui_ImplOpenGL3_NewFrame();
   ImGui::NewFrame();
 
@@ -103,58 +112,68 @@ void DebugUI::FeedInput(float dt) {
     io.DisplayFramebufferScale = ImVec2(framebuffer.x / surface.x, framebuffer.y / surface.y);
   }
 
+  if (window_.HasFocus() != imgui_focused_) {
+    imgui_focused_ = window_.HasFocus();
+    io.AddFocusEvent(imgui_focused_);
+  }
+
   const bool touch = input.IsTouchScreen();
   io.AddMouseSourceEvent(touch ? ImGuiMouseSource_TouchScreen : ImGuiMouseSource_Mouse);
   const Vec2 pointer = input.PointerPosition();
-  if (!touch || input.RawPointerDown() || input.RawPointerPressed() || input.RawPointerReleased()) {
+  if (window_.IsCursorLocked()) {
+    io.AddMousePosEvent(-FLT_MAX, -FLT_MAX);  // a locked cursor (mouse look) points at nothing
+  } else if (!touch || input.RawPointerDown() || input.RawPointerPressed() || input.RawPointerReleased()) {
     io.AddMousePosEvent(pointer.x, pointer.y);
   } else {
     io.AddMousePosEvent(-FLT_MAX, -FLT_MAX);  // a lifted finger hovers nothing
   }
 
   // ImGui's input queue takes events in order, so a press and a release inside one frame (a
-  // quick tap) still reach it as a click: it plays them back over consecutive frames.
-  if (input.RawPointerPressed() && !imgui_pointer_down_) {
-    io.AddMouseButtonEvent(ImGuiMouseButton_Left, true);
-    imgui_pointer_down_ = true;
+  // quick tap) still reach it as a click: it plays them back over consecutive frames. A finger is
+  // the pointer; a mouse has its five buttons (ImGui's order is MouseButton's).
+  for (int i = 0; i < ImGuiMouseButton_COUNT; ++i) {
+    const auto button = static_cast<input::MouseButton>(i);
+    const bool pressed = touch ? (i == 0 && input.RawPointerPressed()) : input.RawMouseButtonPressed(button);
+    const bool down = touch ? (i == 0 && input.RawPointerDown()) : input.RawMouseButtonDown(button);
+    if (pressed && !imgui_buttons_down_[i]) {
+      io.AddMouseButtonEvent(i, true);
+      imgui_buttons_down_[i] = true;
+    }
+    if (!down && imgui_buttons_down_[i]) {
+      io.AddMouseButtonEvent(i, false);
+      imgui_buttons_down_[i] = false;
+    }
   }
-  if (!input.RawPointerDown() && imgui_pointer_down_) {
-    io.AddMouseButtonEvent(ImGuiMouseButton_Left, false);
-    imgui_pointer_down_ = false;
+  // ImGui's horizontal wheel is +x = left.
+  if (const Vec2 scroll = input.RawScrollDelta(); scroll.x != 0.0f || scroll.y != 0.0f) {
+    io.AddMouseWheelEvent(-scroll.x, scroll.y);
   }
 }
 
+// ImGui's cursor shape from the last frame goes to the window while ImGui has the mouse (resize borders, text
+// fields); the game's shape otherwise.
+void DebugUI::UpdateCursor() {
+  const ImGuiIO& io = ImGui::GetIO();
+  std::optional<scene::Cursor> cursor;
+  if (io.WantCaptureMouse && (io.ConfigFlags & ImGuiConfigFlags_NoMouseCursorChange) == 0) {
+    cursor = io.MouseDrawCursor ? scene::Cursor::Hidden : FromImGuiCursor(ImGui::GetMouseCursor());
+  }
+  window_.Internal().SetCursorOverride(cursor);
+}
+
 void DebugUI::FeedKeyboard() {
-  struct Mapping {
-    input::Key key;
-    ImGuiKey imgui;
-  };
-  static constexpr Mapping kKeys[] = {
-      {input::Key::Up, ImGuiKey_UpArrow},
-      {input::Key::Down, ImGuiKey_DownArrow},
-      {input::Key::Left, ImGuiKey_LeftArrow},
-      {input::Key::Right, ImGuiKey_RightArrow},
-      {input::Key::Enter, ImGuiKey_Enter},
-      {input::Key::Escape, ImGuiKey_Escape},
-      {input::Key::Space, ImGuiKey_Space},
-      {input::Key::Tab, ImGuiKey_Tab},
-      {input::Key::Backspace, ImGuiKey_Backspace},
-      {input::Key::Delete, ImGuiKey_Delete},
-      {input::Key::Home, ImGuiKey_Home},
-      {input::Key::End, ImGuiKey_End},
-      {input::Key::PageUp, ImGuiKey_PageUp},
-      {input::Key::PageDown, ImGuiKey_PageDown},
-      {input::Key::A, ImGuiKey_A},
-      {input::Key::Control, ImGuiMod_Ctrl},
-      {input::Key::Shift, ImGuiMod_Shift},
-  };
   ImGuiIO& io = ImGui::GetIO();
   const input::Input& input = window_.GetInput();
-  // Presses and releases in order (a quick tap inside one frame: down, then up).
-  for (const Mapping& mapping : kKeys) {
-    if (input.RawKeyPressed(mapping.key)) io.AddKeyEvent(mapping.imgui, true);
-    if (input.RawKeyReleased(mapping.key) || (input.RawKeyPressed(mapping.key) && !input.RawKeyDown(mapping.key))) {
-      io.AddKeyEvent(mapping.imgui, false);
+  // Every key change in the OS's order (Ctrl before Z; a quick tap inside one frame: down, then up), by the
+  // layout's key (D18). A modifier key also sets ImGui's modifier, held while either side is.
+  for (const input::KeyEvent& event : input.RawKeyEvents()) {
+    io.AddKeyEvent(ToImGuiKey(event.layout_key), event.down);
+    if (const ImGuiKey modifier = ToImGuiModifier(event.key); modifier != ImGuiKey_None) {
+      bool held = event.down;
+      for (const input::Key side : kModifierSides) {
+        if (side != event.key && ToImGuiModifier(side) == modifier && input.RawKeyDown(side)) held = true;
+      }
+      io.AddKeyEvent(modifier, held);
     }
   }
   const bool toggled_console = input.RawKeyPressed(input::Key::Grave);

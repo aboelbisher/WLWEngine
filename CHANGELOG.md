@@ -226,6 +226,52 @@ listed under **Breaking** with its **Migration**. Shims added before that (`WLW_
   `ShadowLookupPosition` is available in both stages. Asked for by Bluzzle (a shader background under the board's
   shadows). Test: a game shader's shadows draw the same picture as the engine's.
 
+### Keys and mouse for tools (Roadmap 3.1)
+What the Studio needs from input: shortcuts, every mouse button, the wheel, cursor shapes and a locked cursor, and
+Dear ImGui fed all of it. The polling API stays (timestamped events, several pointers and gamepads are 14.1); the
+pointer, taps and swipes the games use are unchanged.
+- **Keys by position (D18)**: `input::Key` has the full keyboard: A-Z, `Digit0-9`, F1-F12, the US punctuation
+  (`Grave`, `Minus`, `Equal`, brackets, `Backslash`, `Semicolon`, `Apostrophe`, `Comma`, `Period`, `Slash`) and the
+  ISO key (`IntlBackslash`), Insert, the locks, PrintScreen, Pause, Menu, the numpad, and left / right Shift,
+  Control, Alt and Super. A key names where it sits (WASD stays put on AZERTY), like Unity's Input System, SDL
+  scancodes and Godot's physical keys.
+- **Shortcuts by label**: `Input::WasShortcutPressed(key, modifiers)` matches the key printed on the player's layout
+  (Ctrl+Z is the key labelled Z) with exactly those modifiers held when it went down (Ctrl+Z is not Ctrl+Shift+Z; a
+  Ctrl+Z tapped inside one frame counts: each `KeyEvent` keeps its modifiers); blocked while a
+  text field has the keyboard. The platform reports both keys: GLFW's key name for the character it types, mapped
+  back with `KeyFromCharacter` (ImGui's GLFW backend does the same); keys of other alphabets keep their position.
+  `Input::HeldModifiers()` (mask `Modifiers` Shift / Control / Alt / Super; `Modifiers::Primary` = Ctrl on Windows
+  and Linux, Cmd on macOS). `RawKeyEvents()`: the frame's key changes in the OS's order.
+- **Names**: `KeyName` / `KeyFromName` (unique, case ignored: menus and saved bindings), `ShortcutName(key, mods)`
+  ("Ctrl+Shift+Z"; "Shift+Cmd+Z" on macOS, Apple's order).
+- **Mouse**: `MouseButton` {Left, Right, Middle, Back, Forward} with `IsMouseButtonDown` / `WasMouseButtonPressed` /
+  `WasMouseButtonReleased`; `PointerDelta()` (movement this frame; a finger only while touching; unbounded while
+  locked); `ScrollDelta()` (both axes in notches, trackpad fractions; +x right, +y away from the player). A blocked
+  pointer (the debug UI has the mouse) hides them too; `Raw*` versions for the owner.
+- **Window**: `SetCursor(Cursor)` {Arrow, TextInput, Hand, Crosshair, ResizeEW / NS / NWSE / NESW, ResizeAll,
+  NotAllowed, Hidden} (GLFW 3.4's standard cursors, the arrow where one is missing; phones ignore it);
+  `SetCursorLocked(bool)` (hidden, held in the window, raw motion where the OS has it); `HasFocus()`.
+- **Dear ImGui fed everything** (`debug/imgui_input.h`): every key by the layout's key, in order, with the modifiers
+  (Ctrl+C / V / X / Z / Y work in the console and text fields; before, only Ctrl+A did. The clipboard is
+  ImGui's own: Windows' system clipboard, an in-app one elsewhere until 3.2 wires GLFW's), five buttons, both wheel
+  axes, focus; its cursor shapes go to the window while it has the mouse (resize borders, text fields).
+- **Android**: the full keyboard map (Bluetooth keyboards, Chromebooks, the emulator), the mouse wheel
+  (`AMOTION_EVENT_ACTION_SCROLL`), focus (keys released when a dialog takes it). Mouse buttons wait for 7.1.
+- Engine panel: an Input section (held keys, modifiers, buttons, pointer movement, the last wheel, focus), a cursor
+  shape picker and a 5-second cursor lock, to check shapes and the lock by hand.
+- Checked end to end: a real Windows window driven by SendInput (every cursor shape read back with GetCursorInfo,
+  the lock hidden + clipped with 1140 px of unbounded motion, right / middle / back buttons, both wheel axes, Ctrl+Z
+  as a shortcut, ImGui's text cursor and Ctrl+A / X / V / Z / Shift+Z in a text field) and Bluzzle on the Android
+  emulator (held keys and modifiers, both wheel axes).
+- Tests (`input` suite): every key and button pressed + released in one frame, repeats ignored, event order and
+  layout keys, modifiers and `Primary`, exact shortcuts (QWERTZ / AZERTY labels), name round trip for every key,
+  layout characters, shortcut spelling per platform, the wheel summed and reset, pointer movement (mouse, finger,
+  after a lock), blocking, release on focus loss, every key's own ImGui key, ImGui cursor shapes.
+- **Breaking:** `Key::Control` and `Key::Shift` are gone; Key's values are renumbered. **Migration:**
+  `IsKeyDown(Key::Control)` -> `HasAny(input.HeldModifiers(), Modifiers::Control)` (or `Key::LeftControl` /
+  `Key::RightControl`), the same for Shift; shortcuts -> `WasShortcutPressed(Key::Z, Modifiers::Primary)`. Nothing
+  outside the engine used them (the games use the pointer, taps and swipes).
+
 ## 0.3.0 (2026-10-24): Phase 2, core API
 
 The core API the editor will show and edit, made consistent while the games are small: one set of math, colour

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <array>
+
 #include "wlw/debug/console_window.h"
 #include "wlw/scene/window.h"
 
@@ -43,12 +45,14 @@ class DebugUI {
  private:
   void FeedInput(float dt);
   void FeedKeyboard();
+  void UpdateCursor();
   void DrawToggleButton();
 
   scene::Window& window_;
   bool open_ = false;
-  float hidden_for_ = 0.0f;          // seconds left with the toggle button hidden
-  bool imgui_pointer_down_ = false;  // the button state ImGui has been told about
+  float hidden_for_ = 0.0f;                   // seconds left with the toggle button hidden
+  std::array<bool, 5> imgui_buttons_down_{};  // the button states ImGui has been told about
+  bool imgui_focused_ = true;
   core::Connection overlay_;
   ConsoleWindow console_;
 };

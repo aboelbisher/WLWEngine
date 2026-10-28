@@ -7,11 +7,10 @@ around the editor and iOS ("Why this order"). Work goes one step at a time, in o
 stable: commits name them ("Roadmap 4.3b: ..."). Commits and CHANGELOG entries from before 2026-10-21
 use the old numbers: "Old numbering" at the end maps them.
 
-**Current step:** 3.1 Keys and mouse for tools (plan in chat first) · **Updated:** 2026-10-28
+**Current step:** 3.2a Studio shell, engine side (plan in chat first) · **Updated:** 2026-10-28
 
-**Next session:** 3.1 in progress on branch `input/setup` (Studio plan and 3.1 approved 2026-10-28).
-  Then, in order:
-  3.2a / b / c, 3.3, 4.1-4.5, 5.1 (scenes edited in the Studio), 5.2-5.6. Threadlock moves to the current engine
+**Next session:** plan 3.2a in chat. Then, in order:
+  3.2b / c, 3.3, 4.1-4.5, 5.1 (scenes edited in the Studio), 5.2-5.6. Threadlock moves to the current engine
   before 5.6 (its 2.8 migration redone on its main). Before Bluzzle's next Play release: tag v0.3.1 from main (D19); it points at an untagged
   commit today.
 
@@ -337,7 +336,9 @@ The editor shows and edits what this phase defines, so it comes first.
 The Studio (D12, D20) is the engine's editor: an IDE for scenes, like the Godot editor or Unity's, Windows first and
 written in portable C++ so it moves to the Mac without a rewrite (6.5). Code is still written in Visual Studio /
 Xcode; the Studio edits scenes and data. This phase builds the window, the panels, the play controls and undo.
-- [ ] **3.1 Keys and mouse for tools.** The full key set (letters, digits, function keys, punctuation, numpad,
+- [x] **3.1 Keys and mouse for tools.** (done 2026-10-28; also `IntlBackslash`, the ISO key, and an Input section in
+  the engine panel for the hand checks; checked on a real Windows window driven by SendInput (every cursor shape, the
+  lock, buttons, wheel, Ctrl+A / X / V / Z / Shift+Z in an ImGui field) and Bluzzle on the Android emulator (keys, wheel); `Input::HeldModifiers()` instead of `Modifiers()`, a name the type already has) The full key set (letters, digits, function keys, punctuation, numpad,
   modifiers as keys and as a mask), every mouse button, the wheel (both axes), cursor shapes; Dear ImGui fed all of
   them (Ctrl+Z, Ctrl+S, right-drag, wheel zoom work). The polling API stays; timestamped events, several pointers
   and gamepads stay in 14.1.

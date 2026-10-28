@@ -2,12 +2,14 @@
 // glad for loading OpenGL 3.3 core functions.
 #ifdef WLW_PLATFORM_GLFW
 
+#include <array>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <optional>
 
 #include "wlw/rendering/gl.h"  // glad must come before GLFW
 #include <GLFW/glfw3.h>
@@ -220,35 +222,103 @@ namespace wlw::scene {
 namespace {
 
 input::Key MapKey(int key) {
-  switch (key) {
-    case GLFW_KEY_UP: return input::Key::Up;
-    case GLFW_KEY_DOWN: return input::Key::Down;
-    case GLFW_KEY_LEFT: return input::Key::Left;
-    case GLFW_KEY_RIGHT: return input::Key::Right;
-    case GLFW_KEY_SPACE: return input::Key::Space;
-    case GLFW_KEY_ENTER: return input::Key::Enter;
-    case GLFW_KEY_ESCAPE: return input::Key::Escape;
-    case GLFW_KEY_W: return input::Key::W;
-    case GLFW_KEY_A: return input::Key::A;
-    case GLFW_KEY_S: return input::Key::S;
-    case GLFW_KEY_D: return input::Key::D;
-    case GLFW_KEY_I: return input::Key::I;
-    case GLFW_KEY_P: return input::Key::P;
-    case GLFW_KEY_F1: return input::Key::F1;
-    case GLFW_KEY_TAB: return input::Key::Tab;
-    case GLFW_KEY_BACKSPACE: return input::Key::Backspace;
-    case GLFW_KEY_DELETE: return input::Key::Delete;
-    case GLFW_KEY_HOME: return input::Key::Home;
-    case GLFW_KEY_END: return input::Key::End;
-    case GLFW_KEY_PAGE_UP: return input::Key::PageUp;
-    case GLFW_KEY_PAGE_DOWN: return input::Key::PageDown;
-    case GLFW_KEY_LEFT_CONTROL:
-    case GLFW_KEY_RIGHT_CONTROL: return input::Key::Control;
-    case GLFW_KEY_LEFT_SHIFT:
-    case GLFW_KEY_RIGHT_SHIFT: return input::Key::Shift;
-    case GLFW_KEY_GRAVE_ACCENT: return input::Key::Grave;
-    default: return input::Key::Unknown;
+  using input::Key;
+  if (key >= GLFW_KEY_A && key <= GLFW_KEY_Z) return static_cast<Key>(static_cast<int>(Key::A) + (key - GLFW_KEY_A));
+  if (key >= GLFW_KEY_0 && key <= GLFW_KEY_9) {
+    return static_cast<Key>(static_cast<int>(Key::Digit0) + (key - GLFW_KEY_0));
   }
+  if (key >= GLFW_KEY_F1 && key <= GLFW_KEY_F12)
+    return static_cast<Key>(static_cast<int>(Key::F1) + (key - GLFW_KEY_F1));
+  if (key >= GLFW_KEY_KP_0 && key <= GLFW_KEY_KP_9) {
+    return static_cast<Key>(static_cast<int>(Key::Numpad0) + (key - GLFW_KEY_KP_0));
+  }
+  switch (key) {
+    case GLFW_KEY_GRAVE_ACCENT: return Key::Grave;
+    case GLFW_KEY_MINUS: return Key::Minus;
+    case GLFW_KEY_EQUAL: return Key::Equal;
+    case GLFW_KEY_LEFT_BRACKET: return Key::LeftBracket;
+    case GLFW_KEY_RIGHT_BRACKET: return Key::RightBracket;
+    case GLFW_KEY_BACKSLASH: return Key::Backslash;
+    case GLFW_KEY_SEMICOLON: return Key::Semicolon;
+    case GLFW_KEY_APOSTROPHE: return Key::Apostrophe;
+    case GLFW_KEY_COMMA: return Key::Comma;
+    case GLFW_KEY_PERIOD: return Key::Period;
+    case GLFW_KEY_SLASH: return Key::Slash;
+    case GLFW_KEY_WORLD_1:
+    case GLFW_KEY_WORLD_2: return Key::IntlBackslash;  // the ISO key (GLFW names it by platform)
+    case GLFW_KEY_SPACE: return Key::Space;
+    case GLFW_KEY_ENTER: return Key::Enter;
+    case GLFW_KEY_ESCAPE: return Key::Escape;
+    case GLFW_KEY_TAB: return Key::Tab;
+    case GLFW_KEY_BACKSPACE: return Key::Backspace;
+    case GLFW_KEY_INSERT: return Key::Insert;
+    case GLFW_KEY_DELETE: return Key::Delete;
+    case GLFW_KEY_HOME: return Key::Home;
+    case GLFW_KEY_END: return Key::End;
+    case GLFW_KEY_PAGE_UP: return Key::PageUp;
+    case GLFW_KEY_PAGE_DOWN: return Key::PageDown;
+    case GLFW_KEY_UP: return Key::Up;
+    case GLFW_KEY_DOWN: return Key::Down;
+    case GLFW_KEY_LEFT: return Key::Left;
+    case GLFW_KEY_RIGHT: return Key::Right;
+    case GLFW_KEY_CAPS_LOCK: return Key::CapsLock;
+    case GLFW_KEY_SCROLL_LOCK: return Key::ScrollLock;
+    case GLFW_KEY_NUM_LOCK: return Key::NumLock;
+    case GLFW_KEY_PRINT_SCREEN: return Key::PrintScreen;
+    case GLFW_KEY_PAUSE: return Key::Pause;
+    case GLFW_KEY_MENU: return Key::Menu;
+    case GLFW_KEY_KP_DECIMAL: return Key::NumpadDecimal;
+    case GLFW_KEY_KP_DIVIDE: return Key::NumpadDivide;
+    case GLFW_KEY_KP_MULTIPLY: return Key::NumpadMultiply;
+    case GLFW_KEY_KP_SUBTRACT: return Key::NumpadSubtract;
+    case GLFW_KEY_KP_ADD: return Key::NumpadAdd;
+    case GLFW_KEY_KP_ENTER: return Key::NumpadEnter;
+    case GLFW_KEY_KP_EQUAL: return Key::NumpadEqual;
+    case GLFW_KEY_LEFT_SHIFT: return Key::LeftShift;
+    case GLFW_KEY_RIGHT_SHIFT: return Key::RightShift;
+    case GLFW_KEY_LEFT_CONTROL: return Key::LeftControl;
+    case GLFW_KEY_RIGHT_CONTROL: return Key::RightControl;
+    case GLFW_KEY_LEFT_ALT: return Key::LeftAlt;
+    case GLFW_KEY_RIGHT_ALT: return Key::RightAlt;
+    case GLFW_KEY_LEFT_SUPER: return Key::LeftSuper;
+    case GLFW_KEY_RIGHT_SUPER: return Key::RightSuper;
+    default: return Key::Unknown;
+  }
+}
+
+// The key a printable key's label names on the current layout (D18: shortcuts follow the label), like Dear ImGui's
+// GLFW backend: GLFW names the character the key types; letters, digits and the US punctuation map back to keys.
+// Unknown (= the key's position) for the rest: numpad, non-printing keys, other alphabets.
+input::Key MapLayoutKey(int key, int scancode) {
+  if (key < GLFW_KEY_SPACE || key > GLFW_KEY_WORLD_2 || key == GLFW_KEY_SPACE) return input::Key::Unknown;
+  GLFWerrorfun previous = glfwSetErrorCallback(nullptr);  // keys without a name report an error
+  const char* name = glfwGetKeyName(key, scancode);
+  glfwSetErrorCallback(previous);
+  if (name == nullptr || name[0] == '\0' || name[1] != '\0') return input::Key::Unknown;  // one ASCII character
+  return input::KeyFromCharacter(static_cast<unsigned char>(name[0]));
+}
+
+// GLFW's buttons 0-4 in MouseButton's order (left, right, middle, back = 4th, forward = 5th).
+std::optional<input::MouseButton> MapMouseButton(int button) {
+  if (button < GLFW_MOUSE_BUTTON_1 || button > GLFW_MOUSE_BUTTON_5) return std::nullopt;
+  return static_cast<input::MouseButton>(button - GLFW_MOUSE_BUTTON_1);
+}
+
+int StandardCursorShape(Cursor cursor) {
+  switch (cursor) {
+    case Cursor::TextInput: return GLFW_IBEAM_CURSOR;
+    case Cursor::Hand: return GLFW_POINTING_HAND_CURSOR;
+    case Cursor::Crosshair: return GLFW_CROSSHAIR_CURSOR;
+    case Cursor::ResizeEW: return GLFW_RESIZE_EW_CURSOR;
+    case Cursor::ResizeNS: return GLFW_RESIZE_NS_CURSOR;
+    case Cursor::ResizeNWSE: return GLFW_RESIZE_NWSE_CURSOR;
+    case Cursor::ResizeNESW: return GLFW_RESIZE_NESW_CURSOR;
+    case Cursor::ResizeAll: return GLFW_RESIZE_ALL_CURSOR;
+    case Cursor::NotAllowed: return GLFW_NOT_ALLOWED_CURSOR;
+    case Cursor::Arrow:
+    case Cursor::Hidden: break;
+  }
+  return GLFW_ARROW_CURSOR;
 }
 
 class GlfwWindow : public Window {
@@ -262,6 +332,9 @@ class GlfwWindow : public Window {
     // If the platform was already shut down, glfwTerminate() destroyed this window for us.
     if (window_ != nullptr && platform::IsAlive()) {
       glfwDestroyWindow(window_);
+      for (GLFWcursor* cursor : cursors_) {
+        if (cursor != nullptr) glfwDestroyCursor(cursor);
+      }
     }
     window_ = nullptr;
   }
@@ -295,6 +368,8 @@ class GlfwWindow : public Window {
     glfwSetCharCallback(window_, &GlfwWindow::OnChar);
     glfwSetMouseButtonCallback(window_, &GlfwWindow::OnMouseButton);
     glfwSetCursorPosCallback(window_, &GlfwWindow::OnCursorPos);
+    glfwSetScrollCallback(window_, &GlfwWindow::OnScroll);
+    glfwSetWindowFocusCallback(window_, &GlfwWindow::OnFocus);
     glfwSetFramebufferSizeCallback(window_, &GlfwWindow::OnFramebufferSize);
     glfwSetWindowPosCallback(window_, &GlfwWindow::OnWindowPos);
 
@@ -302,6 +377,8 @@ class GlfwWindow : public Window {
     glfwGetFramebufferSize(window_, &fb_w, &fb_h);  // pixels (can differ from size_ on HiDPI)
     size_ = {(float)fb_w, (float)fb_h};
     UpdateInputSurface();
+    focused_ = glfwGetWindowAttrib(window_, GLFW_FOCUSED) == GLFW_TRUE;
+    ApplyCursor();
 
     glfwMakeContextCurrent(window_);
     ApplyPacing();
@@ -349,15 +426,19 @@ class GlfwWindow : public Window {
  private:
   static GlfwWindow* From(GLFWwindow* w) { return static_cast<GlfwWindow*>(glfwGetWindowUserPointer(w)); }
 
-  static void OnKey(GLFWwindow* w, int key, int /*scancode*/, int action, int /*mods*/) {
+  static void OnKey(GLFWwindow* w, int key, int scancode, int action, int /*mods*/) {
     if (action == GLFW_REPEAT) return;
-    From(w)->input_.Internal().OnKey(MapKey(key), action == GLFW_PRESS);
+    const bool down = action == GLFW_PRESS;
+    From(w)->input_.Internal().OnKey(MapKey(key), down, down ? MapLayoutKey(key, scancode) : input::Key::Unknown);
   }
 
   static void OnChar(GLFWwindow* w, unsigned int codepoint) { From(w)->input_.Internal().OnText(codepoint); }
 
   static void OnMouseButton(GLFWwindow* w, int button, int action, int /*mods*/) {
-    if (button != GLFW_MOUSE_BUTTON_LEFT) return;
+    if (const std::optional<input::MouseButton> mapped = MapMouseButton(button)) {
+      From(w)->input_.Internal().OnMouseButton(*mapped, action == GLFW_PRESS);
+    }
+    if (button != GLFW_MOUSE_BUTTON_LEFT) return;  // the pointer = the left button
     double x = 0, y = 0;
     glfwGetCursorPos(w, &x, &y);
     if (action == GLFW_PRESS)
@@ -368,6 +449,54 @@ class GlfwWindow : public Window {
 
   static void OnCursorPos(GLFWwindow* w, double x, double y) {
     From(w)->input_.Internal().OnPointerMove((float)x, (float)y);
+  }
+
+  // GLFW: +y = away from the player, +x = left (Windows' tilt right is negative): turned to +x = right.
+  static void OnScroll(GLFWwindow* w, double x, double y) {
+    From(w)->input_.Internal().OnScroll(static_cast<float>(-x), static_cast<float>(y));
+  }
+
+  // GLFW releases held keys and buttons itself when focus goes (through the callbacks above).
+  static void OnFocus(GLFWwindow* w, int focused) { From(w)->focused_ = focused == GLFW_TRUE; }
+
+  // Shape, hidden or locked (GLFW_CURSOR_DISABLED: hidden, held in the window, unbounded positions; raw motion where
+  // the OS has it). GLFW itself frees a locked cursor while the window is unfocused.
+  void ApplyCursor() override {
+    if (window_ == nullptr) return;
+    const Cursor shape = EffectiveCursor();
+    const int mode = cursor_locked_            ? GLFW_CURSOR_DISABLED
+                     : shape == Cursor::Hidden ? GLFW_CURSOR_HIDDEN
+                                               : GLFW_CURSOR_NORMAL;
+    const int current = glfwGetInputMode(window_, GLFW_CURSOR);
+    if (mode != current) {
+      if ((mode == GLFW_CURSOR_DISABLED) != (current == GLFW_CURSOR_DISABLED)) {
+        input_.Internal().ForgetPointerPosition();  // positions jump between the real and the unbounded cursor
+      }
+      if (glfwRawMouseMotionSupported()) {
+        glfwSetInputMode(window_, GLFW_RAW_MOUSE_MOTION, mode == GLFW_CURSOR_DISABLED ? GLFW_TRUE : GLFW_FALSE);
+      }
+      glfwSetInputMode(window_, GLFW_CURSOR, mode);
+    }
+    if (mode == GLFW_CURSOR_NORMAL && shape != applied_shape_) {
+      glfwSetCursor(window_, StandardCursor(shape));
+      applied_shape_ = shape;
+    }
+  }
+
+  // The system cursor for a shape, made once (null = the arrow: GLFW's default, also when the system lacks it).
+  GLFWcursor* StandardCursor(Cursor shape) {
+    if (shape == Cursor::Arrow) return nullptr;
+    const auto index = static_cast<size_t>(shape);
+    if (!cursor_tried_[index]) {
+      cursor_tried_[index] = true;
+      GLFWerrorfun previous = glfwSetErrorCallback(nullptr);  // GLFW_CURSOR_UNAVAILABLE: logged below instead
+      cursors_[index] = glfwCreateStandardCursor(StandardCursorShape(shape));
+      glfwSetErrorCallback(previous);
+      if (cursors_[index] == nullptr) {
+        WLW_LOG(LogPlatform, Info, "Cursor shape %d unavailable here: the arrow instead", static_cast<int>(shape));
+      }
+    }
+    return cursors_[index];
   }
 
   static void OnFramebufferSize(GLFWwindow* w, int width, int height) {
@@ -434,6 +563,10 @@ class GlfwWindow : public Window {
   float refresh_hz_ = 0.0f;
   core::PacingPlan plan_;
   core::FrameLimiter limiter_;
+  static constexpr size_t kCursorCount = static_cast<size_t>(Cursor::Hidden) + 1;
+  std::array<GLFWcursor*, kCursorCount> cursors_{};
+  std::array<bool, kCursorCount> cursor_tried_{};
+  Cursor applied_shape_ = Cursor::Arrow;
 };
 
 }  // namespace
