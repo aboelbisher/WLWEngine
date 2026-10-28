@@ -59,8 +59,9 @@ int g_users = 0;  // Init() calls not yet matched by a Shutdown()
 EGLDisplay g_display = EGL_NO_DISPLAY;
 SafeAreaInsets g_insets;  // cached; refreshed when the window changes
 bool g_insets_valid = false;
-bool g_keep_screen_on = false;  // what the game asked for (KeepScreenOn)
-int g_reduce_motion = -1;       // ReduceMotion's cached answer (-1 = ask the OS); dropped on resume
+SafeAreaInsets CurrentSafeAreaInsets();  // the window's insets (below: asked through JNI)
+bool g_keep_screen_on = false;           // what the game asked for (KeepScreenOn)
+int g_reduce_motion = -1;                // ReduceMotion's cached answer (-1 = ask the OS); dropped on resume
 
 // Processes pending OS events. timeout_ms = -1 blocks until at least one event arrives.
 void PollEvents(int timeout_ms) {
@@ -254,6 +255,7 @@ class AndroidWindow : public scene::Window {
   std::string PacingMethod() const override { return swappy_ ? "Swappy" : core::PacingPlanName(plan_); }
 
   bool HasSurface() const override { return surface_ != EGL_NO_SURFACE; }
+  platform::SafeAreaInsets GetSafeAreaInsets() const override { return CurrentSafeAreaInsets(); }
   bool ShouldClose() const override { return close_requested_ || g_app->destroyRequested; }
   void RequestClose() override { close_requested_ = true; }
   void SetTitle(const std::string&) override {}  // no title bar on Android
@@ -626,9 +628,7 @@ bool QueryInsets(SafeAreaInsets& out) {
   return ok;
 }
 
-}  // namespace
-
-SafeAreaInsets GetSafeAreaInsets() {
+SafeAreaInsets CurrentSafeAreaInsets() {
   if (!g_insets_valid) {
     SafeAreaInsets insets;
     if (QueryInsets(insets)) {
@@ -638,6 +638,8 @@ SafeAreaInsets GetSafeAreaInsets() {
   }
   return g_insets;
 }
+
+}  // namespace
 
 bool MoveToBackground() {
   // activity.moveTaskToBack(true): the same as pressing Home; the app keeps running in the

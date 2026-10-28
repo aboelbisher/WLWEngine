@@ -10,6 +10,7 @@
 #include "wlw/platform/platform.h"
 #include "wlw/rendering/render_device.h"
 #include "wlw/rendering/rendering_driver.h"
+#include "wlw/scene/offscreen_window.h"
 #include "wlw/ui/canvas.h"
 #include "wlw/ui/ui_context.h"
 #if WLW_DEBUG_UI
@@ -48,7 +49,8 @@ AppConfig ResolveAppConfig(AppConfig config) {
 Application::Application(AppConfig config)
     : config_(ResolveAppConfig(std::move(config))),
       render_device_(rendering::RenderDevice::Create()),
-      renderer_(rendering::RenderingDriver::Create(render_device_.get())),
+      own_renderer_(rendering::RenderingDriver::Create(render_device_.get())),
+      renderer_(own_renderer_.get()),
       window_(scene::Window::Create(config_.window.size, config_.window.title,
                                     {.visible = config_.window.visible, .depth = config_.graphics.screen_depth})),
       clock_(config_.time.fixed_step, config_.time.max_frame_time) {
@@ -63,14 +65,8 @@ Application::Application(AppConfig config)
   if (const std::string folder = platform::GetSaveDirectory(config_.name); !folder.empty()) {
     quality_.Internal().SetSaveFile(folder + "/quality.txt");
     cvar_file_ = folder + "/cvars.cfg";
-#ifndef NDEBUG
-    // Debug builds keep a log file (the run before as log.txt.prev); release builds don't write one.
-    StartLogFile(folder + "/log.txt");
-#endif
   }
-  WLW_LOG(LogApp, Info, "%s", core::BuildInfoText().c_str());  // which build a log came from
-  screens_.Internal().SetApp(this);                            // Screen::App()
-  quit_command_ = std::make_unique<ConsoleCommand>("quit", "Quits the game", [this](const ConsoleArgs&) { Quit(); });
+  screens_.Internal().SetApp(this);  // Screen::App()
 #if WLW_DEBUG_UI
   AddSystem<debug::EnginePanel>();  // the engine's own debug windows, first of the debug panels
   AddSystem<debug::CVarPanel>();
@@ -79,7 +75,12 @@ Application::Application(AppConfig config)
 
 Application::~Application() {
   if (state_ == State::Running) Shutdown();  // OnShutdown runs exactly once, whoever drove the frames
-  profile::Stop();
+  WLW_ASSERT(hosted_sessions_ == 0, "Application: destroyed before the sessions hosted on it");
+  if (host_ != nullptr) {
+    --host_->hosted_sessions_;
+  } else {
+    profile::Stop();  // the host's, while it runs
+  }
 }
 
 int Application::Run() {
@@ -97,13 +98,40 @@ double Application::ClockSeconds() const {
   return std::chrono::duration<double>(std::chrono::steady_clock::now() - clock_origin_).count();
 }
 
+bool Application::InitHosted(Application& host, std::shared_ptr<scene::OffscreenWindow> window) {
+  if (!WLW_VERIFY(state_ == State::NotStarted, "Application: Init() is called once")) return false;
+  if (!WLW_VERIFY(host.state_ == State::Running && host.host_ == nullptr && window != nullptr,
+                  "Application: InitHosted needs a running app that isn't hosted itself, and a window")) {
+    return false;
+  }
+  host_ = &host;
+  ++host.hosted_sessions_;
+  window_ = std::move(window);
+  renderer_ = host.renderer_;
+#if WLW_DEBUG_UI
+  debug_ui_ = host.debug_ui_;
+#endif
+  return Init();
+}
+
 bool Application::Init() {
   if (!WLW_VERIFY(state_ == State::NotStarted, "Application: Init() is called once")) return false;
   game_thread_ = std::this_thread::get_id();
   state_ = State::Stopped;  // until it has started: a failed start never runs frames
+  const bool hosted = host_ != nullptr;
+  if (!hosted) {
+#ifndef NDEBUG
+    // Debug builds keep a log file (the run before as log.txt.prev); release builds don't write one.
+    if (const std::string folder = platform::GetSaveDirectory(config_.name); !folder.empty()) {
+      StartLogFile(folder + "/log.txt");
+    }
+#endif
+    WLW_LOG(LogApp, Info, "%s", core::BuildInfoText().c_str());  // which build a log came from
+    quit_command_ = std::make_unique<ConsoleCommand>("quit", "Quits the game", [this](const ConsoleArgs&) { Quit(); });
+  }
   ApplyStartupCVars();
-  bool started = false;
-  {
+  bool started = hosted;  // a hosted session draws with its host's renderer, already started
+  if (!hosted) {
     WLW_PROFILE_SCOPE("Engine start");
     started = renderer_->Initialize(window_);  // the platform, the window and its GL context
   }
@@ -113,6 +141,32 @@ bool Application::Init() {
     return false;
   }
   audio_ = std::make_unique<audio::Audio>(config_.audio);
+  if (paused_) audio_->Suspend();  // paused before it started
+  if (!hosted) WatchOtherAudio();
+  ui_ = std::make_unique<ui::UIContext>(window_->MainViewport().GetCanvas());
+#if WLW_DEBUG_UI
+  if (!hosted) {
+    own_debug_ui_ = std::make_unique<debug::DebugUI>(*window_);  // needs the GL context Start() made
+    debug_ui_ = own_debug_ui_.get();
+  }
+#endif
+  {
+    WLW_PROFILE_SCOPE("Systems start");
+    systems_.StartPending();  // the systems added before Init, in order
+  }
+  // The scenes they built: compile the shader variants they need now, not during the first frames.
+  renderer_->WarmUp(*window_);
+  // The game has started: ReadOnly cvars keep their values from now on. A quality lock from a config
+  // file or the command line applies now that OnStart configured the levels.
+  CVarBase::SetStarted(true);
+  if (quality_.Configured() && cv_quality_lock.Get() >= 0) quality_.Lock(cv_quality_lock.Get());
+
+  state_ = State::Running;
+  clock_.Start(ClockSeconds());  // last: startup isn't the first frame's time
+  return true;
+}
+
+void Application::WatchOtherAudio() {
   // What else is playing on the device (Android: AudioWatcher.kt). A call, an alarm or the
   // assistant interrupts us: silent until it ends, and the game pauses like when it goes to the
   // background (the player has stopped playing). The player's own music: ours steps aside.
@@ -131,24 +185,6 @@ bool Application::Init() {
   });
   // Anything reported before this handler existed was dropped: ask again.
   if (platform::HasBridge()) platform::BridgeCall("audio", "refresh");
-  ui_ = std::make_unique<ui::UIContext>(window_->MainViewport().GetCanvas());
-#if WLW_DEBUG_UI
-  debug_ui_ = std::make_unique<debug::DebugUI>(*window_);  // needs the GL context Start() made
-#endif
-  {
-    WLW_PROFILE_SCOPE("Systems start");
-    systems_.StartPending();  // the systems added before Init, in order
-  }
-  // The scenes they built: compile the shader variants they need now, not during the first frames.
-  renderer_->WarmUp(*window_);
-  // The game has started: ReadOnly cvars keep their values from now on. A quality lock from a config
-  // file or the command line applies now that OnStart configured the levels.
-  CVarBase::SetStarted(true);
-  if (quality_.Configured() && cv_quality_lock.Get() >= 0) quality_.Lock(cv_quality_lock.Get());
-
-  state_ = State::Running;
-  clock_.Start(ClockSeconds());  // last: startup isn't the first frame's time
-  return true;
 }
 
 bool Application::Frame() {
@@ -167,7 +203,8 @@ bool Application::Frame() {
   // but audible.
   if (window_->ConsumePaused()) {
     WLW_PROFILE_SCOPE("App paused");
-    audio_->Suspend();  // silent in the background
+    in_background_ = true;
+    UpdateAudioSuspended();  // silent in the background
     ForEachSystem(systems_, [](System& system) { system.OnAppPaused(); });
     screens_.Internal().AppPaused();  // e.g. the game screen opens its pause panel
   }
@@ -176,17 +213,25 @@ bool Application::Frame() {
     // Back from the background (mobile): don't count the time we were away as one huge frame.
     clock_.Restart(ClockSeconds());
     quality_.Settle();  // the first frames back are slow for reasons that pass
-    audio_->Resume();
+    in_background_ = false;
+    UpdateAudioSuspended();
     ForEachSystem(systems_, [](System& system) { system.OnAppResumed(); });
   }
 
-  // 2. Time: clamped, through the time scale, cut into fixed steps (frame_clock.h).
-  const FrameClock::Tick tick = clock_.Advance(ClockSeconds(), time_);
+  // 2. Time: clamped, through the time scale, cut into fixed steps (frame_clock.h). Paused: game
+  // time stands still (Hold), or moves one fixed step (Step).
+  const bool stepping = paused_ && step_requested_;
+  step_requested_ = false;
+  const bool moves = !paused_ || stepping;  // the game moves this frame
+  const double now = ClockSeconds();
+  const FrameClock::Tick tick =
+      !paused_ ? clock_.Advance(now, time_) : (stepping ? clock_.Step(now, time_) : clock_.Hold(now, time_));
   const double frame_seconds = tick.seconds;
   const int steps = tick.steps;
+  const bool hosted = host_ != nullptr;
 
 #if WLW_DEBUG_UI
-  {
+  if (!hosted) {
     // First, so the debug UI can claim the pointer before the game reads input this frame.
     WLW_PROFILE_SCOPE("Debug UI begin");
     debug_ui_->BeginFrame(time_.real_delta_);
@@ -194,20 +239,20 @@ bool Application::Frame() {
 #endif
 
   // 3. Back: the top screen first (close a panel...), then the systems; with nothing left to
-  // close, leave like any Android app does (desktop: Escape quits).
+  // close, leave like any Android app does (desktop: Escape quits; the Studio: the session ends).
   const input::Input& input = window_->GetInput();
-  if (input.WasKeyPressed(input::Key::Back) || input.WasKeyPressed(input::Key::Escape)) {
+  if (moves && (input.WasKeyPressed(input::Key::Back) || input.WasKeyPressed(input::Key::Escape))) {
     if (!screens_.Internal().Back() && !systems_.Back() && !platform::MoveToBackground()) Quit();
   }
 
   // 4. Results from platform code (an ad closed, a cloud save arrived...) reach the game here,
-  // on its own thread, before this frame's updates.
-  {
+  // on its own thread, before this frame's updates. Paused, they wait. (A hosted session's host does it.)
+  if (moves && !hosted) {
     WLW_PROFILE_SCOPE("Bridge messages");
     platform::DispatchBridgeMessages();
   }
 
-  // 5-7. Updates and rendering: the systems, then the screens.
+  // 5-7. Updates and rendering: the systems, then the screens. Paused: none (steps = 0).
   const float step = time_.FixedStep();
   for (int i = 0; i < steps; ++i) {
     WLW_PROFILE_SCOPE("FixedUpdate");
@@ -217,7 +262,7 @@ bool Application::Frame() {
       screens_.Internal().FixedUpdate(step);
     }
   }
-  {
+  if (moves) {
     WLW_PROFILE_SCOPE("Update");
     const float dt = time_.delta_;
     ForEachSystem(systems_, [dt](System& system) { system.OnUpdate(dt); });
@@ -226,7 +271,7 @@ bool Application::Frame() {
       screens_.Internal().Update(dt);
     }
   }
-  {
+  if (moves) {
     WLW_PROFILE_SCOPE("Render");
     const float alpha = time_.alpha_;
     ForEachSystem(systems_, [alpha](System& system) { system.OnRender(alpha); });
@@ -236,18 +281,18 @@ bool Application::Frame() {
     }
   }
 
-  // 8. UI.
-  BuildUI();
+  // 8. UI. Paused: the canvases keep what was drawn last.
+  if (moves) BuildUI();
 
-  // 9. Debug panels.
+  // 9. Debug panels (paused too). A hosted session's go into its host's ImGui frame, if one is open.
 #if WLW_DEBUG_UI
   {
     WLW_PROFILE_SCOPE("DebugUI");
-    if (debug_ui_->IsOpen()) {
+    if (debug_ui_->IsOpen() && (!hosted || debug_ui_->InFrame())) {
       ForEachSystem(systems_, [](System& system) { system.OnDebugUI(); });
       screens_.Internal().DebugUI();
     }
-    debug_ui_->EndFrame();  // drawn on top of the scene by DrawWindow
+    if (!hosted) debug_ui_->EndFrame();  // drawn on top of the scene by DrawWindow
   }
 #endif
 
@@ -260,13 +305,15 @@ bool Application::Frame() {
     WLW_PROFILE_SCOPE("Poll input");
     window_->ProcessEvents();
   }
-  WLW_PROFILE_FRAME();  // presented: one frame on the profiler's timeline
-  {
+  if (!hosted) {
+    WLW_PROFILE_FRAME();  // presented: one frame on the profiler's timeline
+  }
+  if (moves) {
     WLW_PROFILE_SCOPE("Screen changes");
     screens_.Internal().EndFrame(time_.real_delta_);
   }
   UpdateStats(frame_seconds);
-  {
+  if (moves && !hosted) {  // a hosted session keeps its level: the host's machine isn't the device
     WLW_PROFILE_SCOPE("Quality");
     UpdateQuality(frame_seconds);
   }
@@ -274,7 +321,7 @@ bool Application::Frame() {
     WLW_PROFILE_SCOPE("Save cvars");
     SaveCVars();  // rare: a setting the player changed
   }
-  PlotFrame(frame_seconds);
+  if (!hosted) PlotFrame(frame_seconds);
   in_frame_ = false;
   return !quit_requested_ && !window_->ShouldClose();
 }
@@ -284,7 +331,7 @@ int Application::Shutdown() {
   WLW_ASSERT(OnGameThread(), "Application: Shutdown() runs on the thread that called Init()");
   if (!WLW_VERIFY(!in_frame_, "Application: Shutdown() called from a hook: use Quit()")) return exit_code_;
   state_ = State::Stopped;
-  platform::SetBridgeHandler("audio", nullptr);
+  if (host_ == nullptr) platform::SetBridgeHandler("audio", nullptr);
   WLW_PROFILE_SCOPE("Shutdown");
   screens_.Internal().Clear();  // OnExit for every screen while the systems are still fully alive
   ForEachSystem(systems_, [](System& system) { system.OnShutdown(); });
@@ -306,7 +353,7 @@ void Application::BuildUI() {
   window_->MainViewport().Internal().BeginCanvases({framebuffer.x, framebuffer.y}, reference);
   ui::Canvas& canvas = ui_->canvas;
   ui_->NewFrame(time_.RealDelta());
-  ui_->safe_area = ui::SafeAreaFor(canvas, platform::GetSafeAreaInsets());
+  ui_->safe_area = ui::SafeAreaFor(canvas, window_->GetSafeAreaInsets());
 
   // The pointer for UI widgets, in Canvas units: pointer units -> framebuffer pixels -> units.
   // Uses the normal (blockable) queries, so the debug UI still takes precedence.
@@ -334,6 +381,23 @@ void Application::BuildUI() {
 }
 
 void Application::SetTargetFps(int fps) { cv_target_fps.Set(fps); }  // its OnChange tells the window
+
+void Application::SetPaused(bool paused) {
+  if (paused == paused_) return;
+  paused_ = paused;
+  step_requested_ = false;
+  if (!paused) quality_.Settle();  // the first frames back aren't the game's usual ones
+  UpdateAudioSuspended();
+}
+
+void Application::UpdateAudioSuspended() {
+  if (!audio_) return;  // not started yet: Init applies it
+  if (in_background_ || paused_) {
+    audio_->Suspend();
+  } else {
+    audio_->Resume();
+  }
+}
 
 int Application::TargetFps() const { return window_->TargetFps(); }
 

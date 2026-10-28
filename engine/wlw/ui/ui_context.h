@@ -67,7 +67,7 @@ struct UIContext {
 };
 
 // The safe area in `canvas` units: its whole area minus the insets (pixels, from
-// platform::GetSafeAreaInsets()).
+// scene::Window::GetSafeAreaInsets()).
 inline Rect SafeAreaFor(const Canvas& canvas, const platform::SafeAreaInsets& insets_pixels) {
   return {canvas.FromPixels({insets_pixels.left, insets_pixels.top}),
           canvas.Size() - canvas.FromPixels({insets_pixels.right, insets_pixels.bottom})};

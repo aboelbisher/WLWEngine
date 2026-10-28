@@ -30,8 +30,16 @@ class FrameClock {
   // One frame: measures it, clamps it to max_frame_time (a breakpoint doesn't hand OnUpdate a
   // 30-second dt), applies the time scale once and fills `time` (its fixed step included).
   Tick Advance(double now, Time& time);
+  // A paused frame (Application::Internal().SetPaused): measured like any other (RealDelta, stats), but game
+  // time stands still: Delta 0, no steps; the fixed time left over and Alpha are kept for when it goes on.
+  Tick Hold(double now, Time& time);
+  // A paused frame that moves the game exactly one fixed step (Application::Internal().Step): Delta = the
+  // fixed step, one step, whatever the time scale; the fixed time left over and Alpha are kept.
+  Tick Step(double now, Time& time);
 
  private:
+  Tick Measure(double now, Time& time);  // the real part of a frame: length, RealDelta, SinceStart
+
   core::FixedTimestep timestep_;
   float max_frame_time_;
   double start_ = 0.0;

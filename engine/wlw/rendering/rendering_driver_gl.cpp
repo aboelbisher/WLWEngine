@@ -169,10 +169,13 @@ class GLRenderingDriver : public RenderingDriver {
   };
 
   // One frame of a window: its offscreen viewports into their textures (in the order added, so
-  // one may use the picture of an earlier one), then the screen, the overlays, and present.
+  // one may use the picture of an earlier one), then the screen, the overlays, and present. A window
+  // without an OS surface (scene::OffscreenWindow) draws its screen into its texture instead, with the
+  // context that is current (the host's), and leaves the framebuffer that was bound as it found it.
   void DrawWindow(std::shared_ptr<scene::Window> window) override {
     WLW_PROFILE_SCOPE("Draw window");
     window->MakeContextCurrent();
+    RenderTarget* screen_target = window->Internal().ScreenTarget();
 
     GLint screen_framebuffer = 0;  // not always 0: the platform may draw into its own
     {
@@ -182,8 +185,9 @@ class GLRenderingDriver : public RenderingDriver {
     }
     const glm::vec2 screen_pixels{window->GetSize().x, window->GetSize().y};
 
-    // GPU timing: this frame's sections are measured; the results of one a few frames ago arrive.
-    timing_ = gpu_timer_ && window->GpuTiming();
+    // GPU timing: this frame's sections are measured; the results of one a few frames ago arrive. Only for
+    // the window the renderer started with (one frame of sections per frame).
+    timing_ = gpu_timer_ && window->GpuTiming() && window == main_window_;
     invalidate_ = window->InvalidateFramebuffers();
     if (timing_) {
       WLW_PROFILE_SCOPE("GPU timer read");
@@ -200,8 +204,14 @@ class GLRenderingDriver : public RenderingDriver {
       DrawViewport(*viewport, pixels, GLFramebuffer(*target), target->Settings().depth);
     }
 
-    DrawViewport(window->MainViewport(), {static_cast<int>(screen_pixels.x), static_cast<int>(screen_pixels.y)},
-                 static_cast<GLuint>(screen_framebuffer), window->ScreenHasDepth());
+    const glm::ivec2 screen_size{static_cast<int>(screen_pixels.x), static_cast<int>(screen_pixels.y)};
+    if (screen_target != nullptr) {
+      screen_target->SetSize(screen_size.x, screen_size.y);
+      DrawViewport(window->MainViewport(), screen_size, GLFramebuffer(*screen_target), screen_target->Settings().depth);
+    } else {
+      DrawViewport(window->MainViewport(), screen_size, static_cast<GLuint>(screen_framebuffer),
+                   window->ScreenHasDepth());
+    }
     if (timing_) gpu_timer_->End();
     {
       WLW_PROFILE_SCOPE("Overlays");
@@ -210,7 +220,9 @@ class GLRenderingDriver : public RenderingDriver {
     }
     // The screen's depth (and stencil) end with the frame: not written back to memory.
     glBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(screen_framebuffer));
-    if (window->ScreenHasDepth()) Invalidate(static_cast<GLuint>(screen_framebuffer), /*color=*/false, /*depth=*/true);
+    if (screen_target == nullptr && window->ScreenHasDepth()) {
+      Invalidate(static_cast<GLuint>(screen_framebuffer), /*color=*/false, /*depth=*/true);
+    }
 
     // Present the frame we just drew (previously the swap happened before drawing,
     // so every frame was shown one frame late).

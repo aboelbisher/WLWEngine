@@ -159,6 +159,7 @@ add_library(wlw STATIC
   wlw/scene/light.h
   wlw/scene/node.h
   wlw/scene/node_3d.cpp
+  wlw/scene/offscreen_window.h
   wlw/scene/post_effects.cpp
   wlw/scene/post_effects.h
   wlw/scene/scene.cpp

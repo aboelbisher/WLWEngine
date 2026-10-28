@@ -57,14 +57,14 @@ bool WriteFileAtomic(const std::string& path, const std::vector<uint8_t>& data);
 std::optional<std::vector<uint8_t>> ReadLocalFile(const std::string& path);
 
 // The parts of the screen covered by system UI or hardware: status bar, camera cutout/notch,
-// gesture or navigation bar. Keep important UI inside. In framebuffer pixels; all 0 on desktop.
+// gesture or navigation bar. Keep important UI inside. In framebuffer pixels; all 0 on desktop. A window's:
+// scene::Window::GetSafeAreaInsets().
 struct SafeAreaInsets {
   float left = 0.0f;
   float top = 0.0f;
   float right = 0.0f;
   float bottom = 0.0f;
 };
-SafeAreaInsets GetSafeAreaInsets();
 
 // What Back does when the game has nothing left to close: Android sends the app to the
 // background (like the home screen does; the game keeps its state). Returns false where that

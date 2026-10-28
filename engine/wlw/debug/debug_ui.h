@@ -32,6 +32,9 @@ class DebugUI {
 
   void BeginFrame(float dt);
   void EndFrame();
+  // Between BeginFrame and EndFrame: ImGui windows may be built now (a Studio's hosted game session draws its
+  // OnDebugUI panels only then).
+  bool InFrame() const { return in_frame_; }
 
   bool IsOpen() const { return open_; }
   void SetOpen(bool open) { open_ = open; }
@@ -50,6 +53,7 @@ class DebugUI {
 
   scene::Window& window_;
   bool open_ = false;
+  bool in_frame_ = false;
   float hidden_for_ = 0.0f;                   // seconds left with the toggle button hidden
   std::array<bool, 5> imgui_buttons_down_{};  // the button states ImGui has been told about
   bool imgui_focused_ = true;

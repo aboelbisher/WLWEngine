@@ -272,6 +272,42 @@ pointer, taps and swipes the games use are unchanged.
   `Key::RightControl`), the same for Shift; shortcuts -> `WasShortcutPressed(Key::Z, Modifiers::Primary)`. Nothing
   outside the engine used them (the games use the pointer, taps and swipes).
 
+### Studio shell, engine side (Roadmap 3.2a)
+What the Studio needs from the engine to play a game inside it, the way Unreal's Play In Editor and Unity's Game view
+do: the Studio is a long-lived app that owns the OS window, the GL context, the renderer and ImGui; each Play starts
+a fresh copy of the game (its own `MakeApp()`) inside it, drawing into a texture at a device's size; Stop destroys
+it, so no game code runs while the Studio is stopped. Games don't change.
+- **`scene::OffscreenWindow`**: a window with no OS surface. Its screen (`MainViewport()`) is drawn into a texture
+  (`GetTexture()`) at its size (`SetSize`: a phone's pixels, a rotation); its `Input` is fed by its owner, in its
+  pixels (`SetTouchScreen` for a simulated phone); `SetSafeAreaInsets` (notch, system bars), `SetFocused`. To the game
+  it is its window: `GetSize()`, `Input::SurfaceSize()`, touch and the safe area are the device's. It draws with the
+  host's GL context, never presents, closes only through `RequestClose`. Not GPU-timed yet.
+- **Hosted sessions**: `Application::Internal().InitHosted(host, window)` starts an app on a running one's renderer
+  (and its ImGui context), on an `OffscreenWindow`. The session has its own systems, screens, time, audio, UI and
+  quality (kept at its level: the PC isn't the device); the host keeps the log file, the bridge, the console's
+  `quit`, the profiler's frames. The host calls the session's `Frame()` from one of its own hooks, so the game's
+  `OnDebugUI` panels go into the host's ImGui frame (`DebugUI::InFrame()`). `Quit(code)`, or Escape / Back with
+  nothing left to close, ends the session (its `Frame()` returns false, `Shutdown()` returns the code), not the
+  host. Cvars stay process-wide, like Unreal's console variables. `Internal().Renderer()`: the renderer an app draws
+  with (reading an offscreen screen back).
+- **Paused frames**: `Application::Internal().SetPaused(bool)` / `IsPaused()`: frames still poll input, run the debug
+  UI and draw, but the game doesn't move (no Back, bridge messages wait, no fixed or frame updates, no `OnRender` /
+  `OnRenderUI`: the UI drawn last stays, no screen changes or Quality), game time stands still and the game is
+  silent. `Step()`: the next frame moves exactly one fixed step (`OnFixedUpdate` once, `OnUpdate(fixed step)`,
+  `OnRender`, `OnRenderUI`). `FrameClock::Hold` / `Step` do the time.
+- **`Window::GetSafeAreaInsets()`** (virtual: phones the OS's, desktop none, an `OffscreenWindow` its device's); the
+  Application gives it to the UI.
+- The renderer draws an `OffscreenWindow`'s screen into its texture and leaves the bound framebuffer as it found it;
+  GPU timing covers only the window it started with.
+- An Application's log file, build-info line and `quit` command now start in `Init()` (not the constructor), so a
+  hosted session doesn't take them over.
+- Tests: `wlw_app_tests` (a host app on a hidden window running sessions from its hooks: the session's window, size,
+  input surface, touch and safe area; its screen read back from the texture; its debug panels in the host's ImGui
+  frame; Escape ending the session, not the host; a second session after the first; `Quit(4)`'s code; paused
+  frames, `Step`, Escape ignored while paused); `frame_clock` (Hold and Step keep the leftover fixed time).
+- **Breaking:** `platform::GetSafeAreaInsets()` is gone. **Migration:** `App().Window().GetSafeAreaInsets()` (the
+  game's screen, simulated in the Studio). Nothing outside the engine called it.
+
 ## 0.3.0 (2026-10-24): Phase 2, core API
 
 The core API the editor will show and edit, made consistent while the games are small: one set of math, colour

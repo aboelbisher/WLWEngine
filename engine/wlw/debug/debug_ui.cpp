@@ -65,6 +65,7 @@ DebugUI::~DebugUI() {
 }
 
 void DebugUI::BeginFrame(float dt) {
+  in_frame_ = true;
   FeedInput(dt);
   UpdateCursor();
   ImGui_ImplOpenGL3_NewFrame();
@@ -94,7 +95,10 @@ void DebugUI::BeginFrame(float dt) {
   window_.GetInput().SetKeyboardBlocked(ImGui::GetIO().WantTextInput);
 }
 
-void DebugUI::EndFrame() { ImGui::Render(); }
+void DebugUI::EndFrame() {
+  ImGui::Render();
+  in_frame_ = false;
+}
 
 void DebugUI::FeedInput(float dt) {
   ImGuiIO& io = ImGui::GetIO();
