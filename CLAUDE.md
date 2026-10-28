@@ -446,7 +446,8 @@ the last release (the build info's git commit tells builds apart).
   CHANGELOG's "Unreleased" into `## x.y.z (date): Phase N, <name>` with a summary + **Breaking** / **Deprecated**
   lists, commit "Release vx.y.z", then `git tag -a vx.y.z -m "WLWengine x.y.z"`, `git push origin vx.y.z` and
   `gh release create vx.y.z --title "WLWengine x.y.z" --notes-file <that CHANGELOG section>`. Games move their
-  submodule to the tag. A fix a game needs before the next phase = a patch release from `main` (x.y.z+1).
+  submodule to the tag. A fix or a non-breaking addition a game needs before the next phase = a patch release from
+  `main` (x.y.z+1; ROADMAP D19); anything breaking waits for the phase's minor version.
 
 ## Building the engine on its own
 Windows (from a "Developer PowerShell for VS"):

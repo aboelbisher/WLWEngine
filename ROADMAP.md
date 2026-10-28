@@ -1,24 +1,33 @@
 # WLWengine roadmap
 
 The engine is being brought to big-engine quality in architecture, practices and features: mobile
-first (Android, iOS, web), with desktop as a full target, and an editor to make the games with, like
+first (Android, iOS, web), with desktop as a full target, and an editor (the Studio) to make the games with, like
 Godot's. This plan came out of the October 2026 architecture review and was reordered on 2026-10-21
 around the editor and iOS ("Why this order"). Work goes one step at a time, in order. Step ids are
 stable: commits name them ("Roadmap 4.3b: ..."). Commits and CHANGELOG entries from before 2026-10-21
 use the old numbers: "Old numbering" at the end maps them.
 
-**Current step:** 3.1 Keys and mouse for tools (plan in chat first) · **Updated:** 2026-10-24
+**Current step:** 3.1 Keys and mouse for tools (plan in chat first) · **Updated:** 2026-10-28
 
-**Next session:** plan 3.1 in chat and wait for the OK (v0.3.0 is out; Threadlock moves to the tag when the
-  owner has committed its work in progress).
+**Next session:** 3.1 in progress on branch `input/setup` (Studio plan and 3.1 approved 2026-10-28).
+  Then, in order:
+  3.2a / b / c, 3.3, 4.1-4.5, 5.1 (scenes edited in the Studio), 5.2-5.6. Threadlock moves to the current engine
+  before 5.6 (its 2.8 migration redone on its main). Before Bluzzle's next Play release: tag v0.3.1 from main (D19); it points at an untagged
+  commit today.
 
-Where things stand (2026-10-21):
+Where things stand (2026-10-28):
 - Done: Phase 0 = v0.1.0 (2026-10-15), Phase 1 = v0.2.0 (2026-10-18), Phase 2 = v0.3.0 (2026-10-24), each step one squashed commit on main named
   "Roadmap x.y: ..." with its details and numbers in CHANGELOG.md (0.8 also has a reformat commit, listed in
   `.git-blame-ignore-revs`). Since v0.2.0, two small additions Threadlock asked for (CHANGELOG 0.3.0):
   `platform::KeepScreenOn`, `ui::TextStyle::rotation`.
-- Games: Bluzzle (live in Play testing; desktop + Android) and Threadlock (Android) are migrated to the Phase 2
-  API (2.8) and move to v0.3.0 with it. Snake (`samples/snake`) only has to keep compiling. Epicycles, Silhouette and Ripple are on old
+- Since v0.3.0 (2026-10-25 to 10-27, 33 commits, CHANGELOG "Unreleased"): features Bluzzle asked for, landed ahead
+  of their phases and recorded there as early slices: HDR picture + output pass + bloom + ripples + distortion
+  buffer (13.1, 13.7), instance uniforms (9.5), billboards, particle curves and trails (13.11), canvas and text
+  styles (15.4), music and live mix (16.2, 16.4), anim tools (17.6), leaderboards (kit; 6.2 for iOS),
+  `platform::ReduceMotion` (7.5).
+- Games: Bluzzle (live in Play testing; desktop + Android) is on main after v0.3.0 (86c4c3a, untagged). Threadlock
+  (Android) is still on c39718e (v0.2.0 + 2): its 2.8 migration has to be redone on its main. Snake (`samples/snake`)
+  only has to keep compiling. Epicycles, Silhouette and Ripple are on old
   pre-0.1 commits and are not targets (the owner dropped them).
 - How the owner works: the plan goes in chat first; code only after an OK. Work on a branch (`<topic>/setup`, or
   `bench/<topic>` so `bench.yml` runs) pushed to GitHub so CI checks it, then show the result and squash-merge to
@@ -49,10 +58,17 @@ Where things stand (2026-10-21):
   that wait into our code (9.3's tracked state removes the call). Nobody has profiled on the Pixel 4 with Tracy yet
   (a game's profile build needs the INTERNET permission).
 
-## Why this order (2026-10-21)
-- **The owner wants an editor ("studio"), like the Godot editor: for their own games first, maybe a product for
-  other developers later** (decided 2026-10-21). Phases 3-5 build it; Phase 19 turns it into a product if that is
-  still wanted then.
+## Why this order (2026-10-21, Studio order revised 2026-10-28)
+- **The owner wants an editor, the Studio: an IDE that edits scenes, like the Godot editor; for their own games
+  first, maybe a product for other developers later** (decided 2026-10-21; on 2026-10-28: scene editing is the
+  goal, Windows first, written in portable C++ so it runs on the Mac too, D20). Phases 3-5 build it; Phase 19 turns
+  it into a product if that is still wanted then.
+- **Scene editing first, game-specific tools after it (2026-10-28).** The 2026-10-21 order put game plugins first
+  (Threadlock's level editor in Phase 3) and generic scene editing last; the owner wants the scene IDE, so Phase 4
+  is now only what scene editing needs (reflection, serialization, `res://`, scene files, the inspector) and Phase 5
+  edits scenes first (5.1), with resources, prefabs and signals after it and the games' own tools (Threadlock's
+  level editor, Bluzzle's tuning) last (5.6), as plugins on the finished Studio. Scene files reference resources by
+  path until the resource manager's uids arrive (5.2), which D15's path fallback already allows.
 - **The editor needs the scene model, reflection, data files, resources and scenes, not the rendering rewrite.** It
   shows the game through a viewport texture (`Viewport::GetTexture()` in an ImGui panel), so the RHI, Vulkan and
   Metal (Phases 9-11) change one spot in it later. Phase 2 comes first because the editor shows and edits exactly
@@ -60,15 +76,16 @@ Where things stand (2026-10-21):
 - **Editor features come in the order the games use them.** Research (2026-10-21): small engines that built a
   generic editor first (Hazel: docking, hierarchy, inspector, gizmos, then play/stop over two years; no undo in the
   public repo) spent years before a game used it; Godot's and Unity's value for a game is in game-specific plugins
-  (EditorPlugin, EditorWindow, custom inspectors). So: the shell and game plugins first (Phase 3), with Threadlock's
-  level editor as the first user (72 JSON levels, ~35 to redesign for Worlds 3-4, all edited by hand as
-  coordinates today; its solver and validators are ready to run live); reflection, the inspector and data files
-  next (Phase 4), with Bluzzle's tuning as the first user (69 hand-written ImGui widgets over plain structs, none
-  saved); generic scene editing last (Phase 5), for the next games and Bluzzle's static stage.
+  (EditorPlugin, EditorWindow, custom inspectors). The lesson kept from it: each Studio step ships something
+  usable (the shell runs the game with Play / Pause / Launch; the inspector edits live values before the scene
+  editor exists), undo comes from the start, and plugins stay first-class: the scene editor itself is a plugin,
+  so Threadlock's level editor (72 JSON levels, ~35 to redesign, edited by hand as coordinates today) and Bluzzle's
+  tuning (69 hand-written ImGui widgets, none saved) land on the same API (5.6).
 - **iOS roughly doubles the market of a mobile puzzle game.** The owner has or will get a Mac (2026-10-21), and
   iOS can ship on today's GLES renderer, as Godot's Compatibility renderer does (D17), so it no longer waits for
   Metal (Phase 11). It can move ahead of
-  Phases 3-5 if the Mac arrives first and Bluzzle wants iOS before the editor.
+  Phases 3-5 if the Mac arrives first and Bluzzle wants iOS before the Studio. The Studio on the Mac (6.5) comes
+  with it: same Mac, and the engine's desktop GL path already asks macOS for its core profile.
 - **Android platform work (GameActivity, thermal, device lab) helps the live game now**, so it moves ahead of the
   rendering rewrite; its Vulkan parts stay with Vulkan (Phase 10).
 - **Everything else stays planned in full** (the owner's decision of 2026-10-14: big-engine quality, Vulkan
@@ -90,9 +107,10 @@ Where things stand (2026-10-21):
   work has benchmark numbers before and after on desktop (`windows-local`) and Linux CI. Phone
   numbers (any Android device, compared only with its own baseline) are optional: taken when a
   phone is at hand, never a blocker. Firebase Test Lab (7.6) brings a device matrix later.
-- Editor work (from Phase 3): the editor targets build in CI (Windows and Linux); editor logic (documents, undo,
-  reflection, serialization) is tested without a window; file formats have round-trip tests and a corpus of old
-  files that must keep loading.
+- Studio work (from Phase 3): the Studio targets build in CI on Windows and Linux (Linux proves the code isn't
+  Windows-only; macOS by hand from 6.5); no OS header outside `platform/` (D20); Studio logic (documents, undo,
+  reflection, serialization, commands) is tested without a window; file formats have round-trip tests and a corpus
+  of old files that must keep loading.
 - Bluzzle (desktop and Android) and Threadlock (Android) build and run with the change; Snake
   compiles. iOS joins the list once Phase 6 has run it.
 - CLAUDE.md and CHANGELOG.md updated; breaking changes come with migration notes.
@@ -110,7 +128,7 @@ Where things stand (2026-10-21):
 - Measure on devices; every quality tier has a budget; no battery spent for nothing.
 - Deterministic where it matters: simulation, random numbers, draw order.
 - Every API says which thread may call it.
-- Every editor feature names the game that uses it first. The editor runs the game's own code: no editor-only
+- Every Studio feature names the game that uses it first. The Studio runs the game's own code: no Studio-only
   gameplay paths, and what plays in the editor plays the same in the shipped game.
 
 ## Decisions (confirmed when their step starts)
@@ -134,15 +152,17 @@ Where things stand (2026-10-21):
 - **D9 Android:** GameActivity + AGDK (Swappy, GameTextInput, Paddleboat) + ADPF.
 - **D10 Physics:** Jolt (3D), Box2D v3 (2D).
 - **D11 Text:** FreeType + HarfBuzz + SheenBidi + msdfgen + libunibreak.
-- **D12 Editor (revised 2026-10-21):** an in-process editor build of each game, like Unreal's Editor target and
-  Fyrox's editor crate: `wlw_add_game` adds a desktop-only `<game>_editor` executable = the game's own code + the
-  `wlw::editor` library, statically linked, `WLW_EDITOR` defined. Dear ImGui's docking branch (multi-viewports off
-  until Wayland can place windows). Two ways to play: in the editor (on a copy of what is being edited) and Launch
+- **D12 Studio (revised 2026-10-21; named and widened 2026-10-28, confirmed):** the editor is called the Studio. One
+  library, `wlw::studio`, statically linked into two kinds of executable: `wlw_studio` (engine types only: opens any
+  project folder and edits its scenes, like a plain Godot editor) and, from `wlw_add_game(... STUDIO_SOURCES ...)`,
+  `<game>_studio` = the same Studio + the game's own code (its node types, systems and Play), like Unreal's Editor
+  target and Fyrox's editor crate; `WLW_STUDIO` defined. Dear ImGui's docking branch (multi-viewports off
+  until Wayland can place windows). Two ways to play: in the Studio (on a copy of what is being edited) and Launch
   (the real game as its own process, on the desktop or a phone: the ground truth, and a crash can't take the editor
   down). No game DLLs and no engine shared library until Phase 19: they need one CRT, one copy of every engine
   global (glad's GL pointers, cvars, log sinks, resource lists, the shader library) and a stable ABI, and C++ hot
   reload is fragile (Godot's GDExtension reload and Fyrox's dylib reload both warn about it). Code changes mean a
-  fast rebuild that restores the editor's session; MSVC Hot Reload or Live++ cover small edits.
+  fast rebuild that restores the Studio's session; MSVC Hot Reload or Live++ cover small edits.
 - **D13 Dependencies:** vendored, pinned sources in `third_party/`, built by our CMake on every
   platform (versions and licences in `third_party/README.md`); vcpkg only for desktop-only GLFW.
 - **D14 Reflection (2026-10-21):** hand-written registration, no code generator (Godot ClassDB / O3DE
@@ -170,6 +190,31 @@ Where things stand (2026-10-21):
   removal or native bugs show; reports of ANGLE in games are mixed (jMonkeyEngine 2026: 14 fps vs 47 native; Godot
   rolled it back on macOS in 4.2.1). Native GLES doesn't run in the Apple-silicon Simulator (crashes since Xcode
   15.4), so a real iPhone (A13 or later) is needed. Metal replaces it with the RHI (11.3).
+- **D18 Keys (2026-10-28, confirmed):** `input::Key` names a key's position (named by the US layout), like
+  Unity's Input System keys, SDL scancodes and Godot's physical keycodes, so game controls stay put on AZERTY or
+  Dvorak (WASD is where WASD is); GLFW already reports positions. Shortcuts use the key's label on the player's
+  layout instead (Ctrl+Z = the key printed Z), as Dear ImGui's own GLFW backend does: the platform reports both, ImGui
+  and `WasShortcutPressed` get the layout's key. Typed text stays `Input::Text()` (code points).
+- **D19 Patch releases (2026-10-28, confirmed):** a patch (x.y.z+1) from `main` may carry fixes and additions a
+  game needs to ship, as long as nothing breaks for existing callers; anything breaking waits for the phase's
+  minor version. Games ship only on tags, so a game shipping between phases gets a patch tag.
+- **D20 A portable Studio (2026-10-28, the owner's ask, confirmed):** Windows first, the Mac next, from the same C++. Rules:
+  - All Studio code is portable C++20 in `studio/`: no OS or compiler-specific headers (no `<windows.h>`, no
+    Objective-C), only the engine, Dear ImGui, the standard library and vendored portable libraries.
+  - All Studio UI is Dear ImGui, menus included (no native menu bar or widgets), so it looks and behaves the same
+    on both systems; windows, clipboard, cursors and HiDPI content scale come from GLFW.
+  - The few OS services live in `engine/wlw/platform/<os>/` behind small interfaces, each with a Windows and a
+    macOS implementation from the start (Linux too, for CI): file dialogs (nativefiledialog-extended, which ships all
+    three), the file watcher (ReadDirectoryChangesW / FSEvents / inotify), starting processes and reading their
+    output (CreateProcessW / posix_spawn), "show in Explorer / Finder", the config folder (%APPDATA% / ~/Library/
+    Application Support). The macOS ones may be Objective-C++ (.mm) files there and nowhere else.
+  - Paths are `std::filesystem` with UTF-8 strings; wide Windows strings only inside `platform/win`.
+  - Shortcuts use `Modifiers::Primary` (Ctrl / Cmd, 3.1) and are shown per platform.
+  - Rendering: the engine's GL 3.3 core path, which macOS runs today (a forward-compatible core context, GL 4.1 at
+    most; deprecated by Apple but present on Apple silicon), so the Mac Studio doesn't wait for Metal (11); Metal
+    replaces it later through the RHI with no Studio change.
+  - CI: Linux builds and tests the Studio on every push (the proof nothing Windows-only crept in); a macOS build job
+    by hand (Constraints: macOS minutes cost).
 
 ## New third-party libraries (all permissive)
 doctest (MIT), nanobench (MIT), Tracy (BSD-3), volk (MIT), Vulkan-Headers (Apache-2.0), Vulkan
@@ -195,8 +240,9 @@ licence) for editor UI tests.
   (Adreno, Mali, low end) without owning them.
 - Bluzzle is live in testing: its releases pin a tagged engine version (from v0.1.0; one minor
   version per phase, CLAUDE.md "Versioning").
-- The editor is desktop-only (Windows first, Linux in CI; macOS with Phase 11). Threadlock's rule "desktop builds
-  are only the engine's dev target" gets an exception for its editor build (in Threadlock's repo).
+- The Studio is desktop-only: Windows first, Linux in CI, macOS from 6.5 on the GL path (D20), Metal later (11).
+  Threadlock's rule "desktop builds are only the engine's dev target" gets an exception for its Studio build (in
+  Threadlock's repo).
 
 ## Phase 0: Safety net and tooling
 - [x] **0.1 doctest.** *(done 2026-10-14, commit "Roadmap 0.1: doctest"; the CHANGELOG has the details)* The 24 suites move to doctest: one `TEST_CASE` per behaviour, the same
@@ -287,82 +333,141 @@ The editor shows and edits what this phase defines, so it comes first.
   to Z up (no Y-up root node), Threadlock and Snake moved; no engine code changed)* Bluzzle, Threadlock and Snake
   updated; a short note for the dropped games (Epicycles, Silhouette, Ripple) in the CHANGELOG.
 
-## Phase 3: Editor shell and game tools
-The editor as a build of each game (D12), useful first through the games' own tools. Done when Threadlock's
-level editor runs on it.
+## Phase 3: Studio shell
+The Studio (D12, D20) is the engine's editor: an IDE for scenes, like the Godot editor or Unity's, Windows first and
+written in portable C++ so it moves to the Mac without a rewrite (6.5). Code is still written in Visual Studio /
+Xcode; the Studio edits scenes and data. This phase builds the window, the panels, the play controls and undo.
 - [ ] **3.1 Keys and mouse for tools.** The full key set (letters, digits, function keys, punctuation, numpad,
   modifiers as keys and as a mask), every mouse button, the wheel (both axes), cursor shapes; Dear ImGui fed all of
   them (Ctrl+Z, Ctrl+S, right-drag, wheel zoom work). The polling API stays; timestamped events, several pointers
   and gamepads stay in 14.1.
-- [ ] **3.2 Editor shell.** `wlw::editor` (`editor/wlw/editor/`: a desktop-only target on top of the engine, like
-  kit; the runtime never includes it). `wlw_add_game(... EDITOR_SOURCES ...)` adds `<game>_editor`. Dear ImGui on
-  its docking branch of the same version (v1.92.9b-docking; 1.93's draw-list changes are a separate update),
-  layouts saved per game in the user's folder. Panels: Game (the game's screen drawn into a viewport texture at a
-  chosen device size: phone presets, orientation, safe areas and notches = the device simulator's first part),
-  the engine panel, cvars, console and log, docked. The editor owns the frame (2.7): Pause / Step (one fixed step)
-  / Resume / Restart the game; Launch runs the real game (the desktop executable with `+cvar` arguments, or the APK
-  on a phone through adb with the intent extra). Native file dialogs. The editor reopens its last session
-  (layout, documents, camera) so a rebuild costs seconds.
-- [ ] **3.3 Plugins, documents and undo.** `EditorPlugin` (Godot's EditorPlugin, Unity's EditorWindow): a game's
-  editor build registers plugins that add panels, menu items, toolbar buttons, tools drawn over the Game panel,
-  and document types (open, save, autosave, the unsaved mark, reload when the file changes on disk); a plugin can
-  play a document in the running game ("play this level"). Undo/redo from the start (D16): one command stack per
-  document, merging within a gesture, an Edit menu and a history panel; the first command type keeps a snapshot of
-  the document before and after (enough for a JSON level). A desktop file watcher on the game's asset folder
-  reloads changed JSON, shaders and textures in the running game (the first piece of 4.5 / 4.6's hot reload).
-- [ ] **3.4 First user: Threadlock's level editor** (planned and built in Threadlock's repo; this step is the
-  engine fixes it needs). The level drawn by the game's own board view, nodes and pipe bends dragged with snapping,
-  a palette of pieces, the validators and the solver run live (pars, timing), "play this level" and Launch on the
-  phone, saved through the game's level writer.
+  Found in the code (2026-10-28): `input::Key` has 26 keys (letters W A S D I P only, F1 only, one `Control` and one
+  `Shift`); the mouse is only the left button as "the pointer" (no right / middle, no wheel, no movement delta);
+  no cursor API; the debug UI feeds ImGui only the letter A (Ctrl+A works in the console, Ctrl+C / V / Z don't).
+  The games use only the pointer, taps and swipes, which stay. Plan:
+  - Keys (D18): A-Z, `Digit0-9`, F1-F12, punctuation (named by the US layout), Insert, the locks, PrintScreen, Pause,
+    Menu, the numpad, left / right Shift, Control, Alt and Super (replacing `Key::Control` / `Key::Shift`: Breaking,
+    only the debug UI used them). `Input::Modifiers()` = a mask from the held keys, with `Primary` = Ctrl on Windows
+    and Linux, Cmd (Super) on macOS, so Studio shortcuts are written once (`Primary + S` = Ctrl+S / Cmd+S);
+    `WasShortcutPressed(key, mods)` (exact mask: Ctrl+Z is not Ctrl+Shift+Z; matched on the layout's key);
+    `KeyName` / `KeyFromName` (menus show "Ctrl+S" or "Cmd+S"; 14.3's saved bindings).
+  - Mouse: `MouseButton` {Left, Right, Middle, Back, Forward} down / pressed / released (a real mouse only; the
+    pointer API is unchanged and stays the left button or the first finger), `PointerDelta()` (movement this frame),
+    `ScrollDelta()` (both axes, in notches, fractions from trackpads; +y = away from the player). Blocking (the debug
+    UI has the mouse) hides buttons, wheel and delta too.
+  - Window: `SetCursor(Cursor)` {Arrow, TextInput, Hand, Crosshair, ResizeEW / NS / NWSE / NESW, ResizeAll,
+    NotAllowed, Hidden} (GLFW 3.4's standard cursors, the same on Windows and macOS; phones ignore it); the debug UI's
+    cursor wins only while it has the mouse (`Internal()` override). `SetCursorLocked(bool)` (hidden, unbounded
+    `PointerDelta`, raw motion where the OS has it): pulled from 14.1 because 5.1's fly camera (right-drag look)
+    needs it. `HasFocus()`.
+  - Dear ImGui fed everything: every key (letters by the layout), modifiers (`ConfigMacOSXBehaviors` on macOS),
+    five buttons in order (a click inside one frame still lands), both wheel axes, focus; its cursor shape goes back
+    to the window.
+  - Android: the full keyboard map (Bluetooth keyboards, Chromebooks, the emulator) and the mouse wheel
+    (`AMOTION_EVENT_ACTION_SCROLL`); mouse buttons wait for 7.1 (GameActivity rewrites Android input).
+  - Tests (no window): every key and button pressed + released in one frame, OS repeat ignored, the wheel summed per
+    frame and reset, modifiers, `Primary` per platform and exact shortcuts (layout keys too), blocking, `KeyName`
+    round trip for every key, every key's own distinct ImGui key. Cursor shapes and lock checked by hand.
+- [ ] **3.2 Studio shell.** `wlw::studio` (`studio/wlw/studio/`: a desktop-only library on top of the engine, like
+  kit; the runtime never includes it), built into two executables from the same code (D12): `wlw_studio` (the
+  engine's node types; opens any project folder) and, through `wlw_add_game(... STUDIO_SOURCES ...)`,
+  `<game>_studio` (the same plus the game's own types, systems and Play). Dear ImGui on its docking branch of the
+  same version (v1.92.9b-docking; 1.93's draw-list changes are a separate update): all Studio UI, menus included,
+  is ImGui (no native menus or widgets: the same on Windows and macOS); layouts saved per project in the user's
+  folder; HiDPI from the window's content scale (Windows scaling, Retina). Panels: Game (the game's screen drawn
+  into a viewport texture at a chosen device size: phone presets, orientation, safe areas and notches = the device
+  simulator's first part; the game's `Input` fed from the panel: pointer in the panel image's coordinates, keys
+  only while the panel has focus), the engine panel, cvars, console and log, docked. The Studio owns the frame
+  (2.7): Play / Pause / Step (one fixed step) / Stop; Launch runs the real game (the desktop executable with `+cvar`
+  arguments, or the APK on a phone through adb with the intent extra). Native file dialogs. The Studio reopens its
+  last session (layout, open scenes, camera) so a rebuild costs seconds.
+  Engine changes it needs (found in the code 2026-10-28):
+  - `Window::MainViewport()` is always the screen (`Viewport::CreateScreen`): it must be able to draw into a texture
+    at a size of its own (the device size), with the real window drawing only the Studio.
+  - The game's surface comes from the platform: `Input::SurfaceSize`, `platform::GetSafeAreaInsets()` (read by
+    Application for `UIContext::safe_area`) and the UI reference fit follow the window. They move behind the Window
+    (or an override on it) so the Studio can simulate a device's size, insets and touch.
+  - `Application::Frame()` always updates the game: Pause needs frames that draw (Studio, Game panel) without
+    updating systems and screens, and Step = one fixed step. `Quit()` and Escape-as-Back (Application closes the app
+    when nothing handles Back) must stop the play session in the Studio, not close it.
+  - One ImGui context: `DebugUI` creates it with no ini file and no docking, and draws the in-game toggle button.
+    The Studio takes it over (docking, an ini per project, no toggle button); a Studio build forces `WLW_DEBUG_UI` on.
+  - `wlw_add_game` takes only `SOURCES` / `ASSETS`: `STUDIO_SOURCES` adds the `<game>_studio` target (desktop only).
+  - OS services the Studio needs, in `platform/` behind small interfaces (D20): native open / save / folder dialogs
+    (nativefiledialog-extended: Windows IFileDialog, macOS NSOpenPanel, Linux portals), starting a process and
+    reading its output (Launch, adb), "show in Explorer / Finder", the user's config folder.
+  Sub-steps: **3.2a** engine side (offscreen main viewport, simulated surface and insets, paused frames, Quit in the
+  Studio; tested with `wlw_app_tests`), **3.2b** the Studio library, both executables, docking and panels, **3.2c**
+  Launch (desktop + adb), file dialogs, session restore. CI builds the Studio on Windows and Linux (Linux = the
+  cheap proof that nothing is Windows-only).
+- [ ] **3.3 Documents, undo and plugins.** Documents: open, save, save as, autosave, the unsaved mark, several open
+  at once, reload when the file changes on disk. Undo/redo from the start (D16): one command stack per document,
+  merging within a gesture (mouse down to up), an Edit menu with `Primary+Z` / `Primary+Shift+Z`, a history panel;
+  the first command type keeps a snapshot of the document before and after. `StudioPlugin` (Godot's EditorPlugin,
+  Unity's EditorWindow): a game's Studio build registers panels, menu items, toolbar buttons, tools drawn over a
+  view and its own document types; the Studio's own scene editing (5.1) is built the same way. A file watcher on
+  the project's folder reloads changed JSON, shaders and textures in the running game (the first piece of hot
+  reload); OS code, so in `platform/` (Windows ReadDirectoryChangesW, macOS FSEvents, Linux inotify, a polling
+  fallback) behind an interface the tests can fake.
 
-## Phase 4: Reflection, data and scenes
-What the inspector, scene files, undo and animation tracks are built on. Bluzzle's tuning is the first user.
+## Phase 4: Scenes as data
+What the Studio edits: reflected properties, scene files and the inspector. Done when a scene file made by hand
+loads in a game and its nodes can be edited in the inspector.
 - [ ] **4.1 Reflection.** D14: classes and plain structs register their properties (member pointers or
   getter/setter pairs; enums with names; base classes); attributes `Range`, hints (colour, angle, multiline, file,
   resource type), flags Storage / Editor / ReadOnly / NoUndo; `Version(n)` and `RenamedFrom`; types created by a
-  stable name (scene files; `TypeName<T>()` isn't stable). Engine types registered from Application, game types
-  from `MakeApp`.
+  stable name (scene files; `TypeName<T>()` isn't stable). Engine types (every node type, lights, cameras,
+  materials, post settings) registered from Application, game types from `MakeApp`.
 - [ ] **4.2 Serialization and data files.** D15: any reflected value to and from JSON and CBOR (nlohmann moves from
   kit into the engine); non-default values only, shortest round-trip floats (`std::to_chars`; nlohmann alone
   prints 0.1f as 0.10000000149011612); file format numbers, per-class versions and upgrade functions; unknown
   properties kept with a warning; a corpus of old files in tests/data. Data files: a reflected struct saved as its
   own file (Godot's custom Resource, Unity's ScriptableObject) for tuning, looks and settings.
-- [ ] **4.3 Inspector.** A reflection-driven panel: widgets per property type (numbers, ranges, bools, enums,
+- [ ] **4.3 File system and async IO.** Mounts `res://` (the project folder on desktop, the APK, the iOS bundle;
+  paks in 12.6), `user://`, `cache://`; directory listing; the Studio writes into the project folder; the file
+  watcher from 3.3 behind it; sync and async reads completed on the game thread; UTF-8 paths everywhere (wide
+  Windows APIs only inside `platform/`); replaces `platform::ReadFile`. (This also lets glTF load from the APK.)
+- [ ] **4.4 Scene files.** Scene files (D15): a flat node list in tree order (id, parent, name, type, non-default
+  properties), node references by id; resources referenced by `res://` path for now (built-in primitives as
+  `builtin://cube` etc.; uids join in 5.2, with the path kept as the fallback D15 already names); migrations; games
+  load and instantiate scene files at runtime (`Scene::Load`, `Instantiate` under a node). Prefabs come in 5.3.
+- [ ] **4.5 Inspector.** A reflection-driven panel: widgets per property type (numbers, ranges, bools, enums,
   colours, vectors, strings, arrays, resource and node references), custom property editors from plugins (Godot's
-  EditorInspectorPlugin), each change a SetProperty command (D16), applied live to the running game. Bluzzle's
-  rules and tuning structs move to it and to data files (its hand-written sliders go).
-- [ ] **4.4 Signals.** `Signal<void(Args...)>` with scoped connections; queued signals delivered on the game
-  thread; a property-changed signal for inspected objects (games react to live edits).
-- [ ] **4.5 File system and async IO.** Mounts `res://` (the source folder on desktop, the APK, the iOS bundle;
-  paks in 12.6), `user://`, `cache://`; directory listing; editor builds write into the source folder; the desktop
-  file watcher from 3.3 behind it; sync and async reads completed on the game thread; replaces
-  `platform::ReadFile`. (This also lets glTF load from the APK.)
-- [ ] **4.6 Resource manager.** Typed ref-counted handles; a uid per resource (D15: in its own file's header, or a
-  `.uid` sidecar for PNG / glTF / OGG), a uid -> path table baked for the APK and the bundle; sync and async
-  loading with states and dependencies; a cache by path; unload on last release; a per-frame GPU upload budget;
-  source tracking to rebuild after device loss; desktop hot reload.
-- [ ] **4.7 Scenes and prefabs.** Scene files (D15): a flat node list in tree order (id, parent, name, type,
-  non-default properties), node references by id, resource references by uid; prefab instances with overrides
-  (target id chain, property, value; added and removed nodes), variants (a scene whose root is an instance),
-  nesting; migrations; games instantiate scene files at runtime.
+  EditorInspectorPlugin), each change a SetProperty command (D16), applied live to the running game. Also on data
+  files and on any reflected object a game shows (Bluzzle's tuning structs: 5.6).
 
 ## Phase 5: Scene editor
-Generic editing, like the Godot editor's 3D view. First users: Bluzzle's static stage (lights, floor, camera) as
-a scene file, and the next games.
+The Studio edits scenes, like the Godot editor's 3D view. First users: Bluzzle's static stage (lights, floor,
+camera) as a scene file, and the next games.
 - [ ] **5.1 Scene editing.** Scene documents (open, save, several at once); a hierarchy (drag to reparent, rename,
-  multi-select, filter); the inspector on nodes; a Scene panel with an editor camera (orbit, fly, frame the
-  selection) beside the Game panel; ImGuizmo gizmos (translate, rotate, scale, snapping, local / world); picking
-  (rays against world boxes, then GPU id picking); duplicate, delete, copy and paste; all undoable (create and
-  delete subtree, reparent). Play: the scene is serialized and the game runs on a copy; Stop throws the copy away
-  (a change made while playing can be copied back as one undoable command).
-- [ ] **5.2 Prefab editing.** Open a prefab; instances show their overrides, which can be reverted or applied to
-  the source; variants.
-- [ ] **5.3 Asset browser.** The `res://` tree and search, thumbnails (images; models and scenes rendered
-  offscreen), drag into the scene or onto a property, open scenes and data files, rename and move without breaking
-  uids. Import settings and reimport arrive with the cooker (12.8).
-- [ ] **5.4 Tool panels.** Profiler panel (CPU zones of the frame, GpuTimer sections; Tracy for depth), render
+  multi-select, filter, add node by type); the inspector on nodes; a Scene panel with a Studio camera (orbit, fly
+  with the locked cursor from 3.1, frame the selection) beside the Game panel; a grid and axis gizmo (Z up, D1);
+  ImGuizmo gizmos (translate, rotate, scale, snapping, local / world); picking (rays against world boxes, then GPU
+  id picking); duplicate, delete, copy and paste; all undoable (create and delete subtree, reparent). Play: the
+  scene is serialized and the game runs on a copy; Stop throws the copy away (a change made while playing can be
+  copied back as one undoable command).
+- [ ] **5.2 Resources and asset browser.** Resource manager: typed ref-counted handles; a uid per resource (D15: in
+  its own file's header, or a `.uid` sidecar for PNG / glTF / OGG), a uid -> path table baked for the APK and the
+  bundle; sync and async loading with states and dependencies; a cache by path; unload on last release; a per-frame
+  GPU upload budget; source tracking to rebuild after device loss; hot reload in the Studio. Asset browser: the
+  `res://` tree and search, thumbnails (images; models and scenes rendered offscreen), drag into the scene or onto a
+  property, open scenes and data files, rename and move without breaking uids. Import settings and reimport arrive
+  with the cooker (12.8).
+- [ ] **5.3 Prefabs.** Prefab instances with overrides (target id chain, property, value; added and removed nodes),
+  variants (a scene whose root is an instance), nesting. In the Studio: open a prefab; instances show their
+  overrides, which can be reverted or applied to the source.
+- [ ] **5.4 Signals.** `Signal<void(Args...)>` with scoped connections; queued signals delivered on the game
+  thread; a property-changed signal for inspected objects (games react to live edits); connections saved in scene
+  files (Godot's signal connections) when a game needs them.
+- [ ] **5.5 Tool panels.** Profiler panel (CPU zones of the frame, GpuTimer sections; Tracy for depth), render
   stats, the device simulator completed (a device list with real resolutions, densities, safe areas and notches;
-  orientation; the quality level), the log with filters. Editor UI smoke tests if ImGui Test Engine's licence fits.
+  orientation; the quality level), the log with filters. Studio UI smoke tests if ImGui Test Engine's licence fits.
+- [ ] **5.6 Game tools on the Studio.** Bluzzle's rules and tuning structs move to the inspector and data files
+  (its 69 hand-written sliders go). Threadlock's level editor as a `StudioPlugin` (planned and built in Threadlock's
+  repo; this step is the engine fixes it needs): the level drawn by the game's own board view, nodes and pipe bends
+  dragged with snapping, a palette of pieces, the validators and the solver run live (pars, timing), "play this
+  level" and Launch on the phone, saved through the game's level writer. Needs Threadlock on the current engine
+  (its 2.8 migration redone on its main).
 
 ## Phase 6: iOS (needs a Mac and an iPhone)
 On the current GL renderer (D17); Metal comes with the RHI (11.3). Can move ahead of Phase 3 if the Mac arrives
@@ -386,6 +491,10 @@ is ~850 lines of C++ + ~225 of Kotlin).
   April 2027) and iOS 13 or later as the minimum; TestFlight; Bluzzle on an iPhone.
 - [ ] **6.4 CI.** An `ios-arm64` build-only job on a GitHub macOS runner (like `android-arm64`), on main and by hand
   only (Constraints).
+- [ ] **6.5 The Studio on macOS.** The Studio (Phases 3-5) built and run on the Mac on the GL path (D20): the
+  macOS implementations of the platform services (FSEvents watcher, NSOpenPanel dialogs, posix_spawn, Finder) checked
+  for real, Cmd shortcuts, Retina scale, trackpad scrolling, a `.app` bundle from CMake; the desktop golden images on
+  macOS's GL; a `macos` build job (by hand). Small by design: everything else is the same C++ as on Windows.
 
 ## Phase 7: Android platform
 - [ ] **7.1 GameActivity.** AGDK GameActivity replaces NativeActivity (native glue, `WlwActivity`);
@@ -396,7 +505,7 @@ is ~850 lines of C++ + ~225 of Kotlin).
 - [ ] **7.3 ADPF and thermal.** Performance hint sessions for the game and render threads, thermal
   headroom forecasts feeding Quality (step down before throttling), the Game Mode API, low-power
   reactions.
-- [ ] **7.4 Context loss.** Recovery from `EGL_CONTEXT_LOST` by rebuilding GPU state from resource sources (4.6);
+- [ ] **7.4 Context loss.** Recovery from `EGL_CONTEXT_LOST` by rebuilding GPU state from resource sources (5.2);
   a debug command that simulates it; tests. (`VK_ERROR_DEVICE_LOST` in 10.5.)
 - [ ] **7.5 Display and lifecycle.** Orientation lock and changes, foldable and multi-window resizes,
   immersive mode, density (dp) for UI scale. (Done: keep-screen-on `platform::KeepScreenOn`, the "Remove animations"
@@ -418,7 +527,7 @@ is ~850 lines of C++ + ~225 of Kotlin).
 - [ ] **8.2 Memory and handles.** Per-frame and per-thread linear allocators, pools, generational
   `Handle<T>` with dense storage, memory accounting by category (engine panel, Tracy).
 - [ ] **8.3 Web.** Emscripten: WebGL 2 through the GL backend, HTML5 input, `Frame()` from
-  `emscripten_set_main_loop`, files preloaded or fetched (4.5), saves in IndexedDB, WebAudio unlocked on
+  `emscripten_set_main_loop`, files preloaded or fetched (4.3), saves in IndexedDB, WebAudio unlocked on
   the first input. A single-threaded build by default, a threaded build for cross-origin-isolated
   hosts; a CI job; WebGL 2 limits added to the CLAUDE.md rules. WebGL 2 shaders are GLSL ES 3.00:
   1.3's precision rules (both stages agree on every uniform and block member) and its GLSL ES
@@ -496,13 +605,14 @@ is ~850 lines of C++ + ~225 of Kotlin).
 ## Phase 11: Metal and macOS
 - [ ] **11.1 Metal backend.** The RHI on Metal (MSL from the shader pipeline, memoryless
   attachments, MTLBinaryArchive caching, timestamps, debug groups).
-- [ ] **11.2 macOS.** A macOS window through GLFW + CAMetalLayer; golden images on macOS; the editor on macOS.
+- [ ] **11.2 macOS.** A macOS window through GLFW + CAMetalLayer; golden images on macOS;
+  the Studio moves to Metal with the rest (it runs on GL from 6.5).
 - [ ] **11.3 iOS on Metal.** iOS moves from the GL path (D17) to Metal; CPU, GPU and power compared; the GL path
   kept or deleted from the numbers.
 - [ ] **11.4 CI.** The macOS runner also builds macOS and runs the golden images there (main and by hand).
 
 ## Phase 12: Content pipeline
-- [ ] **12.1 Cooker.** A `wlw_cook` host tool, an asset database (resources' uids from 4.6; `.meta` sidecars
+- [ ] **12.1 Cooker.** A `wlw_cook` host tool, an asset database (resources' uids from 5.2; `.meta` sidecars
   hold import settings), content-hash incremental cooking, per-platform output, CMake, Gradle and Xcode
   integration, pak output, clear errors.
 - [ ] **12.2 Textures.** Decoding (PNG, JPG, 16-bit, HDR, EXR); sRGB-correct mips (normal
@@ -513,14 +623,14 @@ is ~850 lines of C++ + ~225 of Kotlin).
   vertex colours, tangents (MikkTSpace), skins, animations, morph targets, `KHR_lights_punctual`,
   `KHR_texture_transform`, `KHR_mesh_quantization`, `KHR_texture_basisu`, `EXT_meshopt_compression`.
   meshoptimizer for cache / fetch / overdraw order, quantization and LODs. Output: a binary
-  ModelAsset instantiated into nodes, or a scene file (4.7). (From 1.4: a glTF node
+  ModelAsset instantiated into nodes, or a scene file (4.4). (From 1.4: a glTF node
   with a mirroring transform (det < 0) flips its triangles' winding; glTF says to reverse it when importing.
   The baked normals already point out: `core::NormalMatrix`.)
 - [ ] **12.4 Fonts.** Cooked fonts: the TTF, prebaked MSDF atlas pages for chosen ranges, metrics.
 - [ ] **12.5 Audio.** Decode and resample at cook time; load types Decompress / CompressedInMemory /
   Streaming; PCM16 or ADPCM for effects, Vorbis for long clips; mono stays mono.
 - [ ] **12.6 Shaders and paks.** Pak archives (index, per-file zstd, aligned for memory mapping) mounted under
-  `res://` (4.5); per-platform shader archives in the cooked output, versioned.
+  `res://` (4.3); per-platform shader archives in the cooked output, versioned.
 - [ ] **12.7 Hot reload.** Desktop watcher -> re-cook -> live reload of textures, meshes, materials,
   shaders, fonts and audio.
 - [ ] **12.8 Import in the editor.** Import settings in the inspector, reimport from the asset browser, cook
@@ -586,13 +696,16 @@ is ~850 lines of C++ + ~225 of Kotlin).
 - [ ] **13.11 GPU particles.** Compute emit / update / sort / indirect draw on Vulkan, Metal and GLES
   3.1+, with a CPU fallback (the current systems); curves and gradients over lifetime; flipbooks;
   depth-buffer collisions; a particle editor (curves, gradients, live preview).
+  Early slice done (2026-10-27, for Bluzzle's line clears), on the CPU systems: `BillboardBatch` (camera-facing and
+  velocity-stretched quads in one draw), `ParticleSystem::WriteTo(BillboardBatch&)`, size / intensity / colour over
+  life (`anim::Curve`, `anim::Gradient`), HDR intensity, `fx::Trail`.
 - [ ] **13.12 2D rendering.** World-space sprites with atlases, 9-slice, flipbook animation and
   sorting layers for 2D games.
 
 ## Phase 14: Input
-- [ ] **14.1 Event core.** Timestamped events (keys, text, pointers with ids, wheel, gamepad); cursor modes
-  (hidden, locked, confined), multi-pointer state; the polling API built on the events. (The full key set and
-  mouse buttons came in 3.1.)
+- [ ] **14.1 Event core.** Timestamped events (keys, text, pointers with ids, wheel, gamepad); the confined cursor
+  mode, multi-pointer state; the polling API built on the events. (The full key set, mouse buttons, wheel, cursor
+  shapes and the hidden / locked cursor came in 3.1.)
 - [ ] **14.2 Gestures.** Recognizers as a layer: tap, double tap, long press, swipe, pan, pinch,
   rotate; thresholds in dp; conflict rules. Today's built-in swipe and tap move here.
 - [ ] **14.3 Actions.** Named actions (button, axis, 2D) with bindings and composites, contexts with
@@ -616,8 +729,9 @@ is ~850 lines of C++ + ~225 of Kotlin).
   borders and strokes, soft shadows, a UI atlas, backdrop blur. New quad kinds keep 1.3b's shape:
   derivatives taken once in uniform control flow, each pixel computes only its own kind, textures
   read only by the kinds that need them, per-quad constants in flat varyings, precision named per
-  input (canvas coordinates highp, colour and coverage mediump). In so far (2026-10-27, for Bluzzle's banners):
-  text gradient fills, SDF glows (a soft layer, params.w), per-glyph effects (GlyphFx), per-corner triangle colours.
+  input (canvas coordinates highp, colour and coverage mediump). In so far (2026-10-26/27, for Bluzzle's menu and
+  banners): linear gradient rects, modulate / fade scopes, premultiplied images, text gradient fills, SDF glows (a
+  soft layer, params.w), per-glyph effects (GlyphFx), per-corner triangle colours.
 - [ ] **15.5 Widgets and layout.** An ID stack, scroll views (inertia, overscroll), virtualized lists,
   a text field (IME), slider, progress bar, checkbox and radio, dropdown, a modal stack,
   keyboard/gamepad focus navigation, flexbox-style immediate-mode layout, accessibility hooks
@@ -656,6 +770,10 @@ is ~850 lines of C++ + ~225 of Kotlin).
 - [ ] **17.6 Property tracks and tween sequences.** Tracks for any reflected property (4.1): material params,
   colours, visibility; tween sequences and parallel groups with callbacks; an animation timeline in the editor
   (keys, curves, preview).
+  Early slice done (2026-10-25/27, for Bluzzle): `anim::Timeline` (beats placed Then / With / At, polled cues),
+  `Spring<T>` (exact damped spring), `Curve` and `Gradient` (baked), `CubicBezier` + `ArcLength` (even pace along a
+  path), next to the older `Tween<T>`, easing and shake. Still to do: tracks on reflected properties, callbacks,
+  the editor timeline.
 
 ## Phase 18: Physics
 - [ ] **18.1 Jolt (3D).** A physics system on the fixed step; body nodes (static, rigid, kinematic,
@@ -668,8 +786,9 @@ is ~850 lines of C++ + ~225 of Kotlin).
 - [ ] **18.3 Physics tooling.** Debug drawing, a stats panel, profiling zones; collision shapes edited with
   gizmos in the editor.
 
-## Phase 19: Editor as a product (only if still wanted then; ask first)
-For other developers' games: one prebuilt editor that opens any project, like Godot's.
+## Phase 19: Studio as a product (only if still wanted then; ask first)
+For other developers' games: one prebuilt Studio that opens any project and loads its game code, like Godot's
+(`wlw_studio` from 3.2 already opens any project, with engine types only).
 - [ ] **19.1 Game modules.** The engine as a shared library and each game as a module the editor loads (one CRT,
   one copy of the engine's globals, a module API with a version); code reload with state saved across it, or
   Live++.
@@ -690,10 +809,12 @@ navigation meshes (Recast/Detour), video playback, XR, in-app purchases.
 
 ## Old numbering (before 2026-10-21)
 Commits and CHANGELOG entries before the reorder use these numbers. Phases 0-2 kept theirs.
+Phases 3-5 were reordered again on 2026-10-28 (before any of their steps started); the table shows the current
+numbers.
 
 | Old | New |
 |---|---|
-| 3 Runtime infrastructure: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6 | 8.1, 8.2, 4.4, 4.5 (paks: 12.6), 4.6, 8.3 |
+| 3 Runtime infrastructure: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6 | 8.1, 8.2, 5.4, 4.3 (paks: 12.6), 5.2, 8.3 |
 | 4 Rendering architecture: 4.1-4.8 | 9.1-9.8 |
 | 5 Vulkan: 5.1-5.6 | 10.1-10.6 |
 | 6 Android platform: 6.1-6.7 | 7.1-7.7 (Vulkan parts of 6.2 and 6.4: 10.5) |
@@ -705,4 +826,4 @@ Commits and CHANGELOG entries before the reorder use these numbers. Phases 0-2 k
 | 12 Animation: 12.1-12.6 | 17.1-17.6 |
 | 13 Physics: 13.1-13.3 | 18.1-18.3 |
 | 14 Apple platforms: 14.1, 14.2, 14.3, 14.4 | 11.1 + 11.2, 6.1 + 6.3, 6.2, 6.4 + 11.4 |
-| 15 Editor and tools: 15.1, 15.2, 15.3, 15.4, 15.5, 15.6 | 4.1, 4.7, 3.2, 5.1 + 5.2, 5.3 + 12.8, 5.4 (+ panels in 9.6, 13.x, 17.6, 18.3) |
+| 15 Editor and tools: 15.1, 15.2, 15.3, 15.4, 15.5, 15.6 | 4.1, 4.4 + 5.3, 3.2, 5.1 + 5.3, 5.2 + 12.8, 5.5 (+ panels in 9.6, 13.x, 17.6, 18.3) |
