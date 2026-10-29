@@ -37,6 +37,9 @@ namespace rendering {
 class RenderDevice;
 class RenderingDriver;
 }  // namespace rendering
+namespace scene {
+class OffscreenWindow;
+}  // namespace scene
 
 namespace app {
 
@@ -127,7 +130,14 @@ AppConfig ResolveAppConfig(AppConfig config);
 //                     OnAppPaused runs before the app is suspended.
 //   Web (later)       emscripten_set_main_loop calls Frame(); the Application lives on the heap (the
 //                     browser unwinds main), and Shutdown() may never come.
-//   Editor (later)    calls Frame() when the game should move on (Pause / Step).
+//   The Studio        is an Application itself (it owns the OS window, the renderer and ImGui). Each Play makes
+//                     the game's Application with its MakeApp() and starts it hosted on the Studio
+//                     (Internal().InitHosted) on a scene::OffscreenWindow: the game's screen in a texture, at
+//                     a device's size, with its own input. The Studio calls the session's Frame() from one of
+//                     its own hooks (inside its ImGui frame, so the game's OnDebugUI panels draw into it);
+//                     Pause / Step = Internal().SetPaused / Step; Quit() or Escape with nothing to close ends
+//                     the session (its Frame() returns false), not the Studio; Stop destroys it. Like Unreal's
+//                     Play In Editor (a fresh game instance per session in the editor's process).
 // So save in OnAppPaused, not only in OnShutdown: iOS ends suspended apps and browsers close tabs
 // without a Shutdown() (Android already can).
 class Application final {
@@ -155,7 +165,7 @@ class Application final {
   // process exit code: Quit's, 0 when the window was closed, 1 when the app couldn't start.
   int Run();
   // Ends the app after this frame (it still finishes and is shown), like Godot's quit(code) and
-  // Unity's Application.Quit(code). The last call's code wins.
+  // Unity's Application.Quit(code). The last call's code wins. In the Studio it ends the play session.
   void Quit(int exit_code = 0) {
     quit_requested_ = true;
     exit_code_ = exit_code;
@@ -172,6 +182,8 @@ class Application final {
   int TargetFps() const;
 
   // ---- Services ----
+  // The game's window: the OS window, or in the Studio the OffscreenWindow its session runs on (its size,
+  // input and safe area are the simulated device's).
   scene::Window& Window() { return *window_; }
   input::Input& Input() { return window_->GetInput(); }  // keys, pointer/touch, swipes, taps
   audio::Audio& Audio() { return *audio_; }              // silent, but usable, without an audio device
@@ -180,13 +192,14 @@ class Application final {
   app::Quality& Quality() { return quality_; }           // quality levels from the device's speed
   const AppConfig& Config() const { return config_; }
 #if WLW_DEBUG_UI
-  debug::DebugUI& DebugUi() { return *debug_ui_; }  // e.g. HideFor() before a screenshot
+  debug::DebugUI& DebugUi() { return *debug_ui_; }  // e.g. HideFor() before a screenshot (in the Studio: its own)
 #endif
 
  private:
   enum class State { NotStarted, Running, Stopped };
 
   bool Init();
+  bool InitHosted(Application& host, std::shared_ptr<scene::OffscreenWindow> window);
   bool Frame();
   int Shutdown();
   bool OnGameThread() const;
@@ -196,6 +209,9 @@ class Application final {
   void PlotFrame(double frame_seconds);
   void UpdateQuality(double frame_seconds);
   void ApplyQualityRenderScale();  // the level's render scale (QualitySettings::render_scales) -> the screen
+  void SetPaused(bool paused);
+  void UpdateAudioSuspended();  // silent while in the background or paused
+  void WatchOtherAudio();       // the bridge's "audio" events (calls, other music)
   // Cvars (core/cvar.h): wlw.cfg, the player's saved ones, the command line; then the engine's own wired up.
   void ApplyStartupCVars();
   void WatchCVar(CVarBase& cvar, std::function<void()> apply);
@@ -206,14 +222,19 @@ class Application final {
   // references to each other), then the UI and audio, the window handle, the renderer (it keeps the
   // window: releases its scenes and its own GL objects, then shuts the platform down) and the mesh
   // device last (the renderer uses it until then).
+  // A hosted session (InitHosted) leaves its own device and renderer unstarted and draws with its host's.
   std::unique_ptr<rendering::RenderDevice> render_device_;
-  std::unique_ptr<rendering::RenderingDriver> renderer_;
+  std::unique_ptr<rendering::RenderingDriver> own_renderer_;
+  rendering::RenderingDriver* renderer_ = nullptr;  // own_renderer_, or the host's
   std::shared_ptr<scene::Window> window_;
   std::unique_ptr<audio::Audio> audio_;
   std::unique_ptr<ui::UIContext> ui_;  // the UI layer over the screen's canvas (pointer, safe area, widget state)
 #if WLW_DEBUG_UI
-  std::unique_ptr<debug::DebugUI> debug_ui_;
+  std::unique_ptr<debug::DebugUI> own_debug_ui_;
+  debug::DebugUI* debug_ui_ = nullptr;  // own_debug_ui_, or the host's
 #endif
+  Application* host_ = nullptr;  // the app this one is hosted on (InitHosted), else null
+  int hosted_sessions_ = 0;      // apps hosted on this one, alive (they must go first)
   SystemList systems_;
   ScreenStack screens_;  // emptied by Shutdown(), while the systems are still alive
   FrameClock clock_;
@@ -223,6 +244,9 @@ class Application final {
   float quality_render_scale_ = 0.0f;  // the last one applied to the screen (0: none yet)
   State state_ = State::NotStarted;
   bool in_frame_ = false;
+  bool paused_ = false;          // Internal().SetPaused: frames draw, the game doesn't move
+  bool step_requested_ = false;  // Internal().Step: the next frame moves one fixed step
+  bool in_background_ = false;   // between the window's paused and resumed (mobile)
   bool quit_requested_ = false;
   int exit_code_ = 0;
   std::thread::id game_thread_;  // the thread that called Init()
@@ -246,12 +270,36 @@ class Application::InternalAccess {
   // UI, debug UI, the systems' OnStart, the shader warm-up, a quality lock; the clock starts last.
   // False when the app can't start (Run() then returns 1). Once only.
   bool Init() const { return app_.Init(); }
+  // Init as a session hosted on `host` (a running app: the Studio), instead of Init(): the game runs on
+  // `window` (its screen drawn into the window's texture, its input fed by the host) and draws with the
+  // host's renderer and GL context. Its own: systems, screens, time, audio, UI, quality (kept at its level:
+  // the host's machine isn't the device). The host's: the debug UI (the session's OnDebugUI panels draw
+  // into the host's ImGui frame when its Frame() runs inside one), the bridge, the log file, the console's
+  // quit, the profiler's frames. Call Frame() from the host's thread, typically from one of its hooks; the
+  // session ends like any app (Quit, the window's RequestClose: Frame() returns false). The host must outlive
+  // it. Cvars are process-wide (like Unreal's console variables): the session's settings reach the host too.
+  bool InitHosted(Application& host, std::shared_ptr<scene::OffscreenWindow> window) const {
+    return app_.InitHosted(host, std::move(window));
+  }
   // One whole frame (phases 1-10). False when it's time to stop: Quit() was called or the window was
   // closed (that frame still ran and was shown); also before Init() and after Shutdown().
   bool Frame() const { return app_.Frame(); }
   // The screens' OnExit and the systems' OnShutdown (once), then the exit code. Not from a hook: use
   // Quit(). The destructor calls it for a running app; it destroys everything else as before.
   int Shutdown() const { return app_.Shutdown(); }
+
+  // Paused: frames still poll input, run the debug UI (OnDebugUI), draw and present, but the game doesn't
+  // move: no Back, bridge messages (they wait), fixed or frame updates, OnRender, OnRenderUI (the UI drawn
+  // last stays), screen changes or Quality; game time stands still and the game is silent. Unpaused, it
+  // goes on from where it was (no long frame). The Studio's Pause; like Unity's and Unreal's.
+  void SetPaused(bool paused) const { app_.SetPaused(paused); }
+  bool IsPaused() const { return app_.paused_; }
+  // While paused: the next frame moves the game by exactly one fixed step (one OnFixedUpdate, OnUpdate with
+  // the fixed step as dt, OnRender, OnRenderUI), then it is paused again.
+  void Step() const { app_.step_requested_ = true; }
+
+  // The renderer it draws with (a hosted session: its host's), e.g. to read an OffscreenWindow's screen back.
+  rendering::RenderingDriver& Renderer() const { return *app_.renderer_; }
 
  private:
   Application& app_;

@@ -74,6 +74,11 @@ engine/wlw/
               FrameClock (frame_clock.h: fed seconds, clamp, scale, fixed steps, restart after a resume; tested).
               The frame loop is three calls, Internal().Init() / Frame() / Shutdown() (entry points, editor, tests;
               application.h says which platform drives frames how); Run() = those (desktop + Android via WLW_MAIN).
+              The Studio's Play (Unreal's Play In Editor): Internal().InitHosted(host, scene::OffscreenWindow) = a fresh
+              game app on a running app's renderer + ImGui (own systems, screens, time, audio, UI; its OnDebugUI goes
+              into the host's ImGui frame; Quit / Escape end the session, not the host; Stop = destroy it). Internal()
+              .SetPaused / Step (frames draw, the game doesn't move / one fixed step: FrameClock::Hold / Step),
+              Internal().Renderer().
               Checks: Frame before Init / after Shutdown = false; Init twice, Frame inside a frame, Shutdown from a
               hook refused; one thread; the destructor shuts a running app down. Quit(exit_code) -> Run's return.
               Save in OnAppPaused: OnShutdown isn't guaranteed on iOS / web.
@@ -280,6 +285,10 @@ engine/wlw/
               Window::Create(size, title, {.visible = false}) = a hidden window (desktop): just a GL context.
               Window::SetCursor(Cursor: GLFW 3.4's standard shapes + Hidden), SetCursorLocked (GLFW_CURSOR_DISABLED + raw
               motion; positions forgotten across a change so PointerDelta doesn't jump), HasFocus; phones ignore the cursor.
+              Window::GetSafeAreaInsets() (virtual: the OS's on phones, none on desktop) -> UIContext::safe_area.
+              OffscreenWindow (offscreen_window.h): no OS surface; its screen is drawn into GetTexture() at SetSize (a
+              device's pixels), its Input is fed by its owner (SetTouchScreen, SetSafeAreaInsets, SetFocused): the game's
+              window in the Studio's Game panel. Draws with the current (host's) context, never presents, not GPU-timed.
               The driver: DrawWindow -> DrawViewport(each) -> gather, shadow pass, main pass, post passes, canvas.
               RenderingDriver::ReadPixels(target) = a target's picture as RGBA8, top row first (stalls: tests,
               screenshots); GpuName() = GL_RENDERER.

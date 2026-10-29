@@ -7,10 +7,10 @@ around the editor and iOS ("Why this order"). Work goes one step at a time, in o
 stable: commits name them ("Roadmap 4.3b: ..."). Commits and CHANGELOG entries from before 2026-10-21
 use the old numbers: "Old numbering" at the end maps them.
 
-**Current step:** 3.2a Studio shell, engine side (plan in chat first) · **Updated:** 2026-10-28
+**Current step:** 3.2b Studio library, executables, docking and panels (plan in chat first) · **Updated:** 2026-10-29
 
-**Next session:** plan 3.2a in chat. Then, in order:
-  3.2b / c, 3.3, 4.1-4.5, 5.1 (scenes edited in the Studio), 5.2-5.6. Threadlock moves to the current engine
+**Next session:** plan 3.2b in chat. Then, in order:
+  3.2c, 3.3, 4.1-4.5, 5.1 (scenes edited in the Studio), 5.2-5.6. Threadlock moves to the current engine
   before 5.6 (its 2.8 migration redone on its main). Before Bluzzle's next Play release: tag v0.3.1 from main (D19); it points at an untagged
   commit today.
 
@@ -398,7 +398,16 @@ Xcode; the Studio edits scenes and data. This phase builds the window, the panel
     (nativefiledialog-extended: Windows IFileDialog, macOS NSOpenPanel, Linux portals), starting a process and
     reading its output (Launch, adb), "show in Explorer / Finder", the user's config folder.
   Sub-steps: **3.2a** engine side (offscreen main viewport, simulated surface and insets, paused frames, Quit in the
-  Studio; tested with `wlw_app_tests`), **3.2b** the Studio library, both executables, docking and panels, **3.2c**
+  Studio; tested with `wlw_app_tests`) *(done 2026-10-29: the owner asked for what big engines do, so it follows
+  Unreal's Play In Editor instead of a simulated screen inside the game's own window: the Studio is a long-lived
+  Application (OS window, renderer, ImGui) and each Play is a fresh game app from its `MakeApp()`,
+  `Internal().InitHosted(host, scene::OffscreenWindow)` (the game's screen in a texture at a device's size, its
+  own input, safe area and touch); Stop destroys it, so no game code runs while stopped; `Quit` / Escape end the
+  session because it is its own app (no quit handler needed); `SetPaused` / `Step`; `Window::GetSafeAreaInsets`
+  replaces `platform::GetSafeAreaInsets`. Left for 3.2b: feeding the session's input from the Game panel, the
+  game's cursor and focus there, the host's own engine panel vs the session's (both draw an "Engine" window),
+  cvars being process-wide (a session's r.target_fps paces the Studio too))*, **3.2b** the Studio library, both
+  executables, docking and panels, **3.2c**
   Launch (desktop + adb), file dialogs, session restore. CI builds the Studio on Windows and Linux (Linux = the
   cheap proof that nothing is Windows-only).
 - [ ] **3.3 Documents, undo and plugins.** Documents: open, save, save as, autosave, the unsaved mark, several open

@@ -186,8 +186,6 @@ std::optional<std::vector<uint8_t>> ReadLocalFile(const std::string& path) {
   return std::vector<uint8_t>(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
 }
 
-SafeAreaInsets GetSafeAreaInsets() { return {}; }  // desktop windows have no cutouts or system bars
-
 bool MoveToBackground() { return false; }  // no such thing on desktop: the app quits instead
 
 void Vibrate(int, float) {}  // desktops don't vibrate

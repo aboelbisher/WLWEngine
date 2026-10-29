@@ -10,6 +10,8 @@
 #include "wlw/core/color.h"
 #include "wlw/core/connection.h"
 #include "wlw/core/math.h"
+#include "wlw/platform/platform.h"
+#include "wlw/rendering/render_target.h"
 #include "wlw/scene/viewport.h"
 #include "wlw/input/input.h"
 
@@ -73,6 +75,10 @@ class Window {
   // False while there's nothing to draw into (mobile: the OS took the surface away, e.g. in the
   // frame that reports the pause). Drawing is skipped then.
   virtual bool HasSurface() const { return true; }
+  // The parts of the screen covered by system UI or hardware (status bar, camera cutout, gesture bar), in
+  // framebuffer pixels: keep important UI inside. Phones: the OS's; desktop windows: none; an OffscreenWindow: the
+  // device it simulates. The Application gives it to the UI as UIContext::safe_area.
+  virtual platform::SafeAreaInsets GetSafeAreaInsets() const { return {}; }
 
   input::Input& GetInput() { return input_; }
   const input::Input& GetInput() const { return input_; }
@@ -102,7 +108,7 @@ class Window {
   // ---- What it shows ----
   // The main viewport, drawn to the screen: its scene (empty at first), camera (a default Camera3D
   // until SetCamera: at the origin looking along +Y) and the canvas the game's UI is drawn on
-  // (Application::OnRenderUI).
+  // (Application::OnRenderUI). An OffscreenWindow's screen is a texture (OffscreenWindow::GetTexture).
   Viewport& MainViewport() { return *screen_; }
   const Viewport& MainViewport() const { return *screen_; }
 
@@ -183,6 +189,8 @@ class Window {
   bool focused_ = true;
 
   std::unique_ptr<Viewport> screen_ = Viewport::CreateScreen();
+  // Where the screen is drawn when the window has no OS surface (OffscreenWindow); null = the surface.
+  std::shared_ptr<rendering::RenderTarget> screen_target_;
   std::vector<std::shared_ptr<Viewport>> viewports_;
   core::CallbackList<> overlays_;
   bool screen_depth_ = true;
@@ -207,6 +215,8 @@ class Window::InternalAccess {
   void SetGpuTimingSupported(bool supported) const { window_.gpu_timing_supported_ = supported; }
   void SetGpuFrameMs(float ms) const { window_.gpu_frame_ms_ = ms; }
   void SetFragmentPrecision(std::string text) const { window_.fragment_precision_ = std::move(text); }
+  // The renderer: what the screen (MainViewport) is drawn into; null = the OS surface.
+  rendering::RenderTarget* ScreenTarget() const { return window_.screen_target_.get(); }
 
   // The debug UI's cursor shape while it has the mouse (nullopt = the game's again).
   void SetCursorOverride(std::optional<Cursor> cursor) const {

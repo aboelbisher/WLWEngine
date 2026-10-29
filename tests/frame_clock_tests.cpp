@@ -69,6 +69,31 @@ TEST_CASE("frame clock: a restart drops the time away and the leftover step") {
   CHECK(Near(static_cast<float>(time.SinceStart()), 600.004f, 1e-3f));  // real time since start goes on
 }
 
+TEST_CASE("frame clock: paused frames hold game time, a step moves exactly one fixed step") {
+  FrameClock clock(0.01f, 0.25f);
+  Time time;
+  time.SetScale(0.5f);
+  clock.Start(0.0);
+  clock.Advance(0.03, time);  // 0.015 of game time: one step, half a step left over
+  CHECK(Near(time.Alpha(), 0.5f));
+
+  FrameClock::Tick tick = clock.Hold(0.05, time);  // paused
+  CHECK(tick.steps == 0);
+  CHECK(Near(static_cast<float>(tick.seconds), 0.02f));  // measured like any frame
+  CHECK((Near(time.Delta(), 0.0f) && Near(time.RealDelta(), 0.02f) && Near(time.Alpha(), 0.5f)));
+  CHECK(Near(static_cast<float>(time.SinceStart()), 0.05f));
+
+  tick = clock.Step(0.06, time);  // one fixed step, whatever the time scale
+  CHECK(tick.steps == 1);
+  CHECK((Near(time.Delta(), 0.01f) && Near(time.RealDelta(), 0.01f) && Near(time.Alpha(), 0.5f)));
+
+  tick = clock.Advance(0.08, time);  // going on: only the last frame counts, the half step is still there
+  CHECK(Near(static_cast<float>(tick.seconds), 0.02f));
+  CHECK(Near(time.Delta(), 0.01f));
+  CHECK(tick.steps == 1);  // 0.5 + 1 steps
+  CHECK(Near(time.Alpha(), 0.5f));
+}
+
 TEST_CASE("frame clock: a clock going backwards counts as a zero-length frame") {
   FrameClock clock(0.01f, 0.25f);
   Time time;
