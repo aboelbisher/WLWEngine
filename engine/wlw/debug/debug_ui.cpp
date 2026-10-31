@@ -23,13 +23,17 @@ constexpr const char* kImGuiGLSLVersion = "#version 300 es";
 constexpr const char* kImGuiGLSLVersion = "#version 330 core";
 #endif
 
-// UI scale. Desktop sizes are in window units (HiDPI is handled by the framebuffer scale), so 1.
-// On a phone the surface is in physical pixels: ~400 px per short side ~ 1 "dp", a rough
-// density estimate (a 1080 px wide phone gets ~2.7x) until the platform reports real density.
-float UIScale(const input::Input& input) {
-  if (!input.IsTouchScreen()) return 1.0f;
+// UI scale. Desktop: the OS's display scaling (ContentScale), in pointer units: where those are already larger
+// than pixels (macOS points: the framebuffer scale draws them sharp) that part is taken out again. On a phone the
+// surface is in physical pixels: ~400 px per short side ~ 1 "dp", a rough density estimate (a 1080 px wide phone
+// gets ~2.7x) until the platform reports real density.
+float UIScale(const scene::Window& window) {
+  const input::Input& input = window.GetInput();
   const Vec2 size = input.SurfaceSize();
-  return std::clamp(std::min(size.x, size.y) / 400.0f, 1.0f, 4.0f);
+  if (input.IsTouchScreen()) return std::clamp(std::min(size.x, size.y) / 400.0f, 1.0f, 4.0f);
+  const Vec2 framebuffer = window.GetSize();
+  const float points = size.x > 0.0f && framebuffer.x > 0.0f ? framebuffer.x / size.x : 1.0f;
+  return std::clamp(window.ContentScale() / points, 1.0f, 4.0f);
 }
 
 }  // namespace
@@ -43,11 +47,7 @@ DebugUI::DebugUI(scene::Window& window) : window_(window) {
   io.BackendFlags |= ImGuiBackendFlags_HasMouseCursors;  // its cursor shapes go to the window (UpdateCursor)
   if (window.GetInput().IsTouchScreen()) io.ConfigFlags |= ImGuiConfigFlags_IsTouchScreen;
 
-  ImGui::StyleColorsDark();
-  ImGuiStyle& style = ImGui::GetStyle();
-  const float scale = UIScale(window.GetInput());
-  style.ScaleAllSizes(scale);  // padding, spacing, scrollbars...
-  style.FontScaleDpi = scale;  // ...and text (the vector font stays sharp at any size)
+  ApplyScale();
   io.Fonts->AddFontDefaultVector();
 
   ImGui_ImplOpenGL3_Init(kImGuiGLSLVersion);
@@ -64,15 +64,39 @@ DebugUI::~DebugUI() {
   ImGui::DestroyContext();
 }
 
+void DebugUI::SetStudioMode(bool on) {
+  studio_mode_ = on;
+  if (on) open_ = true;
+  ImGuiIO& io = ImGui::GetIO();
+  if (on) {
+    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+  } else {
+    io.ConfigFlags &= ~ImGuiConfigFlags_DockingEnable;
+  }
+}
+
+void DebugUI::ApplyScale() {
+  const float scale = UIScale(window_);
+  if (scale == scale_) return;
+  scale_ = scale;
+  ImGuiStyle& style = ImGui::GetStyle();
+  style = ImGuiStyle();  // ScaleAllSizes multiplies: start again from the unscaled sizes
+  ImGui::StyleColorsDark();
+  style.ScaleAllSizes(scale);  // padding, spacing, scrollbars...
+  style.FontScaleDpi = scale;  // ...and text (the vector font stays sharp at any size)
+}
+
 void DebugUI::BeginFrame(float dt) {
   in_frame_ = true;
   FeedInput(dt);
   UpdateCursor();
+  ApplyScale();  // moved to a monitor with another scale
   ImGui_ImplOpenGL3_NewFrame();
   ImGui::NewFrame();
+  if (frame_start_) frame_start_();
 
   const input::Input& input = window_.GetInput();
-  if (input.RawKeyPressed(input::Key::F1)) open_ = !open_;
+  if (input.RawKeyPressed(input::Key::F1) && !studio_mode_) open_ = !open_;
   if (input.RawKeyPressed(input::Key::Grave)) {  // the console: opens the debug UI with it
     console_.open = !console_.open || !open_;
     if (console_.open) {
@@ -81,8 +105,8 @@ void DebugUI::BeginFrame(float dt) {
     }
   }
   if (hidden_for_ > 0.0f) {
-    hidden_for_ -= dt;  // hidden (HideFor): no button, F1 still works
-  } else {
+    hidden_for_ -= dt;         // hidden (HideFor): no button, F1 still works
+  } else if (!studio_mode_) {  // the Studio: always open, no button
     DrawToggleButton();
   }
 
@@ -160,8 +184,11 @@ void DebugUI::UpdateCursor() {
   const ImGuiIO& io = ImGui::GetIO();
   std::optional<scene::Cursor> cursor;
   if (io.WantCaptureMouse && (io.ConfigFlags & ImGuiConfigFlags_NoMouseCursorChange) == 0) {
-    cursor = io.MouseDrawCursor ? scene::Cursor::Hidden : FromImGuiCursor(ImGui::GetMouseCursor());
+    cursor = requested_cursor_    ? *requested_cursor_
+             : io.MouseDrawCursor ? scene::Cursor::Hidden
+                                  : FromImGuiCursor(ImGui::GetMouseCursor());
   }
+  requested_cursor_.reset();  // asked for again every frame
   window_.Internal().SetCursorOverride(cursor);
 }
 

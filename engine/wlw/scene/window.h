@@ -79,6 +79,9 @@ class Window {
   // framebuffer pixels: keep important UI inside. Phones: the OS's; desktop windows: none; an OffscreenWindow: the
   // device it simulates. The Application gives it to the UI as UIContext::safe_area.
   virtual platform::SafeAreaInsets GetSafeAreaInsets() const { return {}; }
+  // How much larger than usual the OS draws its own UI on this window's monitor (Windows display scaling 150% =
+  // 1.5, Retina = 2; 1 elsewhere): tools scale their text and widgets by it (the debug UI, the Studio).
+  virtual float ContentScale() const { return 1.0f; }
 
   input::Input& GetInput() { return input_; }
   const input::Input& GetInput() const { return input_; }

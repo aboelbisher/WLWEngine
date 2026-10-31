@@ -13,8 +13,11 @@
 //   WLW_MAIN(MakeApp)
 //
 // Desktop: a normal main(). Android: android_main(), called by NativeActivity on its own thread.
-// Both call Application::Run(). (iOS and the web will get their variants here; where the platform
-// owns the loop they drive Internal().Init() / Frame() / Shutdown() instead: see application.h.)
+// Both call Application::Run(). A game's Studio build (<game>_studio, from wlw_add_game(... STUDIO ...), which
+// defines WLW_STUDIO): the Studio's main(), and Play runs `make_app`'s app (like Unreal's editor target: the
+// game's code built into the editor). The game's main.cpp is the same for all three. (iOS and the web will get their
+// variants here; where the platform owns the loop they drive Internal().Init() / Frame() / Shutdown() instead: see
+// application.h.)
 
 #include <memory>
 
@@ -29,6 +32,16 @@ void RunAndroidApp(android_app* app, std::unique_ptr<::wlw::app::Application> (*
 
 #define WLW_MAIN(make_app) \
   extern "C" void android_main(struct android_app* app) { ::wlw::platform::RunAndroidApp(app, &make_app); }
+
+#elif defined(WLW_STUDIO)
+
+namespace wlw::studio {
+// studio/wlw/studio/studio.h
+int RunStudio(int argc, char** argv, const char* game_name, std::unique_ptr<::wlw::app::Application> (*make_game)());
+}  // namespace wlw::studio
+
+#define WLW_MAIN(make_app) \
+  int main(int argc, char** argv) { return ::wlw::studio::RunStudio(argc, argv, WLW_STUDIO_GAME, &make_app); }
 
 #else
 

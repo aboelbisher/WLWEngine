@@ -32,6 +32,17 @@ add_subdirectory(third_party)
 add_subdirectory(engine)
 add_subdirectory(kit)
 
+# The Studio (studio/: D12, D20): the editor, desktop only, on the debug UI's ImGui. Off where the debug UI is
+# (release-type builds): build it in a Debug or profile folder, like Unreal's "Development Editor".
+if(NOT ANDROID AND WLW_DEBUG_UI)
+  option(WLW_BUILD_STUDIO "Build the Studio library and wlw_studio (and games' <game>_studio)" ON)
+else()
+  set(WLW_BUILD_STUDIO OFF)
+endif()
+if(WLW_BUILD_STUDIO)
+  add_subdirectory(studio)
+endif()
+
 set(CMAKE_C_FLAGS_DEBUG "${_wlw_saved_c_flags_debug}")
 set(CMAKE_CXX_FLAGS_DEBUG "${_wlw_saved_cxx_flags_debug}")
 

@@ -313,7 +313,9 @@ if(WLW_DEBUG_UI)
     wlw/debug/engine_panel.h
     wlw/debug/imgui_gl_backend.cpp
     wlw/debug/imgui_input.cpp
-    wlw/debug/imgui_input.h)
+    wlw/debug/imgui_input.h
+    wlw/debug/imgui_texture.cpp
+    wlw/debug/imgui_texture.h)
   target_compile_definitions(wlw PUBLIC WLW_DEBUG_UI=1)
   target_link_libraries(wlw PUBLIC wlw_imgui)  # games use the ImGui API in OnDebugUI()
 else()

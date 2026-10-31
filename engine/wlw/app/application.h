@@ -300,6 +300,9 @@ class Application::InternalAccess {
 
   // The renderer it draws with (a hosted session: its host's), e.g. to read an OffscreenWindow's screen back.
   rendering::RenderingDriver& Renderer() const { return *app_.renderer_; }
+  // How many apps are hosted on this one now (the Studio: 1 while a game plays). The engine's debug panels step
+  // aside for the session's own, which show the game.
+  int HostedSessions() const { return app_.hosted_sessions_; }
 
  private:
   Application& app_;

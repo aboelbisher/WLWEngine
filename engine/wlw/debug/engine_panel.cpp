@@ -16,6 +16,7 @@
 namespace wlw::debug {
 
 void EnginePanel::OnDebugUI() {
+  if (App().Internal().HostedSessions() > 0) return;  // the Studio while a game plays: the game's panel shows it
   scene::Window& window = App().Window();
   ImGui::SetNextWindowCollapsed(true, ImGuiCond_FirstUseEver);
   ImGui::SetNextWindowPos(ImVec2(8.0f, 8.0f), ImGuiCond_FirstUseEver);

@@ -85,8 +85,12 @@ endfunction()
 #   desktop: an executable (assets copied next to it)
 #   Android: a shared library lib<target>.so that NativeActivity loads (assets are packed into
 #            the APK by Gradle instead; see the game's android/ project)
+# STUDIO (and/or STUDIO_SOURCES <files>): also <target>_studio on desktop, the Studio with the game's code built in
+# (D12; like Unreal's editor target): the same sources, assets and settings (libraries, include folders,
+# definitions added to <target> later are copied too), plus STUDIO_SOURCES (the game's own Studio panels), with
+# WLW_STUDIO defined, so WLW_MAIN starts the Studio. Needs the Studio (WLW_BUILD_STUDIO: desktop with WLW_DEBUG_UI).
 function(wlw_add_game target)
-  cmake_parse_arguments(GAME "" "ASSETS" "SOURCES" ${ARGN})
+  cmake_parse_arguments(GAME "STUDIO" "ASSETS" "SOURCES;STUDIO_SOURCES" ${ARGN})
   if(ANDROID)
     add_library(${target} SHARED ${GAME_SOURCES})
     # The glue's ANativeActivity_onCreate lives in a static library and nothing references it;
@@ -100,4 +104,22 @@ function(wlw_add_game target)
   endif()
   target_link_libraries(${target} PRIVATE wlw::wlw)
   wlw_set_warnings(${target})
+
+  if(NOT ANDROID AND (GAME_STUDIO OR GAME_STUDIO_SOURCES))
+    if(TARGET wlw::studio)
+      set(studio ${target}_studio)
+      add_executable(${studio} ${GAME_SOURCES} ${GAME_STUDIO_SOURCES})
+      if(GAME_ASSETS)
+        wlw_add_assets(${studio} "${GAME_ASSETS}")
+      endif()
+      target_compile_definitions(${studio} PRIVATE WLW_STUDIO=1 WLW_STUDIO_GAME="${target}"
+        "$<TARGET_PROPERTY:${target},COMPILE_DEFINITIONS>")
+      target_include_directories(${studio} PRIVATE "$<TARGET_PROPERTY:${target},INCLUDE_DIRECTORIES>")
+      target_compile_options(${studio} PRIVATE "$<TARGET_PROPERTY:${target},COMPILE_OPTIONS>")
+      target_link_libraries(${studio} PRIVATE wlw::studio "$<TARGET_PROPERTY:${target},LINK_LIBRARIES>")
+      wlw_set_warnings(${studio})
+    else()
+      message(STATUS "${target}_studio: not built (the Studio needs a desktop build with WLW_DEBUG_UI)")
+    endif()
+  endif()
 endfunction()

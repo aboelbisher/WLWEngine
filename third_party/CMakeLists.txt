@@ -23,7 +23,8 @@ target_link_libraries(wlw_tinygltf INTERFACE wlw_stb)
 add_library(wlw_json INTERFACE)
 target_include_directories(wlw_json SYSTEM INTERFACE tinygltf)
 
-# ---- Dear ImGui v1.92.9b (MIT; vendored core + OpenGL3 renderer backend): the debug UI ----
+# ---- Dear ImGui v1.92.9b-docking (MIT; vendored core + OpenGL3 renderer backend): the debug UI and the Studio ----
+# The docking branch at the same version (docking on only in the Studio; multi-viewports off).
 # Linked by the engine only when WLW_DEBUG_UI is on. The backend is compiled by the engine
 # (wlw/debug/imgui_gl_backend.cpp) so it uses the engine's GL headers.
 add_library(wlw_imgui STATIC

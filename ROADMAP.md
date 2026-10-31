@@ -7,10 +7,10 @@ around the editor and iOS ("Why this order"). Work goes one step at a time, in o
 stable: commits name them ("Roadmap 4.3b: ..."). Commits and CHANGELOG entries from before 2026-10-21
 use the old numbers: "Old numbering" at the end maps them.
 
-**Current step:** 3.2b Studio library, executables, docking and panels (plan in chat first) · **Updated:** 2026-10-29
+**Current step:** 3.2c Launch (desktop + adb), file dialogs, session restore (plan in chat first) · **Updated:** 2026-10-30
 
-**Next session:** plan 3.2b in chat. Then, in order:
-  3.2c, 3.3, 4.1-4.5, 5.1 (scenes edited in the Studio), 5.2-5.6. Threadlock moves to the current engine
+**Next session:** plan 3.2c in chat. Then, in order:
+  3.3, 4.1-4.5, 5.1 (scenes edited in the Studio), 5.2-5.6. Threadlock moves to the current engine
   before 5.6 (its 2.8 migration redone on its main). Before Bluzzle's next Play release: tag v0.3.1 from main (D19); it points at an untagged
   commit today.
 
@@ -407,7 +407,12 @@ Xcode; the Studio edits scenes and data. This phase builds the window, the panel
   replaces `platform::GetSafeAreaInsets`. Left for 3.2b: feeding the session's input from the Game panel, the
   game's cursor and focus there, the host's own engine panel vs the session's (both draw an "Engine" window),
   cvars being process-wide (a session's r.target_fps paces the Studio too))*, **3.2b** the Studio library, both
-  executables, docking and panels, **3.2c**
+  executables, docking and panels *(done 2026-10-30: `studio/` = `wlw::studio` (StudioSystem: menus, toolbar,
+  status bar, dockspace with a saved default layout; PlaySession; GamePanel with 8 device presets, Turn, the safe
+  area; GameInputForwarder), `wlw_studio` + `wlw_add_game(... STUDIO)` -> `<game>_studio`, ImGui on 1.92.9b-docking,
+  DebugUI Studio mode + HiDPI, `Window::ContentScale`, `debug::ImGuiTexture`; tests `wlw_studio_tests` +
+  `wlw_studio_app_tests`; checked by hand with `bluzzle_studio`. Still open: cvars process-wide (a game's
+  r.target_fps paces the Studio), the game uses its real save folder)*, **3.2c**
   Launch (desktop + adb), file dialogs, session restore. CI builds the Studio on Windows and Linux (Linux = the
   cheap proof that nothing is Windows-only).
 - [ ] **3.3 Documents, undo and plugins.** Documents: open, save, save as, autosave, the unsaved mark, several open

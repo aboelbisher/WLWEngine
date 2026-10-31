@@ -408,6 +408,12 @@ class GlfwWindow : public Window {
     ApplyPacing();
   }
   float RefreshRate() const override { return refresh_hz_; }
+  float ContentScale() const override {
+    if (window_ == nullptr) return 1.0f;
+    float x = 1.0f, y = 1.0f;
+    glfwGetWindowContentScale(window_, &x, &y);
+    return x > 0.0f ? x : 1.0f;
+  }
   float PacedFps() const override { return static_cast<float>(plan_.fps); }
   std::string PacingMethod() const override { return core::PacingPlanName(plan_); }
 

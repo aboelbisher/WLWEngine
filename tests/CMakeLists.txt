@@ -77,3 +77,8 @@ option(WLW_BUILD_GPU_TESTS "Build the golden-image GPU tests" ON)
 if(WLW_BUILD_GPU_TESTS)
   add_subdirectory(gpu)
 endif()
+
+# The Studio's tests (tests/studio): only where the Studio is built (desktop with the debug UI).
+if(TARGET wlw::studio)
+  add_subdirectory(studio)
+endif()

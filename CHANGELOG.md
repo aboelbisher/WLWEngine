@@ -308,6 +308,51 @@ it, so no game code runs while the Studio is stopped. Games don't change.
 - **Breaking:** `platform::GetSafeAreaInsets()` is gone. **Migration:** `App().Window().GetSafeAreaInsets()` (the
   game's screen, simulated in the Studio). Nothing outside the engine called it.
 
+### Studio shell (Roadmap 3.2b)
+The first Studio you can run: a window with docked panels that plays the game inside it (Unreal's Play In Editor,
+Unity's Game view and Device Simulator). One codebase, two kinds of executable (D12, Unreal's editor targets):
+`wlw_studio` (engine types only; nothing to play until projects open in 3.2c) and a game's `<game>_studio`, the game's
+own code built in. Desktop only, in builds with the debug UI (Debug, profile).
+- **`studio/`, `wlw::studio`** (new library; the runtime never includes it): `StudioSystem` = the Studio itself, a
+  System on its own Application: the main menu (File > Quit; Play > Play / Stop, Pause, Step; Window > Console, Reset
+  layout), a toolbar (Play / Pause / Step, the device), a status bar (the Studio's and the game's fps), a dockspace
+  over the window with a default layout (Game in the middle, Engine + CVars on the right, Console below; saved per
+  Studio in its save folder, `studio_layout.ini`). A game's own debug panels dock as tabs next to Engine the first time
+  they appear. `RunStudio`, `StudioConfig`.
+- **Play / Pause / Step / Stop** (`PlaySession`, on 3.2a's hosted sessions): Play builds a fresh game with its
+  `MakeApp()` on an `OffscreenWindow`; Stop destroys it; the game quitting (or Escape with nothing left to close)
+  ends the session and shows its exit code. Shortcuts as in Unity: `Primary+P` play / stop, `Primary+Shift+P` pause,
+  `Primary+Alt+P` step, `Primary+Q` quits the Studio. Escape never closes the Studio.
+- **Game panel** (`GamePanel`): the game's screen fitted into the panel (aspect kept, up to 8x); devices
+  (`DevicePresets`): Free (the panel's size), Desktop 1280 x 720 / 1920 x 1080, Pixel 4, Pixel 8, iPhone 15, iPhone SE,
+  iPad (10th gen), each with its pixels, safe area and touch; Turn (a quarter turn: landscape) and a safe-area overlay.
+  **Input** (`GameInputForwarder`): the pointer in the game's pixels while over the picture, or while a button pressed
+  there is held; the five buttons and the wheel on desktop devices, the left button as the finger on touch ones (it
+  moves only while down); keys and typed text while the panel has focus, everything let go when it loses it. The
+  game's cursor shape shows over the picture; its cursor lock holds the Studio's cursor while the panel has focus
+  (Shift+F1 lets go, as in Unreal; a click on the picture takes it again).
+- **Builds:** `wlw_add_game(<game> STUDIO ...)` (and/or `STUDIO_SOURCES <files>`: the game's own Studio panels) adds
+  `<game>_studio`: the same sources, assets and settings, with `WLW_STUDIO` defined, so `WLW_MAIN` starts the Studio
+  and Play runs `make_app`; the game's main.cpp doesn't change. `WLW_BUILD_STUDIO` (on for desktop builds with
+  `WLW_DEBUG_UI`). Run: `cmake --build <build> --target <game>_studio`, then `<build>/<game>_studio.exe`.
+- **Engine:** Dear ImGui moves to the docking branch of the same version (v1.92.9b-docking; docking only on in the
+  Studio, multi-viewports off). `DebugUI` gets a Studio mode (`SetStudioMode`: always open, docking, no toggle button
+  or F1, the console as a panel), `SetFrameStart` (drawn right after each ImGui frame starts: menus and dockspace),
+  `RequestCursor`, `Console()`; its text and widgets follow the display scaling (HiDPI) on desktop.
+  `Window::ContentScale()` (Windows display scaling, Retina; GLFW's content scale). `debug::ImGuiTexture(texture)` +
+  `kImGuiFlippedUv0/1` (an engine texture in ImGui; render targets upside down). `Application::Internal()
+  .HostedSessions()`: the host's Engine and CVars panels step aside while a game plays (the game's draw instead).
+- Tests: `wlw_studio_tests` (presets, Free / turned screens, fitting, panel -> device pixels, the forwarder: clicks,
+  drags past the edge, other buttons, the wheel, a click within one frame, touch, keys and text with focus only,
+  letting go on focus loss, the locked cursor) and `wlw_studio_app_tests` (label gpu: a Studio on a hidden window
+  plays a test game: Play, a click at the Game panel's centre arriving at the device's centre, Pause, Step = one fixed
+  step, Stop, Play again, the game's Quit(7) code, Escape not closing the Studio, shutting down while playing; a Studio
+  with no game can't play). Checked by hand: `bluzzle_studio` played through the panel (taps, drags, Pixel 4 with its
+  safe area, Pause, Escape to Bluzzle's menu, Stop).
+- Known: cvars stay process-wide (3.2a), so a game's `r.target_fps` paces the Studio too until it restarts; the game
+  in the Studio uses its normal desktop save folder (as in Unity's editor); the session's Engine panel shows no paced
+  rate or GPU time for its offscreen window.
+
 ## 0.3.0 (2026-10-24): Phase 2, core API
 
 The core API the editor will show and edit, made consistent while the games are small: one set of math, colour

@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <string>
 
+#include "wlw/app/application.h"
 #include "wlw/core/console.h"
 #include "wlw/core/cvar.h"
 
@@ -56,6 +57,7 @@ void DrawCVar(CVarBase& cvar, const char* label) {
 }  // namespace
 
 void CVarPanel::OnDebugUI() {
+  if (App().Internal().HostedSessions() > 0) return;  // the Studio while a game plays: the game's panel draws it
   ImGui::SetNextWindowCollapsed(true, ImGuiCond_FirstUseEver);
   ImGui::SetNextWindowPos(ImVec2(8.0f, 40.0f), ImGuiCond_FirstUseEver);
   ImGui::SetNextWindowSize(ImVec2(380.0f, 0.0f), ImGuiCond_FirstUseEver);

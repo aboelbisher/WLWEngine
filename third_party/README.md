@@ -6,7 +6,7 @@ Update one library at a time: replace its files, bump the version here, note it 
 | Library | Version | Licence | Used for |
 |---|---|---|---|
 | doctest (`doctest/`) | 2.4.12 | MIT | unit tests (`doctest.h`; `doctest.cmake` + `doctestAddTests.cmake` = CTest discovery) |
-| Dear ImGui (`imgui/`) | 1.92.9b | MIT | debug UI |
+| Dear ImGui (`imgui/`) | 1.92.9b-docking | MIT | debug UI, the Studio (docking branch: same version + docking) |
 | nanobench (`nanobench/`) | 4.3.11 | MIT | microbenchmarks (`benchmarks/`; `nanobench.h` + LICENSE) |
 | miniaudio (`miniaudio/`) | 0.11.25 | public domain / MIT-0 | audio device and decoding |
 | stb_image, stb_image_write, stb_truetype, stb_vorbis (`stb/`) | 2.30, 1.16, 1.26, 1.22 | public domain / MIT | images, fonts, Ogg Vorbis |

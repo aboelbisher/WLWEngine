@@ -62,7 +62,8 @@ engine/wlw/
               key by the layout's key, in order, + modifiers; 5 buttons, both wheel axes, focus) and its cursor shapes go to
               the window (Window::Internal().SetCursorOverride) while it has the mouse; while it wants text input the
               game's keyboard is blocked. Engine panel's Input section: held keys / buttons / wheel, cursor shapes, a 5 s
-              cursor lock. Off in release builds
+              cursor lock. Studio mode (SetStudioMode: always open, docking, no toggle; SetFrameStart, RequestCursor);
+              text follows Window::ContentScale (HiDPI). imgui_texture.h: ImGuiTexture(texture) + flipped uv. Off in release builds
   app/        Application (final: owns the services, the RenderDevice + RenderingDriver (no separate engine object; the renderer keeps the window and does the GL shutdown order) and runs the frames; see the frame in application.h): Window(),
               Input(), Audio(), Screens(), Time(), Config(). engine_cvars.h: log.filter, r.gpu_timing,
               r.invalidate_framebuffers, r.target_fps, r.pacing.auto_interval, r.render_scale, quality.lock (Run applies the cvar sources first, wires these to the window /
@@ -345,6 +346,22 @@ kit/wlw/kit/  wlw::kit: game-level building blocks shared by games (separate tar
               count) -> LeaderboardPage{top, player, players}; Play Games v2 via the bridge on Android, FakeLeaderboards
               on desktop). kit/android/playgames/java/com/wlw/kit/PlayGamesService.kt = Kotlin side (service
               "leaderboards"); its own dir so only games that use it need play-services-games-v2 + the manifest APP_ID
+studio/       wlw::studio (ROADMAP Phase 3, D12, D20): the Studio, the engine's editor; desktop only, built when
+              WLW_BUILD_STUDIO (desktop + WLW_DEBUG_UI: Debug / profile folders, not Release); the runtime never includes
+              it; all UI Dear ImGui (docking branch), portable C++, OS services only through platform/. studio.h:
+              RunStudio + StudioConfig + StudioSystem (a System on the Studio's own Application: main menu, toolbar,
+              status bar, dockspace + default layout saved as <save dir>/studio_layout.ini, game panels docked next
+              to Engine; shortcuts Primary+P / Primary+Shift+P / Primary+Alt+P / Primary+Q; Escape never closes it).
+              play_session.h: PlaySession = Unreal's Play In Editor on 3.2a's hosted apps (Play = the game's MakeApp() +
+              Internal().InitHosted on an OffscreenWindow, Stop destroys it, the game's own Quit ends it with its code).
+              game_panel.h: the Game panel (the picture fitted, device controls, safe-area overlay, the game's cursor
+              shape and lock); devices.h: DevicePresets (Free, desktop sizes, phones, iPad), ScreenFor (turned),
+              FitGameRect, ToDevicePixels; game_input.h: GameInputForwarder (Studio Input -> the game's: pointer in
+              device pixels over the picture or while dragging, buttons / wheel on desktop devices, the finger on touch
+              ones, keys + text with focus, ReleaseAll on focus loss, raw motion while locked). Executables:
+              wlw_studio (studio/main: engine types only) and each game's <game>_studio from
+              wlw_add_game(<game> STUDIO [STUDIO_SOURCES ...]) (WLW_STUDIO defined: WLW_MAIN runs RunStudio with the
+              game's MakeApp). Tests: tests/studio (wlw_studio_tests CPU; wlw_studio_app_tests label gpu)
 samples/      small games, built only when the engine is the top-level project (desktop):
               snake/ (Snake + its rules tests)
 tests/        engine unit tests (no window/GPU: frame clock, conventions (axes, turns, camera on screen, lights, particles, primitive windings, glTF front), cameras (view = inverse world, fit modes, frustum, fly/orbit/follow controllers), node kinds, quality levels (down/up, back-off, settle, frame-time-only, lock, saved,
@@ -375,7 +392,7 @@ benchmarks/   wlw_benchmarks (nanobench; top-level only, desktop + Android execu
               --threshold %, never a failure), --smoke = CTest "bench: smoke" (label bench). Baselines in
               benchmarks/baselines/: windows-local (owner's Ryzen 7 9800X3D, MSVC Release), linux-ci (bench.yml
               artifact), optional per-phone ones (<device>.json, e.g. pixel4; see "Benchmarks" below).
-third_party/  glm 1.0.1 (wlw_glm, public through wlw::wlw), glad (desktop only), stb, tinygltf + nlohmann json (also its own target wlw_json), miniaudio 0.11.25, stb_vorbis, Dear ImGui 1.92.9b,
+third_party/  glm 1.0.1 (wlw_glm, public through wlw::wlw), glad (desktop only), stb, tinygltf + nlohmann json (also its own target wlw_json), miniaudio 0.11.25, stb_vorbis, Dear ImGui 1.92.9b-docking,
               doctest 2.4.12, nanobench 4.3.11 (wlw_nanobench), Tracy 0.14.1 client (target wlw_tracy, only with WLW_PROFILE),
               Swappy 2.3.0-alpha01 (wlw_swappy, Android only; one local patch, see its README row) (vendored; versions and licences in third_party/README.md)
 cmake/WLWHelpers.cmake  wlw_add_game(), wlw_add_assets(), wlw_set_warnings(), wlw_optimize_debug_flags()
@@ -478,7 +495,10 @@ cmake --build --preset windows-debug
 ctest --test-dir build\windows-debug --output-on-failure -j8
 ctest --test-dir build\windows-debug -R tween                 # cases whose name matches
 .\build\windows-debug\tests\wlw_tests.exe -ts=anim            # one suite (-tc="tween*" = cases)
+.\build\windows-debug\studio\wlw_studio.exe                   # the Studio (engine types only)
 ```
+A game's Studio: add `STUDIO` to its `wlw_add_game(...)`, then `cmake --build <its build> --target <game>_studio` and
+run `<game>_studio.exe` (Debug or profile build folders; Release ones skip it). Play = `Ctrl+P`.
 CI (`.github/workflows/ci.yml`, GitHub Actions on every push) runs the same presets; reproduce a job with
 `cmake --preset <name>` + `cmake --build --preset <name>` + `ctest --preset <name>`:
 `windows-debug` / `windows-release` (Release only on main), `linux-asan` (clang, ASan + UBSan via
