@@ -111,10 +111,13 @@ engine/wlw/
               F1-F12, punctuation, numpad, left/right modifiers); HeldModifiers() mask, Modifiers::Primary = Ctrl / Cmd (macOS);
               WasShortcutPressed(key, mods) = by the LAYOUT's key (the platform reports both: OnKey(key, down, layout_key);
               KeyFromCharacter), exact mods; KeyName / KeyFromName / ShortcutName ("Ctrl+S" / "Cmd+S"); RawKeyEvents (in
-              order); Text() (typed code points); pointer (mouse left button / first finger), PointerDelta (finger: only
-              while touching), swipes, taps; MouseButton x5, ScrollDelta (notches, +x right, +y away); pointer and keyboard
-              can be blocked (debug UI; blocking hides buttons / wheel / delta too), Raw* queries ignore that. Android:
-              full key map + wheel, no mouse buttons yet (7.1)
+              order); Text() (typed code points); pointer (mouse left button / the PRIMARY finger: one that touched an
+              empty screen, released when it lifts, never jumps to another finger), PointerDelta (finger: only
+              while touching), swipes, taps; Touches() (every finger down + those lifted this frame, touch order: Touch
+              {id never reused, position, delta, start_position, pressed, released, canceled}; FindTouch(id), TouchCount,
+              RawTouches; fed by OnTouchDown/Move/Up(os_id...) + CancelTouches; a mouse makes none); MouseButton x5, ScrollDelta (notches, +x right, +y away); pointer and keyboard
+              can be blocked (debug UI; blocking hides buttons / wheel / delta / touches too), Raw* queries ignore that.
+              Android: every finger (POINTER_DOWN/UP, all on MOVE, CANCEL), full key map + wheel, no mouse buttons yet (7.1)
   math/       ExactCover: Knuth's Algorithm X with Dancing Links (exact cover search, counting, hints);
               BitGrid<W,H> (bitboards: a grid as 64-bit words, fits = one AND); game_search.h (Minimax with
               alpha-beta, BestMove, Expectimax; a game = small class with Moves/Apply/Evaluate/MaxToMove);
@@ -564,7 +567,8 @@ changes didn't break anything; keep it building when the engine API changes.
   rebuilt every frame (no cached draw commands for static nodes, unlike Unreal). Fine for hundreds of nodes.
 - No shader program cache on disk yet (glProgramBinary): every launch compiles its variants (~25-60 ms on the emulator).
 - Shadows: one shadow map shared by every viewport (each viewport's shadow pass redraws it).
-- Touch input uses only the first finger (no multi-touch yet).
+- Multi-touch has no gesture recognizers yet (pinch / twist / long press are the game's own math until 14.2), no
+  timestamps and no historical (batched) samples: one position per finger per event.
 - GPU time needs EXT_disjoint_timer_query on phones (Pixel 4 / Adreno 640 has it; the emulator doesn't). Phone
   clocks scale with load (DVFS): light frames read slower, so compare GPU ms between levels only roughly.
   2D is post-processed only in Picture canvas layers.

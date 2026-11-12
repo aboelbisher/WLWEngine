@@ -23,7 +23,8 @@ Where things stand (2026-10-28):
   of their phases and recorded there as early slices: HDR picture + output pass + bloom + ripples + distortion
   buffer (13.1, 13.7), instance uniforms (9.5), billboards, particle curves and trails (13.11), canvas and text
   styles (15.4), music and live mix (16.2, 16.4), anim tools (17.6), leaderboards (kit; 6.2 for iOS),
-  `platform::ReduceMotion` (7.5).
+  `platform::ReduceMotion` (7.5). For Snapfold (the owner's third game, 2026-11-12): multi-touch (14.1); next Jolt
+  physics (18.1, D10) and debug draw (13.10), each an early slice on its own branch.
 - Games: Bluzzle (live in Play testing; desktop + Android) is on main after v0.3.0 (86c4c3a, untagged). Threadlock
   (Android) is still on c39718e (v0.2.0 + 2): its 2.8 migration has to be redone on its main. Snake (`samples/snake`)
   only has to keep compiling. Epicycles, Silhouette and Ripple are on old
@@ -720,7 +721,9 @@ is ~850 lines of C++ + ~225 of Kotlin).
 ## Phase 14: Input
 - [ ] **14.1 Event core.** Timestamped events (keys, text, pointers with ids, wheel, gamepad); the confined cursor
   mode, multi-pointer state; the polling API built on the events. (The full key set, mouse buttons, wheel, cursor
-  shapes and the hidden / locked cursor came in 3.1.)
+  shapes and the hidden / locked cursor came in 3.1. Early slice for Snapfold, CHANGELOG "Unreleased": multi-touch
+  state, `Input::Touches()` with never-reused ids, the pointer = the primary finger; still to do here: timestamps,
+  the event queue, batched samples.)
 - [ ] **14.2 Gestures.** Recognizers as a layer: tap, double tap, long press, swipe, pan, pinch,
   rotate; thresholds in dp; conflict rules. Today's built-in swipe and tap move here.
 - [ ] **14.3 Actions.** Named actions (button, axis, 2D) with bindings and composites, contexts with

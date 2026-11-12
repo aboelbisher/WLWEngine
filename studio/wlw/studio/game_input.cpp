@@ -5,6 +5,10 @@
 
 namespace wlw::studio {
 
+namespace {
+constexpr int64_t kFinger = 0;  // a touch device's one finger: the left button (its touch is also the game's pointer)
+}  // namespace
+
 bool GameInputForwarder::Captured() const {
   return std::any_of(buttons_down_.begin(), buttons_down_.end(), [](bool down) { return down; });
 }
@@ -33,7 +37,13 @@ void GameInputForwarder::Forward(const input::Input& from, input::Input& to, con
 
   // Moves: a mouse over the picture or dragging from it; a finger only while it is down.
   const bool moves = frame.touch ? buttons_down_[0] : (over || Captured());
-  if (moves && point != to.PointerPosition()) game.OnPointerMove(point.x, point.y);
+  if (moves && point != to.PointerPosition()) {
+    if (frame.touch) {
+      game.OnTouchMove(kFinger, point.x, point.y);
+    } else {
+      game.OnPointerMove(point.x, point.y);
+    }
+  }
 
   // Buttons: pressed over the picture, released wherever (also a press and release inside one frame). The left
   // button is also the pointer, as the OS reports it; on a touch screen it is only the finger.
@@ -42,13 +52,21 @@ void GameInputForwarder::Forward(const input::Input& from, input::Input& to, con
     const auto button = static_cast<input::MouseButton>(i);
     const bool used = i < buttons;
     if (used && over && from.RawMouseButtonPressed(button) && !buttons_down_[i]) {
-      if (!frame.touch) game.OnMouseButton(button, true);
-      if (i == 0) game.OnPointerDown(point.x, point.y);
+      if (frame.touch) {
+        game.OnTouchDown(kFinger, point.x, point.y);
+      } else {
+        game.OnMouseButton(button, true);
+        if (i == 0) game.OnPointerDown(point.x, point.y);
+      }
       buttons_down_[i] = true;
     }
     if (buttons_down_[i] && (!used || !from.RawMouseButtonDown(button))) {
-      if (!frame.touch) game.OnMouseButton(button, false);
-      if (i == 0) game.OnPointerUp(point.x, point.y);
+      if (frame.touch) {
+        game.OnTouchUp(kFinger, point.x, point.y);
+      } else {
+        game.OnMouseButton(button, false);
+        if (i == 0) game.OnPointerUp(point.x, point.y);
+      }
       buttons_down_[i] = false;
     }
   }

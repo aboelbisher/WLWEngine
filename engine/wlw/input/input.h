@@ -3,6 +3,7 @@
 #include <array>
 #include <cstdint>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -76,6 +77,22 @@ struct KeyEvent {
   Modifiers modifiers = Modifiers::None;  // held just after this event (a shortcut's modifiers when it went down)
 };
 
+// One finger on a touch screen (Input::Touches; Unity's Touch, Godot's InputEventScreenTouch / ScreenDrag index,
+// SDL's finger events). A game with a hand per finger keeps each one by `id`.
+struct Touch {
+  // This touch's own number: counts up from 1 and is never reused (the OS reuses its pointer ids at once), so a
+  // new finger is never taken for one that lifted, even inside one frame.
+  uint32_t id = 0;
+  Vec2 position{0.0f};        // pixels, origin top-left (like PointerPosition)
+  Vec2 delta{0.0f};           // moved this frame (+y down)
+  Vec2 start_position{0.0f};  // where it went down
+  bool pressed = false;       // went down this frame
+  // Lifted this frame: its last frame in the list. Pressed and released together = down and up inside one frame.
+  bool released = false;
+  bool canceled = false;  // ended by the OS, not lifted (a system gesture took it, the app lost focus): no tap
+  bool IsDown() const { return !released; }
+};
+
 // Key names: "A", "1", "F5", "-", "Space", "PageUp", "Numpad7", "LeftShift"... (unique, KeyFromName reads them
 // back, ignoring case; "Unknown" for Key::Unknown and for names it doesn't know). For menus and saved bindings.
 const char* KeyName(Key key);
@@ -94,9 +111,9 @@ inline constexpr KeyLabels kNativeKeyLabels = KeyLabels::Pc;
 #endif
 std::string ShortcutName(Key key, Modifiers modifiers, KeyLabels labels = kNativeKeyLabels);
 
-// Per-window input state. The platform layer feeds raw events (OnKey, OnPointer*...), the game
-// queries it once per frame. "Pointer" = the mouse on desktop, the first finger on touch screens,
-// so pointer-based code works on both.
+// Per-window input state. The platform layer feeds raw events (OnKey, OnPointer*, OnTouch*...), the game
+// queries it once per frame. "Pointer" = the mouse on desktop, the primary finger on touch screens,
+// so pointer-based code works on both; Touches() has every finger.
 //
 // Two kinds of query:
 //   IsKeyDown(k)      - state: is it held right now?
@@ -122,7 +139,10 @@ class Input {
   // Characters typed this frame (Unicode code points, in order; desktop keyboards).
   const std::vector<uint32_t>& Text() const { return keyboard_blocked_ ? kNoText : text_; }
 
-  // ---- Pointer: the mouse's left button or the first finger ----
+  // ---- Pointer: the mouse's left button or the primary finger ----
+  // The primary finger = one that touched while no other finger was down (Unity's primaryTouch). It stays the
+  // pointer until it lifts; fingers added meanwhile are only touches, and after it lifts the pointer stays up
+  // until a finger touches an empty screen again (the pointer never jumps to another finger).
   bool IsPointerDown() const { return !pointer_blocked_ && pointer_down_; }
   bool WasPointerPressed() const { return !pointer_blocked_ && pointer_pressed_; }
   bool WasPointerReleased() const { return !pointer_blocked_ && pointer_released_; }
@@ -143,6 +163,14 @@ class Input {
   bool WasTapped() const { return !pointer_blocked_ && tapped_; }
   // True when the pointer is a finger (no hover between touches, less precise aim).
   bool IsTouchScreen() const { return touch_screen_; }
+
+  // ---- Touches: every finger on a touch screen (a desktop mouse makes none) ----
+  // The fingers down now and the ones lifted this frame (released), in the order they touched. Empty while the
+  // pointer is blocked (the debug UI has it): a hand whose touch can't be found has ended.
+  std::span<const Touch> Touches() const { return pointer_blocked_ ? std::span<const Touch>() : touches_; }
+  // The touch with this id (down, or lifted this frame); nullptr once it's gone or while blocked.
+  const Touch* FindTouch(uint32_t id) const;
+  int TouchCount() const;  // fingers down now (not counting the ones lifted this frame); 0 while blocked
 
   // ---- Mouse (a real mouse; fingers don't press these) ----
   bool IsMouseButtonDown(MouseButton button) const { return !pointer_blocked_ && buttons_down_[Index(button)]; }
@@ -166,6 +194,7 @@ class Input {
   bool RawMouseButtonPressed(MouseButton button) const { return buttons_pressed_[Index(button)]; }
   bool RawMouseButtonReleased(MouseButton button) const { return buttons_released_[Index(button)]; }
   Vec2 RawScrollDelta() const { return scroll_delta_; }
+  std::span<const Touch> RawTouches() const { return touches_; }
   // The keyboard, like the pointer: blocked while e.g. the console has it (typing must not steer the game).
   void SetKeyboardBlocked(bool blocked) { keyboard_blocked_ = blocked; }
   bool IsKeyboardBlocked() const { return keyboard_blocked_; }
@@ -190,6 +219,12 @@ class Input {
   void OnPointerUp(float x, float y);
   void OnMouseButton(MouseButton button, bool down);
   void OnScroll(float x, float y);
+  void OnTouchDown(int64_t os_id, float x, float y);
+  void OnTouchMove(int64_t os_id, float x, float y);
+  void OnTouchUp(int64_t os_id, float x, float y, bool canceled);
+  void CancelTouches();
+  int FindDownTouch(int64_t os_id) const;  // index in touches_ of the finger down with this OS id, or -1
+  void EndTouch(size_t index, bool canceled);
   void ReleaseAll();
   void SetSurfaceSize(float width, float height);  // swipe distance is relative to screen size
   void SetTouchScreen(bool touch) { touch_screen_ = touch; }
@@ -229,6 +264,11 @@ class Input {
   std::vector<uint32_t> text_;
   bool touch_screen_ = false;
 
+  std::vector<Touch> touches_;         // down + lifted this frame, in touch order
+  std::vector<int64_t> touch_os_ids_;  // the OS's pointer id of each touches_ entry
+  uint32_t next_touch_id_ = 1;
+  uint32_t primary_touch_ = 0;  // the id of the touch that drives the pointer; 0 = none
+
   Vec2 surface_size_{720.0f, 1280.0f};
   float surface_min_side_ = 720.0f;
 };
@@ -250,7 +290,16 @@ class Input::InternalAccess {
   void ForgetPointerPosition() const { input_.pointer_known_ = false; }
   void OnMouseButton(MouseButton button, bool down) const { input_.OnMouseButton(button, down); }
   void OnScroll(float x, float y) const { input_.OnScroll(x, y); }  // notches, +x right, +y away
-  // Everything held goes up (the window lost focus: the OS sends the releases elsewhere).
+  // Fingers, by the OS's pointer id (unique among the fingers down now; the OS reuses it later). The primary
+  // finger also drives the pointer (Input's pointer section). A down for an id already down ends that touch first
+  // (its lift was missed); moves and lifts of ids not down are ignored. `canceled` = the OS ended it (no tap).
+  void OnTouchDown(int64_t os_id, float x, float y) const { input_.OnTouchDown(os_id, x, y); }
+  void OnTouchMove(int64_t os_id, float x, float y) const { input_.OnTouchMove(os_id, x, y); }
+  void OnTouchUp(int64_t os_id, float x, float y, bool canceled = false) const {
+    input_.OnTouchUp(os_id, x, y, canceled);
+  }
+  void CancelTouches() const { input_.CancelTouches(); }  // every finger, ended by the OS (Android's ACTION_CANCEL)
+  // Everything held goes up, fingers canceled (the window lost focus: the OS sends the releases elsewhere).
   void ReleaseAll() const { input_.ReleaseAll(); }
   // Swipe distance is relative to the screen's size.
   void SetSurfaceSize(float width, float height) const { input_.SetSurfaceSize(width, height); }

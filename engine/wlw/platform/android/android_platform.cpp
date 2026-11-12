@@ -310,13 +310,45 @@ class AndroidWindow : public scene::Window {
                                    AMotionEvent_getAxisValue(event, AMOTION_EVENT_AXIS_VSCROLL, 0));
         return 1;
       }
-      const float x = AMotionEvent_getX(event, 0);  // first finger only
-      const float y = AMotionEvent_getY(event, 0);
+      if (AMotionEvent_getToolType(event, 0) == AMOTION_EVENT_TOOL_TYPE_MOUSE) {  // a mouse: the pointer, no touches
+        const float x = AMotionEvent_getX(event, 0);
+        const float y = AMotionEvent_getY(event, 0);
+        switch (action) {
+          case AMOTION_EVENT_ACTION_DOWN: input_.Internal().OnPointerDown(x, y); break;
+          case AMOTION_EVENT_ACTION_MOVE: input_.Internal().OnPointerMove(x, y); break;
+          case AMOTION_EVENT_ACTION_UP:
+          case AMOTION_EVENT_ACTION_CANCEL: input_.Internal().OnPointerUp(x, y); break;
+          default: break;
+        }
+        return 1;
+      }
+      // Fingers (and styluses): DOWN = the first, POINTER_DOWN / POINTER_UP = the others (the action names the
+      // pointer's index), MOVE carries every pointer, UP = the last one, CANCEL = all of them taken by the system.
+      const auto index =
+          static_cast<size_t>((AMotionEvent_getAction(event) & AMOTION_EVENT_ACTION_POINTER_INDEX_MASK) >>
+                              AMOTION_EVENT_ACTION_POINTER_INDEX_SHIFT);
+      const auto finger = [event](size_t i) { return static_cast<int64_t>(AMotionEvent_getPointerId(event, i)); };
+      // MotionEvent.FLAG_CANCELED (API 33): this POINTER_UP / UP is a cancel (e.g. palm rejection). Not in the
+      // NDK's input.h yet.
+      constexpr int32_t kFlagCanceled = 0x20;
+      const bool canceled = (AMotionEvent_getFlags(event) & kFlagCanceled) != 0;
       switch (action) {
-        case AMOTION_EVENT_ACTION_DOWN: input_.Internal().OnPointerDown(x, y); break;
-        case AMOTION_EVENT_ACTION_MOVE: input_.Internal().OnPointerMove(x, y); break;
+        case AMOTION_EVENT_ACTION_DOWN:
+        case AMOTION_EVENT_ACTION_POINTER_DOWN:
+          input_.Internal().OnTouchDown(finger(index), AMotionEvent_getX(event, index),
+                                        AMotionEvent_getY(event, index));
+          break;
+        case AMOTION_EVENT_ACTION_MOVE:
+          for (size_t i = 0, count = AMotionEvent_getPointerCount(event); i < count; ++i) {
+            input_.Internal().OnTouchMove(finger(i), AMotionEvent_getX(event, i), AMotionEvent_getY(event, i));
+          }
+          break;
         case AMOTION_EVENT_ACTION_UP:
-        case AMOTION_EVENT_ACTION_CANCEL: input_.Internal().OnPointerUp(x, y); break;
+        case AMOTION_EVENT_ACTION_POINTER_UP:
+          input_.Internal().OnTouchUp(finger(index), AMotionEvent_getX(event, index), AMotionEvent_getY(event, index),
+                                      canceled);
+          break;
+        case AMOTION_EVENT_ACTION_CANCEL: input_.Internal().CancelTouches(); break;
         default: break;
       }
       return 1;

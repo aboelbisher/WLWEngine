@@ -234,6 +234,15 @@ void EnginePanel::InputSection(scene::Window& window) {
   if (scroll != Vec2(0.0f)) last_scroll_ = scroll;
   ImGui::Text("Pointer %.0f, %.0f, moved %.1f, %.1f; last wheel %.2f, %.2f", position.x, position.y, delta.x, delta.y,
               last_scroll_.x, last_scroll_.y);
+  std::string touches;
+  for (const input::Touch& touch : input.RawTouches()) {
+    if (!touch.IsDown()) continue;
+    char text[48];
+    std::snprintf(text, sizeof(text), "%s#%u %.0f,%.0f", touches.empty() ? "" : "  ", touch.id, touch.position.x,
+                  touch.position.y);
+    touches.append(text);
+  }
+  ImGui::Text("Touches: %s", touches.empty() ? "-" : touches.c_str());
   ImGui::Text("Focus: %s", window.HasFocus() ? "yes" : "no");
 
   static constexpr const char* kCursors[] = {"Arrow",     "TextInput",  "Hand",       "Crosshair",

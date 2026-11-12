@@ -1,6 +1,6 @@
 // Tests for wlw::input::Input: taps vs swipes, pointer blocking (used by the debug UI so a drag on one of its
-// sliders doesn't also reach the game), keys, modifiers and shortcuts (D18), mouse buttons, wheel and movement,
-// and what the debug UI tells Dear ImGui.
+// sliders doesn't also reach the game), touches (several fingers, the primary one = the pointer), keys, modifiers and
+// shortcuts (D18), mouse buttons, wheel and movement, and what the debug UI tells Dear ImGui.
 #include <set>
 #include <string>
 #include <utility>
@@ -14,6 +14,7 @@
 
 TEST_SUITE_BEGIN("input");
 
+using wlw::Vec2;
 using wlw::input::Input;
 using wlw::input::Key;
 using wlw::input::KeyEvent;
@@ -67,6 +68,140 @@ TEST_CASE("touch flag") {
   CHECK(!in.IsTouchScreen());
   in.Internal().SetTouchScreen(true);
   CHECK(in.IsTouchScreen());
+}
+
+// ---- Touches (several fingers; the pointer = the primary one) ----
+
+TEST_CASE("touches: ids, order, movement and lifting") {
+  Input in;
+  in.Internal().SetTouchScreen(true);
+  in.Internal().BeginFrame();
+  in.Internal().OnTouchDown(0, 100, 100);  // the OS's pointer ids: 0, then 1
+  in.Internal().OnTouchDown(1, 300, 400);
+  REQUIRE(in.Touches().size() == 2);
+  const uint32_t a = in.Touches()[0].id;
+  const uint32_t b = in.Touches()[1].id;
+  CHECK((a != 0 && b != 0 && a != b));
+  CHECK((in.Touches()[0].pressed && in.Touches()[1].pressed && in.TouchCount() == 2));
+  CHECK(in.Touches()[1].start_position == Vec2(300.0f, 400.0f));
+
+  in.Internal().BeginFrame();
+  CHECK((!in.Touches()[0].pressed && !in.Touches()[1].pressed));
+  in.Internal().OnTouchMove(1, 310, 380);
+  in.Internal().OnTouchMove(1, 320, 390);
+  CHECK(in.FindTouch(b)->delta == Vec2(20.0f, -10.0f));
+  CHECK(in.FindTouch(b)->position == Vec2(320.0f, 390.0f));
+  CHECK(in.FindTouch(a)->delta == Vec2(0.0f));
+  in.Internal().OnTouchMove(7, 0, 0);  // not down: ignored
+  CHECK(in.Touches().size() == 2);
+
+  in.Internal().BeginFrame();
+  CHECK(in.FindTouch(b)->delta == Vec2(0.0f));  // per frame
+  in.Internal().OnTouchUp(0, 105, 100);
+  CHECK((in.FindTouch(a)->released && !in.FindTouch(a)->canceled && in.FindTouch(a)->delta == Vec2(5.0f, 0.0f)));
+  CHECK((in.TouchCount() == 1 && in.Touches().size() == 2));  // still listed in the frame it lifted
+
+  in.Internal().BeginFrame();
+  CHECK((in.FindTouch(a) == nullptr && in.Touches().size() == 1 && in.Touches()[0].id == b));
+}
+
+TEST_CASE("touches: a finger down and up inside one frame, and an OS id reused at once, are separate touches") {
+  Input in;
+  in.Internal().SetTouchScreen(true);
+  in.Internal().BeginFrame();
+  in.Internal().OnTouchDown(0, 10, 10);
+  in.Internal().OnTouchUp(0, 10, 10);
+  in.Internal().OnTouchDown(0, 500, 500);  // Android hands id 0 to the next finger straight away
+  REQUIRE(in.Touches().size() == 2);
+  CHECK((in.Touches()[0].pressed && in.Touches()[0].released));  // a whole tap, still seen
+  CHECK((in.Touches()[1].pressed && in.Touches()[1].IsDown() && in.Touches()[1].id != in.Touches()[0].id));
+  in.Internal().OnTouchMove(0, 510, 500);  // moves the finger that is down, not the lifted one
+  CHECK((in.Touches()[1].delta == Vec2(10.0f, 0.0f) && in.Touches()[0].delta == Vec2(0.0f)));
+
+  // A down for an id that is already down: its lift was missed, so that touch ends (canceled) first.
+  in.Internal().OnTouchDown(0, 800, 800);
+  REQUIRE(in.Touches().size() == 3);
+  CHECK((in.Touches()[1].released && in.Touches()[1].canceled && in.TouchCount() == 1));
+}
+
+TEST_CASE("touches: the pointer is the primary finger and never jumps to another") {
+  Input in;
+  in.Internal().SetSurfaceSize(1000, 2000);
+  in.Internal().SetTouchScreen(true);
+  in.Internal().BeginFrame();
+  in.Internal().OnTouchDown(0, 100, 100);
+  CHECK((in.WasPointerPressed() && in.PointerPosition() == Vec2(100.0f, 100.0f)));
+  in.Internal().OnTouchDown(1, 600, 900);  // a second finger: a touch only
+  in.Internal().OnTouchMove(1, 650, 900);
+  CHECK((in.PointerPosition() == Vec2(100.0f, 100.0f) && in.PointerDelta() == Vec2(0.0f)));
+  in.Internal().OnTouchMove(0, 110, 100);
+  CHECK((in.PointerPosition() == Vec2(110.0f, 100.0f) && in.PointerDelta() == Vec2(10.0f, 0.0f)));
+
+  // The primary lifts while the other stays: the pointer is released (a tap: it hardly moved) and stays up.
+  in.Internal().BeginFrame();
+  in.Internal().OnTouchUp(0, 110, 100);
+  CHECK((in.WasPointerReleased() && !in.IsPointerDown() && in.WasTapped()));
+  in.Internal().BeginFrame();
+  in.Internal().OnTouchMove(1, 700, 900);
+  in.Internal().OnTouchDown(2, 200, 200);  // another finger joins: not the pointer either
+  CHECK((!in.IsPointerDown() && !in.WasPointerPressed() && in.PointerPosition() == Vec2(110.0f, 100.0f)));
+  in.Internal().OnTouchUp(1, 700, 900);
+  in.Internal().OnTouchUp(2, 200, 200);
+  CHECK((!in.WasPointerReleased() && !in.WasTapped()));
+
+  // The screen is empty again: the next finger is the pointer.
+  in.Internal().BeginFrame();
+  in.Internal().OnTouchDown(0, 400, 400);
+  CHECK((in.IsPointerDown() && in.WasPointerPressed() && in.PointerPosition() == Vec2(400.0f, 400.0f)));
+  in.Internal().OnTouchMove(0, 400, 600);  // past the swipe threshold (60)
+  CHECK((in.Swipes().size() == 1 && in.Swipes()[0] == Swipe::Down));
+}
+
+TEST_CASE("touches: canceled by the OS ends every finger without a tap") {
+  Input in;
+  in.Internal().SetTouchScreen(true);
+  in.Internal().BeginFrame();
+  in.Internal().OnTouchDown(0, 100, 100);
+  in.Internal().OnTouchDown(1, 300, 300);
+  in.Internal().BeginFrame();
+  in.Internal().CancelTouches();
+  CHECK((in.TouchCount() == 0 && in.Touches().size() == 2));
+  CHECK((in.Touches()[0].canceled && in.Touches()[1].canceled && in.Touches()[0].released));
+  CHECK((in.WasPointerReleased() && !in.IsPointerDown() && !in.WasTapped()));
+
+  // One finger canceled (palm rejection: Android's FLAG_CANCELED on its lift).
+  in.Internal().BeginFrame();
+  in.Internal().OnTouchDown(0, 100, 100);
+  in.Internal().OnTouchUp(0, 100, 100, true);
+  CHECK((in.Touches()[0].canceled && in.WasPointerReleased() && !in.WasTapped()));
+
+  // Focus lost: ReleaseAll cancels the fingers too.
+  in.Internal().BeginFrame();
+  in.Internal().OnTouchDown(3, 50, 50);
+  in.Internal().BeginFrame();
+  in.Internal().ReleaseAll();
+  CHECK((in.TouchCount() == 0 && in.Touches()[0].canceled && !in.IsPointerDown() && !in.WasTapped()));
+}
+
+TEST_CASE("touches: hidden while the pointer is blocked") {
+  Input in;
+  in.Internal().SetTouchScreen(true);
+  in.Internal().BeginFrame();
+  in.Internal().OnTouchDown(0, 100, 100);
+  const uint32_t id = in.RawTouches()[0].id;
+  in.SetPointerBlocked(true);
+  CHECK((in.Touches().empty() && in.FindTouch(id) == nullptr && in.TouchCount() == 0));
+  CHECK(in.RawTouches().size() == 1);
+  in.SetPointerBlocked(false);
+  CHECK((in.Touches().size() == 1 && in.FindTouch(id) != nullptr));
+}
+
+TEST_CASE("touches: a mouse makes none") {
+  Input in;
+  in.Internal().BeginFrame();
+  in.Internal().OnMouseButton(MouseButton::Left, true);
+  in.Internal().OnPointerDown(10, 10);
+  CHECK((in.IsPointerDown() && in.Touches().empty() && in.TouchCount() == 0));
 }
 
 TEST_CASE("every key: pressed and released inside one frame, repeats ignored") {

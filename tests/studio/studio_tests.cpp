@@ -197,6 +197,8 @@ TEST_CASE("studio: forwarder: a touch screen has one finger, no other buttons an
   forwarder.Forward(studio_input, game, Frame(true, false, true));
   CHECK(game.WasPointerPressed());
   CHECK(game.PointerPosition() == Vec2(500.0f, 1000.0f));
+  REQUIRE(game.Touches().size() == 1);  // the finger is a touch too (multi-touch games see it)
+  CHECK((game.Touches()[0].pressed && game.Touches()[0].position == Vec2(500.0f, 1000.0f)));
   CHECK_FALSE(game.IsMouseButtonDown(MouseButton::Left));  // a finger, not a mouse button
   CHECK_FALSE(game.IsMouseButtonDown(MouseButton::Right));
   CHECK(game.ScrollDelta() == Vec2(0.0f));
@@ -206,6 +208,7 @@ TEST_CASE("studio: forwarder: a touch screen has one finger, no other buttons an
   studio_input.Internal().OnPointerMove(60.0f, 140.0f);
   forwarder.Forward(studio_input, game, Frame(true, false, true));
   CHECK(game.PointerPosition() == Vec2(500.0f, 1200.0f));  // dragged
+  CHECK((game.Touches().size() == 1 && game.Touches()[0].delta == Vec2(0.0f, 200.0f)));
 
   studio_input.Internal().BeginFrame();
   game.Internal().BeginFrame();
@@ -213,6 +216,7 @@ TEST_CASE("studio: forwarder: a touch screen has one finger, no other buttons an
   studio_input.Internal().OnPointerUp(60.0f, 140.0f);
   forwarder.Forward(studio_input, game, Frame(true, false, true));
   CHECK(game.WasPointerReleased());
+  CHECK((game.Touches().size() == 1 && game.Touches()[0].released && !game.Touches()[0].canceled));
 }
 
 TEST_CASE("studio: forwarder: keys and text only with focus, and losing it lets go of everything") {

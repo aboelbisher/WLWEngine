@@ -119,6 +119,93 @@ void Input::BeginFrame() {
   swipes_.clear();
   tapped_ = false;
   text_.clear();
+
+  // Touches lifted last frame had their last frame; the others start this one still.
+  size_t kept = 0;
+  for (size_t i = 0; i < touches_.size(); ++i) {
+    if (touches_[i].released) continue;
+    touches_[kept] = touches_[i];
+    touch_os_ids_[kept] = touch_os_ids_[i];
+    touches_[kept].pressed = false;
+    touches_[kept].delta = {0, 0};
+    ++kept;
+  }
+  touches_.resize(kept);
+  touch_os_ids_.resize(kept);
+}
+
+const Touch* Input::FindTouch(uint32_t id) const {
+  if (pointer_blocked_) return nullptr;
+  for (const Touch& touch : touches_) {
+    if (touch.id == id) return &touch;
+  }
+  return nullptr;
+}
+
+int Input::TouchCount() const {
+  if (pointer_blocked_) return 0;
+  return static_cast<int>(
+      std::count_if(touches_.begin(), touches_.end(), [](const Touch& touch) { return touch.IsDown(); }));
+}
+
+int Input::FindDownTouch(int64_t os_id) const {
+  for (size_t i = 0; i < touches_.size(); ++i) {
+    if (touch_os_ids_[i] == os_id && touches_[i].IsDown()) return static_cast<int>(i);
+  }
+  return -1;
+}
+
+void Input::OnTouchDown(int64_t os_id, float x, float y) {
+  if (const int missed = FindDownTouch(os_id); missed >= 0) EndTouch(static_cast<size_t>(missed), true);
+  const bool alone = std::none_of(touches_.begin(), touches_.end(), [](const Touch& touch) { return touch.IsDown(); });
+  Touch touch;
+  touch.id = next_touch_id_++;
+  if (next_touch_id_ == 0) next_touch_id_ = 1;  // 0 stays "no touch"
+  touch.position = touch.start_position = {x, y};
+  touch.pressed = true;
+  touches_.push_back(touch);
+  touch_os_ids_.push_back(os_id);
+  if (alone && primary_touch_ == 0) {  // a finger on an empty screen is the pointer until it lifts
+    primary_touch_ = touch.id;
+    OnPointerDown(x, y);
+  }
+}
+
+void Input::OnTouchMove(int64_t os_id, float x, float y) {
+  const int i = FindDownTouch(os_id);
+  if (i < 0) return;
+  Touch& touch = touches_[static_cast<size_t>(i)];
+  touch.delta += Vec2(x, y) - touch.position;
+  touch.position = {x, y};
+  if (touch.id == primary_touch_) OnPointerMove(x, y);
+}
+
+void Input::OnTouchUp(int64_t os_id, float x, float y, bool canceled) {
+  const int i = FindDownTouch(os_id);
+  if (i < 0) return;
+  OnTouchMove(os_id, x, y);  // a fast flick may only report its end position
+  EndTouch(static_cast<size_t>(i), canceled);
+}
+
+void Input::EndTouch(size_t index, bool canceled) {
+  Touch& touch = touches_[index];
+  touch.released = true;
+  touch.canceled = canceled;
+  if (touch.id != primary_touch_) return;
+  primary_touch_ = 0;
+  if (!canceled) {
+    OnPointerUp(touch.position.x, touch.position.y);
+  } else if (pointer_down_) {  // ended by the OS: released, but not a tap
+    pointer_down_ = false;
+    pointer_released_ = true;
+    if (touch_screen_) pointer_known_ = false;
+  }
+}
+
+void Input::CancelTouches() {
+  for (size_t i = 0; i < touches_.size(); ++i) {
+    if (touches_[i].IsDown()) EndTouch(i, true);
+  }
 }
 
 void Input::OnKey(Key key, bool down, Key layout_key) {
@@ -189,6 +276,7 @@ void Input::ReleaseAll() {
     if (keys_down_[i]) OnKey(static_cast<Key>(i), false, Key::Unknown);
   }
   for (size_t i = 0; i < kButtonCount; ++i) OnMouseButton(static_cast<MouseButton>(i), false);
+  CancelTouches();
   if (pointer_down_) {  // ended, but not a tap: the player didn't lift it here
     pointer_down_ = false;
     pointer_released_ = true;

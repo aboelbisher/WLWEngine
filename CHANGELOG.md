@@ -11,6 +11,24 @@ listed under **Breaking** with its **Migration**. Shims added before that (`WLW_
 
 ## Unreleased
 
+- Multi-touch (ROADMAP 14.1 early slice, for Snapfold: a hand per finger; Unity's Touch / primaryTouch, Godot's
+  ScreenTouch + ScreenDrag index, SDL's finger events): `Input::Touches()` = every finger down plus the ones lifted
+  this frame, in touch order, as `input::Touch {id, position, delta, start_position, pressed, released, canceled}`;
+  `FindTouch(id)`, `TouchCount()`, `RawTouches()`. Ids count up from 1 and are never reused (Android reuses its
+  pointer ids at once), so a new finger is never taken for one that just lifted, even in one frame; a finger down
+  and up inside one frame is still seen. Touches are hidden while the pointer is blocked (debug UI). Feeding:
+  `Internal().OnTouchDown/Move/Up(os_id, x, y[, canceled])`, `CancelTouches()`. Android reads every pointer
+  (POINTER_DOWN / POINTER_UP, all of them on MOVE, CANCEL and FLAG_CANCELED = canceled); a mouse on Android stays the
+  pointer only. The Studio's Game panel on a phone device feeds its finger as a touch. Engine panel: the touches.
+  Tests: ids and order, per-frame delta, lifted-this-frame, reused OS ids, missed lifts, the primary finger, cancels,
+  ReleaseAll, blocking, mice.
+  **Behaviour change** (no API break): the pointer is the *primary* finger (one that touched an empty screen). Before,
+  Android read pointer index 0, so lifting the first finger while another stayed made the pointer jump to the other
+  finger (a big PointerDelta, a stray swipe) and stay down until the last finger lifted; now the pointer is released
+  when the primary finger lifts and stays up until a finger touches an empty screen again. ACTION_CANCEL used to be a
+  lift (it could tap); now it releases without a tap. Bluzzle and Threadlock only use the pointer: single-finger
+  play is unchanged.
+
 - Fix: the GL driver kept one shadow map and reallocated it whenever a light asked for another size, so two scenes
   with different `ShadowSettings::map_size` in one frame (Bluzzle's board at 2048 and its menu logo's viewport at
   1024) deleted and recreated a depth texture and framebuffer twice a frame. It now keeps one map per size asked for.
