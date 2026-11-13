@@ -19,6 +19,7 @@
 #include "wlw/core/cvar.h"
 #include "wlw/core/type_name.h"
 #include "wlw/core/math.h"
+#include "wlw/debug/debug_draw.h"
 #include "wlw/input/input.h"
 #include "wlw/scene/window.h"
 
@@ -191,6 +192,8 @@ class Application final {
   app::Time& Time() { return time_; }                    // this frame's time; the time scale
   app::Quality& Quality() { return quality_; }           // quality levels from the device's speed
   const AppConfig& Config() const { return config_; }
+  // Debug lines, shapes and labels in the world, drawn over the 3D (debug/debug_draw.h; does nothing in release).
+  debug::DebugDraw& DebugDraw() { return debug_draw_; }
 #if WLW_DEBUG_UI
   debug::DebugUI& DebugUi() { return *debug_ui_; }  // e.g. HideFor() before a screenshot (in the Studio: its own)
 #endif
@@ -229,6 +232,7 @@ class Application final {
   std::shared_ptr<scene::Window> window_;
   std::unique_ptr<audio::Audio> audio_;
   std::unique_ptr<ui::UIContext> ui_;  // the UI layer over the screen's canvas (pointer, safe area, widget state)
+  debug::DebugDraw debug_draw_;        // CPU only: the renderer keeps its GPU buffers
 #if WLW_DEBUG_UI
   std::unique_ptr<debug::DebugUI> own_debug_ui_;
   debug::DebugUI* debug_ui_ = nullptr;  // own_debug_ui_, or the host's

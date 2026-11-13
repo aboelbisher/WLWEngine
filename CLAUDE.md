@@ -63,7 +63,15 @@ engine/wlw/
               the window (Window::Internal().SetCursorOverride) while it has the mouse; while it wants text input the
               game's keyboard is blocked. Engine panel's Input section: held keys / buttons / wheel, cursor shapes, a 5 s
               cursor lock. Studio mode (SetStudioMode: always open, docking, no toggle; SetFrameStart, RequestCursor);
-              text follows Window::ContentScale (HiDPI). imgui_texture.h: ImGuiTexture(texture) + flipped uv. Off in release builds
+              text follows debug_scale.h DebugScale(window). imgui_texture.h: ImGuiTexture(texture) + flipped uv. Off in release builds.
+              DEBUG DRAW (debug_draw.h, ROADMAP 13.10 early slice; compiled always, WLW_DEBUG_DRAW = default WLW_DEBUG_UI: off =
+              inline no-op calls, kDebugDrawEnabled): App().DebugDraw() = one list per app; Line/Polyline/Arrow/Box/Sphere/Circle/
+              Axes/Cross/Frustum/Triangle/Text with DrawStyle {color, width dp, DepthMode Tested/XRay/OnTop, seconds}; lifetimes
+              frame / fixed step (drawn in OnFixedUpdate) / timed (game s), paused frames keep the last frame's; limits 64k lines /
+              tris, 1024 labels; Internal().BeginFrame/BeginFixedStep (Application), Lists() grouped by depth mode + a version
+              unique across apps. Window::Internal().SetDebugDraw = whose shapes its viewports show (Viewport::SetShowDebugDraw,
+              screen on); rendering/gl_debug_draw.h draws them after the main pass (debug_line/triangle shaders); labels via
+              DebugUI::DrawLabels (ImGui background list). Cvar debug.draw; engine panel checkbox + counts
   app/        Application (final: owns the services, the RenderDevice + RenderingDriver (no separate engine object; the renderer keeps the window and does the GL shutdown order) and runs the frames; see the frame in application.h): Window(),
               Input(), Audio(), Screens(), Time(), Config(). engine_cvars.h: log.filter, r.gpu_timing,
               r.invalidate_framebuffers, r.target_fps, r.pacing.auto_interval, r.render_scale, quality.lock (Run applies the cvar sources first, wires these to the window /
@@ -135,8 +143,11 @@ engine/wlw/
               angle (+ = b counter-clockwise about the axis), speed, point, axis, force / torque / limit_torque of the last
               (sub)step = Jolt's lambdas / dt. CastRay + QueryFilter (layer mask, ignore, accept). jolt_internal.h =
               Jolt includes, glm <-> Jolt, EnsureJolt (allocator, Trace -> LogPhysics, Jolt asserts -> the engine's, types;
-              once per process). One thread uses a World (Step may use Jolt's workers). No contact events, interpolation,
-              debug draw or body nodes yet
+              once per process). One thread uses a World (Step may use Jolt's workers). World::DebugDraw(draw, PhysicsDrawSettings)
+              = the physics view through Jolt's DebugRendererSimple (one per process, never freed; Jolt gets JPH_DEBUG_RENDERER with
+              WLW_DEBUG_DRAW): shapes by state / body / island, boxes, centres of mass, velocities, joints, limits, frames. No contact
+              events, interpolation,
+              contact-point drawing or body nodes yet
   platform/   THE ONLY PER-OS CODE: platform.h interface + glfw/glfw_platform.cpp (desktop)
               + android/android_platform.cpp (NativeActivity + EGL). Init/Shutdown are counted (each renderer holds one). Also save files: GetSaveDirectory, WriteFileAtomic, ReadLocalFile. iOS goes here later.
               LaunchArguments() (launch_arguments.cpp; desktop argv via WLW_MAIN, Android the intent's "wlw" extra).
@@ -534,7 +545,8 @@ Build options (CMake cache variables):
 - `WLW_PCH` (on): precompiled standard library + glm headers for the engine target.
 - `WLW_BUILD_PHYSICS`: builds Jolt + `wlw::physics` (+ its tests and benchmarks). On when the engine is top-level, off
   in games unless they set it (Snapfold does); it adds Jolt's ~300 files to a fresh build.
-- `WLW_PROFILE`, `WLW_DEBUG_UI`, `WLW_ENABLE_ASSERTS`, `WLW_SANITIZE`: see "Profiling" and the CMake files.
+- `WLW_PROFILE`, `WLW_DEBUG_UI`, `WLW_DEBUG_DRAW` (follows the debug UI), `WLW_ENABLE_ASSERTS`, `WLW_SANITIZE`: see
+  "Profiling" and the CMake files.
 
 ## Benchmarks
 Numbers only from optimized builds (a Debug run prints a warning). `.github/workflows/bench.yml` runs them on Linux

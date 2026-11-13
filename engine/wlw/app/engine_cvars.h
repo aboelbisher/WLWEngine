@@ -40,6 +40,9 @@ inline CVar<int> cv_hdr{"r.hdr", -1, "The screen's 3D picture: 1 = HDR (RGBA16F)
 inline CVar<int> cv_bloom{"r.bloom", -1, "The screen's bloom: 1 = on, 0 = off, -1 = the game's", CVarFlags::None,
                           CVar<int>::Range{-1, 1}};
 
+// Debug shapes (debug/debug_draw.h, builds with WLW_DEBUG_DRAW): 0 drops and hides them all (like Unreal's ShowFlag).
+inline CVar<bool> cv_debug_draw{"debug.draw", true, "Debug shapes: lines, boxes, labels, the physics view"};
+
 // A fixed quality level (app/quality.h), or -1 to let the engine choose.
 inline CVar<int> cv_quality_lock{"quality.lock", -1, "Fixed quality level, -1 = automatic", CVarFlags::None,
                                  CVar<int>::Range{-1, 15}};

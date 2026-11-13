@@ -53,6 +53,17 @@ void EnginePanel::OnDebugUI() {
       ImGui::Text("GPU %.2f ms / frame", window.GpuFrameMs());
     }
   }
+  if constexpr (kDebugDrawEnabled) {  // debug/debug_draw.h, through the debug.draw cvar like the console
+    bool shapes = app::cv_debug_draw.Get();
+    if (ImGui::Checkbox("Debug draw", &shapes)) app::cv_debug_draw.Set(shapes, CVarSource::Console);
+    const DebugDrawStats stats = App().DebugDraw().Stats();
+    ImGui::SameLine();
+    ImGui::Text("%d lines, %d triangles, %d labels", stats.lines, stats.triangles, stats.texts);
+    if (stats.dropped > 0) {
+      ImGui::SameLine();
+      ImGui::TextColored(ImVec4(1.0f, 0.6f, 0.2f, 1.0f), "(%d dropped: full)", stats.dropped);
+    }
+  }
   ImGui::Text("Fragment mediump: %s", window.FragmentPrecision().c_str());  // r.mediump (glsl_header.h)
   bool invalidate = app::cv_invalidate_framebuffers.Get();                  // phones: compare the GPU time with it off
   if (ImGui::Checkbox("Invalidate framebuffers", &invalidate)) {

@@ -24,7 +24,8 @@ Where things stand (2026-10-28):
   buffer (13.1, 13.7), instance uniforms (9.5), billboards, particle curves and trails (13.11), canvas and text
   styles (15.4), music and live mix (16.2, 16.4), anim tools (17.6), leaderboards (kit; 6.2 for iOS),
   `platform::ReduceMotion` (7.5). For Snapfold (the owner's third game, 2026-11-12): multi-touch (14.1), Jolt
-  physics (18.1, D10: `wlw::physics`, opt-in); next debug draw (13.10), each an early slice on its own branch.
+  physics (18.1, D10: `wlw::physics`, opt-in), debug draw (13.10: `App().DebugDraw()`, the physics view), each an
+  early slice on its own branch.
 - Games: Bluzzle (live in Play testing; desktop + Android) is on main after v0.3.0 (86c4c3a, untagged). Threadlock
   (Android) is still on c39718e (v0.2.0 + 2): its 2.8 migration has to be redone on its main. Snake (`samples/snake`)
   only has to keep compiling. Epicycles, Silhouette and Ripple are on old
@@ -709,6 +710,10 @@ is ~850 lines of C++ + ~225 of Kotlin).
 - [ ] **13.10 Debug draw and views.** Immediate debug drawing (lines, boxes, spheres, frustums, text;
   timed; depth-tested or on top). Views: wireframe, overdraw, mip level, normals, albedo, lighting
   only, cascades, clusters, LODs; chosen in the editor's Scene panel too.
+  Early slice done (2026-11-13, for Snapfold; CHANGELOG "Unreleased"): `App().DebugDraw()` = lines, wire shapes,
+  triangles and labels; dp widths; depth tested / X-ray / on top; frame, fixed-step and timed lifetimes; compiled out of
+  release (`WLW_DEBUG_DRAW`); `physics::World::DebugDraw` (Jolt's debug renderer). Still to do here: the views, editor
+  gizmos, depth-tested labels, contact points (Jolt draws them only during a step).
 - [ ] **13.11 GPU particles.** Compute emit / update / sort / indirect draw on Vulkan, Metal and GLES
   3.1+, with a CPU fallback (the current systems); curves and gradients over lifetime; flipbooks;
   depth-buffer collisions; a particle editor (curves, gradients, live preview).

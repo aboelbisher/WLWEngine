@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <string_view>
 #include <cmath>
 #include <utility>
 #include <vector>
@@ -27,6 +28,9 @@
 #include <Jolt/Physics/Constraints/HingeConstraint.h>
 #include <Jolt/Physics/PhysicsSettings.h>
 #include <Jolt/Physics/PhysicsSystem.h>
+#ifdef JPH_DEBUG_RENDERER
+#include <Jolt/Renderer/DebugRendererSimple.h>
+#endif
 // clang-format on
 
 namespace wlw::physics {
@@ -658,6 +662,98 @@ std::optional<RayHit> World::CastRay(Vec3 origin, Vec3 direction, float max_dist
     hit.normal = ToWlw(body->GetWorldSpaceSurfaceNormal(result.mSubShapeID2, ToJolt(hit.point)));
   }
   return hit;
+}
+
+// ---- Debug ----
+
+#ifdef JPH_DEBUG_RENDERER
+namespace {
+
+// Jolt's debug renderer into a debug::DebugDraw. Jolt allows one renderer per process: made on first use and never
+// destroyed, like Jolt's factory (detail::EnsureJolt). It points at the call in progress's DebugDraw and settings.
+class JoltDebugRenderer final : public JPH::DebugRendererSimple {
+ public:
+  void DrawLine(JPH::RVec3Arg from, JPH::RVec3Arg to, JPH::ColorArg color) override {
+    target->Line(detail::ToWlw(from), detail::ToWlw(to), Style(color, 1.0f));
+  }
+  void DrawTriangle(JPH::RVec3Arg a, JPH::RVec3Arg b, JPH::RVec3Arg c, JPH::ColorArg color,
+                    ECastShadow /*cast_shadow*/) override {
+    target->Triangle(detail::ToWlw(a), detail::ToWlw(b), detail::ToWlw(c), Style(color, settings->shape_alpha));
+  }
+  void DrawText3D(JPH::RVec3Arg position, const std::string_view& text, JPH::ColorArg color,
+                  float /*height*/) override {
+    target->Text(detail::ToWlw(position), text, Style(color, 1.0f));
+  }
+
+  debug::DebugDraw* target = nullptr;
+  const PhysicsDrawSettings* settings = nullptr;
+
+ private:
+  debug::DrawStyle Style(JPH::ColorArg color, float alpha) const {
+    return {.color = wlw::Color(color.r / 255.0f, color.g / 255.0f, color.b / 255.0f, alpha * (color.a / 255.0f)),
+            .width = settings->width,
+            .depth = settings->depth};
+  }
+};
+
+JoltDebugRenderer& DebugRenderer() {
+  static JoltDebugRenderer* renderer = new JoltDebugRenderer();  // reachable for the process's life: not a leak
+  return *renderer;
+}
+
+JPH::BodyManager::EShapeColor ToJolt(PhysicsDrawSettings::Colors colors) {
+  switch (colors) {
+    case PhysicsDrawSettings::Colors::State: return JPH::BodyManager::EShapeColor::SleepColor;
+    case PhysicsDrawSettings::Colors::Body: return JPH::BodyManager::EShapeColor::InstanceColor;
+    case PhysicsDrawSettings::Colors::Island: return JPH::BodyManager::EShapeColor::IslandColor;
+  }
+  return JPH::BodyManager::EShapeColor::SleepColor;
+}
+
+}  // namespace
+#endif  // JPH_DEBUG_RENDERER
+
+void World::DebugDraw(debug::DebugDraw& draw, const PhysicsDrawSettings& settings) {
+#ifdef JPH_DEBUG_RENDERER
+  if (!draw.Enabled()) {
+    return;
+  }
+  WLW_PROFILE_SCOPE("Physics debug draw");
+  JoltDebugRenderer& renderer = DebugRenderer();
+  renderer.target = &draw;
+  renderer.settings = &settings;
+  JPH::BodyManager::DrawSettings bodies;
+  bodies.mDrawShape = settings.shapes;
+  bodies.mDrawShapeWireframe = settings.wireframe;
+  bodies.mDrawShapeColor = ToJolt(settings.colors);
+  bodies.mDrawBoundingBox = settings.bounding_boxes;
+  bodies.mDrawCenterOfMassTransform = settings.centers_of_mass;
+  bodies.mDrawVelocity = settings.velocities;
+  if (settings.shapes || settings.bounding_boxes || settings.centers_of_mass || settings.velocities) {
+    impl_->system.DrawBodies(bodies, &renderer);
+  }
+  if (settings.joints || settings.joint_limits || settings.joint_frames) {
+    for (const Impl::Joint& joint : impl_->joints) {
+      if (joint.hinge != nullptr) {
+        joint.hinge->SetDrawConstraintSize(settings.joint_size);
+      }
+    }
+    if (settings.joints) {
+      impl_->system.DrawConstraints(&renderer);
+    }
+    if (settings.joint_limits) {
+      impl_->system.DrawConstraintLimits(&renderer);
+    }
+    if (settings.joint_frames) {
+      impl_->system.DrawConstraintReferenceFrame(&renderer);
+    }
+  }
+  renderer.target = nullptr;
+  renderer.settings = nullptr;
+#else
+  (void)draw;
+  (void)settings;
+#endif
 }
 
 // ---- Stats ----

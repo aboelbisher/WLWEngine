@@ -13,10 +13,13 @@
 
 #include "wlw/core/assert.h"
 #include "wlw/core/profile.h"
+#include "wlw/debug/debug_draw.h"
+#include "wlw/debug/debug_scale.h"
 #include "wlw/platform/platform.h"
 #include "rendering_driver.h"
 #include "wlw/rendering/frame_uniforms.h"
 #include "wlw/rendering/gl_blend.h"
+#include "wlw/rendering/gl_debug_draw.h"
 #include "wlw/rendering/gl_gpu_profile.h"
 #include "wlw/rendering/gl_gpu_queries.h"
 #include "wlw/rendering/gl_index_buffer.h"
@@ -184,6 +187,10 @@ class GLRenderingDriver : public RenderingDriver {
       glGetIntegerv(GL_FRAMEBUFFER_BINDING, &screen_framebuffer);
     }
     const glm::vec2 screen_pixels{window->GetSize().x, window->GetSize().y};
+#if WLW_DEBUG_DRAW
+    window_debug_draw_ = window->Internal().GetDebugDraw();
+    debug_scale_ = debug::DebugScale(*window);
+#endif
 
     // GPU timing: this frame's sections are measured; the results of one a few frames ago arrive. Only for
     // the window the renderer started with (one frame of sections per frame).
@@ -290,6 +297,12 @@ class GLRenderingDriver : public RenderingDriver {
     warm(window.MainViewport());
     MakeOutputPasses();  // made now so the warm-up compiles them (any viewport may turn tone mapping on later)
     MakeBloomPasses();   // the same for bloom
+#if WLW_DEBUG_DRAW
+    if (window.Internal().GetDebugDraw()) {  // an app's window: its debug shapes may come any time
+      if (!debug_draw_) debug_draw_ = std::make_unique<GLDebugDraw>();
+      debug_draw_->Prepare();
+    }
+#endif
     // Every game shader and texture alive now (canvas shaders too: no scene says they're needed).
     const int custom = PrepareAliveResources();
     warmed_up_ = true;
@@ -393,6 +406,17 @@ class GLRenderingDriver : public RenderingDriver {
     if (clear_bits) glClear(clear_bits);
 
     if (draw_scene) DrawMainPass(*scene, frame_, has_depth, stats);
+#if WLW_DEBUG_DRAW
+    if (draw_scene && window_debug_draw_ && viewport.ShowsDebugDraw()) {
+      if (!debug_draw_) debug_draw_ = std::make_unique<GLDebugDraw>();
+      // Widths are dp of the viewport: at a render scale below 1, fewer pixels each.
+      const float render_scale = pixels.x > 0 ? static_cast<float>(render.x) / static_cast<float>(pixels.x) : 1.0f;
+      debug_draw_->Draw(
+          *window_debug_draw_,
+          {debug_scale_ * render_scale, static_cast<float>(render.x), static_cast<float>(render.y), has_depth}, state_,
+          stats);
+    }
+#endif
     const auto submitted = Clock::now();
 
     auto micros = [](Clock::duration d) { return std::chrono::duration<float, std::micro>(d).count(); };
@@ -1328,6 +1352,9 @@ class GLRenderingDriver : public RenderingDriver {
       for (PostPass& pass : bloom_down_) pass.material.reset();
       for (PostPass& pass : bloom_up_) pass.material.reset();
       gpu_timer_.reset();
+#if WLW_DEBUG_DRAW
+      debug_draw_.reset();
+#endif
     }
     main_window_.reset();
     // ...then our hold on the platform: the last one shuts it down (destroys any windows / contexts still open).
@@ -1388,6 +1415,13 @@ class GLRenderingDriver : public RenderingDriver {
   ShadowMap* shadow_ = nullptr;                     // this viewport's, set by EnsureShadowMap
   bool shadow_failed_ = false;                      // the framebuffer was refused once: don't retry every frame
   bool warned_shadow_type_ = false;
+
+#if WLW_DEBUG_DRAW
+  // Debug draw (debug/debug_draw.h): the window being drawn's shapes, drawn after each viewport's main pass.
+  std::unique_ptr<GLDebugDraw> debug_draw_;
+  debug::DebugDraw* window_debug_draw_ = nullptr;  // set per DrawWindow (null: the window has none)
+  float debug_scale_ = 1.0f;                       // its pixels per dp
+#endif
 };
 
 std::unique_ptr<RenderingDriver> RenderingDriver::Create(RenderDevice* device) {

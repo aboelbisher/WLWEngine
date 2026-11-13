@@ -14,6 +14,8 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 #include "golden.h"
+#include "wlw/core/geometry.h"
+#include "wlw/debug/debug_draw.h"
 #include "wlw/rendering/instance_buffer.h"
 #include "wlw/rendering/material.h"
 #include "wlw/rendering/shader.h"
@@ -1094,5 +1096,131 @@ TEST_CASE("cube faces") {
     CHECK(NearestColor(image.Pixel(100, 100), colors) == look.face);
   }
 }
+
+#if WLW_DEBUG_DRAW
+
+namespace {
+
+// A blue cube 2 x 2 x 2 at the origin under the sun, seen straight down by an orthographic camera (25.6 pixels per
+// unit; world (x, y) at pixel (128 + 25.6 x, 128 - 25.6 y)), its debug shapes shown.
+std::shared_ptr<scene::Viewport> DebugDrawScene() {
+  auto viewport = MakeViewport();
+  viewport->SetShowDebugDraw(true);
+  viewport->SetCamera(OrthoCamera({0, 0, 10}, {0, 0, 0}, 10.0f));
+  AddSun(*viewport, 0.5f);
+  AddMesh(*viewport, utils::CubeMesh(2.0f, Color{0.2f, 0.25f, 0.9f, 1.0f}), Opaque(), {0, 0, 0});
+  return viewport;
+}
+
+// Rows from `y` on, stepping by `dy`, whose red is above 60 at column x (the background's is 20, the cube's ~40).
+int RedRun(const testing::Image& image, int x, int y, int dy) {
+  int run = 0;
+  while (y >= 0 && y < gpu_tests::kSize && image.Pixel(x, y)[0] > 60) {
+    ++run;
+    y += dy;
+  }
+  return run;
+}
+
+}  // namespace
+
+TEST_CASE("debug lines: as wide as asked, hidden behind solids, X-ray faint, on top over them") {
+  auto viewport = DebugDrawScene();
+  debug::DebugDraw draw;
+  // Above the cube, outside it: 6 and 1 pixels wide (dp / the window's scale).
+  const float px = 1.0f / gpu_tests::DebugDrawScale();
+  draw.Line({-4.5f, 3.0f, 0.0f}, {4.5f, 3.0f, 0.0f}, {.color = colors::kWhite, .width = 6.0f * px});
+  draw.Line({-4.5f, 4.0f, 0.0f}, {4.5f, 4.0f, 0.0f}, {.color = colors::kWhite, .width = 1.0f * px});
+  // Through the cube (inside it: its top at z = 1 is nearer the camera) in each depth mode.
+  draw.Line({-3.0f, 0.5f, 0.0f}, {3.0f, 0.5f, 0.0f}, {.color = colors::kRed, .width = 4.0f * px});
+  draw.Line({-3.0f, 0.0f, 0.0f}, {3.0f, 0.0f, 0.0f},
+            {.color = colors::kRed, .width = 4.0f * px, .depth = debug::DepthMode::XRay});
+  draw.Line({-3.0f, -0.5f, 0.0f}, {3.0f, -0.5f, 0.0f},
+            {.color = colors::kRed, .width = 4.0f * px, .depth = debug::DepthMode::OnTop});
+  gpu_tests::SetDebugDraw(&draw);
+  const testing::Image image = gpu_tests::Render(viewport);
+  gpu_tests::SetDebugDraw(nullptr);
+  REQUIRE(!image.Empty());
+
+  // Widths: the 6 pixel line covers 6 rows (+1 where its soft edges straddle two), the 1 pixel line 1 (+1).
+  const int y6 = 128 - static_cast<int>(3.0f * 25.6f);  // 52 (the line is centred on 51.2)
+  const int wide = RedRun(image, 128, y6, 1) + RedRun(image, 128, y6 - 1, -1);
+  CHECK_MESSAGE((wide >= 6 && wide <= 7), wide);
+  const int y1 = 128 - static_cast<int>(4.0f * 25.6f);  // 26 (centred on 25.6)
+  const int thin = RedRun(image, 128, y1, 1) + RedRun(image, 128, y1 - 1, -1);
+  CHECK_MESSAGE((thin >= 1 && thin <= 2), thin);
+  // A square cap: the 6 pixel line goes 3 pixels past its end (x = 4.5 -> pixel 243.2).
+  CHECK(image.Pixel(244, y6)[0] > 60);
+  CHECK(image.Pixel(250, y6)[0] < 60);
+
+  // Over the cube's top (column 128, x = 0): tested hidden, X-ray faint, on top full.
+  const int cube_red = image.Pixel(128, 105)[0];  // the top, away from the lines
+  const int tested = image.Pixel(128, 115)[0];    // y = 0.5
+  const int xray = image.Pixel(128, 127)[0];      // y = 0
+  const int on_top = image.Pixel(128, 141)[0];    // y = -0.5
+  CAPTURE(cube_red);
+  CHECK(std::abs(tested - cube_red) <= 3);
+  CHECK(xray > cube_red + 30);  // a quarter of the red over the cube
+  CHECK(xray < 160);
+  CHECK(on_top > 240);
+  // Past the cube (x = 2.5: column 192) all three are whole.
+  CHECK(image.Pixel(192, 115)[0] > 240);
+  CHECK(image.Pixel(192, 127)[0] > 240);
+  CHECK(image.Pixel(192, 141)[0] > 240);
+}
+
+TEST_CASE("debug draw shows only in viewports that show it") {
+  auto plain = DebugDrawScene();
+  const testing::Image without = gpu_tests::Render(plain);
+  debug::DebugDraw draw;
+  draw.Line({-4.0f, 3.0f, 0.0f}, {4.0f, 3.0f, 0.0f},
+            {.width = 6.0f / gpu_tests::DebugDrawScale(), .depth = debug::DepthMode::OnTop});
+  gpu_tests::SetDebugDraw(&draw);
+  auto hidden = DebugDrawScene();
+  hidden->SetShowDebugDraw(false);
+  const testing::Image hidden_image = gpu_tests::Render(hidden);
+  auto shown = DebugDrawScene();
+  const testing::Image shown_image = gpu_tests::Render(shown);
+  draw.SetEnabled(false);  // the debug.draw cvar's switch
+  const testing::Image off_image = gpu_tests::Render(shown);
+  gpu_tests::SetDebugDraw(nullptr);
+  gpu_tests::CheckSamePictures("debug_draw_hidden", without, hidden_image);
+  gpu_tests::CheckSamePictures("debug_draw_off", without, off_image);
+  CHECK(shown_image.Pixel(128, 51)[0] > 200);
+  CHECK(without.Pixel(128, 51)[0] < 60);
+}
+
+TEST_CASE("debug draw") {
+  // The look as a whole, through a perspective camera: a box drawn on a lit cube's edges (they stay visible), X-ray
+  // axes through it, a see-through triangle, a wire sphere, an arrow, lines 1 to 5 pixels wide, an
+  // on-top cross, and a line from behind the camera cut at the near plane.
+  auto viewport = MakeViewport();
+  viewport->SetShowDebugDraw(true);
+  viewport->SetCamera(FixedCamera(Vec3{-4.0f, -6.0f, 4.0f}, Vec3{0, 0, 0}));
+  AddSun(*viewport, 0.4f);
+  AddMesh(*viewport, utils::CubeMesh(2.0f, Color{0.75f, 0.75f, 0.75f, 1.0f}), Opaque(), {0, 0, 0});
+  debug::DebugDraw draw;
+  const float px = 1.0f / gpu_tests::DebugDrawScale();  // widths in pixels on any machine
+  draw.Box(AABB{Vec3(-1.0f), Vec3(1.0f)}, {.color = Color::Hex(0xFFB020), .width = 3.0f * px});
+  draw.Axes(Mat4(1.0f), 2.2f, {.width = 4.0f * px, .depth = debug::DepthMode::XRay});
+  draw.Triangle({1.5f, -1.5f, 0.0f}, {3.0f, -1.0f, 0.0f}, {2.2f, -0.5f, 2.0f},
+                {.color = Color(0.2f, 1.0f, 0.4f, 0.5f)});
+  draw.Sphere({-2.2f, 1.5f, 0.5f}, 0.8f, {.color = Color::Hex(0x60C0FF), .width = 2.0f * px});
+  draw.Arrow({0.0f, -2.5f, -1.0f}, {2.5f, -2.5f, 1.5f}, {.color = colors::kMagenta, .width = 3.0f * px});
+  for (int i = 0; i < 5; ++i) {
+    const float x = -3.0f + 0.5f * static_cast<float>(i);
+    draw.Line({x, -2.0f, -1.0f}, {x, 2.0f, -1.0f},
+              {.color = colors::kWhite, .width = (1.0f + static_cast<float>(i)) * px});
+  }
+  draw.Cross({0.0f, 0.0f, 0.0f}, 0.8f,
+             {.color = colors::kYellow, .width = 5.0f * px, .depth = debug::DepthMode::OnTop});
+  // From behind the camera (past it, away from the scene) to the far corner: only the part in front shows.
+  draw.Line({-8.0f, -12.0f, 6.0f}, {1.0f, 1.5f, -1.0f}, {.color = colors::kCyan, .width = 3.0f * px});
+  gpu_tests::SetDebugDraw(&draw);
+  CheckGolden("debug_draw", viewport);
+  gpu_tests::SetDebugDraw(nullptr);
+}
+
+#endif  // WLW_DEBUG_DRAW
 
 TEST_SUITE_END();

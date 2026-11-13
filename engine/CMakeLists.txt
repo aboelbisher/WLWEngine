@@ -75,6 +75,11 @@ add_library(wlw STATIC
   wlw/core/profile.h
   wlw/core/vertex_3d.h
 
+  # Debug drawing: always compiled (its calls are inline no-ops without WLW_DEBUG_DRAW); the renderer draws it.
+  wlw/debug/debug_draw.cpp
+  wlw/debug/debug_draw.h
+  wlw/debug/debug_scale.h
+
   wlw/fx/flow_particles.cpp
   wlw/fx/flow_particles.h
   wlw/fx/particle_system.cpp
@@ -106,6 +111,8 @@ add_library(wlw STATIC
   wlw/rendering/gl_index_buffer.h
   wlw/rendering/gl_program.cpp
   wlw/rendering/gl_program.h
+  wlw/rendering/gl_debug_draw.cpp
+  wlw/rendering/gl_debug_draw.h
   wlw/rendering/gl_gpu_queries.cpp
   wlw/rendering/gl_gpu_queries.h
   wlw/rendering/gl_gpu_profile.cpp
@@ -193,23 +200,6 @@ add_library(wlw STATIC
   wlw/utils/textures.h
 )
 add_library(wlw::wlw ALIAS wlw)
-
-# ---- Shaders: engine/wlw/rendering/shaders/**.{glsl,vert,frag}, embedded in the binary ----
-# cmake/EmbedShaders.cmake turns them into a generated source (rendering/shader_library.h), so
-# nothing is read from disk or the APK; editing a shader file re-runs it on the next build.
-set(_wlw_shader_dir "${CMAKE_CURRENT_SOURCE_DIR}/wlw/rendering/shaders")
-file(GLOB_RECURSE _wlw_shader_files CONFIGURE_DEPENDS
-  "${_wlw_shader_dir}/*.glsl" "${_wlw_shader_dir}/*.vert" "${_wlw_shader_dir}/*.frag")
-set(_wlw_shaders_cpp "${CMAKE_CURRENT_BINARY_DIR}/generated/wlw_shader_files.cpp")
-add_custom_command(
-  OUTPUT "${_wlw_shaders_cpp}"
-  COMMAND "${CMAKE_COMMAND}" "-DSHADER_DIR=${_wlw_shader_dir}" "-DOUTPUT=${_wlw_shaders_cpp}"
-          -P "${CMAKE_CURRENT_SOURCE_DIR}/../cmake/EmbedShaders.cmake"
-  DEPENDS ${_wlw_shader_files} "${CMAKE_CURRENT_SOURCE_DIR}/../cmake/EmbedShaders.cmake"
-  COMMENT "Embedding engine shaders"
-  VERBATIM)
-set_source_files_properties(${_wlw_shader_files} PROPERTIES HEADER_FILE_ONLY TRUE)
-target_sources(wlw PRIVATE "${_wlw_shaders_cpp}" ${_wlw_shader_files})
 
 # ---- Version (wlw/version.h) and build info (core/build_info.h) ----
 # version.h comes from project(VERSION) in the top-level CMakeLists.txt; minor and patch stay below 100
@@ -323,6 +313,40 @@ else()
 endif()
 message(STATUS "WLWengine debug UI: ${WLW_DEBUG_UI}")
 
+# ---- Debug draw (debug/debug_draw.h) ----
+# Follows the debug UI by default (it draws the labels): off in release-type builds. Off, every debug draw call is
+# empty, debug_draw.cpp and the renderer's part (gl_debug_draw.cpp) compile to nothing, its shaders aren't embedded
+# (below), and wlw::physics builds Jolt without its debug renderer.
+option(WLW_DEBUG_DRAW "Build debug drawing (lines, shapes, labels; the physics view)" ${WLW_DEBUG_UI})
+if(WLW_DEBUG_DRAW)
+  target_compile_definitions(wlw PUBLIC WLW_DEBUG_DRAW=1)
+else()
+  target_compile_definitions(wlw PUBLIC WLW_DEBUG_DRAW=0)
+endif()
+message(STATUS "WLWengine debug draw: ${WLW_DEBUG_DRAW}")
+
+# ---- Shaders: engine/wlw/rendering/shaders/**.{glsl,vert,frag}, embedded in the binary ----
+# cmake/EmbedShaders.cmake turns them into a generated source (rendering/shader_library.h), so
+# nothing is read from disk or the APK; editing a shader file re-runs it on the next build.
+# Debug draw's shaders only with debug draw (EXCLUDE: file names, comma-separated).
+set(_wlw_shader_dir "${CMAKE_CURRENT_SOURCE_DIR}/wlw/rendering/shaders")
+file(GLOB_RECURSE _wlw_shader_files CONFIGURE_DEPENDS
+  "${_wlw_shader_dir}/*.glsl" "${_wlw_shader_dir}/*.vert" "${_wlw_shader_dir}/*.frag")
+set(_wlw_shader_exclude "")
+if(NOT WLW_DEBUG_DRAW)
+  set(_wlw_shader_exclude "debug_line.vert,debug_line.frag,debug_triangle.vert,debug_triangle.frag")
+endif()
+set(_wlw_shaders_cpp "${CMAKE_CURRENT_BINARY_DIR}/generated/wlw_shader_files.cpp")
+add_custom_command(
+  OUTPUT "${_wlw_shaders_cpp}"
+  COMMAND "${CMAKE_COMMAND}" "-DSHADER_DIR=${_wlw_shader_dir}" "-DOUTPUT=${_wlw_shaders_cpp}"
+          "-DEXCLUDE=${_wlw_shader_exclude}" -P "${CMAKE_CURRENT_SOURCE_DIR}/../cmake/EmbedShaders.cmake"
+  DEPENDS ${_wlw_shader_files} "${CMAKE_CURRENT_SOURCE_DIR}/../cmake/EmbedShaders.cmake"
+  COMMENT "Embedding engine shaders"
+  VERBATIM)
+set_source_files_properties(${_wlw_shader_files} PROPERTIES HEADER_FILE_ONLY TRUE)
+target_sources(wlw PRIVATE "${_wlw_shaders_cpp}" ${_wlw_shader_files})
+
 # ---- Profiling (core/profile.h; the option is in the top-level CMakeLists) ----
 if(WLW_PROFILE)
   target_compile_definitions(wlw PUBLIC WLW_PROFILE=1)
@@ -373,6 +397,10 @@ if(WLW_BUILD_PHYSICS)
     target_compile_definitions(Jolt PUBLIC JPH_ENABLE_ASSERTS)
   else()
     target_compile_definitions(Jolt PUBLIC "$<$<CONFIG:Debug>:JPH_ENABLE_ASSERTS>")
+  endif()
+  # Jolt's debug renderer (World::DebugDraw, the physics view) with debug drawing; on Jolt's target for the same reason.
+  if(WLW_DEBUG_DRAW)
+    target_compile_definitions(Jolt PUBLIC JPH_DEBUG_RENDERER)
   endif()
   wlw_set_warnings(wlw_physics)
   get_target_property(_wlw_physics_sources wlw_physics SOURCES)

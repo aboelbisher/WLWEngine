@@ -8,6 +8,7 @@
 #include <utility>
 
 #include "wlw/core/math.h"
+#include "wlw/debug/debug_draw.h"
 #include "wlw/physics/shape.h"
 
 // wlw::physics: 3D rigid-body physics on Jolt Physics (ROADMAP 18.1, D10), hidden behind these headers. Its own
@@ -156,6 +157,28 @@ struct RayHit {
   Vec3 normal{0.0f};  // the surface normal there (unit; a ray starting inside a body hits at distance 0)
 };
 
+// What World::DebugDraw shows: the physics view (Jolt's own debug drawing, like Jolt's Samples app).
+struct PhysicsDrawSettings {
+  enum class Colors : uint8_t {
+    State,   // static grey, kinematic green, dynamic yellow while awake, red asleep (the sleep is visible)
+    Body,    // a different colour per body
+    Island,  // bodies that are solved together (touching or joined) share a colour
+  };
+  bool shapes = true;      // the bodies' collision shapes
+  bool wireframe = false;  // their triangles' edges instead of see-through solids (hull faces show as triangles)
+  Colors colors = Colors::State;
+  float shape_alpha = 0.35f;     // solid shapes' opacity
+  bool bounding_boxes = false;   // each body's world box
+  bool centers_of_mass = false;  // axes at each body's centre of mass
+  bool velocities = false;       // arrows: linear velocity, angular velocity
+  bool joints = true;            // each joint's points (a marker per body), axis (body a red, b green), normal (white)
+  bool joint_limits = false;     // hinge limits as a pie
+  bool joint_frames = false;     // the joints' reference frames
+  float joint_size = 0.5f;       // how long the joints' axis and normal lines are, and the limits' radius
+  float width = 2.0f;            // lines, dp
+  debug::DepthMode depth = debug::DepthMode::Tested;
+};
+
 // Which bodies a query may hit.
 struct QueryFilter {
   uint32_t layers = kAllLayers;        // LayerBit(...) | ...
@@ -237,6 +260,12 @@ class World {
   // ---- Queries ----
   // The nearest hit along the ray, at most max_distance away; direction need not be unit length.
   std::optional<RayHit> CastRay(Vec3 origin, Vec3 direction, float max_distance, const QueryFilter& filter = {}) const;
+
+  // ---- Debug ----
+  // The physics view: the world as the solver sees it, into `draw` (normally App().DebugDraw()). Call it from
+  // OnUpdate: it draws the state the last step left, once per frame. Does nothing in builds without debug drawing
+  // (debug::kDebugDrawEnabled; Jolt is built without its debug renderer then).
+  void DebugDraw(debug::DebugDraw& draw, const PhysicsDrawSettings& settings = {});
 
   // ---- Stats ----
   int BodyCount() const;

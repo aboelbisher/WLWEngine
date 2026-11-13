@@ -26,6 +26,7 @@ struct RenderStats {
   int instances = 0;               // copies drawn by instanced calls (sprite batches' dots too)
   int instance_bytes = 0;          // per-copy data uploaded to the GPU this frame (only what changed)
   int culled_nodes = 0;            // skipped by frustum culling
+  int debug_draw_calls = 0;        // debug shapes' calls (debug/debug_draw.h; also counted in draw_calls)
   // The size its 3D was drawn at (RenderSize: smaller than the viewport below render scale 1).
   int render_width = 0;
   int render_height = 0;
@@ -218,6 +219,10 @@ class Viewport {
   void SetClearColor(std::optional<Color> color) { settings_.clear = color; }
   const std::optional<Color>& GetClearColor() const { return settings_.clear; }
   const ViewportSettings& Settings() const { return settings_; }
+  // Whether the app's debug shapes (debug/debug_draw.h) are drawn over its 3D: the screen's are, offscreen
+  // viewports' aren't unless turned on. Nothing is drawn in builds without WLW_DEBUG_DRAW.
+  void SetShowDebugDraw(bool show) { show_debug_draw_ = show; }
+  bool ShowsDebugDraw() const { return show_debug_draw_; }
 
   // ---- Post passes (rendering/post_pass.h; ready-made: scene/post_effects.h) ----
   // Full-screen shaders on its 3D picture, in the order added; the last one writes the viewport's
@@ -281,6 +286,7 @@ class Viewport {
     return std::isfinite(scale) ? std::clamp(scale, kMinRenderScale, kMaxRenderScale) : 1.0f;
   }
   UpdateMode update_mode_ = UpdateMode::Always;
+  bool show_debug_draw_ = target_ == nullptr;  // (declared after target_: the screen shows debug shapes)
   glm::ivec2 last_size_{0, 0};
   bool has_picture_ = false;
   rendering::PostChain post_;

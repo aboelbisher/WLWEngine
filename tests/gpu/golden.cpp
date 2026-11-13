@@ -4,6 +4,7 @@
 #include <utility>
 
 #include "support/image_compare.h"
+#include "wlw/debug/debug_scale.h"
 #include "wlw/platform/platform.h"
 #include "wlw/rendering/render_device.h"
 #include "wlw/rendering/render_target.h"
@@ -47,6 +48,15 @@ testing::CompareSettings SettingsFor(const std::string& gpu_name) {
 }  // namespace
 
 void SetUpdateReferences(bool update) { g_update = update; }
+
+float DebugDrawScale() {
+  Gpu& gpu = GetGpu();
+  return gpu.ok ? debug::DebugScale(*gpu.window) : 1.0f;
+}
+
+void SetDebugDraw(debug::DebugDraw* draw) {
+  if (Gpu& gpu = GetGpu(); gpu.ok) gpu.window->Internal().SetDebugDraw(draw);
+}
 
 bool UseGpuContext() {
   Gpu& gpu = GetGpu();

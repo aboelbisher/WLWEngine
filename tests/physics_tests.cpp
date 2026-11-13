@@ -5,6 +5,9 @@
 #include <vector>
 
 #include "test_helpers.h"
+#include "wlw/core/color.h"
+#include "wlw/core/geometry.h"
+#include "wlw/debug/debug_draw.h"
 #include "wlw/physics/world.h"
 
 TEST_SUITE_BEGIN("physics");
@@ -514,6 +517,54 @@ TEST_CASE("an open box of 5 magnet tiles and 8 hinges stands (Snapfold's scale a
   }
   CHECK(Near(carried, 4.0f * g, 0.05f * 4.0f * g));
   CHECK_FALSE(world->IsAwake(floor));  // and it all fell asleep
+}
+
+TEST_CASE("physics view: shapes as see-through triangles by state, joints as lines, inside the bodies' reach") {
+  WorldSettings settings = TestSettings();
+  settings.gravity = Vec3(0.0f);
+  auto world = World::Create(settings);
+  const Shape tile = Shape::Box({0.5f, 0.5f, 0.045f}, 0.02f);
+  const BodyId a = world->CreateBody({.shape = tile, .position = {0.0f, 0.0f, 1.0f}, .layer = kMoving});
+  const BodyId b = world->CreateBody({.shape = tile, .position = {0.0f, 1.0f, 1.0f}, .layer = kMoving});
+  REQUIRE(world->AddHinge({.body_a = a, .body_b = b, .point = {0.0f, 0.5f, 1.0f}, .axis = kRight}).IsValid());
+
+  debug::DebugDraw draw;
+  world->DebugDraw(draw, {.shape_alpha = 0.4f, .joint_size = 0.3f});
+  const auto& lists = draw.Internal().Lists();
+  if constexpr (!debug::kDebugDrawEnabled) {
+    CHECK(lists.vertices.empty());  // Jolt built without its debug renderer: nothing
+    return;
+  }
+  REQUIRE(lists.vertices.size() >= 2 * 12 * 3);  // two boxes' faces (rounded corners: more)
+  CHECK_FALSE(lists.lines.empty());              // the hinge's axes and markers
+  // Everything within the two tiles, grown by the hinge markers' size.
+  const AABB reach = AABB{{-0.5f, -0.5f, 0.955f}, {0.5f, 1.5f, 1.045f}}.Grown(0.31f);
+  for (const debug::DebugVertex& corner : lists.vertices) CHECK(reach.Contains(corner.position));
+  for (const debug::DebugLine& line : lists.lines) {
+    CHECK(reach.Contains(line.a));
+    CHECK(reach.Contains(line.b));
+  }
+  // Awake dynamic bodies are yellow (State colours), see-through at the alpha asked for.
+  const Color32 color = Color32::FromPacked(lists.vertices[0].color);
+  CHECK(color.r > 100);
+  CHECK(color.g > 100);
+  CHECK(color.b < 40);
+  CHECK(color.a == Color32(Color(1.0f, 1.0f, 1.0f, 0.4f)).a);
+
+  // Asleep: red. Shapes only (no joints): no lines.
+  world->SetAwake(a, false);
+  world->SetAwake(b, false);
+  draw.Clear();
+  world->DebugDraw(draw, {.joints = false});
+  const Color32 asleep = Color32::FromPacked(draw.Internal().Lists().vertices.at(0).color);
+  CHECK(asleep.r > 100);
+  CHECK(asleep.g < 40);
+  CHECK(draw.Internal().Lists().lines.empty());
+
+  // Debug draw off: nothing.
+  draw.SetEnabled(false);
+  world->DebugDraw(draw);
+  CHECK(draw.Stats().triangles == 0);
 }
 
 TEST_SUITE_END();

@@ -146,6 +146,10 @@ void CompileEverything() {
   engine("billboard", "billboard.vert", "billboard.frag", {"TEXTURED"});
   engine("skybox", "skybox.vert", "skybox.frag", {});
   engine("ui", "ui.vert", "ui.frag", {});
+#if WLW_DEBUG_DRAW  // only embedded with debug draw
+  engine("debug_line", "debug_line.vert", "debug_line.frag", {});
+  engine("debug_triangle", "debug_triangle.vert", "debug_triangle.frag", {});
+#endif
 
   auto game = [](const std::string& name, const std::string& code) {
     g_current = name;

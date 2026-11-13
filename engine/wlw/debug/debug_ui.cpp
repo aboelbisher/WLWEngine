@@ -6,6 +6,8 @@
 
 #include "imgui.h"
 #include "imgui_impl_opengl3.h"
+#include "wlw/debug/debug_draw.h"
+#include "wlw/debug/debug_scale.h"
 #include "wlw/debug/imgui_input.h"
 #include "wlw/platform/platform.h"
 
@@ -22,19 +24,6 @@ constexpr const char* kImGuiGLSLVersion = "#version 300 es";
 #else
 constexpr const char* kImGuiGLSLVersion = "#version 330 core";
 #endif
-
-// UI scale. Desktop: the OS's display scaling (ContentScale), in pointer units: where those are already larger
-// than pixels (macOS points: the framebuffer scale draws them sharp) that part is taken out again. On a phone the
-// surface is in physical pixels: ~400 px per short side ~ 1 "dp", a rough density estimate (a 1080 px wide phone
-// gets ~2.7x) until the platform reports real density.
-float UIScale(const scene::Window& window) {
-  const input::Input& input = window.GetInput();
-  const Vec2 size = input.SurfaceSize();
-  if (input.IsTouchScreen()) return std::clamp(std::min(size.x, size.y) / 400.0f, 1.0f, 4.0f);
-  const Vec2 framebuffer = window.GetSize();
-  const float points = size.x > 0.0f && framebuffer.x > 0.0f ? framebuffer.x / size.x : 1.0f;
-  return std::clamp(window.ContentScale() / points, 1.0f, 4.0f);
-}
 
 }  // namespace
 
@@ -76,7 +65,7 @@ void DebugUI::SetStudioMode(bool on) {
 }
 
 void DebugUI::ApplyScale() {
-  const float scale = UIScale(window_);
+  const float scale = DebugScale(window_);
   if (scale == scale_) return;
   scale_ = scale;
   ImGuiStyle& style = ImGui::GetStyle();
@@ -122,6 +111,29 @@ void DebugUI::BeginFrame(float dt) {
 void DebugUI::EndFrame() {
   ImGui::Render();
   in_frame_ = false;
+}
+
+void DebugUI::DrawLabels(DebugDraw& draw) {
+  if (!in_frame_ || !draw.Enabled()) return;
+  const auto& texts = draw.Internal().Texts();
+  const scene::Viewport& screen = window_.MainViewport();
+  const std::shared_ptr<scene::Camera3D>& camera = screen.GetCamera();
+  const ImVec2 display = ImGui::GetIO().DisplaySize;  // pointer units, the screen's shape
+  if (texts.empty() || !camera || !screen.ShowsDebugDraw() || display.x <= 0.0f || display.y <= 0.0f) return;
+  const Mat4 view_projection = camera->GetViewProjectionMatrix(display.x / display.y);
+  ImDrawList* list = ImGui::GetBackgroundDrawList();
+  for (const auto& stored : texts) {
+    const DebugText& text = stored.text;
+    const Vec4 clip = view_projection * Vec4(text.position, 1.0f);
+    if (clip.w <= 1e-6f) continue;  // behind the camera
+    const Vec3 ndc = Vec3(clip) / clip.w;
+    if (ndc.z < -1.0f || ndc.z > 1.0f) continue;  // nearer than the near plane or past the far one
+    const ImVec2 at((ndc.x * 0.5f + 0.5f) * display.x, (0.5f - ndc.y * 0.5f) * display.y);
+    const Color32 color = Color32::FromPacked(text.color);
+    // A dark copy one pixel down-right first: readable on light and dark backgrounds alike.
+    list->AddText(ImVec2(at.x + 1.0f, at.y + 1.0f), IM_COL32(0, 0, 0, color.a), text.text.c_str());
+    list->AddText(at, IM_COL32(color.r, color.g, color.b, color.a), text.text.c_str());
+  }
 }
 
 void DebugUI::FeedInput(float dt) {

@@ -11,6 +11,37 @@ listed under **Breaking** with its **Migration**. Shims added before that (`WLW_
 
 ## Unreleased
 
+- Debug draw (ROADMAP 13.10 early slice; for Snapfold's magnets, joints and stress): immediate-mode debug shapes in
+  the world, like Unreal's `DrawDebugLine`, Unity's `Debug.DrawLine` / Gizmos and Godot's DebugDraw3D.
+  `App().DebugDraw()` (`debug::DebugDraw`, debug/debug_draw.h): `Line`, `Polyline`, `Arrow`, `Box` (AABB, or a
+  transform + half extents), `Sphere`, `Circle`, `Axes`, `Cross`, `Frustum`, `Triangle` (filled, flat-shaded by its
+  facing, two-sided) and `Text` (labels), each with a `DrawStyle` {colour, width in dp, depth mode, seconds}. Depth
+  modes: `Tested` (default; pulled 0.2% of its distance towards the camera so lines on surfaces show), `XRay` (the
+  hidden parts drawn at a quarter strength) and `OnTop`. Lifetimes: until the next frame; drawn from `OnFixedUpdate`,
+  until the next fixed step (no flicker on frames without a step, unlike Unity's); `seconds` of game time; a paused
+  game (the Studio's Pause) keeps the last frame's shapes. Limits: 65536 lines, 65536 triangles, 1024 labels (whole
+  shapes past them are dropped, logged once, counted). Drawn in viewports that show it
+  (`Viewport::SetShowDebugDraw`: the screen does, offscreen viewports don't), after the main pass's transparent
+  objects, before 2D and post passes: lines = one instanced quad each (32 bytes, shaders/debug_line.vert: cut at the
+  near plane, widened on screen in pixels, square caps, a 1 px soft edge instead of MSAA), triangles in one vertex
+  buffer (16 bytes a corner), at most 6 calls (X-ray hidden parts, tested + X-ray, on top; triangles then lines),
+  re-uploaded only when the shapes change (rendering/gl_debug_draw.h). Labels go through the debug UI (ImGui's
+  background list, the screen's camera). Widths are dp: `debug::DebugScale(window)` (debug/debug_scale.h, the debug
+  UI's scale, moved there) x the render scale. Build option `WLW_DEBUG_DRAW` (default = `WLW_DEBUG_UI`: off in
+  release-type builds): off, the calls are empty, debug_draw.cpp and gl_debug_draw.cpp compile to nothing and the four
+  shaders aren't embedded (`EmbedShaders.cmake` takes `EXCLUDE`; a Snapfold release library has no debug draw
+  symbols); `debug::kDebugDrawEnabled` guards work that only feeds it. Cvar `debug.draw` (and a checkbox + counts in
+  the engine panel) turns it off at run time. `RenderStats::debug_draw_calls`. Physics view:
+  `physics::World::DebugDraw(draw, PhysicsDrawSettings)`
+  draws the world through Jolt's `DebugRendererSimple` (Jolt is built with `JPH_DEBUG_RENDERER` when `WLW_DEBUG_DRAW`
+  is on): see-through shapes coloured by state (static grey, kinematic green, dynamic yellow awake / red asleep; or
+  per body, or per island), wireframe, bounding boxes, centres of mass, velocities, joints (points, axes), hinge
+  limits, reference frames; joint size, width, depth mode. Call it from `OnUpdate`. Tests: `debug_draw` (shapes'
+  lines, frustum corners, lifetimes with 0 / 2 fixed steps and pausing, grouping by depth mode, versions, shading,
+  limits, turning off; a release build keeps nothing), `physics` (the view of two hinged tiles: inside their reach,
+  colours awake / asleep, off = nothing), `gpu: debug lines ...` (pixel widths, square caps, hidden / X-ray / on top
+  over a cube), `gpu: debug draw shows only in viewports that show it`, golden `gpu: debug draw`, both shaders in
+  `gpu: glsl 330` / `gpu: glsl es 300`.
 - Physics: `wlw::physics` on Jolt Physics 5.6.0 (ROADMAP 18.1 early slice, D10; for Snapfold's magnet tiles). Its own
   opt-in library: a game sets `WLW_BUILD_PHYSICS ON` before adding the engine and links `wlw::physics` (on in the
   engine's own builds; Bluzzle and Threadlock never compile Jolt). Jolt stays behind `wlw/physics/*.h` (games never

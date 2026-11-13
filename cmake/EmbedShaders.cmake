@@ -5,6 +5,11 @@
 # chunks: MSVC limits a single literal's length.
 
 file(GLOB_RECURSE files RELATIVE "${SHADER_DIR}" "${SHADER_DIR}/*.glsl" "${SHADER_DIR}/*.vert" "${SHADER_DIR}/*.frag")
+# -DEXCLUDE=a.vert,b.frag: files left out (relative paths; e.g. debug draw's in release builds).
+if(EXCLUDE)
+  string(REPLACE "," ";" excluded "${EXCLUDE}")
+  list(REMOVE_ITEM files ${excluded})
+endif()
 list(SORT files)
 
 set(chunk_size 2000)

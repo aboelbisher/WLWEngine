@@ -19,6 +19,7 @@ add_executable(wlw_tests
   connection_tests.cpp
   console_tests.cpp
   conventions_tests.cpp
+  debug_draw_tests.cpp
   core_tests.cpp
   cvar_tests.cpp
   exact_cover_tests.cpp

@@ -15,6 +15,10 @@
 #include "wlw/scene/viewport.h"
 #include "wlw/input/input.h"
 
+namespace wlw::debug {
+class DebugDraw;
+}
+
 namespace wlw::scene {
 
 // The mouse cursor's shape over the window (desktop; phones ignore it). The same standard shapes on Windows,
@@ -204,6 +208,7 @@ class Window {
   bool invalidate_framebuffers_ = true;
   int target_fps_ = 60;
   bool auto_swap_interval_ = false;
+  debug::DebugDraw* debug_draw_ = nullptr;  // the app's (debug/debug_draw.h), drawn in viewports that show it
 
  public:
   static std::unique_ptr<Window> Create(const Vec2& size, const std::string& title, const WindowOptions& options = {});
@@ -220,6 +225,9 @@ class Window::InternalAccess {
   void SetFragmentPrecision(std::string text) const { window_.fragment_precision_ = std::move(text); }
   // The renderer: what the screen (MainViewport) is drawn into; null = the OS surface.
   rendering::RenderTarget* ScreenTarget() const { return window_.screen_target_.get(); }
+  // The debug shapes its viewports show (Viewport::SetShowDebugDraw): the Application's; null = none.
+  void SetDebugDraw(debug::DebugDraw* draw) const { window_.debug_draw_ = draw; }
+  debug::DebugDraw* GetDebugDraw() const { return window_.debug_draw_; }
 
   // The debug UI's cursor shape while it has the mouse (nullopt = the game's again).
   void SetCursorOverride(std::optional<Cursor> cursor) const {

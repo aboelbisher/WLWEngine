@@ -10,6 +10,8 @@
 
 namespace wlw::debug {
 
+class DebugDraw;
+
 // In-game debug UI built on Dear ImGui (immediate mode: panels are rebuilt from your data every
 // frame, so they can never show stale values). Only compiled with WLW_DEBUG_UI.
 //
@@ -38,6 +40,9 @@ class DebugUI {
 
   void BeginFrame(float dt);
   void EndFrame();
+  // Between BeginFrame and EndFrame: debug draw's labels (DebugDraw::Text) behind every ImGui window, placed by the
+  // screen's camera (only while the screen shows debug shapes).
+  void DrawLabels(DebugDraw& draw);
   // Between BeginFrame and EndFrame: ImGui windows may be built now (a Studio's hosted game session draws its
   // OnDebugUI panels only then).
   bool InFrame() const { return in_frame_; }

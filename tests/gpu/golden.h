@@ -19,6 +19,10 @@
 // On a failure, <build>/tests/gpu/gpu_output/ gets <name>.actual.png and <name>.diff.png (bad pixels
 // in red). `wlw_gpu_tests --update` rewrites the references from this machine's GPU: run it on
 // llvmpipe (or take CI's gpu_output artifact) so they stay the strict ones.
+namespace wlw::debug {
+class DebugDraw;
+}
+
 namespace wlw::gpu_tests {
 
 inline constexpr int kSize = 256;  // every test picture is kSize x kSize pixels
@@ -36,6 +40,13 @@ testing::Image Render(const std::shared_ptr<scene::Viewport>& viewport);
 // Compares two pictures drawn in this run (no stored reference): for scenes that must look the same
 // built two ways. `name` names the files written on a mismatch (<name>.a.png, .b.png, .diff.png).
 void CheckSamePictures(const std::string& name, const testing::Image& a, const testing::Image& b);
+
+// The debug shapes (debug/debug_draw.h) the test window's viewports show when they show them
+// (Viewport::SetShowDebugDraw); null = none. Set it back to null at the end of the test.
+void SetDebugDraw(debug::DebugDraw* draw);
+// The test window's pixels per dp for debug draw's widths (debug/debug_scale.h: the monitor's scaling on a desktop, 1
+// under xvfb): divide widths by it to draw a number of pixels on any machine.
+float DebugDrawScale();
 
 // Set by main from --update.
 void SetUpdateReferences(bool update);

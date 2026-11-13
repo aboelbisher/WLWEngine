@@ -75,6 +75,7 @@ Application::Application(AppConfig config)
 
 Application::~Application() {
   if (state_ == State::Running) Shutdown();  // OnShutdown runs exactly once, whoever drove the frames
+  if (window_ && window_->Internal().GetDebugDraw() == &debug_draw_) window_->Internal().SetDebugDraw(nullptr);
   WLW_ASSERT(hosted_sessions_ == 0, "Application: destroyed before the sessions hosted on it");
   if (host_ != nullptr) {
     --host_->hosted_sessions_;
@@ -130,7 +131,8 @@ bool Application::Init() {
     quit_command_ = std::make_unique<ConsoleCommand>("quit", "Quits the game", [this](const ConsoleArgs&) { Quit(); });
   }
   ApplyStartupCVars();
-  bool started = hosted;  // a hosted session draws with its host's renderer, already started
+  window_->Internal().SetDebugDraw(&debug_draw_);  // its viewports show this app's debug shapes
+  bool started = hosted;                           // a hosted session draws with its host's renderer, already started
   if (!hosted) {
     WLW_PROFILE_SCOPE("Engine start");
     started = renderer_->Initialize(window_);  // the platform, the window and its GL context
@@ -229,6 +231,8 @@ bool Application::Frame() {
   const double frame_seconds = tick.seconds;
   const int steps = tick.steps;
   const bool hosted = host_ != nullptr;
+  // Last frame's debug shapes end (paused: they stay), timed ones age by the game time that passed.
+  if constexpr (debug::kDebugDrawEnabled) debug_draw_.Internal().BeginFrame(time_.delta_, moves);
 
 #if WLW_DEBUG_UI
   if (!hosted) {
@@ -256,11 +260,14 @@ bool Application::Frame() {
   const float step = time_.FixedStep();
   for (int i = 0; i < steps; ++i) {
     WLW_PROFILE_SCOPE("FixedUpdate");
+    // Debug shapes drawn in a fixed step last until the next one (no flicker on frames without a step).
+    if constexpr (debug::kDebugDrawEnabled) debug_draw_.Internal().BeginFixedStep();
     ForEachSystem(systems_, [step](System& system) { system.OnFixedUpdate(step); });
     {
       WLW_PROFILE_SCOPE("Screens");
       screens_.Internal().FixedUpdate(step);
     }
+    if constexpr (debug::kDebugDrawEnabled) debug_draw_.Internal().EndFixedStep();
   }
   if (moves) {
     WLW_PROFILE_SCOPE("Update");
@@ -292,7 +299,10 @@ bool Application::Frame() {
       ForEachSystem(systems_, [](System& system) { system.OnDebugUI(); });
       screens_.Internal().DebugUI();
     }
-    if (!hosted) debug_ui_->EndFrame();  // drawn on top of the scene by DrawWindow
+    if (!hosted) {
+      debug_ui_->DrawLabels(debug_draw_);  // debug draw's Text, over the screen
+      debug_ui_->EndFrame();               // drawn on top of the scene by DrawWindow
+    }
   }
 #endif
 
@@ -451,6 +461,7 @@ void Application::ApplyStartupCVars() {
     if (!SetLogFilter(cv_log_filter.Get())) WLW_LOG(LogApp, Warning, "log.filter: some parts aren't category=level");
   }));
   WatchCVar(cv_gpu_timing, [this] { window_->SetGpuTiming(cv_gpu_timing.Get()); });
+  WatchCVar(cv_debug_draw, [this] { debug_draw_.SetEnabled(cv_debug_draw.Get()); });
   WatchCVar(cv_invalidate_framebuffers,
             [this] { window_->SetInvalidateFramebuffers(cv_invalidate_framebuffers.Get()); });
   WatchCVar(cv_target_fps, [this] { window_->SetTargetFps(cv_target_fps.Get()); });
