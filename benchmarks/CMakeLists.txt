@@ -8,6 +8,11 @@ add_executable(wlw_benchmarks
   render_benchmarks.cpp
   ui_and_audio_benchmarks.cpp)
 target_link_libraries(wlw_benchmarks PRIVATE wlw::wlw wlw_nanobench wlw_json)
+# wlw::physics is opt-in (WLW_BUILD_PHYSICS): its benchmarks come with it.
+if(WLW_BUILD_PHYSICS)
+  target_sources(wlw_benchmarks PRIVATE physics_benchmarks.cpp)
+  target_link_libraries(wlw_benchmarks PRIVATE wlw::physics)
+endif()
 target_compile_definitions(wlw_benchmarks PRIVATE WLW_BENCH_BUILD_TYPE="$<CONFIG>")
 if(NOT ANDROID)
   target_compile_definitions(wlw_benchmarks PRIVATE WLW_BENCH_DATA_DIR="${PROJECT_SOURCE_DIR}/tests/data")

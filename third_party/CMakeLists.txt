@@ -94,3 +94,8 @@ if(ANDROID)
   set_target_properties(wlw_swappy PROPERTIES FOLDER "third_party" POSITION_INDEPENDENT_CODE ON)
   target_link_libraries(wlw_swappy PUBLIC android EGL GLESv3 log)
 endif()
+
+# ---- Jolt Physics v5.6.0 (MIT): 3D physics for wlw::physics; only with WLW_BUILD_PHYSICS (jolt/CMakeLists.txt) ----
+if(WLW_BUILD_PHYSICS)
+  add_subdirectory(jolt)
+endif()

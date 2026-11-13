@@ -351,3 +351,30 @@ endif()
 get_target_property(_wlw_sources wlw SOURCES)
 list(FILTER _wlw_sources EXCLUDE REGEX "/generated/")  # outside the source tree
 source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES ${_wlw_sources})
+
+# ---- Physics: wlw::physics (ROADMAP 18.1, D10): Jolt behind wlw/physics/*.h; only with WLW_BUILD_PHYSICS ----
+# Its own library on top of the engine, so games without physics never compile or link Jolt. A game that uses it:
+# set(WLW_BUILD_PHYSICS ON) before add_subdirectory(<engine>), then target_link_libraries(<game> PRIVATE wlw::physics).
+if(WLW_BUILD_PHYSICS)
+  add_library(wlw_physics STATIC
+    wlw/physics/jolt_internal.h
+    wlw/physics/shape.cpp
+    wlw/physics/shape.h
+    wlw/physics/world.cpp
+    wlw/physics/world.h)
+  add_library(wlw::physics ALIAS wlw_physics)
+  # Jolt stays private: its defines and headers never reach the game.
+  target_link_libraries(wlw_physics PUBLIC wlw PRIVATE Jolt)
+  target_compile_features(wlw_physics PUBLIC cxx_std_20)
+  set_target_properties(wlw_physics PROPERTIES POSITION_INDEPENDENT_CODE ON)
+  # Jolt's asserts follow the engine's (WLW_ASSERT): Debug builds, or WLW_ENABLE_ASSERTS. They go to the engine's
+  # assert handler. The define is on Jolt's target so Jolt and wlw::physics always agree (Jolt checks at start).
+  if(WLW_ENABLE_ASSERTS)
+    target_compile_definitions(Jolt PUBLIC JPH_ENABLE_ASSERTS)
+  else()
+    target_compile_definitions(Jolt PUBLIC "$<$<CONFIG:Debug>:JPH_ENABLE_ASSERTS>")
+  endif()
+  wlw_set_warnings(wlw_physics)
+  get_target_property(_wlw_physics_sources wlw_physics SOURCES)
+  source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES ${_wlw_physics_sources})
+endif()

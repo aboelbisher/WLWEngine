@@ -11,6 +11,35 @@ listed under **Breaking** with its **Migration**. Shims added before that (`WLW_
 
 ## Unreleased
 
+- Physics: `wlw::physics` on Jolt Physics 5.6.0 (ROADMAP 18.1 early slice, D10; for Snapfold's magnet tiles). Its own
+  opt-in library: a game sets `WLW_BUILD_PHYSICS ON` before adding the engine and links `wlw::physics` (on in the
+  engine's own builds; Bluzzle and Threadlock never compile Jolt). Jolt stays behind `wlw/physics/*.h` (games never
+  include it). The shape of the big engines' physics servers (Jolt's BodyInterface, Box2D v3's ids, Godot's
+  PhysicsServer3D): a game-owned `World` (`World::Create(WorldSettings)`), stepped from `OnFixedUpdate`, bodies and
+  joints as plain ids (`BodyId`, `JointId`: stale ids stay invalid), poses copied to nodes by the game (body nodes come
+  with scenes as data). `Shape` = an immutable shared value: `Box`, `Sphere`, `ConvexHull` (+ volume, centre of mass,
+  bounds). `WorldSettings`: `CollisionLayers` (up to 16, a symmetric "collides" table, one broad-phase tree each),
+  gravity, `SolverSettings` (Jolt's velocity / position steps, Baumgarte, slop, speculative distance, sleeping), limits,
+  `worker_threads` (0 = the calling thread only; n = Jolt's JobSystemThreadPool, same results). Bodies:
+  `CreateBody(BodySettings)` (static / kinematic / dynamic, layer, mass override, friction, restitution, damping,
+  gravity factor, continuous collision, `allow_motion_change`, sleeping, user data), `DestroyBody` (also its joints),
+  poses, `SetPose`, `MoveKinematic`, velocities, `PointVelocity`, forces / torques (next step only) and impulses,
+  `Mass`, motion type and layer changes, `SetAwake`, user data. Hinges: `AddHinge(HingeSettings)` in world space
+  (point, axis, a normal per body = angle 0, limits, friction torque, `collide_connected` off = the two bodies don't
+  collide: ref-counted pair blocks in a Jolt group filter), `GetHinge` = angle, speed, point, axis and the constraint
+  force / bending torque / limit torque of the last step (Jolt's lambdas / dt: for breakable joints),
+  `SetHingeFriction`, `SetHingeLimits`, `RemoveJoint`; adding or removing one wakes its bodies. `CastRay` (nearest hit,
+  normal; `QueryFilter` = layer mask, an ignored body, an accept callback). Stats: bodies, awake bodies, joints, last
+  step ms. Jolt's asserts follow the engine's (Debug / `WLW_ENABLE_ASSERTS`, into the engine's assert handler), its
+  traces go to the log (`LogPhysics`); x86_64 builds use SSE4.2 (no AVX: same code on every PC and the emulator);
+  sanitizer builds use plain malloc for Jolt. Tests (14, Windows and the Pixel 4 / ARM64): shapes, falling and resting,
+  sleeping, layers, kinematic pushes, forces, motion changes, the hinge angle's sign, limits, friction, force readback,
+  joined bodies not colliding, stale ids, ray filters, same results with worker threads, an open box of 5 tiles and 8
+  hinges standing at Snapfold's scale. Benchmarks (`physics/`; 300 tiles + 400 hinges at Snapfold's scale and solver,
+  all awake = the worst case): one 1/120 s step 0.58 ms on the PC (0.24 ms with 3 workers), 1.15 ms on the Pixel 4's
+  prime core (0.41 ms with 3 workers, unpinned); the hinges' position solve is the biggest part (~40%: 400 hinges x 4
+  position steps). Reading 400 hinges: 10 us (PC), 27 us (Pixel 4).
+
 - Multi-touch (ROADMAP 14.1 early slice, for Snapfold: a hand per finger; Unity's Touch / primaryTouch, Godot's
   ScreenTouch + ScreenDrag index, SDL's finger events): `Input::Touches()` = every finger down plus the ones lifted
   this frame, in touch order, as `input::Touch {id, position, delta, start_position, pressed, released, canceled}`;

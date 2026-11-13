@@ -23,6 +23,22 @@
       "us": 439.541,
       "error_pct": 0.0
     },
+    "physics/step 300 tiles 400 hinges": {
+      "us": 1148.498,
+      "error_pct": 0.2
+    },
+    "physics/step 300 tiles 400 hinges, 3 workers": {
+      "us": 1321.016,
+      "error_pct": 1.0
+    },
+    "physics/hinge readback 400": {
+      "us": 26.766,
+      "error_pct": 0.1
+    },
+    "physics/ray x10": {
+      "us": 4.88,
+      "error_pct": 0.2
+    },
     "render/gather 1k": {
       "us": 120.813,
       "error_pct": 0.1

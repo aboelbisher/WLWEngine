@@ -55,6 +55,11 @@ add_executable(wlw_tests
   version_tests.cpp
   viewport_tests.cpp)
 target_link_libraries(wlw_tests PRIVATE wlw::wlw wlw::kit wlw_doctest wlw_test_support)
+# wlw::physics (Jolt) is its own opt-in library: its tests come with it.
+if(WLW_BUILD_PHYSICS)
+  target_sources(wlw_tests PRIVATE physics_tests.cpp)
+  target_link_libraries(wlw_tests PRIVATE wlw::physics)
+endif()
 target_compile_definitions(wlw_tests PRIVATE WLW_TEST_FONT="${CMAKE_CURRENT_SOURCE_DIR}/data/LilitaOne-Regular.ttf"
                                             WLW_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data")
 wlw_set_warnings(wlw_tests)

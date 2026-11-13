@@ -28,6 +28,10 @@ if(WLW_OPTIMIZE_ENGINE_IN_DEBUG)
   message(STATUS "WLWengine: engine optimized in Debug builds (${CMAKE_CXX_FLAGS_DEBUG})")
 endif()
 
+# wlw::physics (Jolt, ROADMAP 18.1): opt-in, so games without physics never compile Jolt. A game that uses it sets
+# WLW_BUILD_PHYSICS ON before add_subdirectory(<engine>) and links wlw::physics. On for the engine's own builds.
+option(WLW_BUILD_PHYSICS "Build wlw::physics (Jolt Physics)" ${PROJECT_IS_TOP_LEVEL})
+
 add_subdirectory(third_party)
 add_subdirectory(engine)
 add_subdirectory(kit)

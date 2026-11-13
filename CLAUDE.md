@@ -123,6 +123,20 @@ engine/wlw/
               alpha-beta, BestMove, Expectimax; a game = small class with Moves/Apply/Evaluate/MaxToMove);
               gf2.h (linear algebra over GF(2): BitVector, SolveGf2 = Gaussian elimination with null space,
               LightestSolution: Lights Out-style "which toggles clear it" problems)
+  physics/    wlw::physics (ROADMAP 18.1 early slice, D10): Jolt Physics behind world.h + shape.h, its OWN target, built only
+              with WLW_BUILD_PHYSICS (games turn it on before add_subdirectory and link wlw::physics; Bluzzle / Threadlock
+              don't). World::Create(WorldSettings{CollisionLayers (<= 16, symmetric table, a broad-phase tree each),
+              gravity, SolverSettings, limits, worker_threads 0 = calling thread only}) owned by the game, Step(dt) from
+              OnFixedUpdate; BodyId / JointId = plain ids (stale ones stay invalid, reads give zeros); Shape = immutable
+              shared value (Box, Sphere, ConvexHull). Bodies: CreateBody(BodySettings) / DestroyBody (+ its joints), pose,
+              SetPose, MoveKinematic, velocities, forces (next step only), impulses, Mass, motion type / layer changes,
+              SetAwake, user data. Hinges in world space (point, axis, normal_a / normal_b = angle 0, limits [-pi,0] /
+              [0,pi], friction torque, collide_connected off = a ref-counted pair block in a Jolt GroupFilter); GetHinge =
+              angle (+ = b counter-clockwise about the axis), speed, point, axis, force / torque / limit_torque of the last
+              (sub)step = Jolt's lambdas / dt. CastRay + QueryFilter (layer mask, ignore, accept). jolt_internal.h =
+              Jolt includes, glm <-> Jolt, EnsureJolt (allocator, Trace -> LogPhysics, Jolt asserts -> the engine's, types;
+              once per process). One thread uses a World (Step may use Jolt's workers). No contact events, interpolation,
+              debug draw or body nodes yet
   platform/   THE ONLY PER-OS CODE: platform.h interface + glfw/glfw_platform.cpp (desktop)
               + android/android_platform.cpp (NativeActivity + EGL). Init/Shutdown are counted (each renderer holds one). Also save files: GetSaveDirectory, WriteFileAtomic, ReadLocalFile. iOS goes here later.
               LaunchArguments() (launch_arguments.cpp; desktop argv via WLW_MAIN, Android the intent's "wlw" extra).
@@ -368,7 +382,7 @@ studio/       wlw::studio (ROADMAP Phase 3, D12, D20): the Studio, the engine's 
 samples/      small games, built only when the engine is the top-level project (desktop):
               snake/ (Snake + its rules tests)
 tests/        engine unit tests (no window/GPU: frame clock, conventions (axes, turns, camera on screen, lights, particles, primitive windings, glTF front), cameras (view = inverse world, fit modes, frustum, fly/orbit/follow controllers), node kinds, quality levels (down/up, back-off, settle, frame-time-only, lock, saved,
-              budget from the target, render scales), frame pacing (plans per target/refresh, limiter schedule), draw order (sort keys), sky (rays, place in the order), scene gather + cull, transform (Euler orders, look rotation, matrix cache, hierarchy, names, ids, layers), normal matrices (cofactor vs inverse-transpose, mirrors, flat), shader system (preprocessor, embedded files in every variant, std140 layout, lights, variants, UI kinds), systems (order, starting, Back), blending (depth-write rule, canvas batches, images, falloff texture), resources (made without a GPU, updates, alive list: owned any way, made / destroyed during a walk), connections (disconnect, scoped, changes while calling), app config (groups, defaults), post passes (planning, ping-pong, named inputs, chain targets, effects, render-scale upscale), viewports (scenes, sizes, render scale, update modes), anim, audio, core (random, atomic files, bridge queue), exact cover, search (bitboards, minimax, expectimax), gf2 (Lights Out), shader text splitting, lighting (light nodes, shadow-box fitting), fx, instances (layout, Color32 = lround, SinCos, Arvo boxes vs corners, WriteInstances, cached bounds), input, kit, picking, primitives, ui (canvas, safe area, widgets), screens, profile macros + TypeName, version macros + build info + the deprecation macros; CTest "deprecations" runs cmake/CheckDeprecations.cmake). doctest: one binary wlw_tests, a TEST_SUITE per file, shared main test_main.cpp,
+              budget from the target, render scales), frame pacing (plans per target/refresh, limiter schedule), draw order (sort keys), sky (rays, place in the order), scene gather + cull, transform (Euler orders, look rotation, matrix cache, hierarchy, names, ids, layers), normal matrices (cofactor vs inverse-transpose, mirrors, flat), shader system (preprocessor, embedded files in every variant, std140 layout, lights, variants, UI kinds), systems (order, starting, Back), blending (depth-write rule, canvas batches, images, falloff texture), resources (made without a GPU, updates, alive list: owned any way, made / destroyed during a walk), connections (disconnect, scoped, changes while calling), app config (groups, defaults), post passes (planning, ping-pong, named inputs, chain targets, effects, render-scale upscale), viewports (scenes, sizes, render scale, update modes), anim, audio, core (random, atomic files, bridge queue), exact cover, search (bitboards, minimax, expectimax), gf2 (Lights Out), shader text splitting, lighting (light nodes, shadow-box fitting), fx, instances (layout, Color32 = lround, SinCos, Arvo boxes vs corners, WriteInstances, cached bounds), input, kit, picking, primitives, ui (canvas, safe area, widgets), screens, profile macros + TypeName, version macros + build info + the deprecation macros, physics (with WLW_BUILD_PHYSICS: physics_tests.cpp); CTest "deprecations" runs cmake/CheckDeprecations.cmake). doctest: one binary wlw_tests, a TEST_SUITE per file, shared main test_main.cpp,
               test_helpers.h (Near = absolute tolerance); compound checks in double parentheses CHECK((a && b));
               each TEST_CASE is its own CTest test (cases run in parallel processes: no shared temp files);
               test data in tests/data/, also top-level only. tests/support/ = wlw_test_support (image_compare.h: PNG
@@ -390,14 +404,17 @@ tests/        engine unit tests (no window/GPU: frame clock, conventions (axes, 
               mali_offline_compiler/malioc --core Mali-G78 x.frag; from Git Bash with MSYS_NO_PATHCONV=1).
 benchmarks/   wlw_benchmarks (nanobench; top-level only, desktop + Android executable): no window/GPU, fixed seeds, one op =
               one frame's work. Groups: render (gather/cull/sort 1k, 10k, instance bounds 5k), transform (move flat/nested, read nested; 1k, 10k), fx (flow 20k,
-              particles 5k: update, instances, billboards), ui (text 1k glyphs), audio (mix 24 voices, music sweep + duck). Add: WLW_BENCHMARK("group") { ctx.Run("group/name",
+              particles 5k: update, instances, billboards), ui (text 1k glyphs), audio (mix 24 voices, music sweep + duck), physics (with
+              WLW_BUILD_PHYSICS: one 1/120 step of 300 tiles + 400 hinges all awake, 0 / 3 workers; 400 hinge reads; 10 rays; on a
+              phone the 3-worker case means something only unpinned). Add: WLW_BENCHMARK("group") { ctx.Run("group/name",
               [&] { ... }); } (names are stable: baselines match by name). --out JSON, --baseline compare (warning past
               --threshold %, never a failure), --smoke = CTest "bench: smoke" (label bench). Baselines in
               benchmarks/baselines/: windows-local (owner's Ryzen 7 9800X3D, MSVC Release), linux-ci (bench.yml
               artifact), optional per-phone ones (<device>.json, e.g. pixel4; see "Benchmarks" below).
 third_party/  glm 1.0.1 (wlw_glm, public through wlw::wlw), glad (desktop only), stb, tinygltf + nlohmann json (also its own target wlw_json), miniaudio 0.11.25, stb_vorbis, Dear ImGui 1.92.9b-docking,
               doctest 2.4.12, nanobench 4.3.11 (wlw_nanobench), Tracy 0.14.1 client (target wlw_tracy, only with WLW_PROFILE),
-              Swappy 2.3.0-alpha01 (wlw_swappy, Android only; one local patch, see its README row) (vendored; versions and licences in third_party/README.md)
+              Swappy 2.3.0-alpha01 (wlw_swappy, Android only; one local patch, see its README row), Jolt Physics 5.6.0 (jolt/: target Jolt, only
+              with WLW_BUILD_PHYSICS, linked privately by wlw::physics) (vendored; versions and licences in third_party/README.md)
 cmake/WLWHelpers.cmake  wlw_add_game(), wlw_add_assets(), wlw_set_warnings(), wlw_optimize_debug_flags()
 cmake/ClangFormat.cmake the format check / fix (pinned clang-format, see "Building")
 vcpkg/ + vcpkg.json     GLFW only (desktop); everything else is vendored in third_party/ (D13)
@@ -515,6 +532,8 @@ Build options (CMake cache variables):
   (10-35x faster engine work in Debug). On when the engine is a game's submodule, off when it's top-level. Turn it
   off to step through engine code; header-only engine code always gets the caller's flags.
 - `WLW_PCH` (on): precompiled standard library + glm headers for the engine target.
+- `WLW_BUILD_PHYSICS`: builds Jolt + `wlw::physics` (+ its tests and benchmarks). On when the engine is top-level, off
+  in games unless they set it (Snapfold does); it adds Jolt's ~300 files to a fresh build.
 - `WLW_PROFILE`, `WLW_DEBUG_UI`, `WLW_ENABLE_ASSERTS`, `WLW_SANITIZE`: see "Profiling" and the CMake files.
 
 ## Benchmarks
