@@ -50,7 +50,19 @@ struct WindowOptions {
   // like on phones (tests/gpu checks every shader that way). For compiling shaders, not for running
   // a game: the renderer's desktop paths assume desktop GL. Phones are always ES.
   bool gles = false;
+  // Multisample anti-aliasing (MSAA) of the screen surface: samples per pixel, 0 = off, 2, 4 or 8 (others round
+  // down: NormalizeMsaaSamples). Phone GPUs keep the samples in their on-chip tile memory and average them before
+  // the frame is written out, so 4x costs little there (Unity URP, Unreal's mobile renderer and Godot use 4x on
+  // phones). Fixed when the surface is made; a device without such a surface gets fewer samples, or none
+  // (Window::ScreenSamples says what it got). The surface only: a screen whose 3D goes through its scene picture (post
+  // passes, a render scale, HDR, no screen depth) draws that 3D without MSAA (RenderStats::msaa_samples = 0;
+  // multisampled pictures are ROADMAP 13.6). Offscreen viewports aren't multisampled.
+  int msaa = 0;
 };
+
+// The sample counts MSAA can ask for: 0 (off), 2, 4 or 8; anything in between rounds down (3 -> 2, 6 -> 4),
+// below 2 is 0, above 8 is 8.
+constexpr int NormalizeMsaaSamples(int samples) { return samples >= 8 ? 8 : samples >= 4 ? 4 : samples >= 2 ? 2 : 0; }
 
 // A drawable surface (the OS window / the phone's screen) + its input + what it shows: the
 // main viewport (MainViewport(): a Scene seen through a camera, with the game's UI canvas over
@@ -137,6 +149,11 @@ class Window {
 
   // Whether the screen surface has a depth buffer (WindowOptions::depth).
   bool ScreenHasDepth() const { return screen_depth_; }
+  // The screen surface's MSAA (WindowOptions::msaa): the samples per pixel asked for, and those it got (GL_SAMPLES
+  // once the renderer has started; 0 = none: before that, without a surface (OffscreenWindow), or no such surface
+  // on this device).
+  int ScreenSamplesAsked() const { return screen_samples_asked_; }
+  int ScreenSamples() const { return screen_samples_; }
 
   // ---- GPU timing (rendering/gpu_timer.h) ----
   // Measures the GPU's time per viewport (Viewport::GetGpuStats) and per frame. On in debug
@@ -201,6 +218,8 @@ class Window {
   std::vector<std::shared_ptr<Viewport>> viewports_;
   core::CallbackList<> overlays_;
   bool screen_depth_ = true;
+  int screen_samples_asked_ = 0;
+  int screen_samples_ = 0;
   bool gpu_timing_ = WLW_DEBUG_UI != 0;
   bool gpu_timing_supported_ = false;
   std::string fragment_precision_;
@@ -219,7 +238,9 @@ class Window::InternalAccess {
  public:
   explicit InternalAccess(Window& window) : window_(window) {}
 
-  void SetScreenHasDepth(bool has) const { window_.screen_depth_ = has; }  // the platform
+  void SetScreenHasDepth(bool has) const { window_.screen_depth_ = has; }                     // the platform
+  void SetScreenSamplesAsked(int samples) const { window_.screen_samples_asked_ = samples; }  // the platform
+  void SetScreenSamples(int samples) const { window_.screen_samples_ = samples; }             // the renderer
   void SetGpuTimingSupported(bool supported) const { window_.gpu_timing_supported_ = supported; }
   void SetGpuFrameMs(float ms) const { window_.gpu_frame_ms_ = ms; }
   void SetFragmentPrecision(std::string text) const { window_.fragment_precision_ = std::move(text); }

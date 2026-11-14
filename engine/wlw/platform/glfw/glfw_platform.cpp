@@ -345,6 +345,9 @@ class GlfwWindow : public Window {
     glfwWindowHint(GLFW_VISIBLE, options_.visible ? GLFW_TRUE : GLFW_FALSE);
     glfwWindowHint(GLFW_DEPTH_BITS, options_.depth ? 24 : 0);  // no depth: no stencil either
     glfwWindowHint(GLFW_STENCIL_BITS, options_.depth ? 8 : 0);
+    // MSAA: a soft constraint (GLFW picks the closest pixel format the driver has); GL 3.3 core keeps
+    // GL_MULTISAMPLE on, so a multisampled surface is used as soon as it exists.
+    glfwWindowHint(GLFW_SAMPLES, NormalizeMsaaSamples(options_.msaa));
     if (options_.gles) {  // OpenGL ES 3.0 (the profile hint doesn't apply to ES)
       glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
       glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
@@ -353,6 +356,7 @@ class GlfwWindow : public Window {
     glfwWindowHint(GLFW_VISIBLE, GLFW_TRUE);
     glfwWindowHint(GLFW_DEPTH_BITS, 24);
     glfwWindowHint(GLFW_STENCIL_BITS, 8);
+    glfwWindowHint(GLFW_SAMPLES, 0);
     glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_API);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     if (window_ == nullptr) {
@@ -578,6 +582,7 @@ class GlfwWindow : public Window {
 std::unique_ptr<Window> Window::Create(const Vec2& size, const std::string& title, const WindowOptions& options) {
   auto window = std::make_unique<GlfwWindow>(size, title, options);
   window->Internal().SetScreenHasDepth(options.depth);
+  window->Internal().SetScreenSamplesAsked(NormalizeMsaaSamples(options.msaa));
   return window;
 }
 

@@ -60,6 +60,9 @@ struct GraphicsConfig {
   // false: the screen surface gets no depth buffer (scene::WindowOptions::depth): saves its memory
   // for a game whose screen always has post passes or a render scale below 1 (else it costs a copy).
   bool screen_depth = true;
+  // Multisample anti-aliasing of the screen surface (scene::WindowOptions::msaa): 0 = off, 2, 4 or 8 samples per
+  // pixel (others round down). 4 = smooth edges for little cost on phones; fixed at start.
+  int msaa = 0;
 };
 
 using AudioConfig = audio::AudioConfig;  // enabled, max_voices (audio/audio.h)

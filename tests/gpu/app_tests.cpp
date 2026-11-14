@@ -104,6 +104,39 @@ TEST_CASE("app: OnStart in Init, then each frame's hooks in order") {
   CHECK(recorder.shutdowns == 1);
 }
 
+TEST_CASE("app: the screen surface's MSAA (asked, given, used by the 3D drawn straight into it)") {
+  {
+    auto app = MakeTestApp();  // graphics.msaa = 0: none asked, none given
+    REQUIRE(app->Internal().Init());
+    CHECK((app->Window().ScreenSamplesAsked() == 0 && app->Window().ScreenSamples() == 0));
+    CHECK(app->Internal().Frame());
+    CHECK(app->Window().MainViewport().GetRenderStats().msaa_samples == 0);
+    CHECK(app->Internal().Shutdown() == 0);
+  }
+  app::AppConfig config;
+  config.name = "wlw_app_tests";
+  config.window = {.size = {64, 64}, .stats_in_title = false, .visible = false};
+  config.audio.enabled = false;
+  config.graphics.msaa = 5;  // rounds down to 4
+  auto app = std::make_unique<Application>(config);
+  REQUIRE(app->Internal().Init());
+  scene::Window& window = app->Window();
+  CHECK(window.ScreenSamplesAsked() == 4);
+  // What the driver gave (a hidden window may get none, e.g. some X servers): none, or a real MSAA count.
+  MESSAGE("screen MSAA on this GPU: ", window.ScreenSamples(), "x");
+  CHECK((window.ScreenSamples() == 0 || window.ScreenSamples() >= 2));
+  CHECK(app->Internal().Frame());
+  CHECK(window.MainViewport().GetRenderStats().msaa_samples == window.ScreenSamples());
+  // A render scale sends the 3D through the scene picture, which has no MSAA.
+  window.MainViewport().SetRenderScale(0.5f);
+  CHECK(app->Internal().Frame());
+  CHECK(window.MainViewport().GetRenderStats().msaa_samples == 0);
+  window.MainViewport().SetRenderScale(1.0f);
+  CHECK(app->Internal().Frame());
+  CHECK(window.MainViewport().GetRenderStats().msaa_samples == window.ScreenSamples());
+  CHECK(app->Internal().Shutdown() == 0);
+}
+
 TEST_CASE("app: Quit(code) from a hook finishes that frame, Shutdown returns the code") {
   HookLog hooks;
   auto app = MakeTestApp();

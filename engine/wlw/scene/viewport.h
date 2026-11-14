@@ -51,6 +51,9 @@ struct RenderStats {
   int invalidations = 0;  // glInvalidateFramebuffer calls (phones: pictures not loaded / stored)
   // The format its 3D was drawn in: EffectiveFormat(), or RGBA8 where the GPU fell back.
   rendering::TextureFormat picture_format = rendering::TextureFormat::RGBA8;
+  // MSAA samples its 3D was drawn with: the screen surface's (Window::ScreenSamples) when drawn straight into it,
+  // 0 through a scene picture or into a target.
+  int msaa_samples = 0;
 };
 
 // The GPU's time for a viewport (Window::SetGpuTiming), smoothed, in ms; -1 = not measured

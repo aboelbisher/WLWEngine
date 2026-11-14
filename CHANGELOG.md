@@ -11,6 +11,18 @@ listed under **Breaking** with its **Migration**. Shims added before that (`WLW_
 
 ## Unreleased
 
+- MSAA on the screen surface (ROADMAP 13.6 early slice; for Snapfold's thin tile edges): `AppConfig::graphics.msaa`
+  (`scene::WindowOptions::msaa`) = 0 (off, the default), 2, 4 or 8 samples per pixel; other values round down
+  (`scene::NormalizeMsaaSamples`). Phone GPUs keep the samples in on-chip tile memory and resolve them before the frame
+  is written out, so 4x is cheap there (Unity URP, Unreal's mobile renderer and Godot use 4x on phones). Android asks
+  EGL for `EGL_SAMPLES` and falls back to half the samples, down to none (logged); desktop asks GLFW (`GLFW_SAMPLES`, a
+  soft constraint). Fixed when the surface is made. `Window::ScreenSamplesAsked()` / `ScreenSamples()` (the driver's
+  `GL_SAMPLES`, read when the renderer starts; logged). `RenderStats::msaa_samples` = the samples the 3D was drawn
+  with: the surface's when drawn straight into it, 0 when the screen's 3D goes through its scene picture (post passes, a
+  render scale, HDR, no screen depth; a warning each time that starts), which isn't multisampled yet; offscreen
+  viewports neither. Engine panel: an MSAA line. Tests: `app config: MSAA samples round down to 0, 2, 4 or 8`, `app: the
+  screen surface's MSAA` (asked, given, the 3D's samples drawn straight and through a render-scaled picture).
+
 - Debug draw (ROADMAP 13.10 early slice; for Snapfold's magnets, joints and stress): immediate-mode debug shapes in
   the world, like Unreal's `DrawDebugLine`, Unity's `Debug.DrawLine` / Gizmos and Godot's DebugDraw3D.
   `App().DebugDraw()` (`debug::DebugDraw`, debug/debug_draw.h): `Line`, `Polyline`, `Arrow`, `Box` (AABB, or a

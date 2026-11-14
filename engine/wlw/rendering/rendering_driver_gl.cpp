@@ -87,6 +87,14 @@ class GLRenderingDriver : public RenderingDriver {
             reinterpret_cast<const char*>(glGetString(GL_VERSION)));
     window->Internal().SetFragmentPrecision(DescribeFragmentPrecision());
     WLW_LOG(LogRender, Info, "  Fragment mediump: %s", window->FragmentPrecision().c_str());
+    // The screen surface's MSAA as the driver made it (WindowOptions::msaa asked; the platform may have
+    // given fewer): GL_SAMPLES of the bound framebuffer, the surface's right after the context is made.
+    if (window->Internal().ScreenTarget() == nullptr) {
+      GLint samples = 0;
+      glGetIntegerv(GL_SAMPLES, &samples);
+      window->Internal().SetScreenSamples(samples);
+      WLW_LOG(LogRender, Info, "  Screen MSAA: %dx (asked %dx; 0 = off)", samples, window->ScreenSamplesAsked());
+    }
 
     skybox_program_ = BuildEngineProgram("skybox.vert", "skybox.frag");
     if (skybox_program_ == 0) return false;
@@ -217,7 +225,7 @@ class GLRenderingDriver : public RenderingDriver {
       DrawViewport(window->MainViewport(), screen_size, GLFramebuffer(*screen_target), screen_target->Settings().depth);
     } else {
       DrawViewport(window->MainViewport(), screen_size, static_cast<GLuint>(screen_framebuffer),
-                   window->ScreenHasDepth());
+                   window->ScreenHasDepth(), window->ScreenSamples());
     }
     if (timing_) gpu_timer_->End();
     {
@@ -315,8 +323,10 @@ class GLRenderingDriver : public RenderingDriver {
   // its camera, its post passes if it has any (the scene then goes into the scene picture first,
   // and the last pass writes `destination`), then its canvas over it. A render scale other than 1
   // draws the 3D and Picture layers into the scene picture at the render size too; the passes, or
-  // a copy without them, stretch it to `destination`.
-  void DrawViewport(scene::Viewport& viewport, glm::ivec2 pixels, GLuint destination, bool has_depth) {
+  // a copy without them, stretch it to `destination`. `destination_samples`: its MSAA (the screen
+  // surface's, WindowOptions::msaa; targets have none): the 3D gets it only when drawn straight into it.
+  void DrawViewport(scene::Viewport& viewport, glm::ivec2 pixels, GLuint destination, bool has_depth,
+                    int destination_samples = 0) {
     WLW_PROFILE_SCOPE("Viewport");
 #if WLW_PROFILE
     char label[32];
@@ -346,6 +356,19 @@ class GLRenderingDriver : public RenderingDriver {
       scene_framebuffer = GLFramebuffer(viewport.Post().Internal().SceneTarget());
       drawn_format = viewport.Post().Internal().SceneTarget().Settings().format;
       has_depth = settings.depth;
+    }
+    // The scene picture isn't multisampled (ROADMAP 13.6): a multisampled screen whose 3D goes through it loses
+    // MSAA on the 3D (said once each time it starts).
+    const int drawn_samples = post != nullptr ? 0 : destination_samples;
+    if (viewport.IsScreen()) {
+      const bool msaa_lost = destination_samples > 0 && post != nullptr;
+      if (msaa_lost && !screen_msaa_lost_) {
+        WLW_LOG(LogRender, Warning,
+                "The screen's 3D goes through its scene picture (post passes, a render scale, HDR or no screen "
+                "depth): drawn without the surface's %dx MSAA",
+                destination_samples);
+      }
+      screen_msaa_lost_ = msaa_lost;
     }
     const std::shared_ptr<scene::Scene>& scene = viewport.GetScene();
     const std::shared_ptr<scene::Camera3D>& camera = viewport.GetCamera();
@@ -429,6 +452,7 @@ class GLRenderingDriver : public RenderingDriver {
     stats.render_width = render.x;
     stats.render_height = render.y;
     stats.picture_format = drawn_format;
+    stats.msaa_samples = drawn_samples;
 
     // 2D: Picture layers into the picture (before the passes, at its render size), Overlay layers
     // on top after them (full size: the UI stays sharp at any render scale).
@@ -1365,6 +1389,7 @@ class GLRenderingDriver : public RenderingDriver {
   RenderDevice* device_;
   bool platform_started_ = false;  // Initialize took a platform::Init() (counted): the destructor gives it back
   std::string gpu_name_;           // GL_RENDERER
+  bool screen_msaa_lost_ = false;  // the multisampled screen's 3D went through its scene picture last frame
   std::shared_ptr<scene::Window> main_window_;
   std::unique_ptr<ui::UIRenderer> ui_renderer_;
 

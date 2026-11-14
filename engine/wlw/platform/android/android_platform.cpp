@@ -181,9 +181,10 @@ AndroidWindow* g_window = nullptr;  // Android apps have exactly one window
 
 class AndroidWindow : public scene::Window {
  public:
-  explicit AndroidWindow(bool depth) : depth_(depth) {
+  AndroidWindow(bool depth, int msaa) : depth_(depth), msaa_(scene::NormalizeMsaaSamples(msaa)) {
     g_window = this;
     Internal().SetScreenHasDepth(depth);
+    Internal().SetScreenSamplesAsked(msaa_);
   }
 
   ~AndroidWindow() override {
@@ -397,24 +398,37 @@ class AndroidWindow : public scene::Window {
       }
     }
     // An RGB888 window surface that supports OpenGL ES 3, with a 24-bit depth buffer unless the game
-    // asked for none (WindowOptions::depth; EGL sorts the smallest depth first, so 0 gets none).
-    const EGLint config_attribs[] = {EGL_RENDERABLE_TYPE,
-                                     EGL_OPENGL_ES3_BIT,
-                                     EGL_SURFACE_TYPE,
-                                     EGL_WINDOW_BIT,
-                                     EGL_RED_SIZE,
-                                     8,
-                                     EGL_GREEN_SIZE,
-                                     8,
-                                     EGL_BLUE_SIZE,
-                                     8,
-                                     EGL_DEPTH_SIZE,
-                                     depth_ ? 24 : 0,
-                                     EGL_NONE};
-    EGLint num_configs = 0;
-    if (eglChooseConfig(g_display, config_attribs, &config_, 1, &num_configs) != EGL_TRUE || num_configs == 0) {
-      WLW_LOG(LogPlatform, Error, "No EGL config with OpenGL ES 3 (depth %d)", depth_ ? 24 : 0);
-      return false;
+    // asked for none (WindowOptions::depth; EGL sorts the smallest depth first, so 0 gets none), and
+    // the MSAA samples it asked for (WindowOptions::msaa; EGL sorts the fewest samples first, at least
+    // as many as asked). No such config: half the samples, down to none.
+    int samples = msaa_;
+    for (;; samples = samples > 2 ? samples / 2 : 0) {
+      const EGLint config_attribs[] = {EGL_RENDERABLE_TYPE,
+                                       EGL_OPENGL_ES3_BIT,
+                                       EGL_SURFACE_TYPE,
+                                       EGL_WINDOW_BIT,
+                                       EGL_RED_SIZE,
+                                       8,
+                                       EGL_GREEN_SIZE,
+                                       8,
+                                       EGL_BLUE_SIZE,
+                                       8,
+                                       EGL_DEPTH_SIZE,
+                                       depth_ ? 24 : 0,
+                                       EGL_SAMPLE_BUFFERS,
+                                       samples > 0 ? 1 : 0,
+                                       EGL_SAMPLES,
+                                       samples,
+                                       EGL_NONE};
+      EGLint num_configs = 0;
+      if (eglChooseConfig(g_display, config_attribs, &config_, 1, &num_configs) == EGL_TRUE && num_configs > 0) break;
+      if (samples == 0) {
+        WLW_LOG(LogPlatform, Error, "No EGL config with OpenGL ES 3 (depth %d)", depth_ ? 24 : 0);
+        return false;
+      }
+    }
+    if (samples != msaa_) {
+      WLW_LOG(LogPlatform, Warning, "No EGL config with %dx MSAA: %dx (0 = none)", msaa_, samples);
     }
     const EGLint context_attribs[] = {EGL_CONTEXT_CLIENT_VERSION, 3, EGL_NONE};
     context_ = eglCreateContext(g_display, config_, EGL_NO_CONTEXT, context_attribs);
@@ -522,6 +536,7 @@ class AndroidWindow : public scene::Window {
 
   EGLConfig config_ = nullptr;
   bool depth_ = true;  // WindowOptions::depth: the surface gets a depth buffer
+  int msaa_ = 0;       // WindowOptions::msaa (normalized): the samples asked for
   EGLContext context_ = EGL_NO_CONTEXT;
   EGLSurface surface_ = EGL_NO_SURFACE;
   bool resumed_ = true;        // the activity is starting; APP_CMD_PAUSE flips this
@@ -961,7 +976,8 @@ void RunAndroidApp(android_app* app, std::unique_ptr<::wlw::app::Application> (*
 namespace wlw::scene {
 std::unique_ptr<Window> Window::Create(const Vec2& /*size*/, const std::string& /*title*/,
                                        const WindowOptions& options) {
-  return std::make_unique<platform::AndroidWindow>(options.depth);  // full screen; size comes from the surface
+  // Full screen; the size comes from the surface.
+  return std::make_unique<platform::AndroidWindow>(options.depth, options.msaa);
 }
 }  // namespace wlw::scene
 

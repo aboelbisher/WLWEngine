@@ -43,6 +43,7 @@ void ForEachSystem(SystemList& systems, Hook&& hook) {
 
 AppConfig ResolveAppConfig(AppConfig config) {
   if (config.window.title.empty()) config.window.title = config.name;
+  config.graphics.msaa = scene::NormalizeMsaaSamples(config.graphics.msaa);
   return config;
 }
 
@@ -51,8 +52,9 @@ Application::Application(AppConfig config)
       render_device_(rendering::RenderDevice::Create()),
       own_renderer_(rendering::RenderingDriver::Create(render_device_.get())),
       renderer_(own_renderer_.get()),
-      window_(scene::Window::Create(config_.window.size, config_.window.title,
-                                    {.visible = config_.window.visible, .depth = config_.graphics.screen_depth})),
+      window_(scene::Window::Create(
+          config_.window.size, config_.window.title,
+          {.visible = config_.window.visible, .depth = config_.graphics.screen_depth, .msaa = config_.graphics.msaa})),
       clock_(config_.time.fixed_step, config_.time.max_frame_time) {
   LogThreadId();     // the main thread is T0 in log records
   profile::Start();  // names this thread "Game" in the profiler; log records go to its timeline

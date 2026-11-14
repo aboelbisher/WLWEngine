@@ -65,7 +65,15 @@ void EnginePanel::OnDebugUI() {
     }
   }
   ImGui::Text("Fragment mediump: %s", window.FragmentPrecision().c_str());  // r.mediump (glsl_header.h)
-  bool invalidate = app::cv_invalidate_framebuffers.Get();                  // phones: compare the GPU time with it off
+  // MSAA (WindowOptions::msaa): what the surface got, and whether the screen's 3D used it last frame.
+  if (window.ScreenSamplesAsked() > 0 || window.ScreenSamples() > 0) {
+    const int drawn = window.MainViewport().GetRenderStats().msaa_samples;
+    ImGui::Text("MSAA %dx (asked %dx)%s", window.ScreenSamples(), window.ScreenSamplesAsked(),
+                drawn == window.ScreenSamples() ? "" : ": the 3D goes through the scene picture, without it");
+  } else {
+    ImGui::TextDisabled("MSAA off (AppConfig graphics.msaa)");
+  }
+  bool invalidate = app::cv_invalidate_framebuffers.Get();  // phones: compare the GPU time with it off
   if (ImGui::Checkbox("Invalidate framebuffers", &invalidate)) {
     app::cv_invalidate_framebuffers.Set(invalidate, CVarSource::Console);
   }

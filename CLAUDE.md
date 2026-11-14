@@ -94,7 +94,7 @@ engine/wlw/
               entry_point.h: WLW_MAIN(make_app) with the game's MakeApp() (builds the Application, adds its systems),
               Screen + ScreenStack (game states: deferred push/pop/replace, overlays, fades, Back routing; Screen::App()
               = the services, protected, valid from OnEnter). AppConfig = name (save folder + default window title) +
-              groups window{title, size, stats_in_title, visible} / graphics{target_fps, screen_depth} / audio{enabled,
+              groups window{title, size, stats_in_title, visible} / graphics{target_fps, screen_depth, msaa} / audio{enabled,
               max_voices} / time{fixed_step, max_frame_time} / ui{reference_size}; ResolveAppConfig (tested) fills the
               defaults (window title = name)
               Quality (quality.h, App().Quality(); like Unity QualitySettings + Adaptive Performance): the game defines
@@ -243,6 +243,11 @@ engine/wlw/
               lit layers: 3D 2.20 ms at 1, 1.21 at 0.75, 0.53 at 0.5 (= the pixel count); the upscale copy 0.017 ms.
               AppConfig::graphics.screen_depth / WindowOptions::depth = false: no depth buffer on the screen surface (memory saved
               when the screen is always scaled / post-processed); the screen then always draws through its scene picture.
+              MSAA (ROADMAP 13.6 early slice): AppConfig::graphics.msaa / WindowOptions::msaa = 0 / 2 / 4 / 8 samples on the
+              screen SURFACE (EGL_SAMPLES, falling back to half down to none; GLFW_SAMPLES), fixed at start; NormalizeMsaaSamples;
+              Window::ScreenSamplesAsked / ScreenSamples (GL_SAMPLES read when the renderer starts); RenderStats::msaa_samples
+              = what the screen's 3D got (0 when it goes through its scene picture: post passes, render scale, HDR, no screen
+              depth; warned each time that starts); engine panel line. Scene pictures and offscreen viewports: no MSAA yet.
               Framebuffer invalidation (GLES glInvalidateFramebuffer, nothing on desktop GL 3.3): depth after the 3D,
               each post output before it's drawn (DONT_CARE load), the screen's depth/stencil before swap;
               Window::SetInvalidateFramebuffers (panel checkbox), RenderStats::invalidations. Pixel 4: no measurable GPU ms

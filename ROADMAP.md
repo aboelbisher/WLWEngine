@@ -687,6 +687,12 @@ is ~850 lines of C++ + ~225 of Kotlin).
   viewport, PCF (PCSS on the high tier), presets per tier.
 - [ ] **13.6 Anti-aliasing.** MSAA with on-tile resolve on every backend, FXAA fallback, TAA on the
   high tier (jitter, motion vectors from previous transforms, history clamping, sharpening).
+  Early slice done (2026-11-14, for Snapfold's thin tile edges): MSAA on the screen surface (`AppConfig::graphics.msaa`,
+  EGL / GLFW samples, fixed at start, fewer where the device has no such surface; `Window::ScreenSamples`,
+  `RenderStats::msaa_samples`), like Unity's multisampled backbuffer for a camera that draws straight to the screen.
+  Still to do here: multisampled scene pictures and offscreen viewports (`EXT_multisampled_render_to_texture` on
+  phones: resolved on tile; a multisampled renderbuffer + blit on desktop), changing it at run time (Quality tiers),
+  alpha to coverage, FXAA, TAA.
 - [ ] **13.7 Post stack.** Progressive bloom (Karis average), vignette, chromatic aberration, film
   grain, half-res bokeh depth of field, half-res GTAO (high tier), camera motion blur, SSR (desktop
   high tier); global and per-viewport settings with blending.
