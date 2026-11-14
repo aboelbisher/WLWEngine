@@ -813,8 +813,9 @@ is ~850 lines of C++ + ~225 of Kotlin).
   Early slice for Snapfold, CHANGELOG "Unreleased": Jolt 5.6.0 vendored, `wlw::physics` (opt-in target,
   `WLW_BUILD_PHYSICS`) = a game-owned World on the fixed step, bodies and joints as ids (static / kinematic / dynamic,
   box / sphere / convex hull, layers, forces, MoveKinematic, sleeping), hinges (limits, friction, angle, force readback,
-  joined bodies not colliding), ray casts, Jolt's thread pool; tests + benchmarks (PC, Pixel 4). Still to do here: body
-  nodes, more shapes (meshes, heightfields, compounds), shape / overlap queries, contact signals, more joints,
+  joined bodies not colliding), ray casts, contact events (began this step, faster than a threshold: Box2D v3's hit
+  events), Jolt's thread pool; tests + benchmarks (PC, Pixel 4). Still to do here: body
+  nodes, more shapes (meshes, heightfields, compounds), shape / overlap queries, contact persisted / removed signals, more joints,
   interpolation, our job system (D6), determinism option, physics materials.
 - [ ] **18.2 Box2D v3 (2D).** The same integration for 2D games: bodies, shapes, sensors, joints,
   queries, events; its tasks on our job system.

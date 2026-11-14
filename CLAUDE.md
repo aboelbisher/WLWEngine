@@ -145,8 +145,9 @@ engine/wlw/
               Jolt includes, glm <-> Jolt, EnsureJolt (allocator, Trace -> LogPhysics, Jolt asserts -> the engine's, types;
               once per process). One thread uses a World (Step may use Jolt's workers). World::DebugDraw(draw, PhysicsDrawSettings)
               = the physics view through Jolt's DebugRendererSimple (one per process, never freed; Jolt gets JPH_DEBUG_RENDERER with
-              WLW_DEBUG_DRAW): shapes by state / body / island, boxes, centres of mass, velocities, joints, limits, frames. No contact
-              events, interpolation,
+              WLW_DEBUG_DRAW): shapes by state / body / island, boxes, centres of mass, velocities, joints, limits, frames. Contact events
+              (WorldSettings::contact_events + contact_event_speed; ContactEvents() after Step: began this step, closing
+              faster than the threshold, sorted by body pair, the fastest per pair). No interpolation,
               contact-point drawing or body nodes yet
   platform/   THE ONLY PER-OS CODE: platform.h interface + glfw/glfw_platform.cpp (desktop)
               + android/android_platform.cpp (NativeActivity + EGL). Init/Shutdown are counted (each renderer holds one). Also save files: GetSaveDirectory, WriteFileAtomic, ReadLocalFile. iOS goes here later.

@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <mutex>
 #include <string_view>
 #include <cmath>
 #include <utility>
@@ -21,6 +22,7 @@
 #include <Jolt/Physics/Collision/BroadPhase/BroadPhaseLayerInterfaceTable.h>
 #include <Jolt/Physics/Collision/BroadPhase/ObjectVsBroadPhaseLayerFilterTable.h>
 #include <Jolt/Physics/Collision/CastResult.h>
+#include <Jolt/Physics/Collision/ContactListener.h>
 #include <Jolt/Physics/Collision/GroupFilter.h>
 #include <Jolt/Physics/Collision/NarrowPhaseQuery.h>
 #include <Jolt/Physics/Collision/ObjectLayerPairFilterTable.h>
@@ -193,6 +195,65 @@ Quat NormalizedOrIdentity(const Quat& q) {
 
 }  // namespace
 
+// Collects WorldSettings::contact_events. Jolt calls OnContactAdded from its job threads during Update (the bodies are
+// locked then, velocities still the ones before the solver), so the events go into a list under a mutex; Step sorts
+// them once Update returns.
+class ContactCollector final : public JPH::ContactListener {
+ public:
+  explicit ContactCollector(float min_speed) : min_speed_(min_speed) {}
+
+  void OnContactAdded(const JPH::Body& body1, const JPH::Body& body2, const JPH::ContactManifold& manifold,
+                      JPH::ContactSettings& /*settings*/) override {
+    const JPH::uint count = manifold.mRelativeContactPointsOn1.size();
+    if (count == 0) {
+      return;
+    }
+    JPH::Vec3 sum = JPH::Vec3::sZero();
+    for (JPH::uint i = 0; i < count; ++i) {
+      sum += manifold.mRelativeContactPointsOn1[i];
+    }
+    const JPH::RVec3 point = manifold.mBaseOffset + sum / static_cast<float>(count);
+    // The manifold's normal moves body 2 out of body 1: it points from 1 to 2, so closing = (v1 - v2) . n > 0.
+    const JPH::Vec3 normal = manifold.mWorldSpaceNormal;
+    const float speed = (body1.GetPointVelocity(point) - body2.GetPointVelocity(point)).Dot(normal);
+    if (!(speed > min_speed_)) {
+      return;
+    }
+    const std::lock_guard lock(mutex_);
+    events_.push_back({.body_a = BodyId{body1.GetID().GetIndexAndSequenceNumber()},
+                       .body_b = BodyId{body2.GetID().GetIndexAndSequenceNumber()},
+                       .point = Vec3(static_cast<float>(point.GetX()), static_cast<float>(point.GetY()),
+                                     static_cast<float>(point.GetZ())),
+                       .normal = Vec3(normal.GetX(), normal.GetY(), normal.GetZ()),
+                       .speed = speed});
+  }
+
+  // After Update (one thread again): sorted by body pair, the fastest of each pair kept.
+  void Finish() {
+    std::sort(events_.begin(), events_.end(), [](const ContactEvent& a, const ContactEvent& b) {
+      if (a.body_a.value != b.body_a.value) {
+        return a.body_a.value < b.body_a.value;
+      }
+      if (a.body_b.value != b.body_b.value) {
+        return a.body_b.value < b.body_b.value;
+      }
+      return a.speed > b.speed;
+    });
+    events_.erase(std::unique(events_.begin(), events_.end(),
+                              [](const ContactEvent& a, const ContactEvent& b) {
+                                return a.body_a == b.body_a && a.body_b == b.body_b;
+                              }),
+                  events_.end());
+  }
+  void Clear() { events_.clear(); }
+  const std::vector<ContactEvent>& Events() const { return events_; }
+
+ private:
+  float min_speed_ = 0.0f;
+  std::mutex mutex_;
+  std::vector<ContactEvent> events_;
+};
+
 struct World::Impl {
   struct Joint {
     JPH::Ref<JPH::HingeConstraint> hinge;  // null = a free slot
@@ -226,6 +287,7 @@ struct World::Impl {
   std::unique_ptr<JPH::TempAllocator> temp;
   std::unique_ptr<JPH::JobSystem> jobs;
   JPH::Ref<PairFilter> pairs;
+  std::unique_ptr<ContactCollector> contacts;  // null = contact events off
   JPH::PhysicsSystem system;
 
   std::vector<Joint> joints;
@@ -288,6 +350,10 @@ World::Impl::Impl(const WorldSettings& settings) {
   jolt.mPointVelocitySleepThreshold = solver.sleep_velocity;
   system.SetPhysicsSettings(jolt);
   system.SetGravity(ToJolt(settings.gravity));
+  if (settings.contact_events) {
+    contacts = std::make_unique<ContactCollector>(std::max(settings.contact_event_speed, 0.0f));
+    system.SetContactListener(contacts.get());
+  }
 }
 
 World::Impl::~Impl() {
@@ -336,6 +402,9 @@ World::~World() = default;
 
 void World::Step(float dt, int collision_steps) {
   WLW_PROFILE_SCOPE("physics::World::Step");
+  if (impl_->contacts) {
+    impl_->contacts->Clear();
+  }
   if (dt <= 0.0f) {
     return;
   }
@@ -343,6 +412,9 @@ void World::Step(float dt, int collision_steps) {
   const auto start = std::chrono::steady_clock::now();
   const JPH::EPhysicsUpdateError errors =
       impl_->system.Update(dt, collision_steps, impl_->temp.get(), impl_->jobs.get());
+  if (impl_->contacts) {
+    impl_->contacts->Finish();
+  }
   impl_->last_step_ms = std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - start).count();
   impl_->last_substep_dt = dt / static_cast<float>(collision_steps);
   // Each kind of overflow once per world (they repeat every step while the scene is too big).
@@ -355,6 +427,13 @@ void World::Step(float dt, int collision_steps) {
             (fresh & static_cast<uint32_t>(JPH::EPhysicsUpdateError::BodyPairCacheFull)) ? "max_body_pairs " : "",
             (fresh & static_cast<uint32_t>(JPH::EPhysicsUpdateError::ContactConstraintsFull)) ? "max_contacts" : "");
   }
+}
+
+std::span<const ContactEvent> World::ContactEvents() const {
+  if (!impl_->contacts) {
+    return {};
+  }
+  return impl_->contacts->Events();
 }
 
 void World::SetGravity(Vec3 gravity) { impl_->system.SetGravity(ToJolt(gravity)); }

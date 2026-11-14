@@ -1,6 +1,6 @@
 // Tests for wlw::physics (Jolt behind the engine's API): shapes, bodies falling and resting, layers, kinematic moves,
 // forces, sleeping, motion changes, hinges (angle sign, limits, friction, force readback, no collision between joined
-// bodies), ids after destroying, ray casts with filters, and the same results with worker threads.
+// bodies), ids after destroying, ray casts with filters, the same results with worker threads, contact events.
 #include <cmath>
 #include <vector>
 
@@ -448,6 +448,94 @@ TEST_CASE("worker threads give the same simulation as one thread") {
   bool same = true;
   for (size_t i = 0; i < one.size(); ++i) {
     same = same && one[i] == three[i];
+  }
+  CHECK(same);
+}
+
+TEST_CASE("contact events: off by default; a box landing reports once, with its speed, point and normal") {
+  {
+    auto world = World::Create(TestSettings());
+    AddFloor(*world);
+    world->CreateBody({.shape = Shape::Box(Vec3(0.5f)), .position = {0.0f, 0.0f, 1.0f}, .layer = kMoving});
+    Run(*world, 1.0f);
+    CHECK(world->ContactEvents().empty());
+  }
+  WorldSettings settings = TestSettings();
+  settings.contact_events = true;
+  settings.contact_event_speed = 0.5f;
+  auto world = World::Create(settings);
+  const BodyId floor = AddFloor(*world);
+  // Bottom 2 m above the floor: it lands at sqrt(2 g h) = 6.26 m/s.
+  const BodyId box = world->CreateBody(
+      {.shape = Shape::Box(Vec3(0.5f)), .position = {1.0f, 2.0f, 2.5f}, .layer = kMoving, .restitution = 0.0f});
+  // A ghost falls through the floor without touching it.
+  world->CreateBody({.shape = Shape::Box(Vec3(0.5f)), .position = {-3.0f, 0.0f, 2.5f}, .layer = kGhost});
+  std::vector<ContactEvent> events;
+  for (float t = 0.0f; t < 3.0f; t += kStep) {
+    world->Step(kStep);
+    events.insert(events.end(), world->ContactEvents().begin(), world->ContactEvents().end());
+  }
+  REQUIRE(events.size() == 1);  // resting contacts don't report again
+  const ContactEvent& hit = events[0];
+  CHECK(((hit.body_a == floor && hit.body_b == box) || (hit.body_a == box && hit.body_b == floor)));
+  CHECK(Near(hit.speed, std::sqrt(2.0f * 9.81f * 2.0f), 0.4f));  // contacts begin a little early (speculative)
+  CHECK(Near(hit.point.x, 1.0f, 0.05f));
+  CHECK(Near(hit.point.y, 2.0f, 0.05f));
+  CHECK(Near(hit.point.z, 0.0f, 0.1f));
+  CHECK(Near(glm::length(hit.normal), 1.0f));
+  const Vec3 a_to_b = world->Position(hit.body_b) - world->Position(hit.body_a);
+  CHECK(glm::dot(hit.normal, a_to_b) > 0.0f);
+  CHECK(std::abs(hit.normal.z) > 0.99f);
+  world->Step(kStep);
+  CHECK(world->ContactEvents().empty());  // cleared by the next step
+}
+
+TEST_CASE("contact events: a gentle touch stays under the speed threshold") {
+  WorldSettings settings = TestSettings();
+  settings.contact_events = true;
+  settings.contact_event_speed = 0.5f;
+  auto world = World::Create(settings);
+  AddFloor(*world);
+  world->CreateBody({.shape = Shape::Box(Vec3(0.5f)), .position = {0.0f, 0.0f, 0.505f}, .layer = kMoving});
+  int count = 0;
+  for (float t = 0.0f; t < 1.0f; t += kStep) {
+    world->Step(kStep);
+    count += static_cast<int>(world->ContactEvents().size());
+  }
+  CHECK(count == 0);
+}
+
+TEST_CASE("contact events: the same list with worker threads as with one thread") {
+  auto simulate = [](int threads) {
+    WorldSettings settings = TestSettings();
+    settings.worker_threads = threads;
+    settings.contact_events = true;
+    settings.contact_event_speed = 0.1f;
+    auto world = World::Create(settings);
+    AddFloor(*world);
+    const Shape box = Shape::Box(Vec3(0.25f), 0.02f);
+    for (int i = 0; i < 40; ++i) {
+      const float fi = static_cast<float>(i);
+      world->CreateBody({.shape = box,
+                         .position = {0.3f * std::sin(fi), 0.3f * std::cos(fi), 0.6f + 0.55f * fi},
+                         .rotation = Turn(0.1f * fi, kUp),
+                         .layer = kMoving});
+    }
+    std::vector<ContactEvent> events;
+    for (float t = 0.0f; t < 2.0f; t += kStep) {
+      world->Step(kStep);
+      events.insert(events.end(), world->ContactEvents().begin(), world->ContactEvents().end());
+    }
+    return events;
+  };
+  const std::vector<ContactEvent> one = simulate(0);
+  const std::vector<ContactEvent> three = simulate(3);
+  CHECK(one.size() > 40);  // every box lands, and they knock into each other
+  REQUIRE(one.size() == three.size());
+  bool same = true;
+  for (size_t i = 0; i < one.size(); ++i) {
+    same = same && one[i].body_a == three[i].body_a && one[i].body_b == three[i].body_b &&
+           one[i].speed == three[i].speed && one[i].point == three[i].point;
   }
   CHECK(same);
 }

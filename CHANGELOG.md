@@ -11,6 +11,16 @@ listed under **Breaking** with its **Migration**. Shims added before that (`WLW_
 
 ## Unreleased
 
+- Physics contact events (ROADMAP 18.1 "contact signals", early slice; for Snapfold's impact sounds and haptics):
+  `WorldSettings::contact_events` (off by default: no listener, no cost) + `contact_event_speed` (m/s), then
+  `World::ContactEvents()` after each `Step` = the contacts that began in it whose bodies were closing faster than that
+  along the normal (`ContactEvent` {body_a, body_b, point, normal a -> b, speed}). Like Box2D v3's hit events and
+  Unity's `OnCollisionEnter` + `relativeVelocity`: a Jolt `ContactListener` collects them on its job threads (under a
+  mutex, velocities before the solver); Step sorts them by body pair and keeps the fastest per pair, so the list is the
+  same with or without worker threads. Resting contacts don't report again. Tests: `contact events: ...` (off by
+  default; a landing reports once with its speed, point and normal; a gentle touch stays under the threshold; worker
+  threads give the same list).
+
 - MSAA on the screen surface (ROADMAP 13.6 early slice; for Snapfold's thin tile edges): `AppConfig::graphics.msaa`
   (`scene::WindowOptions::msaa`) = 0 (off, the default), 2, 4 or 8 samples per pixel; other values round down
   (`scene::NormalizeMsaaSamples`). Phone GPUs keep the samples in on-chip tile memory and resolve them before the frame

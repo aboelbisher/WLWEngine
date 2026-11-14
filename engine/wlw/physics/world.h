@@ -5,6 +5,7 @@
 #include <functional>
 #include <memory>
 #include <optional>
+#include <span>
 #include <utility>
 
 #include "wlw/core/math.h"
@@ -102,6 +103,11 @@ struct WorldSettings {
   // threads (Jolt's JobSystemThreadPool) helps; the calling thread works too. Measure: small scenes on phones are
   // often faster single-threaded.
   int worker_threads = 0;
+  // Contact events (World::ContactEvents): off by default (no listener, no cost). Only contacts that begin while their
+  // bodies close faster than contact_event_speed (m/s, along the contact normal) are reported: Box2D v3's hit events
+  // and their threshold, so resting heaps don't flood the list.
+  bool contact_events = false;
+  float contact_event_speed = 0.0f;
 };
 
 struct BodySettings {
@@ -157,6 +163,18 @@ struct RayHit {
   Vec3 normal{0.0f};  // the surface normal there (unit; a ray starting inside a body hits at distance 0)
 };
 
+// Two bodies began touching during a Step (Unity's OnCollisionEnter with relativeVelocity, Box2D v3's
+// b2ContactHitEvent, Godot's body_entered): what impact sounds, sparks and haptics are made from. One per body pair per
+// Step (the fastest, if a pair touched again in a later collision step). Bodies joined without collide_connected,
+// or in layers that don't collide, never touch, so never report.
+struct ContactEvent {
+  BodyId body_a;
+  BodyId body_b;
+  Vec3 point{0.0f};    // world: the middle of the contact points
+  Vec3 normal{0.0f};   // world, unit: from body a towards body b
+  float speed = 0.0f;  // m/s, > 0: how fast the two were closing along the normal as they met (before the solver)
+};
+
 // What World::DebugDraw shows: the physics view (Jolt's own debug drawing, like Jolt's Samples app).
 struct PhysicsDrawSettings {
   enum class Colors : uint8_t {
@@ -201,6 +219,10 @@ class World {
   Vec3 Gravity() const;
   // After adding many bodies at once (a level loading): rebuilds the broad phase's trees for faster queries.
   void OptimizeBroadPhase();
+
+  // The contacts that began during the last Step (all its collision steps), in a fixed order (by body ids: the same
+  // with or without worker threads). Empty unless WorldSettings::contact_events; valid until the next Step.
+  std::span<const ContactEvent> ContactEvents() const;
 
   // ---- Bodies ----
   // Makes the body and adds it to the world. Invalid id when the world is full or the shape is empty (logged).
