@@ -151,6 +151,8 @@ engine/wlw/
               contact-point drawing or body nodes yet
   platform/   THE ONLY PER-OS CODE: platform.h interface + glfw/glfw_platform.cpp (desktop)
               + android/android_platform.cpp (NativeActivity + EGL). Init/Shutdown are counted (each renderer holds one). Also save files: GetSaveDirectory, WriteFileAtomic, ReadLocalFile. iOS goes here later.
+              Vibrate(ms, strength) + Haptic(HapticKind Tick / Click / Heavy: Android 10+ predefined VibrationEffects,
+              else HapticFallback's pulse); KeepScreenOn.
               LaunchArguments() (launch_arguments.cpp; desktop argv via WLW_MAIN, Android the intent's "wlw" extra).
               Frame pacing: desktop = vsync interval when the target divides the monitor's refresh (the monitor the
               window's centre is on, re-checked on moves), else vsync off + FrameLimiter + PreciseSleep (glfw_sleep.cpp:

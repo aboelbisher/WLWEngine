@@ -125,4 +125,15 @@ TEST_CASE("time scale") {
   CHECK(time.Normal());
 }
 
+TEST_CASE("haptics: the fallback pulses grow from a tick to a heavy click; Haptic is a no-op on desktop") {
+  using wlw::platform::HapticFallback;
+  using wlw::platform::HapticKind;
+  static_assert(HapticFallback(HapticKind::Tick).milliseconds < HapticFallback(HapticKind::Click).milliseconds);
+  static_assert(HapticFallback(HapticKind::Click).milliseconds < HapticFallback(HapticKind::Heavy).milliseconds);
+  CHECK(HapticFallback(HapticKind::Tick).strength < HapticFallback(HapticKind::Click).strength);
+  CHECK(HapticFallback(HapticKind::Click).strength < HapticFallback(HapticKind::Heavy).strength);
+  CHECK(HapticFallback(HapticKind::Heavy).strength <= 1.0f);
+  wlw::platform::Haptic(HapticKind::Click);  // no device: nothing happens, nothing breaks
+}
+
 TEST_SUITE_END();

@@ -749,6 +749,37 @@ void Vibrate(int milliseconds, float strength) {
   env->PopLocalFrame(nullptr);
 }
 
+void Haptic(HapticKind kind) {
+  if (!g_app) return;
+  if (AConfiguration_getSdkVersion(g_app->config) < 29) {
+    const VibrationPulse pulse = HapticFallback(kind);
+    Vibrate(pulse.milliseconds, pulse.strength);
+    return;
+  }
+  JNIEnv* env = nullptr;
+  if (g_app->activity->vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) != JNI_OK) return;
+  env->PushLocalFrame(16);
+  // vibrator = activity.getSystemService("vibrator"); vibrator.vibrate(VibrationEffect.createPredefined(id))
+  jobject activity = g_app->activity->clazz;
+  jmethodID get_service =
+      env->GetMethodID(env->GetObjectClass(activity), "getSystemService", "(Ljava/lang/String;)Ljava/lang/Object;");
+  jobject vibrator = env->CallObjectMethod(activity, get_service, env->NewStringUTF("vibrator"));
+  if (vibrator && !env->ExceptionCheck()) {
+    // VibrationEffect.EFFECT_CLICK = 0, EFFECT_TICK = 2, EFFECT_HEAVY_CLICK = 5
+    const jint id = kind == HapticKind::Tick ? 2 : kind == HapticKind::Click ? 0 : 5;
+    jclass effect_class = env->FindClass("android/os/VibrationEffect");
+    jmethodID predefined = env->GetStaticMethodID(effect_class, "createPredefined", "(I)Landroid/os/VibrationEffect;");
+    jobject effect = env->CallStaticObjectMethod(effect_class, predefined, id);
+    if (effect && !env->ExceptionCheck()) {
+      env->CallVoidMethod(vibrator,
+                          env->GetMethodID(env->GetObjectClass(vibrator), "vibrate", "(Landroid/os/VibrationEffect;)V"),
+                          effect);
+    }
+  }
+  if (env->ExceptionCheck()) env->ExceptionClear();  // e.g. no VIBRATE permission: just don't vibrate
+  env->PopLocalFrame(nullptr);
+}
+
 void KeepScreenOn(bool on) {
   if (!g_app || on == g_keep_screen_on) return;
   g_keep_screen_on = on;

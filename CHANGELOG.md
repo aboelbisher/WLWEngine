@@ -11,6 +11,12 @@ listed under **Breaking** with its **Migration**. Shims added before that (`WLW_
 
 ## Unreleased
 
+- Haptic taps (ROADMAP 14.6 early slice; for Snapfold's clicks): `platform::Haptic(HapticKind)` = `Tick` / `Click` /
+  `Heavy`, the phone's own tuned effects: Android 10+ `VibrationEffect.createPredefined` (`EFFECT_TICK` / `EFFECT_CLICK` /
+  `EFFECT_HEAVY_CLICK`), crisper than a few ms of `Vibrate` on phones with a good motor (iOS's
+  `UIImpactFeedbackGenerator` light / medium / heavy, later). Older Android plays `HapticFallback(kind)` = a `Vibrate`
+  pulse (8 / 14 / 25 ms). The same VIBRATE permission; no-op on desktop. Test: `haptics: the fallback pulses ...`.
+
 - Physics contact events (ROADMAP 18.1 "contact signals", early slice; for Snapfold's impact sounds and haptics):
   `WorldSettings::contact_events` (off by default: no listener, no cost) + `contact_event_speed` (m/s), then
   `World::ContactEvents()` after each `Step` = the contacts that began in it whose bodies were closing faster than that

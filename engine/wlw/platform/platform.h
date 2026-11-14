@@ -76,6 +76,32 @@ bool MoveToBackground();
 // manifest. No-op on desktop.
 void Vibrate(int milliseconds, float strength = 1.0f);
 
+// A haptic "tap" from the phone's own tuned effects: crisper than a Vibrate of a few ms on phones with a good motor
+// (iOS's UIImpactFeedbackGenerator light / medium / heavy, Android's predefined VibrationEffects). For touches:
+// something clicked into place, a button, a detent. Android 10+: VibrationEffect.createPredefined (EFFECT_TICK /
+// EFFECT_CLICK / EFFECT_HEAVY_CLICK); older phones get HapticFallback's Vibrate. Same VIBRATE permission. No-op on
+// desktop. Cheap enough for a few a second (rate-limit bursts yourself: a collapse is not 50 taps).
+enum class HapticKind : uint8_t {
+  Tick,   // the lightest: a detent, a hover finding its place
+  Click,  // a button, a piece clicking in
+  Heavy,  // something giving way, a thud
+};
+void Haptic(HapticKind kind);
+
+// What Haptic plays where predefined effects don't exist: a Vibrate of `milliseconds` at `strength`.
+struct VibrationPulse {
+  int milliseconds = 0;
+  float strength = 0.0f;
+};
+constexpr VibrationPulse HapticFallback(HapticKind kind) {
+  switch (kind) {
+    case HapticKind::Tick: return {8, 0.35f};
+    case HapticKind::Click: return {14, 0.7f};
+    case HapticKind::Heavy: return {25, 1.0f};
+  }
+  return {};
+}
+
 // Keeps the screen from dimming and locking while `on` (like Unity's Screen.sleepTimeout =
 // NeverSleep or Unreal's ControlScreensaver): for stretches the player watches without touching,
 // such as a replay or a cutscene. Turn it off again when they end, so the phone sleeps as usual.

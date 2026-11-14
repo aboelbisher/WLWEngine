@@ -744,6 +744,9 @@ is ~850 lines of C++ + ~225 of Kotlin).
 - [ ] **14.5 Text input and IME.** UTF-8 text and composition events: GLFW on desktop, GameTextInput
   on Android, UIKit on iOS; showing and hiding the soft keyboard.
 - [ ] **14.6 Haptics.** Patterns and amplitude (Android VibrationEffect compositions, iOS Core Haptics).
+  Early slice done (2026-11-14, for Snapfold): `platform::Haptic(HapticKind::Tick / Click / Heavy)` = Android 10+'s
+  predefined effects (`VibrationEffect.createPredefined`), a `Vibrate` pulse before that (`HapticFallback`), like iOS's
+  `UIImpactFeedbackGenerator` light / medium / heavy. Still to do here: patterns, compositions, iOS.
 
 ## Phase 15: UI and text
 - [ ] **15.1 Text layout.** UTF-8 everywhere, line breaking (libunibreak), wrapping, multi-line

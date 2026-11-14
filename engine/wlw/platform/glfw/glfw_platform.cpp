@@ -190,6 +190,8 @@ bool MoveToBackground() { return false; }  // no such thing on desktop: the app 
 
 void Vibrate(int, float) {}  // desktops don't vibrate
 
+void Haptic(HapticKind) {}
+
 void KeepScreenOn(bool) {}  // a desktop's screensaver is the user's business
 
 bool ReduceMotion() {
