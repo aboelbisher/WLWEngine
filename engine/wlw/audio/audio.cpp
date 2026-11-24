@@ -233,12 +233,25 @@ bool Audio::PlayMusic(const std::string& path, const MusicParams& params) {
   }
   FreeRetiredMusic();
   lock.unlock();
+#if !defined(WLW_PLATFORM_WEB)  // web: Update() decodes, once per frame
   if (!decode_thread_.joinable()) {
     decoding_.store(true);
     decode_thread_ = std::thread([this] { DecodeLoop(); });
   }
+#endif
   mixer_->PlayStream(stream, params.fade, params.volume);
   return true;
+}
+
+void Audio::Update() {
+#if defined(WLW_PLATFORM_WEB)
+  // What DecodeLoop does on its thread elsewhere. The ring holds ~1 s, a frame is ~16 ms: it stays full
+  // unless frames stop (a hidden tab: the audio is suspended then anyway).
+  WLW_PROFILE_SCOPE("Decode music");
+  std::lock_guard<std::mutex> lock(music_mutex_);
+  for (auto& stream : music_) stream->Fill();
+  FreeRetiredMusic();
+#endif
 }
 
 void Audio::FreeRetiredMusic() {

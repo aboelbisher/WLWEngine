@@ -92,6 +92,20 @@ function(wlw_add_game target)
     # The glue's ANativeActivity_onCreate lives in a static library and nothing references it;
     # force it in, otherwise the linker drops it and Android can't start the app.
     target_link_options(${target} PRIVATE "SHELL:-u ANativeActivity_onCreate")
+  elseif(EMSCRIPTEN)
+    # A folder ready to host (or zip for itch.io): <build>/web/index.html + index.js + index.wasm, and the
+    # assets packed into index.data, which the page downloads before the game starts.
+    add_executable(${target} ${GAME_SOURCES})
+    set_target_properties(${target} PROPERTIES
+      OUTPUT_NAME "index" SUFFIX ".html"
+      RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/web")
+    set(_wlw_shell "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/../engine/wlw/platform/web/shell.html")
+    target_link_options(${target} PRIVATE "SHELL:--shell-file \"${_wlw_shell}\"")
+    set_property(TARGET ${target} APPEND PROPERTY LINK_DEPENDS "${_wlw_shell}")
+    if(GAME_ASSETS)
+      get_filename_component(_wlw_assets "${GAME_ASSETS}" ABSOLUTE)
+      target_link_options(${target} PRIVATE "SHELL:--preload-file \"${_wlw_assets}@/\"")
+    endif()
   else()
     add_executable(${target} ${GAME_SOURCES})
     if(GAME_ASSETS)

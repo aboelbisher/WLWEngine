@@ -13,6 +13,7 @@
 //            com.wlw.kit.AdMobService (kit/android/), which also asks for consent where the law
 //            requires it (Google's UMP: GDPR in the EU/UK, US state privacy laws).
 //   desktop: FakeAds - an "ad" that plays for a couple of seconds, so every flow can be tried.
+//   web:     NoAds - never anything to show (Supported() is false).
 //
 // All callbacks run on the game thread. Ads load in the background; Show* only works when
 // *Ready() says so (otherwise the callback reports failure at once).
@@ -43,6 +44,10 @@ class Ads {
   virtual ~Ads() = default;
 
   virtual void Update(float dt) {}  // call once per frame (the fake uses it to play)
+
+  // False where there are no ads at all (the web build): nothing will ever be ready, so games leave
+  // their ad offers out instead of showing them waiting.
+  virtual bool Supported() const { return true; }
 
   virtual bool RewardedReady() const = 0;
   virtual bool InterstitialReady() const = 0;
@@ -93,6 +98,24 @@ class FakeAds : public Ads {
   float elapsed_ = 0.0f;
   std::function<void(bool)> rewarded_done_;
   std::function<void()> interstitial_done_;
+};
+
+// A platform without ads (the web build): never ready, a Show* answers "no" at once.
+class NoAds : public Ads {
+ public:
+  bool Supported() const override { return false; }
+  bool RewardedReady() const override { return false; }
+  bool InterstitialReady() const override { return false; }
+  void ShowRewarded(std::function<void(bool rewarded)> done) override {
+    if (done) done(false);
+  }
+  void ShowInterstitial(std::function<void()> done) override {
+    if (done) done();
+  }
+  bool Showing() const override { return false; }
+  bool PrivacyOptionsRequired() const override { return false; }
+  void ShowPrivacyOptions() override {}
+  std::string Describe() const override { return "No ads on this platform"; }
 };
 
 }  // namespace wlw::kit

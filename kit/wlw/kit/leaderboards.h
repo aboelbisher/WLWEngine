@@ -15,6 +15,7 @@
 //   Android: Google Play Games Services v2, through the native bridge (platform/bridge.h) to the
 //            Kotlin service com.wlw.kit.PlayGamesService (kit/android/playgames/).
 //   desktop: FakeLeaderboards - made-up rivals in memory, so every screen state can be tried.
+//   web:     NoLeaderboards - no service (Supported() is false).
 // (iOS later: Game Center behind the same interface.)
 //
 // The service keeps ONE best score per player and time span: submitting a lower score changes
@@ -63,6 +64,9 @@ class Leaderboards {
   virtual ~Leaderboards() = default;
 
   virtual void Update(float dt) {}  // call once per frame (the fake uses it to answer)
+
+  // False where there is no game service at all (the web build): games show their local scores only.
+  virtual bool Supported() const { return true; }
 
   // Platforms sign the player in silently at start; SignIn() is for a button the player taps
   // (it may show the platform's own sign-in screen).
@@ -127,6 +131,19 @@ class FakeLeaderboards : public Leaderboards {
   std::map<std::string, std::vector<Score>> boards_;
   std::map<std::string, int64_t> unsent_;  // best per board submitted while signed out
   std::vector<Pending> pending_;
+};
+
+// A platform without a game service (the web build): always signed out, every load fails.
+class NoLeaderboards : public Leaderboards {
+ public:
+  bool Supported() const override { return false; }
+  SignInState State() const override { return SignInState::SignedOut; }
+  void SignIn() override {}
+  void Submit(const std::string&, int64_t) override {}
+  void Load(const std::string&, LeaderboardSpan, int, LoadDone done) override {
+    if (done) done(LeaderboardPage{}, false);
+  }
+  std::string Describe() const override { return "No leaderboards on this platform"; }
 };
 
 }  // namespace wlw::kit

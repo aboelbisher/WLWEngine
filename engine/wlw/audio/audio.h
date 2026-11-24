@@ -83,6 +83,10 @@ class Audio {
   bool HasDevice() const { return device_ != nullptr; }
   Mixer& GetMixer() { return *mixer_; }
 
+  // Once per frame (the Application calls it). Web: decodes the music's next stretch here, on the game
+  // thread (a page has no decode thread without the browser's opt-in thread support); nothing elsewhere.
+  void Update();
+
  private:
   struct Device;       // miniaudio's device, kept out of this header
   struct MusicStream;  // one playthrough: miniaudio decoders over files in memory

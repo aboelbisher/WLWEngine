@@ -13,8 +13,9 @@
 //   WLW_MAIN(MakeApp)
 //
 // Desktop: a normal main(). Android: android_main(), called by NativeActivity on its own thread.
-// Both call Application::Run(). (iOS and the web will get their variants here; where the platform
-// owns the loop they drive Internal().Init() / Frame() / Shutdown() instead: see application.h.)
+// Both call Application::Run(). Web (Emscripten): main() hands the app to platform::RunWebApp, and the
+// browser drives Internal().Init() / Frame() instead (it owns the loop: see application.h). iOS will
+// get its variant here too.
 
 #include <memory>
 
@@ -29,6 +30,25 @@ void RunAndroidApp(android_app* app, std::unique_ptr<::wlw::app::Application> (*
 
 #define WLW_MAIN(make_app) \
   extern "C" void android_main(struct android_app* app) { ::wlw::platform::RunAndroidApp(app, &make_app); }
+
+#elif defined(WLW_PLATFORM_WEB)
+
+#include <string>
+#include <vector>
+
+namespace wlw::platform {
+void SetLaunchArguments(std::vector<std::string> arguments);
+// Loads the save files from the browser's storage, then makes the app and gives its frames to the
+// browser (one per requestAnimationFrame). Returns at once: main() ends, the page keeps running.
+void RunWebApp(std::unique_ptr<::wlw::app::Application> (*create_app)());
+}  // namespace wlw::platform
+
+#define WLW_MAIN(make_app)                                                                                 \
+  int main(int argc, char** argv) {                                                                        \
+    ::wlw::platform::SetLaunchArguments(std::vector<std::string>(argv + (argc > 0 ? 1 : 0), argv + argc)); \
+    ::wlw::platform::RunWebApp(&make_app);                                                                 \
+    return 0;                                                                                              \
+  }
 
 #else
 

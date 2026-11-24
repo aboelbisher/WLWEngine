@@ -206,6 +206,7 @@ bool Application::Frame() {
     WLW_PROFILE_SCOPE("Bridge messages");
     platform::DispatchBridgeMessages();
   }
+  audio_->Update();  // web: the music's next stretch is decoded here (no decode thread on a page)
 
   // 5-7. Updates and rendering: the systems, then the screens.
   const float step = time_.FixedStep();
@@ -339,6 +340,13 @@ int Application::TargetFps() const { return window_->TargetFps(); }
 
 void Application::UpdateQuality(double frame_seconds) {
   if (!quality_.Configured()) return;
+  // A stall isn't the GPU being slow: a browser gives a tab it can't see a frame a second (or none), and a
+  // phone's app switch or a debugger pause look the same. Those frames say nothing about the level.
+  constexpr double kStallSeconds = 0.25;
+  if (frame_seconds > kStallSeconds) {
+    quality_.Settle();
+    return;
+  }
   // The budget is the frame time of the rate frames are paced to (Swappy or the display may change it).
   float paced_fps = window_->PacedFps();
   if (paced_fps <= 0.0f) paced_fps = window_->RefreshRate();  // uncapped: measured against the display

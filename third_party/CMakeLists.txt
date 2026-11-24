@@ -1,5 +1,5 @@
 # ---- glad: OpenGL 3.3 core function loader (desktop only; GLES links its functions directly) ----
-if(NOT ANDROID AND NOT IOS)
+if(NOT ANDROID AND NOT IOS AND NOT EMSCRIPTEN)
   add_library(wlw_glad STATIC glad/src/glad.c)
   target_include_directories(wlw_glad SYSTEM PUBLIC glad/include)
   set_target_properties(wlw_glad PROPERTIES FOLDER "third_party")

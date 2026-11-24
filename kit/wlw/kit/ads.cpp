@@ -104,7 +104,11 @@ class BridgeAds : public Ads {
 
 std::unique_ptr<Ads> Ads::Create(const Config& config) {
   if (platform::HasBridge()) return std::make_unique<BridgeAds>(config);
+#if defined(WLW_PLATFORM_WEB)
+  return std::make_unique<NoAds>();
+#else
   return std::make_unique<FakeAds>(config.fake_seconds);
+#endif
 }
 
 // ---- FakeAds ----
