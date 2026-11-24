@@ -148,7 +148,11 @@ constexpr int kAllSpans = 7;
 
 std::unique_ptr<Leaderboards> Leaderboards::Create() {
   if (platform::HasBridge()) return CreateBridge();
+#if defined(WLW_PLATFORM_WEB)
+  return std::make_unique<NoLeaderboards>();
+#else
   return std::make_unique<FakeLeaderboards>();
+#endif
 }
 
 std::unique_ptr<Leaderboards> Leaderboards::CreateBridge() { return std::make_unique<BridgeLeaderboards>(); }

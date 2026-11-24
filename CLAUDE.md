@@ -1,7 +1,7 @@
 # WLWengine: notes for Claude Code
 
 C++20 / OpenGL game engine, built as a CMake static library (`wlw::wlw`). Targets Windows,
-macOS, Linux and Android today; iOS is planned. Games live in **separate repos** and include
+macOS, Linux, Android and the web (Emscripten) today; iOS is planned. Games live in **separate repos** and include
 this repo as a git submodule. The current game is Bluzzle
 (github.com/aboelbisher/Bluzzle). Its `CLAUDE.md` holds the overall project context, the
 roadmap and the owner's working preferences: read it too when working from there.
@@ -153,6 +153,19 @@ engine/wlw/
               + android/android_platform.cpp (NativeActivity + EGL). Init/Shutdown are counted (each renderer holds one). Also save files: GetSaveDirectory, WriteFileAtomic, ReadLocalFile. iOS goes here later.
               Vibrate(ms, strength) + Haptic(HapticKind Tick / Click / Heavy: Android 10+ predefined VibrationEffects,
               else HapticFallback's pulse); KeepScreenOn.
+              Web (Emscripten, CMake's EMSCRIPTEN -> WLW_PLATFORM_WEB + WLW_GLES): web/web_platform.cpp = the page's
+              <canvas id="canvas"> with a WebGL 2 context (enableExtensionsByDefault: float render targets), drawing
+              buffer = the canvas's CSS size x devicePixelRatio (capped at 2), mouse (5 buttons, wheel) / every finger / keys
+              (by position, layout key from KeyboardEvent.key) from
+              emscripten/html5.h callbacks, page blur = ReleaseAll, tab hidden = pause (one more Frame() right there, so OnAppPaused saves) /
+              shown = resume, saves in IDBFS at /save (autoPersist; loaded before the app is made: RunWebApp ->
+              wlw_web_start), assets preloaded at the virtual root, no bridge, MoveToBackground true (Back never quits),
+              SwapBuffers / PreciseSleep nothing. The browser owns the loop: WLW_MAIN -> platform::RunWebApp ->
+              emscripten_set_main_loop calls Internal().Frame(). No threads (no SharedArrayBuffer needed): Audio::Update
+              decodes music on the game thread there. web/shell.html = the page (portrait canvas, loading bar);
+              wlw_add_game links it (--shell-file) and packs ASSETS (--preload-file) into <build>/web/index.*.
+              -fwasm-exceptions is PUBLIC on wlw. No GPU timer on WebGL (Quality steps down only). MSAA = WebGL's antialias
+              flag (the browser picks the samples). Haptic = HapticFallback's pulse through navigator.vibrate.
               LaunchArguments() (launch_arguments.cpp; desktop argv via WLW_MAIN, Android the intent's "wlw" extra).
               Frame pacing: desktop = vsync interval when the target divides the monitor's refresh (the monitor the
               window's centre is on, re-checked on moves), else vsync off + FrameLimiter + PreciseSleep (glfw_sleep.cpp:

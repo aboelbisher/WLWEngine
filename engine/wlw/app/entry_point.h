@@ -15,9 +15,9 @@
 // Desktop: a normal main(). Android: android_main(), called by NativeActivity on its own thread.
 // Both call Application::Run(). A game's Studio build (<game>_studio, from wlw_add_game(... STUDIO ...), which
 // defines WLW_STUDIO): the Studio's main(), and Play runs `make_app`'s app (like Unreal's editor target: the
-// game's code built into the editor). The game's main.cpp is the same for all three. (iOS and the web will get their
-// variants here; where the platform owns the loop they drive Internal().Init() / Frame() / Shutdown() instead: see
-// application.h.)
+// game's code built into the editor). Web (Emscripten): main() hands the app to platform::RunWebApp, and the
+// browser drives Internal().Init() / Frame() instead (it owns the loop: see application.h). The game's main.cpp
+// is the same for all of them. iOS will get its variant here too.
 
 #include <memory>
 
@@ -42,6 +42,24 @@ int RunStudio(int argc, char** argv, const char* game_name, std::unique_ptr<::wl
 
 #define WLW_MAIN(make_app) \
   int main(int argc, char** argv) { return ::wlw::studio::RunStudio(argc, argv, WLW_STUDIO_GAME, &make_app); }
+#elif defined(WLW_PLATFORM_WEB)
+
+#include <string>
+#include <vector>
+
+namespace wlw::platform {
+void SetLaunchArguments(std::vector<std::string> arguments);
+// Loads the save files from the browser's storage, then makes the app and gives its frames to the
+// browser (one per requestAnimationFrame). Returns at once: main() ends, the page keeps running.
+void RunWebApp(std::unique_ptr<::wlw::app::Application> (*create_app)());
+}  // namespace wlw::platform
+
+#define WLW_MAIN(make_app)                                                                                 \
+  int main(int argc, char** argv) {                                                                        \
+    ::wlw::platform::SetLaunchArguments(std::vector<std::string>(argv + (argc > 0 ? 1 : 0), argv + argc)); \
+    ::wlw::platform::RunWebApp(&make_app);                                                                 \
+    return 0;                                                                                              \
+  }
 
 #else
 

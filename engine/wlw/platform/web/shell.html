@@ -1,0 +1,70 @@
+<!doctype html>
+<!-- The page a WLWengine game runs in on the web (cmake/WLWHelpers.cmake passes it to emcc as the shell
+     file; {{{ SCRIPT }}} becomes the tag that loads the game). The canvas is a portrait, phone-shaped area
+     that fills the window's height (web_platform.cpp sizes its drawing buffer from this layout). -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <title>Game</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #0d0f1c; overflow: hidden; }
+    body { display: flex; align-items: center; justify-content: center; touch-action: none;
+           -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+           -webkit-tap-highlight-color: transparent; }
+    #canvas { display: block; outline: none; background: #14182a; touch-action: none; }
+    #loading { position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%); text-align: center;
+               color: #c9cfe6; font: 16px system-ui, -apple-system, "Segoe UI", sans-serif; pointer-events: none; }
+    #bar { width: 180px; height: 6px; margin: 14px auto 0; border-radius: 3px; background: #262c48; overflow: hidden; }
+    #fill { width: 0; height: 100%; background: #ffd34d; transition: width 0.15s; }
+  </style>
+</head>
+<body>
+  <canvas id="canvas" tabindex="-1" oncontextmenu="event.preventDefault()"></canvas>
+  <div id="loading"><div id="status">Loading...</div><div id="bar"><div id="fill"></div></div></div>
+  <script>
+    var canvas = document.getElementById("canvas");
+    // Portrait: as tall as the window, at most 9:16 wide (a phone's shape); on a window narrower than
+    // 9:21 the height shrinks instead.
+    function fitCanvas() {
+      var width = Math.min(window.innerWidth, window.innerHeight * 9 / 16);
+      var height = Math.min(window.innerHeight, width * 21 / 9);
+      canvas.style.width = Math.floor(width) + "px";
+      canvas.style.height = Math.floor(height) + "px";
+    }
+    fitCanvas();
+    window.addEventListener("resize", fitCanvas);
+    window.addEventListener("orientationchange", fitCanvas);
+    canvas.addEventListener("webglcontextlost", function (event) {
+      event.preventDefault();
+      document.getElementById("loading").style.display = "";
+      document.getElementById("status").textContent = "The graphics were reset. Please reload the page.";
+    });
+    var Module = {
+      canvas: canvas,
+      // Emscripten reports "Downloading data... (x/y)" while the assets arrive; the game clears it ("").
+      setStatus: function (text) {
+        var loading = document.getElementById("loading");
+        var match = text.match(/\((\d+(?:\.\d+)?)\/(\d+)\)/);
+        if (match) document.getElementById("fill").style.width = (100 * match[1] / match[2]) + "%";
+        if (text === "") {
+          loading.style.display = "none";
+        } else if (!match && text !== "Running...") {
+          loading.style.display = "";
+          document.getElementById("status").textContent = text;
+          document.getElementById("bar").style.display = /can't run|reload/.test(text) ? "none" : "";
+        }
+      },
+      print: function (text) { console.log(text); },
+      printErr: function (text) { console.warn(text); },
+      onAbort: function () {
+        document.getElementById("loading").style.display = "";
+        document.getElementById("bar").style.display = "none";
+        document.getElementById("status").textContent = "Something went wrong. Please reload the page.";
+      }
+    };
+    Module.setStatus("Loading...");
+  </script>
+  {{{ SCRIPT }}}
+</body>
+</html>

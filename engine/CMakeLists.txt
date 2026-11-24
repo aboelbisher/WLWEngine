@@ -5,6 +5,8 @@ if(ANDROID)
   set(WLW_PLATFORM "android")
 elseif(IOS)
   message(FATAL_ERROR "WLWengine: the iOS platform layer isn't written yet.")
+elseif(EMSCRIPTEN)
+  set(WLW_PLATFORM "web")  # browsers: WebAssembly + WebGL 2
 else()
   set(WLW_PLATFORM "glfw")  # Windows, macOS, Linux
 endif()
@@ -273,6 +275,20 @@ elseif(WLW_PLATFORM STREQUAL "android")
   target_link_libraries(wlw PUBLIC wlw_native_app_glue EGL GLESv3 android log)
   target_link_libraries(wlw PRIVATE wlw_swappy)  # frame pacing (third_party/swappy)
   target_link_libraries(wlw PRIVATE dl)  # miniaudio loads AAudio / OpenSL ES at runtime
+
+elseif(WLW_PLATFORM STREQUAL "web")
+  # Browsers (Emscripten): the page's canvas with a WebGL 2 context = OpenGL ES 3.0, linked directly.
+  target_sources(wlw PRIVATE wlw/platform/web/web_platform.cpp)
+  target_compile_definitions(wlw PUBLIC WLW_PLATFORM_WEB WLW_GLES)
+  # C++ exceptions as WebAssembly's own (every object file and the link must agree: PUBLIC, so games get it).
+  target_compile_options(wlw PUBLIC -fwasm-exceptions)
+  target_link_options(wlw PUBLIC
+    -fwasm-exceptions
+    "SHELL:-s MIN_WEBGL_VERSION=2" "SHELL:-s MAX_WEBGL_VERSION=2"
+    "SHELL:-s ALLOW_MEMORY_GROWTH=1"
+    "SHELL:-s STACK_SIZE=1048576"   # the default 64 KB is small for a game
+    "SHELL:-s ENVIRONMENT=web"
+    -lidbfs.js)                     # save files in IndexedDB (web_platform.cpp mounts it at /save)
 endif()
 
 # ---- Asserts (core/assert.h) ----
